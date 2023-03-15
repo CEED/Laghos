@@ -639,6 +639,8 @@ namespace mfem
 	      /////
 	      Vector D_el1(dim);
 	      Vector tN_el1(dim);
+	      D_el1 = 0.0;
+	      tN_el1 = 0.0; 
 	      vD->Eval(D_el1, Trans_el1, eip);
 	      vN->Eval(tN_el1, Trans_el1, eip);
 	      /////
@@ -849,6 +851,8 @@ namespace mfem
 	      /////
 	      Vector D_el2(dim);
 	      Vector tN_el2(dim);
+	      D_el2 = 0.0;
+	      tN_el2 = 0.0;
 	      vD->Eval(D_el2, Trans_el2, eip);
 	      vN->Eval(tN_el2, Trans_el2, eip);
 	      /////
@@ -1045,6 +1049,8 @@ namespace mfem
 	    /////
 	    Vector D_el1(dim);
 	    Vector tN_el1(dim);
+	    D_el1 = 0.0;
+	    tN_el1 = 0.0; 	    
 	    vD->Eval(D_el1, Trans_el1, eip);
 	    vN->Eval(tN_el1, Trans_el1, eip);
 	    /////
@@ -1189,6 +1195,8 @@ namespace mfem
 	    /////
 	    Vector D_el2(dim);
 	    Vector tN_el2(dim);
+	    D_el2 = 0.0;
+	    tN_el2 = 0.0;  
 	    vD->Eval(D_el2, Trans_el2, eip);
 	    vN->Eval(tN_el2, Trans_el2, eip);
 	    /////

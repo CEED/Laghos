@@ -107,7 +107,7 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
       ElementTransformation *eltr =
          pmesh.GetFaceNbrElementTransformation(Elem2NbrNo);
       const IntegrationRule &ir =
-         IntRulesLo.Get(pmesh.GetElementBaseGeometry(0), 4*eltr->OrderJ());
+         IntRulesLo.Get(pmesh.GetElementBaseGeometry(0), 4*eltr->OrderJ()+4);
 
       const int nip = ir.GetNPoints();
       vals.SetSize(nip);
