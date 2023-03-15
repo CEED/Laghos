@@ -67,6 +67,7 @@ public:
 
 struct MaterialData;
 
+// Updates the alphas.
 // Updates ind when mat_data is not null.
 void UpdateAlpha(const ParGridFunction &level_set,
                  ParGridFunction &alpha_1, ParGridFunction &alpha_2,

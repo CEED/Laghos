@@ -687,9 +687,9 @@ int main(int argc, char *argv[])
       {
          // These must use ir_volume, because rhoDetJ is defined only there.
          int q_id = ir_volume.GetNPoints() - 1;
-         rho_L_fit_extr.SetPoint(zone_id_10, q_id, &mat_data.alpha_1,
+         rho_L_fit_extr.SetPoint(zone_id_10, q_id, &mat_data.ind0_1,
                                  &hydro.GetRhoDetJw(1), ir_volume, rnameFL);
-         rho_R_fit_extr.SetPoint(zone_id_20, 0, &mat_data.alpha_2,
+         rho_R_fit_extr.SetPoint(zone_id_20, 0, &mat_data.ind0_1,
                                  &hydro.GetRhoDetJw(2), ir_volume, rnameFR);
          e_L_fit_extr.SetPoint(zone_id_10, q_id,
                                 &mat_data.e_1, ir_volume, enameFL);
@@ -697,11 +697,11 @@ int main(int argc, char *argv[])
                                 &mat_data.e_2, ir_volume, enameFR);
          p_L_fit_extr.SetPoint(zone_id_10, q_id,
                                &hydro.GetRhoDetJw(1), mat_data.gamma_1,
-                               &mat_data.alpha_1, &mat_data.e_1,
+                               &mat_data.ind0_1, &mat_data.e_1,
                                ir_volume, pnameFL);
          p_R_fit_extr.SetPoint(zone_id_20, 0,
                                &hydro.GetRhoDetJw(2), mat_data.gamma_2,
-                               &mat_data.alpha_2, &mat_data.e_2,
+                               &mat_data.ind0_1, &mat_data.e_2,
                                ir_volume, pnameFR);
       }
       else
@@ -727,17 +727,17 @@ int main(int argc, char *argv[])
          e_R_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.e_2,
                                ir_volume, enameMR);
 
-         rho_L_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.alpha_1,
+         rho_L_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.ind0_1,
                                  &hydro.GetRhoDetJw(1), ir_volume, rnameML);
-         rho_R_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.alpha_2,
+         rho_R_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.ind0_1,
                                  &hydro.GetRhoDetJw(2), ir_volume, rnameMR);
          p_L_mix_extr.SetPoint(zone_id_15, q_id,
                                &hydro.GetRhoDetJw(1), mat_data.gamma_1,
-                               &mat_data.alpha_1, &mat_data.e_1,
+                               &mat_data.ind0_1, &mat_data.e_1,
                                ir_volume, pnameML);
          p_R_mix_extr.SetPoint(zone_id_15, q_id,
                                &hydro.GetRhoDetJw(2), mat_data.gamma_2,
-                               &mat_data.alpha_2, &mat_data.e_2,
+                               &mat_data.ind0_1, &mat_data.e_2,
                                ir_volume, pnameMR);
       }
 
