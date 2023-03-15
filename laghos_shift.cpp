@@ -972,15 +972,18 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    const int attr_e1 = Trans_e1.Attribute;
    const ParGridFunction *p_e1, *p_e2, *rhoDetJind0_e1, *rhoDetJind0_e2,
                          *ind_e1, *ind_e2;
+   double gamma_e1, gamma_e2;
    if ( (attr_face == 10 && attr_e1 == 10) ||
         (attr_face == 20 && attr_e1 == 15) )
    {
       p_e1           = &mat_data.p_1->GetPressure();
       rhoDetJind0_e1 = &mat_data.rhoDetJind0_1;
       ind_e1         = &mat_data.ind0_1;
+      gamma_e1       =  mat_data.gamma_1;
       p_e2           = &mat_data.p_2->GetPressure();
       rhoDetJind0_e2 = &mat_data.rhoDetJind0_2;
       ind_e2         = &mat_data.ind0_2;
+      gamma_e2       =  mat_data.gamma_2;
    }
    else if ( (attr_face == 10 && attr_e1 == 15) ||
              (attr_face == 20 && attr_e1 == 20) )
@@ -988,9 +991,11 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       p_e1           = &mat_data.p_2->GetPressure();
       rhoDetJind0_e1 = &mat_data.rhoDetJind0_2;
       ind_e1         = &mat_data.ind0_2;
+      gamma_e1       =  mat_data.gamma_2;
       p_e2           = &mat_data.p_1->GetPressure();
       rhoDetJind0_e2 = &mat_data.rhoDetJind0_1;
       ind_e2         = &mat_data.ind0_1;
+      gamma_e1       =  mat_data.gamma_1;
    }
    else { MFEM_ABORT("Invalid marking configuration."); }
 

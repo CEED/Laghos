@@ -685,6 +685,7 @@ int main(int argc, char *argv[])
       //x_extr.SetPoint(zone_id_L, point_interface, x_gf, xname);
       if (pure_test)
       {
+         // These must use ir_volume, because rhoDetJ is defined only there.
          int q_id = ir_volume.GetNPoints() - 1;
          rho_L_fit_extr.SetPoint(zone_id_10, q_id, &mat_data.alpha_1,
                                  &hydro.GetRhoDetJw(1), ir_volume, rnameFL);
@@ -1333,7 +1334,7 @@ void visualize(MaterialData &mat_data,
                                  faces, "Face Marking",
                                  ws, wy, ws, ws);
    hydrodynamics::VisualizeField(vis_vol, vishost, visport,
-                                 mat_data.ind0_1, "Volume Fraction 1",
+                                 mat_data.alpha_1, "Volume Fraction 1",
                                  2*ws, wy, ws, ws, false,
                                  "mAcRjlpppppppppppppppppppppp");
 

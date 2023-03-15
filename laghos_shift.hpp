@@ -257,6 +257,7 @@ public:
    }
 };
 
+// Density extractoin at a quad point.
 class RhoPointExtractor : public PointExtractor
 {
 protected:
@@ -280,6 +281,7 @@ public:
    virtual double GetValue() const;
 };
 
+// Pressure extraction at a quad point.
 class PPointExtractor : public RhoPointExtractor
 {
 protected:
@@ -302,6 +304,7 @@ public:
    virtual double GetValue() const;
 };
 
+// Shifted extraction at a physical location.
 class ShiftedPointExtractor : public PointExtractor
 {
 protected:
