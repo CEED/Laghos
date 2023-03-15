@@ -747,8 +747,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       mat_data.ind0_2.ExchangeFaceNbrData();
       mat_data.p_1->ExchangeFaceNbrData();
       mat_data.p_2->ExchangeFaceNbrData();
-      mat_data.rhoDetJind0_1.ExchangeFaceNbrData();
-      mat_data.rhoDetJind0_2.ExchangeFaceNbrData();
+      mat_data.rho0DetJ_1.ExchangeFaceNbrData();
+      mat_data.rho0DetJ_2.ExchangeFaceNbrData();
    }
 
    // Jacobians of reference->physical transformations for all quad points.

@@ -363,8 +363,8 @@ int main(int argc, char *argv[])
    mat_data.alpha_2.SetSpace(&mat_fes);
    mat_data.ind0_1.SetSpace(&L2FESpace);
    mat_data.ind0_2.SetSpace(&L2FESpace);
-   mat_data.rhoDetJind0_1.SetSpace(&L2FESpace);
-   mat_data.rhoDetJind0_2.SetSpace(&L2FESpace);
+   mat_data.rho0DetJ_1.SetSpace(&L2FESpace);
+   mat_data.rho0DetJ_2.SetSpace(&L2FESpace);
 
    //
    // Shifted interface options.

@@ -86,9 +86,9 @@ struct MaterialData
    ParGridFunction  p;                // recomputed by ComputeTotalPressure().
    ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
    bool             pointwise_alpha;
-   ParGridFunction  ind0_1, ind0_2;     // recomputed in UpdateQuadratureData().
-   ParGridFunction  rhoDetJind0_1,    // pointwise masses as GridFunctions.
-                    rhoDetJind0_2;    // not updated.
+   ParGridFunction  ind0_1, ind0_2;   // recomputed in UpdateQuadratureData().
+   ParGridFunction  rho0DetJ_1,       // pointwise masses as GridFunctions.
+                    rho0DetJ_2;       // not updated.
 
    // Remap influence:
    // * level set is remapped, then updates alpha_1 and alpha_2 after remap.

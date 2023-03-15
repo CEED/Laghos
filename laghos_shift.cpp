@@ -970,31 +970,27 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    const int nqp_face = ir->GetNPoints();
 
    const int attr_e1 = Trans_e1.Attribute;
-   const ParGridFunction *p_e1, *p_e2, *rhoDetJind0_e1, *rhoDetJind0_e2,
-                         *ind_e1, *ind_e2;
+   const ParGridFunction *p_e1, *p_e2, *rho0DetJ_e1, *rho0DetJ_e2;
+
    double gamma_e1, gamma_e2;
    if ( (attr_face == 10 && attr_e1 == 10) ||
         (attr_face == 20 && attr_e1 == 15) )
    {
       p_e1           = &mat_data.p_1->GetPressure();
-      rhoDetJind0_e1 = &mat_data.rhoDetJind0_1;
-      ind_e1         = &mat_data.ind0_1;
+      rho0DetJ_e1 = &mat_data.rho0DetJ_1;
       gamma_e1       =  mat_data.gamma_1;
       p_e2           = &mat_data.p_2->GetPressure();
-      rhoDetJind0_e2 = &mat_data.rhoDetJind0_2;
-      ind_e2         = &mat_data.ind0_2;
+      rho0DetJ_e2 = &mat_data.rho0DetJ_2;
       gamma_e2       =  mat_data.gamma_2;
    }
    else if ( (attr_face == 10 && attr_e1 == 15) ||
              (attr_face == 20 && attr_e1 == 20) )
    {
       p_e1           = &mat_data.p_2->GetPressure();
-      rhoDetJind0_e1 = &mat_data.rhoDetJind0_2;
-      ind_e1         = &mat_data.ind0_2;
+      rho0DetJ_e1 = &mat_data.rho0DetJ_2;
       gamma_e1       =  mat_data.gamma_2;
       p_e2           = &mat_data.p_1->GetPressure();
-      rhoDetJind0_e2 = &mat_data.rhoDetJind0_1;
-      ind_e2         = &mat_data.ind0_1;
+      rho0DetJ_e2 = &mat_data.rho0DetJ_1;
       gamma_e1       =  mat_data.gamma_1;
    }
    else { MFEM_ABORT("Invalid marking configuration."); }
@@ -1194,15 +1190,13 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
          double p_gradp_jump = p_q1_ext - p_q2_ext;
 
-         double rho_q1  = rhoDetJind0_e1->GetValue(Trans_e1, ip_e1) /
-                          Trans_e1.Weight() / ind_e1->GetValue(Trans_e1, ip_e1);
-         double rho_q2  = rhoDetJind0_e2->GetValue(Trans_e2, ip_e2) /
-                          Trans_e2.Weight() / ind_e2->GetValue(Trans_e2, ip_e2);
+         double rho_q1  = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) /
+                          Trans_e1.Weight();
+         double rho_q2  = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) /
+                          Trans_e2.Weight();
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
                      "Negative density at the face, not good: "
-                     << rho_q1 << " " << rho_q2
-                     << " " << ind_e1->GetValue(Trans_e1, ip_e1)
-                     << " " << ind_e2->GetValue(Trans_e1, ip_e2));
+                     << rho_q1 << " " << rho_q2);
 
          double h_1, h_2, mu_1, mu_2, visc_q1, visc_q2;
 
@@ -1295,10 +1289,8 @@ void EnergyCutFaceIntegrator::AssembleRHSElementVect(
 
    const ParGridFunction *p = (mat_id == 1) ? &mat_data.p_1->GetPressure()
                                             : &mat_data.p_2->GetPressure();
-   const ParGridFunction *rhoDetJind0 = (mat_id == 1) ? &mat_data.rhoDetJind0_1
-                                                      : &mat_data.rhoDetJind0_2;
-   const ParGridFunction *ind = (mat_id == 1) ? &mat_data.ind0_1
-                                              : &mat_data.ind0_2;
+   const ParGridFunction *rho0DetJ = (mat_id == 1) ? &mat_data.rho0DetJ_1
+                                                   : &mat_data.rho0DetJ_2;
    const double gamma = (mat_id == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
 
    Vector shape_e(l2dofs_cnt);
@@ -1324,10 +1316,10 @@ void EnergyCutFaceIntegrator::AssembleRHSElementVect(
       const double jump_p = p_q1 - p_q2;
       const double gamma_avg = p_q1 / (p_q1 + p_q2);
 
-      const double rho_q1  = rhoDetJind0->GetValue(Trans_e1, ip_e1) /
-                             ind->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight(),
-                   rho_q2  = rhoDetJind0->GetValue(Trans_e2, ip_e2) /
-                             ind->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+      const double rho_q1  = rho0DetJ->GetValue(Trans_e1, ip_e1) /
+                             Trans_e1.Weight(),
+                   rho_q2  = rho0DetJ->GetValue(Trans_e2, ip_e2) /
+                             Trans_e2.Weight();
       const double cs_q1   = sqrt(gamma * p_q1 / rho_q1),
                    cs_q2   = sqrt(gamma * p_q2 / rho_q2),
                    cs_avg  = gamma_avg * cs_q1 + (1.0 - gamma_avg) * cs_q2;

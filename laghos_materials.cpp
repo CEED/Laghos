@@ -138,7 +138,7 @@ void UpdateAlpha(const ParGridFunction &level_set,
 
 void MaterialData::UpdateInitialMasses()
 {
-   ParFiniteElementSpace &pfes_L2 = *rhoDetJind0_1.ParFESpace();
+   ParFiniteElementSpace &pfes_L2 = *rho0DetJ_1.ParFESpace();
    const IntegrationRule &ir_L2_nodes = pfes_L2.GetFE(0)->GetNodes();
    const int nd = ir_L2_nodes.GetNPoints(), NE = pfes_L2.GetNE();
    for (int e = 0; e < NE; e++)
@@ -149,10 +149,8 @@ void MaterialData::UpdateInitialMasses()
          const IntegrationPoint &ip = ir_L2_nodes.IntPoint(i);
          tr_e.SetIntPoint(&ip);
          const double detJ = tr_e.Weight();
-         rhoDetJind0_1(e * nd + i) = rho0_1(e * nd + i) *
-                                     detJ * ind0_1(e * nd + i);
-         rhoDetJind0_2(e * nd + i) = rho0_2(e * nd + i) *
-                                     detJ * ind0_2(e * nd + i);
+         rho0DetJ_1(e * nd + i) = rho0_1(e * nd + i) * detJ;
+         rho0DetJ_2(e * nd + i) = rho0_2(e * nd + i) * detJ;
       }
    }
 }
