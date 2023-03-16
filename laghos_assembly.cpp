@@ -616,8 +616,12 @@ namespace mfem
 		sign += D_el1(b) * tN_el1(b) / normD;  
 	      }
 	      if (sign < 0.0){
-		std::cout << " shit " << std::endl;
+		D_el1 = 0.0;
+		for( int b = 0; b < dim; b++){
+		  tN_el1 = nor(b) / nor_norm;  
+		}
 	      }
+	      
 	      for (int k = 0; k < h1dofs_cnt; k++){
 		for (int s = 0; s < h1dofs_cnt; s++){
 		  for (int j = 0; j < dim; j++){
@@ -841,7 +845,10 @@ namespace mfem
 		sign += D_el2(b) * tN_el2(b) / normD;  
 	      }
 	      if (sign < 0.0){
-		std::cout << " shit " << std::endl;
+		D_el2 = 0.0;
+		for( int b = 0; b < dim; b++){
+		  tN_el2 = nor(b) / nor_norm;  
+		}
 	      }
 	     
 	      for (int k = 0; k < h1dofs_cnt; k++){
@@ -1010,7 +1017,13 @@ namespace mfem
 	    Tr.SetAllIntPoints(&ip_f);
 	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();	    
 	    CalcOrtho(Tr.Jacobian(), nor);
-	    
+
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
+
 	    fe.CalcShape(eip, shape);
 	    fe.CalcShape(eip, shape_test);
 
@@ -1022,7 +1035,24 @@ namespace mfem
 	    vD->Eval(D_el1, Trans_el1, eip);
 	    vN->Eval(tN_el1, Trans_el1, eip);
 	    /////
-
+	    double sign = 0.0;
+	    double normD = 0.0;
+	    for (int a = 0; a < dim; a++){ 
+	      normD += D_el1(a) * D_el1(a);
+	    }
+	    
+	    normD  = std::pow(normD,0.5);
+	    for( int b = 0; b < dim; b++){
+	      sign += D_el1(b) * tN_el1(b) / normD;  
+	    }
+	    if (sign < 0.0){
+	      std::cout << " shit " << std::endl;
+	      D_el1 = 0.0;
+	      for( int b = 0; b < dim; b++){
+		tN_el1 = nor(b) / nor_norm;  
+	      }
+	    }
+	     
 	    for (int k = 0; k < h1dofs_cnt; k++){
 	      for (int s = 0; s < h1dofs_cnt; s++){
 		for (int j = 0; j < dim; j++){
@@ -1073,12 +1103,6 @@ namespace mfem
 	    else{
 	      shape_test += test_gradUResD_el1;
 	    }
-
-	    double nor_norm = 0.0;
-	    for (int s = 0; s < dim; s++){
-	      nor_norm += nor(s) * nor(s);
-	    }
-	    nor_norm = sqrt(nor_norm);
 
 	    double nTildaDotN = 0.0;
 	    for (int s = 0; s < dim; s++){
@@ -1157,6 +1181,12 @@ namespace mfem
 	    CalcOrtho(Tr.Jacobian(), nor);
 	    nor *= -1.0;
 
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
+
 	    fe2.CalcShape(eip, shape);
 	    fe2.CalcShape(eip, shape_test);
 
@@ -1168,6 +1198,23 @@ namespace mfem
 	    vD->Eval(D_el2, Trans_el2, eip);
 	    vN->Eval(tN_el2, Trans_el2, eip);
 	    /////
+	    double sign = 0.0;
+	    double normD = 0.0;
+	    for (int a = 0; a < dim; a++){ 
+	      normD += D_el2(a) * D_el2(a);
+	    }
+	    
+	    normD  = std::pow(normD,0.5);
+	    for( int b = 0; b < dim; b++){
+	      sign += D_el2(b) * tN_el2(b) / normD;  
+	    }
+	    if (sign < 0.0){
+	      std::cout << " shit 2 " << std::endl;
+	      D_el2 = 0.0;
+	      for( int b = 0; b < dim; b++){
+		tN_el2 = nor(b) / nor_norm;  
+	      }
+	    }
 	    
 	    for (int k = 0; k < h1dofs_cnt; k++){
 	      for (int s = 0; s < h1dofs_cnt; s++){
@@ -1220,12 +1267,6 @@ namespace mfem
 	      shape_test += test_gradUResD_el2;
 	    }
 	    
-	    double nor_norm = 0.0;
-	    for (int s = 0; s < dim; s++){
-	      nor_norm += nor(s) * nor(s);
-	    }
-	    nor_norm = sqrt(nor_norm);
-
 	    double nTildaDotN = 0.0;
 	    for (int s = 0; s < dim; s++){
 	      nTildaDotN += nor(s) * tN_el2(s) / nor_norm;
