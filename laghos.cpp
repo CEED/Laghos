@@ -729,7 +729,7 @@ int main(int argc, char *argv[])
 
          rho_L_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.ind0_1,
                                  &hydro.GetRhoDetJw(1), ir_volume, rnameML);
-         rho_R_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.ind0_1,
+         rho_R_mix_extr.SetPoint(zone_id_15, q_id, &mat_data.ind0_2,
                                  &hydro.GetRhoDetJw(2), ir_volume, rnameMR);
          p_L_mix_extr.SetPoint(zone_id_15, q_id,
                                &hydro.GetRhoDetJw(1), mat_data.gamma_1,
@@ -737,7 +737,7 @@ int main(int argc, char *argv[])
                                ir_volume, pnameML);
          p_R_mix_extr.SetPoint(zone_id_15, q_id,
                                &hydro.GetRhoDetJw(2), mat_data.gamma_2,
-                               &mat_data.ind0_1, &mat_data.e_2,
+                               &mat_data.ind0_2, &mat_data.e_2,
                                ir_volume, pnameMR);
       }
 
