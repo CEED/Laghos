@@ -423,17 +423,17 @@ namespace mfem
       UpdateMesh(S);
 
       //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, rho_gf, useEmbedded, analyticalSurface);
-      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf, useEmbedded, analyticalSurface);
-      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf, useEmbedded, analyticalSurface);
+      UpdateDensity(qdata.rho0DetJ0, rho_gf);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
  
       //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf, useEmbedded, analyticalSurface);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf, useEmbedded, analyticalSurface);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf, useEmbedded, analyticalSurface);
+      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -497,17 +497,17 @@ namespace mfem
 					      Vector &dS_dt) const
     {
       //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, rho_gf, useEmbedded, analyticalSurface);
-      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf, useEmbedded, analyticalSurface);
-      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf, useEmbedded, analyticalSurface);
+      UpdateDensity(qdata.rho0DetJ0, rho_gf);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
  
       //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf, useEmbedded, analyticalSurface);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf, useEmbedded, analyticalSurface);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf, useEmbedded, analyticalSurface);
+      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();

@@ -22,7 +22,7 @@ namespace mfem
 {
   namespace hydrodynamics
   {
-    void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
+    void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf)
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -48,7 +48,7 @@ namespace mfem
 	}
     }
     
-    void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
+    void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf)
     {
       ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -76,7 +76,7 @@ namespace mfem
 	}
     }
     
-    void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
+    void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -103,7 +103,7 @@ namespace mfem
 	}
     }
     
-    void UpdateDensityGL(const Vector &rho0DetJ0, ParGridFunction &rho_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
+    void UpdateDensityGL(const Vector &rho0DetJ0, ParGridFunction &rho_gf)
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -129,7 +129,7 @@ namespace mfem
 	}
     }
     
-    void UpdatePressureGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
+    void UpdatePressureGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf)
     {
       ParFiniteElementSpace *p_fespace = p_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -157,7 +157,7 @@ namespace mfem
 	}
     }
     
-    void UpdateSoundSpeedGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf, bool useEmb, ShiftedFaceMarker *analyticalSurface)
+    void UpdateSoundSpeedGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
