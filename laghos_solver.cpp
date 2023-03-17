@@ -205,6 +205,14 @@ namespace mfem
       block_offsets[3] = block_offsets[2] + L2Vsize;
       one = 1.0;
 
+      rho_gf.ExchangeFaceNbrData();
+      p_gf.ExchangeFaceNbrData();
+      cs_gf.ExchangeFaceNbrData();
+ 
+      rhoface_gf.ExchangeFaceNbrData();
+      pface_gf.ExchangeFaceNbrData();
+      csface_gf.ExchangeFaceNbrData();
+ 
       alpha_fec = new L2_FECollection(0, pmesh->Dimension());
       alpha_fes = new ParFiniteElementSpace(pmesh, alpha_fec);
       alpha_fes->ExchangeFaceNbrData();
@@ -579,7 +587,7 @@ namespace mfem
 
     double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
     {
-      UpdateMesh(S);
+      UpdateMesh(S);  
       UpdateQuadratureData(S);
       double glob_dt_est;
       const MPI_Comm comm = H1.GetParMesh()->GetComm();
@@ -685,8 +693,7 @@ namespace mfem
 	*cs_b  = new double[nqp_batch];
       // Jacobians of reference->physical transformations for all quadrature points
       // in the batch.
-      DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
-   
+      DenseTensor *Jpr_b = new DenseTensor[nzones_batch];    
       for (int b = 0; b < nbatches; b++)
 	{
 	  int z_id = b * nzones_batch; // Global index over zones.
@@ -718,18 +725,19 @@ namespace mfem
 		  rho_b[idx] = qdata.rho0DetJ0(z_id*nqp + q) / detJ;
 		  e_b[idx] = fmax(0.0, e_vals(q));
 		}
-		++z_id;
 	      }
+		++z_id;
 	    }
 	  
 	  // Batched computation of material properties.
 	  ComputeMaterialProperties(nqp_batch, gamma_b, rho_b, e_b, p_b, cs_b);
-
+	  
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
 	      if ((pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::GHOST)) {
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
+	
 		for (int q = 0; q < nqp; q++)
 		{
 		  const IntegrationPoint &ip = ir.IntPoint(q);
@@ -808,7 +816,7 @@ namespace mfem
 	      ++z_id;
 	    }
 	}
-
+      
       delete [] gamma_b;
       delete [] rho_b;
       delete [] e_b;
