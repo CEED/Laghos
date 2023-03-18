@@ -424,7 +424,7 @@ namespace mfem
 	      }
 	  }
       }
-     else if (Tr.Attribute == 21 ){
+      else if (Tr.Attribute == 21 ){
 	const int dim = el2.GetDim();      
 	const IntegrationRule *ir = IntRule;
 	if (ir == NULL)
@@ -519,28 +519,14 @@ namespace mfem
 	  const int elementNo = Trans_el1.ElementNo;
 	  ParFiniteElementSpace * pfes = Vnpt_gf->ParFESpace();
 	  Vector loc_data;
-	  int nbr_el_no = elementNo - pfes->GetParMesh()->GetNE();
-	  if (nbr_el_no >= 0)
+	  Array<int> vdofs;
+	  DofTransformation * doftrans = pfes->GetElementVDofs(elementNo, vdofs);
+	  Vnpt_gf->GetSubVector(vdofs, loc_data);
+	  if (doftrans)
 	    {
-	      const Vector &faceNbrData = Vnpt_gf->FaceNbrData(); 
-	      Array<int> dofs;
-	      DofTransformation * doftrans = pfes->GetFaceNbrElementVDofs(nbr_el_no, dofs);
-	      faceNbrData.GetSubVector(dofs, loc_data);
-	      if (doftrans)
-		{
-		  doftrans->InvTransformPrimal(loc_data);
-		}
+	      doftrans->InvTransformPrimal(loc_data);
 	    }
-	  else{
-	    Array<int> vdofs;
-	    DofTransformation * doftrans = pfes->GetElementVDofs(elementNo, vdofs);
-	    Vnpt_gf->GetSubVector(vdofs, loc_data);
-	    if (doftrans)
-	      {
-		doftrans->InvTransformPrimal(loc_data);
-	      }
-	  }
- 
+	  
 	  for (int q = 0; q  < nqp_face; q++)
 	    {
 	      te_shape = 0.0;
@@ -548,8 +534,7 @@ namespace mfem
 	      // Set the integration point in the face and the neighboring elements
 	      Tr.SetAllIntPoints(&ip_f);
 	      const IntegrationPoint &eip = Tr.GetElement1IntPoint();
-	      Trans_el1.SetIntPoint(&eip);
-	    
+
 	      Vector nor;
 	      nor.SetSize(dim);
 	      nor = 0.0;
@@ -573,23 +558,13 @@ namespace mfem
 	      int h1dofs_cnt = 0.0;
 	      Vector velocity_shape, gradUResD_el1;
 	      DenseMatrix nodalGrad_el1, gradUResDirD_el1, taylorExp_el1;
-	      if (nbr_el_no >= 0){
-		const FiniteElement *FElem = pfes->GetFaceNbrFE(nbr_el_no);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape.SetSize(h1dofs_cnt);
-		velocity_shape = 0.0;
-		FElem->CalcShape(eip, velocity_shape);
-		FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
-	      }
-	      else {
-		const FiniteElement *FElem = pfes->GetFE(elementNo);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape.SetSize(h1dofs_cnt);
-		velocity_shape = 0.0;
-		FElem->CalcShape(eip, velocity_shape);
-		FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
-	      }
-	      
+	      const FiniteElement *FElem = pfes->GetFE(elementNo);
+	      h1dofs_cnt = FElem->GetDof();
+	      velocity_shape.SetSize(h1dofs_cnt);
+	      velocity_shape = 0.0;
+	      FElem->CalcShape(eip, velocity_shape);
+	      FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
+		
 	      gradUResD_el1.SetSize(h1dofs_cnt);
 	      gradUResDirD_el1.SetSize(h1dofs_cnt);
 	      taylorExp_el1.SetSize(h1dofs_cnt);
@@ -606,21 +581,6 @@ namespace mfem
 	      vD->Eval(D_el1, Trans_el1, eip);
 	      vN->Eval(tN_el1, Trans_el1, eip);
 	      /////
-	      double sign = 0.0;
-	      double normD = 0.0;
-	      for (int a = 0; a < dim; a++){ 
-		normD += D_el1(a) * D_el1(a);
-	      }
-	      normD  = std::pow(normD,0.5);
-	      for( int b = 0; b < dim; b++){
-		sign += D_el1(b) * tN_el1(b) / normD;  
-	      }
-	      if (sign < 0.0){
-		D_el1 = 0.0;
-		for( int b = 0; b < dim; b++){
-		  tN_el1 = nor(b) / nor_norm;  
-		}
-	      }
 	      
 	      for (int k = 0; k < h1dofs_cnt; k++){
 		for (int s = 0; s < h1dofs_cnt; s++){
@@ -683,7 +643,7 @@ namespace mfem
 
 	      double normalStressProjNormal = 0.0;
 	      for (int s = 0; s < dim; s++){
-		//normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		//	normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
 		normalStressProjNormal += weightedNormalStress(s) * tN_el1(s);
 	      }
 
@@ -740,33 +700,38 @@ namespace mfem
 	  elvect = 0.0;
 	  Vector te_shape(l2dofs_cnt);
 	  te_shape = 0.0;
-
+	  
 	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
 	  const int elementNo = Trans_el2.ElementNo;
+	  
 	  ParFiniteElementSpace * pfes = Vnpt_gf->ParFESpace();
 	  Vector loc_data;
 	  int nbr_el_no = elementNo - pfes->GetParMesh()->GetNE();
 	  if (nbr_el_no >= 0)
 	    {
-	      const Vector &faceNbrData = Vnpt_gf->FaceNbrData(); 
-	      Array<int> dofs;
-	      DofTransformation * doftrans = pfes->GetFaceNbrElementVDofs(nbr_el_no, dofs);
-	      faceNbrData.GetSubVector(dofs, loc_data);
-	      if (doftrans)
+	      int height = pfes->GetVSize();
+	      Array<int> vdofs;      
+	      pfes->GetFaceNbrElementVDofs(nbr_el_no, vdofs);
+	      
+	      for (int j = 0; j < vdofs.Size(); j++)
 		{
-		  doftrans->InvTransformPrimal(loc_data);
+		  if (vdofs[j] >= 0)
+		    {
+		      vdofs[j] += height;
+		    }
+		  else
+		    {
+		      vdofs[j] -= height;
+		    }
 		}
+	      Vnpt_gf->GetSubVector(vdofs, loc_data);
 	    }
 	  else{
 	    Array<int> vdofs;
-	    DofTransformation * doftrans = pfes->GetElementVDofs(elementNo, vdofs);
+	    DofTransformation * doftrans = pfes->GetElementVDofs(elementNo, vdofs); 
 	    Vnpt_gf->GetSubVector(vdofs, loc_data);
-	    if (doftrans)
-	      {
-		doftrans->InvTransformPrimal(loc_data);
-	      }
 	  }
- 
+	  
 	  for (int q = 0; q  < nqp_face; q++)
 	    {
 	      te_shape = 0.0;
@@ -774,7 +739,6 @@ namespace mfem
 	      // Set the integration point in the face and the neighboring elements
 	      Tr.SetAllIntPoints(&ip_f);
 	      const IntegrationPoint &eip = Tr.GetElement2IntPoint();
-	      Trans_el2.SetIntPoint(&eip);
 	    
 	      Vector nor;
 	      nor.SetSize(dim);
@@ -833,23 +797,6 @@ namespace mfem
 	      vD->Eval(D_el2, Trans_el2, eip);
 	      vN->Eval(tN_el2, Trans_el2, eip);
 	      /////
-
-	      double sign = 0.0;
-	      double normD = 0.0;
-	      for (int a = 0; a < dim; a++){ 
-		normD += D_el2(a) * D_el2(a);
-	      }
-	    
-	      normD  = std::pow(normD,0.5);
-	      for( int b = 0; b < dim; b++){
-		sign += D_el2(b) * tN_el2(b) / normD;  
-	      }
-	      if (sign < 0.0){
-		D_el2 = 0.0;
-		for( int b = 0; b < dim; b++){
-		  tN_el2 = nor(b) / nor_norm;  
-		}
-	      }
 	     
 	      for (int k = 0; k < h1dofs_cnt; k++){
 		for (int s = 0; s < h1dofs_cnt; s++){
@@ -912,7 +859,7 @@ namespace mfem
 	    
 	      double normalStressProjNormal = 0.0;
 	      for (int s = 0; s < dim; s++){
-		// normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		//	normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
 		normalStressProjNormal += weightedNormalStress(s) * tN_el2(s);
 	      }
 	      
@@ -927,7 +874,7 @@ namespace mfem
 	      for (int s = 0; s < dim; s++)
 		{
 		  vDotn += vShape(s) * tN_el2(s);
-		  // vDotn += vShape(s) * nor(s) / nor_norm;
+		  //  vDotn += vShape(s) * nor(s) / nor_norm;
 		}
 
 	      double vDotTildaDotTangent = 0.0;
@@ -941,7 +888,7 @@ namespace mfem
 	      
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  //	  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
+		  //  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
 
 		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
 
@@ -1035,23 +982,6 @@ namespace mfem
 	    vD->Eval(D_el1, Trans_el1, eip);
 	    vN->Eval(tN_el1, Trans_el1, eip);
 	    /////
-	    double sign = 0.0;
-	    double normD = 0.0;
-	    for (int a = 0; a < dim; a++){ 
-	      normD += D_el1(a) * D_el1(a);
-	    }
-	    
-	    normD  = std::pow(normD,0.5);
-	    for( int b = 0; b < dim; b++){
-	      sign += D_el1(b) * tN_el1(b) / normD;  
-	    }
-	    if (sign < 0.0){
-	      std::cout << " shit " << std::endl;
-	      D_el1 = 0.0;
-	      for( int b = 0; b < dim; b++){
-		tN_el1 = nor(b) / nor_norm;  
-	      }
-	    }
 	     
 	    for (int k = 0; k < h1dofs_cnt; k++){
 	      for (int s = 0; s < h1dofs_cnt; s++){
@@ -1116,7 +1046,7 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    //		    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			    //   elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
 			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
 			    //  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el1(vd) * tN_el1(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);			
 	
@@ -1198,23 +1128,6 @@ namespace mfem
 	    vD->Eval(D_el2, Trans_el2, eip);
 	    vN->Eval(tN_el2, Trans_el2, eip);
 	    /////
-	    double sign = 0.0;
-	    double normD = 0.0;
-	    for (int a = 0; a < dim; a++){ 
-	      normD += D_el2(a) * D_el2(a);
-	    }
-	    
-	    normD  = std::pow(normD,0.5);
-	    for( int b = 0; b < dim; b++){
-	      sign += D_el2(b) * tN_el2(b) / normD;  
-	    }
-	    if (sign < 0.0){
-	      std::cout << " shit 2 " << std::endl;
-	      D_el2 = 0.0;
-	      for( int b = 0; b < dim; b++){
-		tN_el2 = nor(b) / nor_norm;  
-	      }
-	    }
 	    
 	    for (int k = 0; k < h1dofs_cnt; k++){
 	      for (int s = 0; s < h1dofs_cnt; s++){

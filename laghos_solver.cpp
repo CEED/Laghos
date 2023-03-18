@@ -413,6 +413,7 @@ namespace mfem
 						Vector &dS_dt,
 						const Vector &S_init) const
     {
+      
       // reset mesh, needed to update the normal velocity penalty term.
       Mv.Update();
       // set the state at the initial one
@@ -422,6 +423,7 @@ namespace mfem
       // reset the mesh state at the current one
       UpdateMesh(S);
 
+      
       //Compute quadrature quantities
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
@@ -441,6 +443,7 @@ namespace mfem
       UpdateQuadratureData(S);
       UpdateQuadratureDataGL(S);
 
+      
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
        
@@ -583,12 +586,14 @@ namespace mfem
       Vector* sptr = const_cast<Vector*>(&S);
       x_gf.MakeRef(&H1, *sptr, 0);
       H1.GetParMesh()->NewNodes(x_gf, false);
+      pmesh->ExchangeFaceNbrNodes();  
     }
 
     double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
     {
-      UpdateMesh(S);  
-      UpdateQuadratureData(S);
+     
+      UpdateMesh(S);
+      UpdateQuadratureData(S); 
       double glob_dt_est;
       const MPI_Comm comm = H1.GetParMesh()->GetComm();
       MPI_Allreduce(&qdata.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN, comm);

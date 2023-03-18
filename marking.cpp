@@ -126,7 +126,7 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	  }
 	}
       }
-    //  pmesh.ExchangeFaceNbrNodes();
+    pmesh.ExchangeFaceNbrNodes();
     //    surrogateNodes.ExchangeFaceNbrData();   
     //  std::cout << " owned face " << pmesh.GetNumFaces() << std::endl;
     // surrogateNodes.ExchangeFaceNbrData();
