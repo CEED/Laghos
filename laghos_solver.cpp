@@ -358,19 +358,19 @@ namespace mfem
       Mv.AddBdrFaceIntegrator(nvmi);
 
       if (useEmbedded){
-	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, analyticalSurface);
+	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
 	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
-	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, v_gf, analyticalSurface, dist_vec, normal_vec, nTerms);
+	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
 	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, analyticalSurface, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
 

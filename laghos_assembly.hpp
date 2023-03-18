@@ -155,11 +155,9 @@ namespace mfem
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
       const ParGridFunction &pface_gf;
-      ShiftedFaceMarker *analyticalSurface;
-      int par_shared_face_count;
       
     public:
-      ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, ShiftedFaceMarker *analyticalSurface) : pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), analyticalSurface(analyticalSurface), par_shared_face_count(0) { }
+      ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf) : pmesh(pmesh), qdata(qdata), pface_gf(pface_gf) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
@@ -179,14 +177,12 @@ namespace mfem
       const ParGridFunction &pface_gf;
       const ParGridFunction &v_gf;
       const ParGridFunction *Vnpt_gf;
-      ShiftedFaceMarker *analyticalSurface;
-      int par_shared_face_count;
       VectorCoefficient *vD;
       VectorCoefficient *vN;
       int nTerms;
 
     public:
-      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, ShiftedFaceMarker *analyticalSurface, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms) :  pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), analyticalSurface(analyticalSurface), par_shared_face_count(0), vD(dist_vec), vN(normal_vec), nTerms(nTerms)  { }
+      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms) :  pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), vD(dist_vec), vN(normal_vec), nTerms(nTerms)  { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
@@ -206,15 +202,13 @@ namespace mfem
     private:
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
-      ShiftedFaceMarker *analyticalSurface;
-      int par_shared_face_count;
       VectorCoefficient *vD;
       VectorCoefficient *vN;
       int nTerms;
       bool fullPenalty;
       
     public:
-      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, ShiftedFaceMarker *analyticalSurface, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), analyticalSurface(analyticalSurface), vD(dist_vec), vN(normal_vec), par_shared_face_count(0), nTerms(nTerms), fullPenalty(fP) { }
+      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,
