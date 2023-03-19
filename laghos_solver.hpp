@@ -139,7 +139,6 @@ namespace mfem
       bool fullPenalty;
   
       void UpdateQuadratureData(const Vector &S) const;
-      void UpdateQuadratureDataGL(const Vector &S) const;
       void AssembleForceMatrix() const;
       void AssembleEnergyForceMatrix() const;
       void AssembleVelocityBoundaryForceMatrix() const;

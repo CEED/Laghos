@@ -184,6 +184,79 @@ namespace mfem
 	}
     }
 
+    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const double penaltyParameter)
+    {
+      ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
+      const int NE = p_fespace->GetParMesh()->GetNE();
+      const ParMesh * pmesh = p_fespace->GetParMesh();
+      int dim = pmesh->Dimension();
+      penaltyScaling_gf = 0.0;
+      // Compute L2 pressure at the quadrature points, element by element.
+      for (int e = 0; e < NE; e++)
+	{
+	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){	 
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	    const int nqp = ir.GetNPoints();
+	    
+	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    for (int q = 0; q < nqp; q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		Tr.SetIntPoint(&ip);
+		const double detJ = (Tr.Jacobian()).Det();
+		const DenseMatrix & Jac = Tr.Jacobian();
+		double rho_vals = rho_gf.GetValue(Tr,ip);
+		double sound_speed = cs_gf.GetValue(Tr,ip);     
+		penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * sound_speed;		
+		double visc_coeff = 0.0;
+		DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
+		if (use_viscosity)
+		  {
+		    // Compression-based length scale at the point. The first
+		    // eigenvector of the symmetric velocity lgradient gives the
+		    // direction of maximal compression. This is used to define the
+		    // relative change of the initial length scale.
+		    v.GetVectorGradient(Tr, sgrad_v);
+		    
+		    double vorticity_coeff = 1.0;
+		    if (use_vorticity)
+		      {
+			const double grad_norm = sgrad_v.FNorm();
+			const double div_v = fabs(sgrad_v.Trace());
+			vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+		      }
+		    
+		    sgrad_v.Symmetrize();
+		    double eig_val_data[3], eig_vec_data[9];
+		    if (dim==1)
+		      {
+			eig_val_data[0] = sgrad_v(0, 0);
+			eig_vec_data[0] = 1.;
+		      }
+		    else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+		    Vector compr_dir(eig_vec_data, dim);
+		    mfem::Mult(Tr.Jacobian(), qdata.Jac0inv(e*nqp + q), Jpi);
+		    Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+		    // Change of the initial mesh size in the compression direction.
+		    const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
+		    // Measure of maximal compression.
+		    const double mu = eig_val_data[0];
+		    visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
+		    // The following represents a "smooth" version of the statement
+		    // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+		    // eps must be scaled appropriately if a different unit system is
+		  // being used.
+		    const double eps = 1e-12;
+		    visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+		    penaltyScaling_gf(e * nqp + q) += penaltyParameter * visc_coeff * (1.0 / h);
+		  }
+	      }
+	  }
+	}
+    }
+ 
+
     void ComputeMaterialProperty(const double gamma,
 				 const double rho, const double e,
 				 double &p, double &cs)

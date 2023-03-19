@@ -442,13 +442,13 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
+      penaltyScalingface_gf.ExchangeFaceNbrData();
  
       UpdateQuadratureData(S);
-      UpdateQuadratureDataGL(S);
-
       
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
@@ -517,12 +517,14 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
+    
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
+      penaltyScalingface_gf.ExchangeFaceNbrData();
  
       UpdateQuadratureData(S);
-      UpdateQuadratureDataGL(S);
 
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
@@ -834,209 +836,6 @@ namespace mfem
       delete [] p_b;
       delete [] cs_b;
       delete [] Jpr_b;
-    }
-
-    /*    void LagrangianHydroOperator::UpdateQuadratureDataGL(const Vector &S) const
-    {
-      if (bv_qdata_is_current) { return; }
-      bv_qdata_is_current = true;
-      bv_forcemat_is_assembled = false;
-    
-      // This code is only for the 1D/FA mode
-      ParGridFunction x, v, e;
-      Vector* sptr = const_cast<Vector*>(&S);
-      x.MakeRef(&H1, *sptr, 0);
-      v.MakeRef(&H1, *sptr, H1.GetVSize());
-      e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
-      // compute the maximum vorticity, density (rho), artificial viscosity (mu), and sound speed
-      // over all faces/edges of the domain.
-      double max_vorticity = 0.0;
-      double max_rho = 0.0;
-      double max_sound_speed = 0.0;
-      double max_mu = 0.0;
-      double min_h = 10000.0;
-      double max_h = 0.0;
-
-      for (int i = 0; i < NE; i++)
-	{
-	  if ((pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::GHOST)){
-	    // The points (and their numbering) coincide with the nodes of p.
-	    const IntegrationRule &ir_p = PFace_L2.GetFE(i)->GetNodes();
-	    const int gl_nqp = ir_p.GetNPoints();
-	    
-	    ElementTransformation &Tr = *PFace_L2.GetElementTransformation(i);
-	    for (int q = 0; q < gl_nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir_p.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      const double detJ = (Tr.Jacobian()).Det();
-	      const DenseMatrix & Jac = Tr.Jacobian();
-	      double rho_vals = gl_qdata.rho0DetJ0(i*gl_nqp+q) / detJ;
-	      double gamma_vals = gamma_gf.GetValue(Tr, ip);
-	      double e_vals = fmax(0.0,e.GetValue(Tr, ip));
-	      double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
-	      if ( max_rho < rho_vals){
-		max_rho = rho_vals;
-	      }
-	      if ( max_sound_speed < sound_speed){
-		max_sound_speed = sound_speed;
-	      }
-	      DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
-	      if (use_viscosity)
-		{
-		  // Compression-based length scale at the point. The first
-		  // eigenvector of the symmetric velocity lgradient gives the
-		  // direction of maximal compression. This is used to define the
-		  // relative change of the initial length scale.
-		  v.GetVectorGradient(Tr, sgrad_v);
-
-		  double vorticity_coeff = 1.0;
-		  if (use_vorticity)
-		    {
-		      const double grad_norm = sgrad_v.FNorm();
-		      const double div_v = fabs(sgrad_v.Trace());
-		      vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-		      if (max_vorticity < vorticity_coeff){
-			max_vorticity = vorticity_coeff;
-		      }
-		  
-		    }
-	       
-		  sgrad_v.Symmetrize();
-		  double eig_val_data[3], eig_vec_data[9];
-		  if (dim==1)
-		    {
-		      eig_val_data[0] = sgrad_v(0, 0);
-		      eig_vec_data[0] = 1.;
-		    }
-		  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
-		  Vector compr_dir(eig_vec_data, dim);
-		  mfem::Mult(Tr.Jacobian(), gl_qdata.Jac0inv(i*gl_nqp + q), Jpi);
-		  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-		  // Change of the initial mesh size in the compression direction.
-		  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
-		  const double h_sing = Jac.CalcSingularvalue(dim-1) / (double) H1.GetOrder(0);
-		  // Measure of maximal compression.
-		  const double mu = fabs(eig_val_data[0]);
-		  if( max_mu < mu){
-		    max_mu = mu;
-		  }
-		  if( h < min_h){
-		    min_h = h;
-		  }
-		  if( h > max_h){
-		    max_h = h;
-		  }
-		}
-	    }
-	  }
-	}
-
-      double global_max_vorticity = 0.0;
-      double global_max_rho = 0.0;
-      double global_max_sound_speed = 0.0;
-      double global_max_mu = 0.0;
-      double global_min_h = 1000.0;
-      double global_max_h = 0.0;
-    
-      // parallel calls
-      MPI_Allreduce(&max_rho, &global_max_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-      MPI_Allreduce(&max_sound_speed, &global_max_sound_speed, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-      MPI_Allreduce(&max_mu, &global_max_mu, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-      MPI_Allreduce(&max_vorticity, &global_max_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-      MPI_Allreduce(&min_h, &global_min_h, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
-      MPI_Allreduce(&max_h, &global_max_h, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-
-      gl_qdata.normalVelocityPenaltyScaling = penaltyParameter * global_max_rho * global_max_sound_speed;
-      if (use_viscosity)
-	{
-	  gl_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_mu * (1.0 / global_min_h);
-	  
-	  if (use_vorticity)
-	    {
-	      gl_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h;
-	    }
-	}
-	}*/
-
-    void LagrangianHydroOperator::UpdateQuadratureDataGL(const Vector &S) const
-    {
-      if (bv_qdata_is_current) { return; }
-      bv_qdata_is_current = true;
-      bv_forcemat_is_assembled = false;
-    
-      // This code is only for the 1D/FA mode
-      ParGridFunction x, v, e;
-      Vector* sptr = const_cast<Vector*>(&S);
-      x.MakeRef(&H1, *sptr, 0);
-      v.MakeRef(&H1, *sptr, H1.GetVSize());
-      e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
-      penaltyScalingface_gf = 0.0;
-      for (int i = 0; i < NE; i++)
-	{
-	  if ((pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::GHOST)){
-	    // The points (and their numbering) coincide with the nodes of p.
-	    const IntegrationRule &ir_p = PFace_L2.GetFE(i)->GetNodes();
-	    const int gl_nqp = ir_p.GetNPoints();
-	    
-	    ElementTransformation &Tr = *PFace_L2.GetElementTransformation(i);
-	    for (int q = 0; q < gl_nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir_p.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      const double detJ = (Tr.Jacobian()).Det();
-	      const DenseMatrix & Jac = Tr.Jacobian();
-	      double rho_vals = gl_qdata.rho0DetJ0(i*gl_nqp+q) / detJ;
-	      double gamma_vals = gamma_gf.GetValue(Tr, ip);
-	      double e_vals = fmax(0.0,e.GetValue(Tr, ip));
-	      double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
-	      penaltyScalingface_gf(i * gl_nqp + q) = penaltyParameter * rho_vals * sound_speed;
-	      double visc_coeff = 0.0;
-	      DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
-	      if (use_viscosity)
-		{
-		  // Compression-based length scale at the point. The first
-		  // eigenvector of the symmetric velocity lgradient gives the
-		  // direction of maximal compression. This is used to define the
-		  // relative change of the initial length scale.
-		  v.GetVectorGradient(Tr, sgrad_v);
-
-		  double vorticity_coeff = 1.0;
-		  if (use_vorticity)
-		    {
-		      const double grad_norm = sgrad_v.FNorm();
-		      const double div_v = fabs(sgrad_v.Trace());
-		      vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-		    }
-	       
-		  sgrad_v.Symmetrize();
-		  double eig_val_data[3], eig_vec_data[9];
-		  if (dim==1)
-		    {
-		      eig_val_data[0] = sgrad_v(0, 0);
-		      eig_vec_data[0] = 1.;
-		    }
-		  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
-		  Vector compr_dir(eig_vec_data, dim);
-		  mfem::Mult(Tr.Jacobian(), gl_qdata.Jac0inv(i*gl_nqp + q), Jpi);
-		  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-		  // Change of the initial mesh size in the compression direction.
-		  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
-		  // Measure of maximal compression.
-		  const double mu = eig_val_data[0];
-		  visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
-		  // The following represents a "smooth" version of the statement
-		  // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-		  // eps must be scaled appropriately if a different unit system is
-		  // being used.
-		  const double eps = 1e-12;
-		  visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		  penaltyScalingface_gf(i * gl_nqp + q) += penaltyParameter * visc_coeff * (1.0 / h);	    	  
-		}
-	    }
-	  }
-	}
-      penaltyScalingface_gf.ExchangeFaceNbrData();
     }
 
 
