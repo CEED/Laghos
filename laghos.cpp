@@ -320,17 +320,24 @@ int main(int argc, char *argv[])
   ParGridFunction p_gf(&P_L2FESpace);
   ParGridFunction cs_gf(&P_L2FESpace);
   ParGridFunction rho_gf(&P_L2FESpace);
+  ParGridFunction penaltyScaling_gf(&P_L2FESpace);
+
   p_gf = 0.0;
   cs_gf = 0.0;
   rho_gf = 0.0;
+  penaltyScaling_gf = 0.0;
+  
   // Grid Functions for face terms
   ParGridFunction pface_gf(&PFace_L2FESpace);
   ParGridFunction csface_gf(&PFace_L2FESpace);
   ParGridFunction rhoface_gf(&PFace_L2FESpace);
+  ParGridFunction penaltyScalingface_gf(&PFace_L2FESpace);
+
   pface_gf = 0.0;
   csface_gf = 0.0;
   rhoface_gf = 0.0;
- 
+  penaltyScalingface_gf = 0.0;
+  
   FunctionCoefficient rho0_coeff(rho0);
   L2_FECollection l2_fec(order_e, pmesh->Dimension());
   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
@@ -378,7 +385,7 @@ int main(int argc, char *argv[])
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
-					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, source, cfl,
+					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, penaltyScaling_gf, penaltyScalingface_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
 					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty, numberGhostTerms, ghostPenaltyCoefficient);

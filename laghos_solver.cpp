@@ -98,6 +98,8 @@ namespace mfem
 						     ParGridFunction &e_gf,
 						     ParGridFunction &cs_gf,
 						     ParGridFunction &csface_gf,
+						     ParGridFunction &penaltyScaling_gf,
+						     ParGridFunction &penaltyScalingface_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -158,8 +160,10 @@ namespace mfem
       p_gf(p_gf),
       e_gf(e_gf),
       cs_gf(cs_gf),
+      penaltyScaling_gf(penaltyScaling_gf),
       pface_gf(pface_gf),
       csface_gf(csface_gf),
+      penaltyScalingface_gf(penaltyScalingface_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -208,11 +212,13 @@ namespace mfem
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
- 
+      penaltyScaling_gf.ExchangeFaceNbrData();
+   
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
- 
+      penaltyScalingface_gf.ExchangeFaceNbrData();
+   
       alpha_fec = new L2_FECollection(0, pmesh->Dimension());
       alpha_fes = new ParFiniteElementSpace(pmesh, alpha_fec);
       alpha_fes->ExchangeFaceNbrData();
@@ -353,7 +359,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyScalingface_gf);
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
@@ -370,7 +376,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, penaltyScalingface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
 
@@ -830,7 +836,7 @@ namespace mfem
       delete [] Jpr_b;
     }
 
-    void LagrangianHydroOperator::UpdateQuadratureDataGL(const Vector &S) const
+    /*    void LagrangianHydroOperator::UpdateQuadratureDataGL(const Vector &S) const
     {
       if (bv_qdata_is_current) { return; }
       bv_qdata_is_current = true;
@@ -951,7 +957,88 @@ namespace mfem
 	      gl_qdata.normalVelocityPenaltyScaling += penaltyParameter * global_max_rho * global_max_vorticity * global_max_h;
 	    }
 	}
+	}*/
+
+    void LagrangianHydroOperator::UpdateQuadratureDataGL(const Vector &S) const
+    {
+      if (bv_qdata_is_current) { return; }
+      bv_qdata_is_current = true;
+      bv_forcemat_is_assembled = false;
+    
+      // This code is only for the 1D/FA mode
+      ParGridFunction x, v, e;
+      Vector* sptr = const_cast<Vector*>(&S);
+      x.MakeRef(&H1, *sptr, 0);
+      v.MakeRef(&H1, *sptr, H1.GetVSize());
+      e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
+      penaltyScalingface_gf = 0.0;
+      for (int i = 0; i < NE; i++)
+	{
+	  if ((pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(i) == ShiftedFaceMarker::SBElementType::GHOST)){
+	    // The points (and their numbering) coincide with the nodes of p.
+	    const IntegrationRule &ir_p = PFace_L2.GetFE(i)->GetNodes();
+	    const int gl_nqp = ir_p.GetNPoints();
+	    
+	    ElementTransformation &Tr = *PFace_L2.GetElementTransformation(i);
+	    for (int q = 0; q < gl_nqp; q++)
+	    {
+	      const IntegrationPoint &ip = ir_p.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      const double detJ = (Tr.Jacobian()).Det();
+	      const DenseMatrix & Jac = Tr.Jacobian();
+	      double rho_vals = gl_qdata.rho0DetJ0(i*gl_nqp+q) / detJ;
+	      double gamma_vals = gamma_gf.GetValue(Tr, ip);
+	      double e_vals = fmax(0.0,e.GetValue(Tr, ip));
+	      double sound_speed = sqrt(gamma_vals * (gamma_vals-1.0) * e_vals);
+	      penaltyScalingface_gf(i * gl_nqp + q) = penaltyParameter * rho_vals * sound_speed;
+	      double visc_coeff = 0.0;
+	      DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
+	      if (use_viscosity)
+		{
+		  // Compression-based length scale at the point. The first
+		  // eigenvector of the symmetric velocity lgradient gives the
+		  // direction of maximal compression. This is used to define the
+		  // relative change of the initial length scale.
+		  v.GetVectorGradient(Tr, sgrad_v);
+
+		  double vorticity_coeff = 1.0;
+		  if (use_vorticity)
+		    {
+		      const double grad_norm = sgrad_v.FNorm();
+		      const double div_v = fabs(sgrad_v.Trace());
+		      vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+		    }
+	       
+		  sgrad_v.Symmetrize();
+		  double eig_val_data[3], eig_vec_data[9];
+		  if (dim==1)
+		    {
+		      eig_val_data[0] = sgrad_v(0, 0);
+		      eig_vec_data[0] = 1.;
+		    }
+		  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+		  Vector compr_dir(eig_vec_data, dim);
+		  mfem::Mult(Tr.Jacobian(), gl_qdata.Jac0inv(i*gl_nqp + q), Jpi);
+		  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+		  // Change of the initial mesh size in the compression direction.
+		  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+		  // Measure of maximal compression.
+		  const double mu = eig_val_data[0];
+		  visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
+		  // The following represents a "smooth" version of the statement
+		  // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+		  // eps must be scaled appropriately if a different unit system is
+		  // being used.
+		  const double eps = 1e-12;
+		  visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+		  penaltyScalingface_gf(i * gl_nqp + q) += penaltyParameter * visc_coeff * (1.0 / h);	    	  
+		}
+	    }
+	  }
+	}
+      penaltyScalingface_gf.ExchangeFaceNbrData();
     }
+
 
     void LagrangianHydroOperator::AssembleForceMatrix() const
     {

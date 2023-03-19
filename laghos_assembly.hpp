@@ -99,6 +99,7 @@ namespace mfem
     private:
       const QuadratureDataGL &qdata;
       const ParGridFunction &pface_gf;
+      
     public:
       VelocityBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf) : qdata(qdata), pface_gf(pface_gf) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
@@ -138,8 +139,10 @@ namespace mfem
     {
     private:
       const QuadratureDataGL &qdata;
+      const ParGridFunction &penaltyScalingface_gf;
+    
     public:
-      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata) : qdata(qdata) { }
+      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, const ParGridFunction &penaltyScalingface_gf) : qdata(qdata), penaltyScalingface_gf(penaltyScalingface_gf) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,
@@ -155,7 +158,7 @@ namespace mfem
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
       const ParGridFunction &pface_gf;
-      
+     
     public:
       ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf) : pmesh(pmesh), qdata(qdata), pface_gf(pface_gf) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
@@ -202,13 +205,14 @@ namespace mfem
     private:
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
+      const ParGridFunction &penaltyScalingface_gf;
       VectorCoefficient *vD;
       VectorCoefficient *vN;
       int nTerms;
       bool fullPenalty;
       
     public:
-      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
+      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &penaltyScalingface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), penaltyScalingface_gf(penaltyScalingface_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,

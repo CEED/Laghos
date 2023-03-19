@@ -324,6 +324,7 @@ namespace mfem
       Vector shape(h1dofs_cnt);
       const int Elem1No = Tr.ElementNo;
       shape = 0.0;
+      ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const int eq = Elem1No*nqp_face + q;
@@ -342,7 +343,9 @@ namespace mfem
 	  else
 	    {
 	      CalcOrtho(Tr.Jacobian(), nor);
-	    }        
+	    }
+	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip);
+
 	  fe.CalcShape(eip, shape);
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
@@ -358,7 +361,7 @@ namespace mfem
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
+			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * penaltyVal /*qdata.normalVelocityPenaltyScaling*/ * ip_f.weight;
 			}
 		    }
 		}
@@ -973,6 +976,7 @@ namespace mfem
 
 	    fe.CalcShape(eip, shape);
 	    fe.CalcShape(eip, shape_test);
+	    double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip);
 
 	    /////
 	    Vector D_el1(dim);
@@ -1047,7 +1051,7 @@ namespace mfem
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
 			    //   elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal/*qdata.normalVelocityPenaltyScaling*/ * ip_f.weight * nTildaDotN * nTildaDotN;
 			    //  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el1(vd) * tN_el1(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);			
 	
 			  }
@@ -1119,6 +1123,7 @@ namespace mfem
 
 	    fe2.CalcShape(eip, shape);
 	    fe2.CalcShape(eip, shape_test);
+	    double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el2,eip);
 
 	    /////
 	    Vector D_el2(dim);
@@ -1194,7 +1199,7 @@ namespace mfem
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
 			    //		    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * qdata.normalVelocityPenaltyScaling * ip_f.weight;
-			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * tN_el2(vd) * tN_el2(md) * qdata.normalVelocityPenaltyScaling * ip_f.weight * nTildaDotN * nTildaDotN;
+			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * tN_el2(vd) * tN_el2(md) * penaltyVal /*qdata.normalVelocityPenaltyScaling*/ * ip_f.weight * nTildaDotN * nTildaDotN;
 			    //    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test(i) * shape(j) * nor_norm * (identity(vd,md) - tN_el2(vd) * tN_el2(md)) * qdata.normalVelocityPenaltyScaling * ip_f.weight * (1.0 - nTildaDotN * nTildaDotN);
 
 			  }

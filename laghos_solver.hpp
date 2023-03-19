@@ -71,10 +71,12 @@ namespace mfem
       ParGridFunction &e_gf;
       ParGridFunction &cs_gf;
       ParGridFunction &rho_gf;
+      ParGridFunction &penaltyScaling_gf;
       // Grid Functions for face terms
       ParGridFunction &pface_gf;
       ParGridFunction &csface_gf;
       ParGridFunction &rhoface_gf;
+      ParGridFunction &penaltyScalingface_gf;
       IntegrationRules GLIntRules;
       
       // Velocity mass matrix and local inverses of the energy mass matrices. These
@@ -161,6 +163,8 @@ namespace mfem
 			      ParGridFunction &e_gf,
 			      ParGridFunction &cs_gf,
 			      ParGridFunction &csface_gf,
+			      ParGridFunction &penaltyScaling_gf,
+			      ParGridFunction &penaltyScalingface_gf,
 			      const int source,
 			      const double cfl,
 			      const bool visc, const bool vort,
