@@ -191,6 +191,10 @@ namespace mfem
       const ParMesh * pmesh = p_fespace->GetParMesh();
       int dim = pmesh->Dimension();
       penaltyScaling_gf = 0.0;
+      double max_standard_coef = 0.0;
+      double max_viscous_coef = 0.0;
+      double min_h = 10000.0;
+      
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
@@ -200,6 +204,7 @@ namespace mfem
 	    const int nqp = ir.GetNPoints();
 	    
 	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    
 	    for (int q = 0; q < nqp; q++)
 	      {
 		const IntegrationPoint &ip = ir.IntPoint(q);
@@ -207,8 +212,9 @@ namespace mfem
 		const double detJ = (Tr.Jacobian()).Det();
 		const DenseMatrix & Jac = Tr.Jacobian();
 		double rho_vals = rho_gf.GetValue(Tr,ip);
-		double sound_speed = cs_gf.GetValue(Tr,ip);     
-		penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * sound_speed;		
+		double sound_speed = cs_gf.GetValue(Tr,ip);
+		max_standard_coef = std::max(max_standard_coef, rho_vals * sound_speed);
+		//	penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * sound_speed;		
 		double visc_coeff = 0.0;
 		DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
 		if (use_viscosity)
@@ -249,11 +255,23 @@ namespace mfem
 		  // being used.
 		    const double eps = 1e-12;
 		    visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		    penaltyScaling_gf(e * nqp + q) += penaltyParameter * visc_coeff * (1.0 / h);
+		    max_viscous_coef = std::max(max_viscous_coef, visc_coeff);
+		    min_h = std::min(min_h, h);
+		    //    penaltyScaling_gf(e * nqp + q) += penaltyParameter * visc_coeff * (1.0 / h);
 		  }
 	      }
 	  }
 	}
+
+      double globalmax_standard_coef = 0.0;
+      double globalmax_viscous_coef = 0.0;
+      double globalmin_h = 0.0;
+   
+      MPI_Allreduce(&max_standard_coef, &globalmax_standard_coef, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+      MPI_Allreduce(&max_viscous_coef, &globalmax_viscous_coef, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+      MPI_Allreduce(&min_h, &globalmin_h, 1, MPI_DOUBLE, MPI_MIN, pmesh->GetComm());
+
+      penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef / globalmin_h);
     }
  
 
