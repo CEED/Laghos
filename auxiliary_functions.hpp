@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "marking.hpp"
+#include "sbm_aux.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -94,7 +95,7 @@ namespace mfem
 
     void UpdateSoundSpeedGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf);
     
-    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const double penaltyParameter);
+    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const double penaltyParameter);
       
     void ComputeMaterialProperty(const double gamma,
 				   const double rho, const double e,

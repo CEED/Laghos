@@ -184,7 +184,7 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const double penaltyParameter)
+    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const double penaltyParameter)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -221,7 +221,17 @@ namespace mfem
 		max_rho = std::max(max_rho, rho_vals);
 		max_cs = std::max(max_cs, sound_speed);
 		max_standard_coef = std::max(max_standard_coef, rho_vals * sound_speed);
-		//	penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * sound_speed;		
+		penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * sound_speed;
+		/////
+		Vector D_el1(dim);
+		D_el1 = 0.0;
+		dist_vec->Eval(D_el1, Tr, ip);
+		double normD = 0.0;
+		//		for (int j = 0; j < dim; j++){
+		//	  normD += D_el1(j) * D_el1(j);
+		//}
+	    //		normD = std::pow(normD,0.5);
+		////
 		double visc_coeff = 0.0;
 		DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
 		if (use_viscosity)
@@ -256,20 +266,22 @@ namespace mfem
 		    const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
 		    // Measure of maximal compression.
 		    const double mu = eig_val_data[0];
-		    visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
+		    visc_coeff = 2.0 * rho_vals * (h+normD) * (h+normD) * fabs(mu);
+		    
 		    // The following represents a "smooth" version of the statement
 		    // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
 		    // eps must be scaled appropriately if a different unit system is
 		    // being used.
 		   
 		    const double eps = 1e-12;
-		    visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		    max_viscous_coef = std::max(max_viscous_coef, visc_coeff / h);
+		    visc_coeff += 0.5 * rho_vals * (h+normD) * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+		    
+		    max_viscous_coef = std::max(max_viscous_coef, visc_coeff / (h+normD));
 		    min_h = std::min(min_h, h);
 		    max_mu = std::max(max_mu, std::fabs(mu));
 		    max_h = std::max(max_h, h);
 		    max_smooth_step = std::max(max_smooth_step, 1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		    //    penaltyScaling_gf(e * nqp + q) += penaltyParameter * visc_coeff * (1.0 / h);
+		    penaltyScaling_gf(e * nqp + q) += penaltyParameter * visc_coeff * (1.0 /  (h+normD));
 		  }
 	      }
 	  }
@@ -295,10 +307,10 @@ namespace mfem
       MPI_Allreduce(&max_smooth_step, &globalmax_smooth_step, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_vorticity, &globalmax_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-      //  penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
+      penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
       //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_viscous_coef);
-      //   penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
-      penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
+      //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
+      // penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
       //     std::cout << " val " << (globalmax_standard_coef + globalmax_viscous_coef) << " visc " << globalmax_viscous_coef << std::endl;
       // std::cout << " old " << (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h) << std::endl;
       

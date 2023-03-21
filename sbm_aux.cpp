@@ -30,7 +30,7 @@ double relativePosition(const Vector &x, const int type)
    else if (type == 2) // circle of radius 0.2 - centered at 0.5, 0.5
    {
      double slope = 0.0;
-     double yIntercept = 0.6;
+     double yIntercept = 0.62;
      double ptOnLine = slope * x(0) + yIntercept;
      return ptOnLine-x(1); // positive is the domain
    }
@@ -88,7 +88,7 @@ void Circle_Normal(const Vector &x, Vector &tN){
 // Distance to circle of radius 0.2 - centered at 0.5, 0.5 
 void Line_Dist(const Vector &x, Vector &D){
   double slope = 0.0;
-  double yIntercept = 0.6;
+  double yIntercept = 0.62;
   double ptOnLine = slope * x(0) + yIntercept;
   D(0) = 0.0;
   D(1) = ptOnLine - x(1);

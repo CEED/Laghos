@@ -442,7 +442,7 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -517,7 +517,7 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
     
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
@@ -605,7 +605,47 @@ namespace mfem
       double glob_dt_est;
       const MPI_Comm comm = H1.GetParMesh()->GetComm();
       MPI_Allreduce(&qdata.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN, comm);
-      return glob_dt_est;
+      if (useEmbedded){
+	// Check if any nodes cross bc
+	for (int e = 0; e < NE; e++)
+	  {
+	    if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
+	      // The points (and their numbering) coincide with the nodes of p.
+	      const IntegrationRule &ir = PFace_L2.GetFE(e)->GetNodes();
+	      const int nqp = ir.GetNPoints();
+	    
+	      ElementTransformation &Tr = *(PFace_L2.GetElementTransformation(e));
+	      for (int q = 0; q < nqp; q++)
+		{
+		  const IntegrationPoint &ip_f = ir.IntPoint(q);
+		  // Set the integration point in the face and the neighboring elements
+		  Tr.SetIntPoint(&ip_f);
+		  /////
+		  Vector D_el1(dim);
+		  Vector tN_el1(dim);
+		  D_el1 = 0.0;
+		  tN_el1 = 0.0; 	    
+		  dist_vec->Eval(D_el1, Tr, ip_f);
+		  normal_vec->Eval(tN_el1, Tr, ip_f);
+		/////
+		  double normD = 0.0;
+		  for (int j = 0; j < dim; j++){
+		    normD += D_el1(j) * D_el1(j);
+		}
+		  normD = std::pow(normD,0.5);
+		  double sign = 0.0;
+		for (int j = 0; j < dim; j++) {
+		  sign += D_el1(j)/normD * tN_el1(j);
+		}
+		if (sign < 0.0) {
+		  std::cout << " NEGATIVE " << std::endl;
+		  return -1.0;
+		}
+		}
+	    }
+	  }
+      }
+      return glob_dt_est;  
     }
 
     void LagrangianHydroOperator::ResetTimeStepEstimate() const
@@ -796,6 +836,7 @@ namespace mfem
 		      // Measure of maximal compression.
 		      const double mu = eig_val_data[0];
 		      visc_coeff = 2.0 * rho * h * h * fabs(mu);
+		    
 		      // The following represents a "smooth" version of the statement
 		      // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
 		      // eps must be scaled appropriately if a different unit system is
