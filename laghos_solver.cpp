@@ -16,6 +16,7 @@
 
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
+MFEM_JIT
 #include "linalg/kernels.hpp"
 #include <unordered_map>
 
