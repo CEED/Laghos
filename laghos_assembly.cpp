@@ -1298,8 +1298,10 @@ namespace mfem
 	    double cs_1 = csface_gf.GetValue(Trans_el1,eip_el1);
 	    double cs_2 = csface_gf.GetValue(Trans_el2,eip_el2);
 
-	    if  ((cs_1 * density_1 + cs_2 * density_2 ) != 0.0){
-	      double weighted_h = penaltyScaling * (cs_1 * density_1) * (cs_2 * density_2) / (cs_1 * density_1 + cs_2 * density_2 );
+	    if  ( (density_1 != 0.0) && (density_2 != 0.0) ) {
+	      //  double weighted_h = penaltyScaling * (cs_1 ) * (cs_2 ) / (cs_1 + cs_2 );
+	      double weighted_h = penaltyScaling * ( (cs_1 * density_1 * (Tr.Elem1->Weight()/nor_norm) )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) ) +  (cs_2 * density_2 * (Tr.Elem2->Weight()/nor_norm) )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) )  );
+	    
 	      double pressure_diff = pressure_1 - pressure_2;
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{

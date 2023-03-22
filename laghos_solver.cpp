@@ -388,7 +388,7 @@ namespace mfem
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
-      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, penaltyParameter * C_I_E);
+      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, /*penaltyParameter * */1.0*C_I_E);
       p_e_bfi->SetIntRule(&b_ir);
       PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
       // Make a dummy assembly to figure out the sparsity.
