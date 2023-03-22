@@ -390,7 +390,7 @@ namespace mfem
 
       p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, /*penaltyParameter * */1.0*C_I_E);
       p_e_bfi->SetIntRule(&b_ir);
-      PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
+      // PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
       // Make a dummy assembly to figure out the sparsity.
       PenaltyEnergyBoundaryForce.Assemble();
 
@@ -473,14 +473,12 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter /** C_I_V*/);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       penaltyScalingface_gf.ExchangeFaceNbrData();
  
-      UpdateQuadratureData(S);
-      
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
        
@@ -548,15 +546,13 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter /** C_I_V*/);
     
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       penaltyScalingface_gf.ExchangeFaceNbrData();
- 
-      UpdateQuadratureData(S);
-
+	
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;
