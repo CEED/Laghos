@@ -184,7 +184,7 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const double penaltyParameter)
+    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -225,8 +225,10 @@ namespace mfem
 		/////
 		Vector D_el1(dim);
 		D_el1 = 0.0;
-		dist_vec->Eval(D_el1, Tr, ip);
 		double normD = 0.0;
+		if (useEmbedded){
+		  dist_vec->Eval(D_el1, Tr, ip);
+		}
 		//		for (int j = 0; j < dim; j++){
 		//	  normD += D_el1(j) * D_el1(j);
 		//}

@@ -34,6 +34,7 @@
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
 // Test problems: see README.
+// mpirun -np 1 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -s 7 -penPar 10.0 -vis -ok 1 -ot 0 -emb -tO 1 -nGT 0 -gPenCoef 1.0 -gS 1 -fP
 
 #include "laghos_solver.hpp"
 
@@ -382,7 +383,7 @@ int main(int argc, char *argv[])
     }
   if (impose_visc) { visc = true; }
 
-  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
+  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, penaltyScaling_gf, penaltyScalingface_gf, source, cfl,

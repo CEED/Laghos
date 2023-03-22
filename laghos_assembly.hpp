@@ -220,6 +220,29 @@ namespace mfem
       
     };
 
+class PenaltyEnergyBoundaryForceIntegrator : public LinearFormIntegrator
+{
+private:
+  const QuadratureDataGL &qdata;
+  const ParGridFunction &pface_gf;
+  const ParGridFunction &csface_gf;
+  const ParGridFunction &rhoface_gf;
+  const double penaltyScaling;
+  
+public:
+  PenaltyEnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &csface_gf, const ParGridFunction &rhoface_gf, const double penPar) : qdata(qdata), pface_gf(pface_gf), csface_gf(csface_gf), rhoface_gf(rhoface_gf), penaltyScaling(penPar) { }
+  
+   using LinearFormIntegrator::AssembleRHSElementVect;
+  
+  virtual void AssembleRHSElementVect(const FiniteElement &el,
+				      const FiniteElement &el2,
+				      FaceElementTransformations &Tr,
+				      Vector &elvect);
+  virtual void AssembleRHSElementVect(const FiniteElement &el,
+				      ElementTransformation &Tr,
+				      Vector &elvect) {}
+  
+};
     
   } // namespace hydrodynamics
   

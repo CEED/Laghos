@@ -83,6 +83,8 @@ namespace mfem
     }
 
     LagrangianHydroOperator::LagrangianHydroOperator(const int size,
+						     const int order_e,
+						     const int order_v,
 						     ParFiniteElementSpace &h1,
 						     ParFiniteElementSpace &l2,
 						     ParFiniteElementSpace &p_l2_fes,
@@ -136,6 +138,7 @@ namespace mfem
       efi(NULL),
       v_bfi(NULL),
       e_bfi(NULL),
+      p_e_bfi(NULL),
       nvmi(NULL),
       shifted_v_bfi(NULL),
       shifted_e_bfi(NULL),
@@ -189,6 +192,7 @@ namespace mfem
       EnergyForce(&L2),
       VelocityBoundaryForce(&H1),
       EnergyBoundaryForce(&L2),
+      PenaltyEnergyBoundaryForce(&L2),
       ShiftedVelocityBoundaryForce(&H1),
       ShiftedEnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
@@ -201,8 +205,11 @@ namespace mfem
       nTerms(nT),
       fullPenalty(fP),
       numberGhostTerms(nGT),
-      ghostPenaltyParameter(gPenCoef)
+      ghostPenaltyParameter(gPenCoef),
+      C_I_E(0.0),
+      C_I_V(0.0)
     {
+      
       block_offsets[0] = 0;
       block_offsets[1] = block_offsets[0] + H1Vsize;
       block_offsets[2] = block_offsets[1] + H1Vsize;
@@ -218,7 +225,25 @@ namespace mfem
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       penaltyScalingface_gf.ExchangeFaceNbrData();
-   
+      
+      switch (pmesh->GetElementBaseGeometry(0))
+	{
+	case Geometry::TRIANGLE:
+	case Geometry::TETRAHEDRON:{
+	  C_I_E = (order_e)*(order_e+1)/dim+1.0;
+	  C_I_V = (order_v)*(order_v+1)/dim;
+	  break;
+	}
+	case Geometry::SQUARE:
+	case Geometry::CUBE:{
+	  C_I_E = order_e*order_e+1.0;
+	  C_I_V = order_v*order_v;
+	  break;
+	}
+	default: MFEM_ABORT("Unknown zone type!");
+	}
+      
+	 
       alpha_fec = new L2_FECollection(0, pmesh->Dimension());
       alpha_fes = new ParFiniteElementSpace(pmesh, alpha_fec);
       alpha_fes->ExchangeFaceNbrData();
@@ -363,6 +388,12 @@ namespace mfem
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
+      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, penaltyParameter * C_I_E);
+      p_e_bfi->SetIntRule(&b_ir);
+      PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
+      // Make a dummy assembly to figure out the sparsity.
+      PenaltyEnergyBoundaryForce.Assemble();
+
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
@@ -442,7 +473,7 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -517,7 +548,7 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, penaltyParameter);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
     
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
@@ -565,6 +596,7 @@ namespace mfem
       e_rhs = 0.0;
       e_rhs += EnergyForce;
       e_rhs += EnergyBoundaryForce;
+      e_rhs += PenaltyEnergyBoundaryForce;
       if (useEmbedded){
 	e_rhs += ShiftedEnergyBoundaryForce; 
       }
@@ -912,6 +944,8 @@ namespace mfem
     {
       EnergyBoundaryForce = 0.0;
       EnergyBoundaryForce.Assemble();
+      PenaltyEnergyBoundaryForce = 0.0;
+      PenaltyEnergyBoundaryForce.Assemble();
       be_forcemat_is_assembled = true;
     }
 

@@ -124,6 +124,9 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 		surrogateNodes(dofs[k]) = 1;	       
 	      }	  	 
 	  }
+	  else if (elem1_inside && elem2_inside) {
+	    pmesh.SetFaceAttribute(f, 33);
+	  }
 	}
       }
     pmesh.ExchangeFaceNbrNodes();
@@ -186,6 +189,9 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	    {
 	      surrogateNodes(dofs[k]) = 1;
 	    }	  
+	}
+	else if (elem1_inside && elem2_inside){
+	  pmesh.SetFaceAttribute(faceno, 33);
 	}
       }
     

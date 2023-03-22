@@ -100,6 +100,7 @@ namespace mfem
       mutable ParLinearForm EnergyForce;
       mutable ParLinearForm VelocityBoundaryForce;
       mutable ParLinearForm EnergyBoundaryForce;
+      mutable ParLinearForm PenaltyEnergyBoundaryForce;
       mutable ParLinearForm ShiftedVelocityBoundaryForce;
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
@@ -116,7 +117,8 @@ namespace mfem
       VelocityBoundaryForceIntegrator *v_bfi;
       EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
-
+      PenaltyEnergyBoundaryForceIntegrator *p_e_bfi;
+      
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
@@ -137,6 +139,8 @@ namespace mfem
       VectorCoefficient *normal_vec;
       int nTerms;
       bool fullPenalty;
+      double C_I_E;
+      double C_I_V;
   
       void UpdateQuadratureData(const Vector &S) const;
       void AssembleForceMatrix() const;
@@ -146,7 +150,7 @@ namespace mfem
       void AssembleShiftedEnergyBoundaryForceMatrix() const;
 
     public:
-      LagrangianHydroOperator(const int size,
+      LagrangianHydroOperator(const int size, const int order_e, const int order_v,
 			      ParFiniteElementSpace &h1_fes,
 			      ParFiniteElementSpace &l2_fes,
 			      ParFiniteElementSpace &p_l2_fes,
