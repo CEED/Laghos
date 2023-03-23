@@ -1318,6 +1318,100 @@ namespace mfem
 	elvect = 0.0;
       }
     }
+
+    void NitscheEnergyBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+								      const FiniteElement &el2,
+								      FaceElementTransformations &Tr,
+								      Vector &elvect)    
+    {
+      if (Vnpt_gf != NULL){
+	if (Tr.Attribute == 33){
+	  const int dim = el.GetDim();
+	  const int l2dofs_cnt = el.GetDof();
+	  elvect.SetSize(2*l2dofs_cnt);
+	  elvect = 0.0;
+	  Vector nor(dim); 
+	  Vector shape_el1(l2dofs_cnt), shape_el2(l2dofs_cnt); 
+	  
+	  const IntegrationRule *ir = IntRule;
+	  if (ir == NULL)
+	    {
+	      // a simple choice for the integration order; is this OK?
+	      const int order = 5 * max(el.GetOrder(), 1);
+	      //	  const int order = 25;
+	      ir = &IntRules.Get(Tr.GetGeometryType(), order);	  
+	    }
+	  
+	  const int nqp_face = ir->GetNPoints();
+	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+	  const int elementNo = Trans_el1.ElementNo;
+	  
+	  for (int q = 0; q < nqp_face; q++)
+	    {
+	      shape_el1 = 0.0;
+	      shape_el2 = 0.0;
+	    
+	      nor = 0.0;
+	    
+	      const IntegrationPoint &ip_f = ir->IntPoint(q);
+	      // Set the integration point in the face and the neighboring elements
+	      Tr.SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
+	      const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
+	      CalcOrtho(Tr.Jacobian(), nor);
+	      double nor_norm = 0.0;
+	      for (int s = 0; s < dim; s++){
+		nor_norm += nor(s) * nor(s);
+	      }
+	      nor_norm = sqrt(nor_norm);
+	      Vector vShape;
+	      Vnpt_gf->GetVectorValue(elementNo, eip_el1, vShape);
+	      double vDotn = 0.0;
+	      for (int s = 0; s < dim; s++)
+	      {
+		vDotn += vShape(s) * nor(s)/nor_norm;
+	      }
+	      
+	      // element 1
+	      el.CalcShape(eip_el1, shape_el1);
+	      // element 2
+	      el2.CalcShape(eip_el2, shape_el2);
+
+	      double pressure_1 = pface_gf.GetValue(Trans_el1,eip_el1);
+	      double pressure_2 = pface_gf.GetValue(Trans_el2,eip_el2);
+	      double density_1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	      double density_2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+	      double cs_1 = csface_gf.GetValue(Trans_el1,eip_el1);
+	      double cs_2 = csface_gf.GetValue(Trans_el2,eip_el2);
+
+	      if  ( (density_1 != 0.0) && (density_2 != 0.0) ) {
+		double weighted_1 = ( density_1 * Tr.Elem1->Weight()/nor_norm )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) );
+		double weighted_2 = (density_2 * Tr.Elem2->Weight()/nor_norm ) / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) ) ;
+	    
+		double pressure_diff = pressure_1 - pressure_2;
+		for (int i = 0; i < l2dofs_cnt; i++)
+		  {
+		    elvect(i) += weighted_1 * vDotn * shape_el1(i) * pressure_diff * ip_f.weight * nor_norm;
+		    elvect(i + l2dofs_cnt) += weighted_1 * vDotn * shape_el2(i) * pressure_diff * ip_f.weight * nor_norm;
+		  }
+	      }
+	    }
+	}
+	else{
+	  const int dim = el.GetDim();
+	  const int l2dofs_cnt = el.GetDof();
+	  elvect.SetSize(2*l2dofs_cnt);
+	  elvect = 0.0;
+	}
+      }
+      else {
+	const int dim = el.GetDim();
+	const int l2dofs_cnt = el.GetDof();
+	elvect.SetSize(2*l2dofs_cnt);
+	elvect = 0.0;
+      }
+    }
     
   } // namespace hydrodynamics
   

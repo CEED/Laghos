@@ -101,6 +101,7 @@ namespace mfem
       mutable ParLinearForm VelocityBoundaryForce;
       mutable ParLinearForm EnergyBoundaryForce;
       mutable ParLinearForm PenaltyEnergyBoundaryForce;
+      mutable ParLinearForm NitscheEnergyBoundaryForce;
       mutable ParLinearForm ShiftedVelocityBoundaryForce;
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
@@ -118,6 +119,7 @@ namespace mfem
       EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
       PenaltyEnergyBoundaryForceIntegrator *p_e_bfi;
+      NitscheEnergyBoundaryForceIntegrator *n_e_bfi;
       
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;

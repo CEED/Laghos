@@ -309,9 +309,9 @@ namespace mfem
       MPI_Allreduce(&max_smooth_step, &globalmax_smooth_step, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_vorticity, &globalmax_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-      //      penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
+      penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
       //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_viscous_coef);
-      penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
+      //     penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
       // penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
       //     std::cout << " val " << (globalmax_standard_coef + globalmax_viscous_coef) << " visc " << globalmax_viscous_coef << std::endl;
       // std::cout << " old " << (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h) << std::endl;

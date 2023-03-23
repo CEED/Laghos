@@ -243,6 +243,32 @@ public:
 				      Vector &elvect) {}
   
 };
+
+    class NitscheEnergyBoundaryForceIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const QuadratureDataGL &qdata;
+      const ParGridFunction &pface_gf;
+      const ParGridFunction &csface_gf;
+      const ParGridFunction &rhoface_gf;
+      const ParGridFunction *Vnpt_gf;
+      
+    public:
+      NitscheEnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &csface_gf, const ParGridFunction &rhoface_gf) : qdata(qdata), pface_gf(pface_gf), csface_gf(csface_gf), rhoface_gf(rhoface_gf), Vnpt_gf(NULL) { }
+      
+      using LinearFormIntegrator::AssembleRHSElementVect;
+      
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  const FiniteElement &el2,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+				      Vector &elvect) {}
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+	Vnpt_gf = velocity_NPT;
+      }
+    };
     
   } // namespace hydrodynamics
   
