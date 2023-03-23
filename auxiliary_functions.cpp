@@ -193,7 +193,7 @@ namespace mfem
       penaltyScaling_gf = 0.0;
       double max_standard_coef = 0.0;
       double max_viscous_coef = 0.0;
-      double min_h = 10000.0;
+      double min_h = 1000.0;
       double max_cs = 0.0;
       double max_rho = 0.0;
       double max_mu = 0.0;
@@ -291,7 +291,7 @@ namespace mfem
 
       double globalmax_standard_coef = 0.0;
       double globalmax_viscous_coef = 0.0;
-      double globalmin_h = 0.0;
+      double globalmin_h = 1000.0;
       double globalmax_mu = 0.0;
       double globalmax_rho = 0.0;
       double globalmax_cs = 0.0;
@@ -309,9 +309,9 @@ namespace mfem
       MPI_Allreduce(&max_smooth_step, &globalmax_smooth_step, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_vorticity, &globalmax_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-      penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
+      // penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
       //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_viscous_coef);
-      //     penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
+      penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
       // penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
       //     std::cout << " val " << (globalmax_standard_coef + globalmax_viscous_coef) << " visc " << globalmax_viscous_coef << std::endl;
       // std::cout << " old " << (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h) << std::endl;
@@ -345,6 +345,59 @@ namespace mfem
     }
 
     void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress)
+    {
+      if (use_viscosity)
+	{
+	  // Jacobians of reference->physical transformations for all quadrature points
+	  // in the batch.
+	  const DenseMatrix &Jpr = T.Jacobian();
+	  double visc_coeff;
+	  visc_coeff = 0.0;	
+	  DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
+	  Jpi = 0.0;
+	  sgrad_v = 0.0;
+
+	  CalcInverse(Jpr, Jinv);
+	
+	  v.GetVectorGradient(T, sgrad_v);
+	
+	  double vorticity_coeff = 1.0;
+	  if (use_vorticity)
+	    {
+	      const double grad_norm = sgrad_v.FNorm();
+	      const double div_v = fabs(sgrad_v.Trace());
+	      vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+	    }
+	
+	  sgrad_v.Symmetrize();
+	  double eig_val_data[3], eig_vec_data[9];
+	  if (dim==1)
+	    {
+	      eig_val_data[0] = sgrad_v(0, 0);
+	      eig_vec_data[0] = 1.;
+	    }
+	  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+	  Vector compr_dir(eig_vec_data, dim);
+	  // Computes the initial->physical transformation Jacobian.
+	  mfem::Mult(Jpr, qdata.Jac0inv(qdata_quad_index), Jpi);
+	  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+	  // Change of the initial mesh size in the compression direction.
+	  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+	  // Measure of maximal compression.
+	  const double mu = eig_val_data[0];
+	  visc_coeff = 2.0 * rho * h * h * fabs(mu);
+	  // The following represents a "smooth" version of the statement
+	  // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+	  // eps must be scaled appropriately if a different unit system is
+	  // being used.
+	  const double eps = 1e-12;
+	  visc_coeff += 0.5 * rho * h * sound_speed * vorticity_coeff *
+	    (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+	  stress.Add(visc_coeff, sgrad_v);
+	}
+    }
+
+    void ComputeViscousStressGL(ElementTransformation &T, const ParGridFunction &v, const QuadratureDataGL &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress)
     {
       if (use_viscosity)
 	{

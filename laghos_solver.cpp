@@ -146,7 +146,6 @@ namespace mfem
       shifted_nvmi(NULL),
       shifted_ghostPenvmi(NULL),
       wall_dist_coef(NULL),
-      combo_dist_coef(NULL),
       distance_vec_space(NULL),
       distance(NULL),
       normal_vec_space(NULL),
@@ -260,7 +259,6 @@ namespace mfem
 	level_set_gf = new ParGridFunction(lsfes);
 	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, *alpha_fes, 0);
 	wall_dist_coef = new Dist_Level_Set_Coefficient(geometricShape);
-	combo_dist_coef = new Combo_Level_Set_Coefficient;
 	
 	level_set_gf->ProjectCoefficient(*wall_dist_coef);
 	// Exchange information for ghost elements i.e. elements that share a face
@@ -269,7 +267,7 @@ namespace mfem
 	// Setup the class to mark all elements based on whether they are located
 	// inside or outside the true domain, or intersected by the true boundary.
 	analyticalSurface->MarkElements(*level_set_gf);
-	combo_dist_coef->Add_Level_Set_Coefficient(*wall_dist_coef);
+	
 	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
 	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
 	H1.MarkerToList(ess_vdofs, ess_tdofs);
@@ -361,7 +359,7 @@ namespace mfem
 	default: MFEM_ABORT("Unknown zone type!");
 	}
       qdata.h0 /= (double) H1.GetOrder(0);
-
+      gl_qdata.h0 = qdata.h0;
       fi = new ForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi, ess_elem);
@@ -374,13 +372,13 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
 
-      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf);
+      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, use_viscosity, use_vorticity);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
       
-      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf);
+      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, use_viscosity, use_vorticity);
       e_bfi->SetIntRule(&b_ir);
       EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
@@ -396,7 +394,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       NitscheEnergyBoundaryForce.Assemble();
 
-      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, /*penaltyParameter * */1.0*C_I_E);
+      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, /*penaltyParameter * */5.0*C_I_E);
       p_e_bfi->SetIntRule(&b_ir);
       PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
       // Make a dummy assembly to figure out the sparsity.
@@ -570,6 +568,7 @@ namespace mfem
       AssembleEnergyForceMatrix();
       
       e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
+      n_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyBoundaryForceMatrix();
 
       if (useEmbedded){

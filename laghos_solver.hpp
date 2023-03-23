@@ -127,7 +127,6 @@ namespace mfem
       GhostStressFullGradPenaltyIntegrator *shifted_ghostPenvmi;
       
       Dist_Level_Set_Coefficient *wall_dist_coef;
-      Combo_Level_Set_Coefficient *combo_dist_coef;
       // in case we are using level set to get distance and normal vectors
       ParFiniteElementSpace *distance_vec_space;
       ParGridFunction *distance;

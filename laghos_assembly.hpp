@@ -99,9 +99,14 @@ namespace mfem
     private:
       const QuadratureDataGL &qdata;
       const ParGridFunction &pface_gf;
+      const ParGridFunction &v_gf;
+      const ParGridFunction &csface_gf;
+      
+      const bool use_viscosity;
+      const bool use_vorticity;
       
     public:
-      VelocityBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf) : qdata(qdata), pface_gf(pface_gf) { }
+      VelocityBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
@@ -119,9 +124,12 @@ namespace mfem
       const ParGridFunction &pface_gf;
       const ParGridFunction &v_gf;
       const ParGridFunction *Vnpt_gf;
+      const ParGridFunction &csface_gf;
+      const bool use_viscosity;
+      const bool use_vorticity;
       
     public:
-      EnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf) :  qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL) { }
+      EnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const bool use_viscosity, const bool use_vorticity) :  qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);

@@ -185,7 +185,7 @@ namespace mfem
 	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
 	  Trans_el1.SetIntPoint(&eip);
 	  const int elementNo = Trans_el1.ElementNo;
-
+	  const int eq = elementNo*nqp_face + q;
 	  Vector nor;
 	  nor.SetSize(dim);
 	  nor = 0.0;
@@ -200,10 +200,15 @@ namespace mfem
 
 	  el.CalcShape(eip, te_shape);
 	  double pressure = pface_gf.GetValue(Trans_el1,eip);
+	  double sound_speed = csface_gf.GetValue(Trans_el1,eip);
+	 
 	  DenseMatrix stress(dim);
 	  stress = 0.0;
+	  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	 
 	  ComputeStress(pressure,dim,stress);
-
+	  // ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	
 	  // evaluation of the normal stress at the face quadrature points
 	  Vector weightedNormalStress(dim);
 	  weightedNormalStress = 0.0;
@@ -251,7 +256,8 @@ namespace mfem
 	    ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
 	    Trans_el1.SetIntPoint(&eip);
 	    const int elementNo = Trans_el1.ElementNo;
-	    
+	    const int eq = elementNo*nqp_face + q;
+	
 	    Vector nor;
 	    nor.SetSize(dim);
 	    nor = 0.0;
@@ -265,10 +271,15 @@ namespace mfem
 	      }        
 	    el.CalcShape(eip, te_shape);
 	    double pressure = pface_gf.GetValue(Trans_el1,eip);
+	    double sound_speed = csface_gf.GetValue(Trans_el1,eip);
+	
 	    DenseMatrix stress(dim);
 	    stress = 0.0;
+	    const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	
 	    ComputeStress(pressure,dim,stress);
-	    
+	    //    ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	
 	    // evaluation of the normal stress at the face quadrature points
 	    Vector weightedNormalStress(dim);
 	    weightedNormalStress = 0.0;

@@ -79,6 +79,10 @@ namespace mfem
       // Reference to physical Jacobian for the initial mesh.
       // These are computed only at time zero and stored here.
       DenseTensor Jac0inv;
+      
+      // Initial length scale. This represents a notion of local mesh size.
+      // We assume that all initial zones have similar size.
+      double h0;
 
       QuadratureDataGL(int dim, int NE, int quads_per_faceel) :  rho0DetJ0(NE * quads_per_faceel), normalVelocityPenaltyScaling(0.0), Jac0inv(dim, dim, NE * quads_per_faceel) { }
     };
@@ -107,6 +111,8 @@ namespace mfem
     void ComputeStress(const double p, const int dim, DenseMatrix &stress);
   
     void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
+    void ComputeViscousStressGL(ElementTransformation &T, const ParGridFunction &v, const QuadratureDataGL &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
+  
     double smooth_step_01(double x, double eps);
 
   } // namespace hydrodynamics
