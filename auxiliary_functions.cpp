@@ -221,7 +221,6 @@ namespace mfem
 		max_rho = std::max(max_rho, rho_vals);
 		max_cs = std::max(max_cs, sound_speed);
 		max_standard_coef = std::max(max_standard_coef, rho_vals * sound_speed);
-		penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * sound_speed;
 		/////
 		Vector D_el1(dim);
 		D_el1 = 0.0;
@@ -236,9 +235,7 @@ namespace mfem
 		////
 		double visc_coeff = 0.0;
 		DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
-		if (use_viscosity)
-		  {
-		    // Compression-based length scale at the point. The first
+		// Compression-based length scale at the point. The first
 		    // eigenvector of the symmetric velocity lgradient gives the
 		    // direction of maximal compression. This is used to define the
 		    // relative change of the initial length scale.
@@ -266,6 +263,8 @@ namespace mfem
 		    Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
 		    // Change of the initial mesh size in the compression direction.
 		    const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
+		    penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * h;
+	
 		    // Measure of maximal compression.
 		    const double mu = eig_val_data[0];
 		    visc_coeff = 2.0 * rho_vals * (h+normD) * (h+normD) * fabs(mu);
@@ -283,8 +282,11 @@ namespace mfem
 		    max_mu = std::max(max_mu, std::fabs(mu));
 		    max_h = std::max(max_h, h);
 		    max_smooth_step = std::max(max_smooth_step, 1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		    penaltyScaling_gf(e * nqp + q) += penaltyParameter * visc_coeff * (1.0 /  (h+normD));
-		  }
+		    if (use_viscosity)
+		      {
+			//	penaltyScaling_gf(e * nqp + q) += penaltyParameter * visc_coeff * (1.0 /  (h+normD));
+			penaltyScaling_gf(e * nqp + q) += penaltyParameter * h * h * fabs(mu) * rho_vals;
+		      }
 	      }
 	  }
 	}
@@ -309,9 +311,11 @@ namespace mfem
       MPI_Allreduce(&max_smooth_step, &globalmax_smooth_step, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_vorticity, &globalmax_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-      // penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
+      //  penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
       //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_viscous_coef);
-      penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
+      //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
+      penaltyScaling_gf = penaltyParameter * (globalmax_h + globalmax_h * globalmax_h * globalmax_mu) * globalmax_rho;
+    
       // penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
       //     std::cout << " val " << (globalmax_standard_coef + globalmax_viscous_coef) << " visc " << globalmax_viscous_coef << std::endl;
       // std::cout << " old " << (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h) << std::endl;
