@@ -102,6 +102,7 @@ namespace mfem
 						     ParGridFunction &csface_gf,
 						     ParGridFunction &penaltyScaling_gf,
 						     ParGridFunction &penaltyScalingface_gf,
+						     ParGridFunction &gammaPressureScalingface_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -167,6 +168,7 @@ namespace mfem
       pface_gf(pface_gf),
       csface_gf(csface_gf),
       penaltyScalingface_gf(penaltyScalingface_gf),
+      gammaPressureScalingface_gf(gammaPressureScalingface_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -226,6 +228,7 @@ namespace mfem
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       penaltyScalingface_gf.ExchangeFaceNbrData();
+      gammaPressureScalingface_gf.ExchangeFaceNbrData();
       
       switch (pmesh->GetElementBaseGeometry(0))
 	{
@@ -388,13 +391,13 @@ namespace mfem
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
-      n_e_bfi = new NitscheEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf);
+      n_e_bfi = new NitscheEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, gammaPressureScalingface_gf);
       n_e_bfi->SetIntRule(&b_ir);
       NitscheEnergyBoundaryForce.AddInteriorFaceIntegrator(n_e_bfi);
       // Make a dummy assembly to figure out the sparsity.
       NitscheEnergyBoundaryForce.Assemble();
 
-      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, /*penaltyParameter * */5.0*C_I_E);
+      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, gammaPressureScalingface_gf, penaltyParameter * C_I_E);
       p_e_bfi->SetIntRule(&b_ir);
       PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
       // Make a dummy assembly to figure out the sparsity.
@@ -479,11 +482,12 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       penaltyScalingface_gf.ExchangeFaceNbrData();
+      gammaPressureScalingface_gf.ExchangeFaceNbrData();
  
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
@@ -552,13 +556,14 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
     
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       penaltyScalingface_gf.ExchangeFaceNbrData();
-	
+      gammaPressureScalingface_gf.ExchangeFaceNbrData();
+		
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;

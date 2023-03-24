@@ -235,10 +235,10 @@ private:
   const ParGridFunction &pface_gf;
   const ParGridFunction &csface_gf;
   const ParGridFunction &rhoface_gf;
-  const double penaltyScaling;
-  
+  const ParGridFunction &gammaPressureScalingface_gf;
+  const double penaltyParameter;
 public:
-  PenaltyEnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &csface_gf, const ParGridFunction &rhoface_gf, const double penPar) : qdata(qdata), pface_gf(pface_gf), csface_gf(csface_gf), rhoface_gf(rhoface_gf), penaltyScaling(penPar) { }
+  PenaltyEnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &csface_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &gammaPressureScalingface_gf, double penaltyParameter) : qdata(qdata), pface_gf(pface_gf), csface_gf(csface_gf), rhoface_gf(rhoface_gf), gammaPressureScalingface_gf(gammaPressureScalingface_gf), penaltyParameter(penaltyParameter) { }
   
    using LinearFormIntegrator::AssembleRHSElementVect;
   
@@ -260,9 +260,10 @@ public:
       const ParGridFunction &csface_gf;
       const ParGridFunction &rhoface_gf;
       const ParGridFunction *Vnpt_gf;
+      const ParGridFunction &gammaPressureScalingface_gf;
       
     public:
-      NitscheEnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &csface_gf, const ParGridFunction &rhoface_gf) : qdata(qdata), pface_gf(pface_gf), csface_gf(csface_gf), rhoface_gf(rhoface_gf), Vnpt_gf(NULL) { }
+      NitscheEnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &csface_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &gammaPressureScalingface_gf ) : qdata(qdata), pface_gf(pface_gf), csface_gf(csface_gf), rhoface_gf(rhoface_gf), gammaPressureScalingface_gf(gammaPressureScalingface_gf), Vnpt_gf(NULL) { }
       
       using LinearFormIntegrator::AssembleRHSElementVect;
       

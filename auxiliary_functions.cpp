@@ -184,13 +184,15 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
+    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, ParGridFunction &gammaPressureScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
       const ParMesh * pmesh = p_fespace->GetParMesh();
       int dim = pmesh->Dimension();
       penaltyScaling_gf = 0.0;
+      gammaPressureScaling_gf = 0.0;
+    
       double max_standard_coef = 0.0;
       double max_viscous_coef = 0.0;
       double min_h = 1000.0;
@@ -264,6 +266,7 @@ namespace mfem
 		    // Change of the initial mesh size in the compression direction.
 		    const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
 		    penaltyScaling_gf(e * nqp + q) = penaltyParameter * rho_vals * h;
+		    gammaPressureScaling_gf(e * nqp + q) = rho_vals * h;
 	
 		    // Measure of maximal compression.
 		    const double mu = eig_val_data[0];

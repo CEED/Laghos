@@ -1308,10 +1308,13 @@ namespace mfem
 	    double density_2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 	    double cs_1 = csface_gf.GetValue(Trans_el1,eip_el1);
 	    double cs_2 = csface_gf.GetValue(Trans_el2,eip_el2);
+	    double penaltyVal_1 = gammaPressureScalingface_gf.GetValue(Trans_el1,eip_el1);
+	    double penaltyVal_2 = gammaPressureScalingface_gf.GetValue(Trans_el2,eip_el2);
 
-	    if  ( (density_1 != 0.0) && (density_2 != 0.0) ) {
+	    if  ( (penaltyVal_1 != 0.0) && (penaltyVal_2 != 0.0) ) {
 	      //  double weighted_h = penaltyScaling * (cs_1 ) * (cs_2 ) / (cs_1 + cs_2 );
-	      double weighted_h = penaltyScaling * ( (cs_1 * density_1 * (Tr.Elem1->Weight()/nor_norm) )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) ) +  (cs_2 * density_2 * (Tr.Elem2->Weight()/nor_norm) )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) )  );
+	      //  double weighted_h = ( (cs_1 * density_1 * (Tr.Elem1->Weight()/nor_norm) )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) ) +  (cs_2 * density_2 * (Tr.Elem2->Weight()/nor_norm) )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) )  );
+	      double weighted_h = penaltyParameter * ((cs_1 * penaltyVal_1 )  / (penaltyVal_1 + penaltyVal_2 ) +  (cs_2 * penaltyVal_2 )  /  (penaltyVal_1 + penaltyVal_2 ) ) ;
 	    
 	      double pressure_diff = pressure_1 - pressure_2;
 	      for (int i = 0; i < l2dofs_cnt; i++)
@@ -1395,10 +1398,12 @@ namespace mfem
 	      double density_2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 	      double cs_1 = csface_gf.GetValue(Trans_el1,eip_el1);
 	      double cs_2 = csface_gf.GetValue(Trans_el2,eip_el2);
+	      double gamma_1 = gammaPressureScalingface_gf.GetValue(Trans_el1,eip_el1);
+	      double gamma_2 = gammaPressureScalingface_gf.GetValue(Trans_el2,eip_el2);
 
 	      if  ( (density_1 != 0.0) && (density_2 != 0.0) ) {
-		double weighted_1 = ( density_1 * Tr.Elem1->Weight()/nor_norm )  / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) );
-		double weighted_2 = (density_2 * Tr.Elem2->Weight()/nor_norm ) / (density_1 * (Tr.Elem1->Weight()/nor_norm) + density_2 * (Tr.Elem2->Weight()/nor_norm) ) ;
+		double weighted_1 = gamma_1  / ( gamma_1 + gamma_2 );
+		double weighted_2 = gamma_2 / (gamma_1 + gamma_2) ;
 	    
 		double pressure_diff = pressure_1 - pressure_2;
 		for (int i = 0; i < l2dofs_cnt; i++)
