@@ -159,6 +159,7 @@ public:
 
    void PrintPressures(const ParGridFunction &e_1,
                        const ParGridFunction &e_2,
+                       const ParGridFunction &v,
                        std::string prefix, int problem);
 };
 

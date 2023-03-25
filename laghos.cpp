@@ -965,7 +965,8 @@ int main(int argc, char *argv[])
 
          if (last_step && extract1D)
          {
-            hydro.PrintPressures(mat_data.e_1, mat_data.e_2, prefix, problem);
+            hydro.PrintPressures(mat_data.e_1, mat_data.e_2, v_gf,
+                                 prefix, problem);
          }
 
          if (last_step || gfprint)

@@ -643,16 +643,27 @@ double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
 
 void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
                                              const ParGridFunction &e_2,
+                                             const ParGridFunction &v,
                                              string prefix,
                                              int problem)
 {
    if (problem != 8 && problem != 9) { return; }
    MFEM_VERIFY(L2.GetNRanks() == 1, "Pressure output only in 1D serial");
 
-   std::ofstream fstream_1, fstream_2, fstream_t;
-   fstream_1.open(prefix + "p_1.out"); fstream_1.precision(8);
-   fstream_2.open(prefix + "p_2.out"); fstream_2.precision(8);
-   fstream_t.open(prefix + "p_tot.out"); fstream_t.precision(8);
+   std::ofstream fstream_p_1,   fstream_p_2,
+                 fstream_r_1,   fstream_r_2,
+                 fstream_e_1,   fstream_e_2,
+                 fstream_p_tot, fstream_e_tot, fstream_r_tot, fstream_v;
+   fstream_p_1.open(prefix + "p_1.out");     fstream_p_1.precision(8);
+   fstream_p_2.open(prefix + "p_2.out");     fstream_p_2.precision(8);
+   fstream_r_1.open(prefix + "r_1.out");     fstream_p_1.precision(8);
+   fstream_r_2.open(prefix + "r_2.out");     fstream_p_2.precision(8);
+   fstream_e_1.open(prefix + "e_1.out");     fstream_p_1.precision(8);
+   fstream_e_2.open(prefix + "e_2.out");     fstream_p_2.precision(8);
+   fstream_p_tot.open(prefix + "p_tot.out"); fstream_p_tot.precision(8);
+   fstream_e_tot.open(prefix + "e_tot.out"); fstream_e_tot.precision(8);
+   fstream_r_tot.open(prefix + "rho_tot.out"); fstream_r_tot.precision(8);
+   fstream_v.open(prefix + "v.out"); fstream_v.precision(8);
 
    const int nqp = ir.GetNPoints();
    Vector pos(dim);
@@ -668,42 +679,78 @@ void LagrangianHydroOperator::PrintPressures(const ParGridFunction &e_1,
          Tr.Transform(ip, pos);
          double detJ = Tr.Weight();
 
-         double p_tot = 0.0;
+         const double ls = mat_data.level_set.GetValue(Tr, ip),
+                      ve = v.GetValue(Tr, ip);
+
+         double p_tot = 0.0, rho_tot = 0.0, e_tot = 0.0;
          if (attr == 10 || attr == 15)
          {
-            double rho = qdata.rho0DetJ0w_1(e*nqp + q) /
-                         mat_data.ind0_1.GetValue(Tr, ip) / detJ / ip.weight;
+            double a1  = mat_data.alpha_1.GetValue(Tr, ip);
+            double i1  = mat_data.ind0_1.GetValue(Tr, ip);
+            double rho = qdata.rho0DetJ0w_1(e*nqp + q) / i1 / detJ / ip.weight;
             double en  = e_1.GetValue(Tr, ip);
             double g   = mat_data.gamma_1;
             double p   = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * en
                                               : (g - 1.0) * rho * en - g*6.0e8;
-            fstream_1 << pos(0) << " " << p << "\n";
-            fstream_1.flush();
+            if (ls <= 0.0)
+            {
+               fstream_p_1 << pos(0) << " " << p << "\n";
+               fstream_p_1.flush();
+               fstream_r_1 << pos(0) << " " << rho << "\n";
+               fstream_r_1.flush();
+               fstream_e_1 << pos(0) << " " << en << "\n";
+               fstream_e_1.flush();
+            }
 
-            p_tot += mat_data.ind0_1.GetValue(Tr, ip) * p;
+            p_tot   += a1 * p;
+            rho_tot += a1 * rho;
+            e_tot   += a1 * en;
          }
 
          if (attr == 15 || attr == 20)
          {
-            double rho = qdata.rho0DetJ0w_2(e*nqp + q) /
-                         mat_data.ind0_2.GetValue(Tr, ip) / detJ / ip.weight;
+            double a2  = mat_data.alpha_2.GetValue(Tr, ip);
+            double i2  = mat_data.ind0_2.GetValue(Tr, ip);
+            double rho = qdata.rho0DetJ0w_2(e*nqp + q) / i2 / detJ / ip.weight;
             double en  = e_2.GetValue(Tr, ip);
             double g   = mat_data.gamma_2;
             double p = (fabs(g - 4.4) > 1e-8) ? (g - 1.0) * rho * en
                                               : (g - 1.0) * rho * en - g*6.0e8;
-            fstream_2 << pos(0) << " " << p << "\n";
-            fstream_2.flush();
+            if (ls >= 0.0)
+            {
+               fstream_p_2 << pos(0) << " " << p << "\n";
+               fstream_p_2.flush();
+               fstream_r_2 << pos(0) << " " << rho << "\n";
+               fstream_r_2.flush();
+               fstream_e_2 << pos(0) << " " << en << "\n";
+               fstream_e_2.flush();
+            }
 
-            p_tot += mat_data.ind0_2.GetValue(Tr, ip) * p;
+            p_tot   += a2 * p;
+            rho_tot += a2 * rho;
+            e_tot   += a2 * en;
          }
 
-         fstream_t << pos(0) << " " << p_tot << "\n";
-         fstream_t.flush();
+         fstream_p_tot << pos(0) << " " << p_tot << "\n";
+         fstream_r_tot << pos(0) << " " << rho_tot << "\n";
+         fstream_e_tot << pos(0) << " " << e_tot << "\n";
+         fstream_v     << pos(0) << " " << ve << "\n";
+         fstream_p_tot.flush();
+         fstream_r_tot.flush();
+         fstream_e_tot.flush();
+         fstream_v.flush();
       }
    }
-   fstream_1.close();
-   fstream_2.close();
-   fstream_t.close();
+   fstream_p_1.close();
+   fstream_p_2.close();
+   fstream_r_1.close();
+   fstream_r_2.close();
+   fstream_e_1.close();
+   fstream_e_2.close();
+   fstream_p_tot.close();
+   fstream_r_tot.close();
+   fstream_e_tot.close();
+   fstream_v.close();
 }
 
 // Smooth transition between 0 and 1 for x in [-eps, eps].

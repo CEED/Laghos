@@ -830,7 +830,7 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
       p_e1     = &mat_data.p_2->GetPressure();
       p_e2     = &mat_data.p_1->GetPressure();
    }
-   else { MFEM_ABORT("Invalid marking configuration."); }
+   else { MFEM_ABORT("Invalid marking configuration."); return; }
 
    // The alpha scaling is always taken from the mixed element.
    // GetValue() is used so that this can work in parallel.
@@ -874,18 +874,47 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
       // Note that the distance vector is a continuous function.
       Trans_e1.SetIntPoint(&ip_e1);
       dist.Eval(d_q, Trans_e1, ip_e1);
-      const double p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
-      Vector shift_p(1);
-      get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
-                        num_taylor, shift_p);
-      double grad_p_d_q1 = shift_p(0) - p_q1;
+      Vector shift_p_e1(1); double p_q1;
+      {
+         p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+                           num_taylor, shift_p_e1);
+      }
+//      if (attr_e1 == 15)
+//      {
+//         p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+//         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+//                           num_taylor, shift_p_e1);
+//      }
+//      else
+//      {
+//         p_q1 = p_e1->GetValue(Trans_e2, ip_e2);
+//         get_shifted_value(*p_e1, Trans_e2.ElementNo, ip_e2, d_q,
+//                           num_taylor, shift_p_e1);
+//      }
+      double grad_p_d_q1 = shift_p_e1(0) - p_q1;
 
       // Compute el2 quantities. Allows negative pressure.
       Trans_e2.SetIntPoint(&ip_e2);
-      const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
-      get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
-                        num_taylor, shift_p);
-      double grad_p_d_q2 = shift_p(0) - p_q2;
+      Vector shift_p_e2(1); double p_q2;
+      {
+         p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
+         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+                           num_taylor, shift_p_e2);
+      }
+//      if (attr_e1 == 15)
+//      {
+//         p_q2 = p_e2->GetValue(Trans_e1, ip_e1);
+//         get_shifted_value(*p_e2, Trans_e1.ElementNo, ip_e1, d_q,
+//                           num_taylor, shift_p_e2);
+//      }
+//      else
+//      {
+//         p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
+//         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+//                           num_taylor, shift_p_e2);
+//      }
+      double grad_p_d_q2 = shift_p_e2(0) - p_q2;
 
       // 1st element.
       {
@@ -993,7 +1022,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       rho0DetJ_e2 = &mat_data.rho0DetJ_1;
       gamma_e1       =  mat_data.gamma_1;
    }
-   else { MFEM_ABORT("Invalid marking configuration."); }
+   else { MFEM_ABORT("Invalid marking configuration."); return; }
 
    // The alpha scaling is always taken from the mixed element.
    // GetValue() is used so that this can work in parallel.
@@ -1033,13 +1062,19 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       else { CalcOrtho(Trans.Jacobian(), nor); }
 
       // Compute el1 quantities. Allows negative pressure.
-      const double p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+      double p_q1;
+      p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+//      if (attr_e1 == 15) { p_q1 = p_e1->GetValue(Trans_e1, ip_e1); }
+//      else               { p_q1 = p_e1->GetValue(Trans_e2, ip_e2); }
       dist.Eval(d_q, Trans_e1, ip_e1);
       p_e1->GetGradient(Trans_e1, p_grad_q1);
       v->GetVectorGradient(Trans_e1, v_grad_q1);
 
       // Compute el2 quantities. Allows negative pressure.
-      const double p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
+      double p_q2;
+      p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
+//      if (attr_e1 == 15) { p_q2 = p_e2->GetValue(Trans_e1, ip_e1); }
+//      else               { p_q2 = p_e2->GetValue(Trans_e2, ip_e2); }
       p_e2->GetGradient(Trans_e2, p_grad_q2);
       v->GetVectorGradient(Trans_e2, v_grad_q2);
 
@@ -1097,7 +1132,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       double jump_gradv_d_n_n = gradv_d_n_n_e1 * nor - gradv_d_n_n_e2 * nor;
 
       // - < [((grad_v d).n) n], {p phi} > (form 4)
-      // phi is DG, so {p phi} = p1 phi + p2 0 = p1 phi.
+      // phi is DG, so {p phi} = g p1 phi + (1-g) p2 0 = g p1 phi.
       if (e_shift_type == 4)
       {
          // 1st element.
@@ -1181,19 +1216,52 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       if (problem_visc && diffusion)
       {
          Vector p_ext(1);
-         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
-                           num_taylor, p_ext);
+         {
+            get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+                              num_taylor, p_ext);
+         }
+//         if (attr_e1 == 15)
+//         {
+//            get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+//                              num_taylor, p_ext);
+//         }
+//         else
+//         {
+//            get_shifted_value(*p_e1, Trans_e2.ElementNo, ip_e2, d_q,
+//                              num_taylor, p_ext);
+//         }
          double p_q1_ext = p_ext(0);
-         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
-                           num_taylor, p_ext);
+         {
+            get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+                              num_taylor, p_ext);
+         }
+//         if (attr_e1 == 15)
+//         {
+//            get_shifted_value(*p_e2, Trans_e1.ElementNo, ip_e1, d_q,
+//                              num_taylor, p_ext);
+//         }
+//         else
+//         {
+//            get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+//                              num_taylor, p_ext);
+//         }
          double p_q2_ext = p_ext(0);
 
          double p_gradp_jump = p_q1_ext - p_q2_ext;
 
-         double rho_q1  = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) /
-                          Trans_e1.Weight();
-         double rho_q2  = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) /
-                          Trans_e2.Weight();
+         double rho_q1, rho_q2;
+         rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+         rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+//         if (attr_e1 == 15)
+//         {
+//            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+//            rho_q2 = rho0DetJ_e2->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+//         }
+//         else
+//         {
+//            rho_q1 = rho0DetJ_e1->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+//            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+//         }
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
                      "Negative density at the face, not good: "
                      << rho_q1 << " " << rho_q2);
@@ -1409,11 +1477,11 @@ int PointExtractor::FindIntegrPoint(const int z_id, const Vector &xyz,
 double RhoPointExtractor::GetValue() const
 {
    ParFiniteElementSpace &pfes = *g->ParFESpace();
-   ElementTransformation &tr = *pfes.GetElementTransformation(element_id);
-   tr.SetIntPoint(&ip);
+   ElementTransformation &Tr = *pfes.GetElementTransformation(element_id);
+   Tr.SetIntPoint(&ip);
 
    return (*rho0DetJ0w)(nqp * element_id + q_id) /
-          g->GetValue(element_id, ip) / tr.Jacobian().Det() / ip.weight;
+          g->GetValue(Tr, ip) / Tr.Weight() / ip.weight;
 }
 
 double PPointExtractor::GetValue() const
