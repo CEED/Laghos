@@ -875,45 +875,47 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
       Trans_e1.SetIntPoint(&ip_e1);
       dist.Eval(d_q, Trans_e1, ip_e1);
       Vector shift_p_e1(1); double p_q1;
+      if (use_mixed_elem == false)
       {
          p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
          get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
                            num_taylor, shift_p_e1);
       }
-//      if (attr_e1 == 15)
-//      {
-//         p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
-//         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
-//                           num_taylor, shift_p_e1);
-//      }
-//      else
-//      {
-//         p_q1 = p_e1->GetValue(Trans_e2, ip_e2);
-//         get_shifted_value(*p_e1, Trans_e2.ElementNo, ip_e2, d_q,
-//                           num_taylor, shift_p_e1);
-//      }
+      else if (attr_e1 == 15)
+      {
+         p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
+         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+                           num_taylor, shift_p_e1);
+      }
+      else
+      {
+         p_q1 = p_e1->GetValue(Trans_e2, ip_e2);
+         get_shifted_value(*p_e1, Trans_e2.ElementNo, ip_e2, d_q,
+                           num_taylor, shift_p_e1);
+      }
       double grad_p_d_q1 = shift_p_e1(0) - p_q1;
 
       // Compute el2 quantities. Allows negative pressure.
       Trans_e2.SetIntPoint(&ip_e2);
       Vector shift_p_e2(1); double p_q2;
+      if (use_mixed_elem == false)
       {
          p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
          get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
                            num_taylor, shift_p_e2);
       }
-//      if (attr_e1 == 15)
-//      {
-//         p_q2 = p_e2->GetValue(Trans_e1, ip_e1);
-//         get_shifted_value(*p_e2, Trans_e1.ElementNo, ip_e1, d_q,
-//                           num_taylor, shift_p_e2);
-//      }
-//      else
-//      {
-//         p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
-//         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
-//                           num_taylor, shift_p_e2);
-//      }
+      else if (attr_e1 == 15)
+      {
+         p_q2 = p_e2->GetValue(Trans_e1, ip_e1);
+         get_shifted_value(*p_e2, Trans_e1.ElementNo, ip_e1, d_q,
+                           num_taylor, shift_p_e2);
+      }
+      else
+      {
+         p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
+         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+                           num_taylor, shift_p_e2);
+      }
       double grad_p_d_q2 = shift_p_e2(0) - p_q2;
 
       // 1st element.
@@ -1063,18 +1065,18 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
       // Compute el1 quantities. Allows negative pressure.
       double p_q1;
-      p_q1 = p_e1->GetValue(Trans_e1, ip_e1);
-//      if (attr_e1 == 15) { p_q1 = p_e1->GetValue(Trans_e1, ip_e1); }
-//      else               { p_q1 = p_e1->GetValue(Trans_e2, ip_e2); }
+      if (use_mixed_elem == false) { p_q1 = p_e1->GetValue(Trans_e1, ip_e1); }
+      else if (attr_e1 == 15)      { p_q1 = p_e1->GetValue(Trans_e1, ip_e1); }
+      else                         { p_q1 = p_e1->GetValue(Trans_e2, ip_e2); }
       dist.Eval(d_q, Trans_e1, ip_e1);
       p_e1->GetGradient(Trans_e1, p_grad_q1);
       v->GetVectorGradient(Trans_e1, v_grad_q1);
 
       // Compute el2 quantities. Allows negative pressure.
       double p_q2;
-      p_q2 = p_e2->GetValue(Trans_e2, ip_e2);
-//      if (attr_e1 == 15) { p_q2 = p_e2->GetValue(Trans_e1, ip_e1); }
-//      else               { p_q2 = p_e2->GetValue(Trans_e2, ip_e2); }
+      if (use_mixed_elem == false) { p_q2 = p_e2->GetValue(Trans_e2, ip_e2); }
+      else if (attr_e1 == 15)      { p_q2 = p_e2->GetValue(Trans_e1, ip_e1); }
+      else                         { p_q2 = p_e2->GetValue(Trans_e2, ip_e2); }
       p_e2->GetGradient(Trans_e2, p_grad_q2);
       v->GetVectorGradient(Trans_e2, v_grad_q2);
 
@@ -1216,52 +1218,58 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       if (problem_visc && diffusion)
       {
          Vector p_ext(1);
+         if (use_mixed_elem == false)
          {
             get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
                               num_taylor, p_ext);
          }
-//         if (attr_e1 == 15)
-//         {
-//            get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
-//                              num_taylor, p_ext);
-//         }
-//         else
-//         {
-//            get_shifted_value(*p_e1, Trans_e2.ElementNo, ip_e2, d_q,
-//                              num_taylor, p_ext);
-//         }
+         else if (attr_e1 == 15)
+         {
+            get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e1, d_q,
+                              num_taylor, p_ext);
+         }
+         else
+         {
+            get_shifted_value(*p_e1, Trans_e2.ElementNo, ip_e2, d_q,
+                              num_taylor, p_ext);
+         }
          double p_q1_ext = p_ext(0);
+
+         if (use_mixed_elem == false)
          {
             get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
                               num_taylor, p_ext);
          }
-//         if (attr_e1 == 15)
-//         {
-//            get_shifted_value(*p_e2, Trans_e1.ElementNo, ip_e1, d_q,
-//                              num_taylor, p_ext);
-//         }
-//         else
-//         {
-//            get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
-//                              num_taylor, p_ext);
-//         }
+         else if (attr_e1 == 15)
+         {
+            get_shifted_value(*p_e2, Trans_e1.ElementNo, ip_e1, d_q,
+                              num_taylor, p_ext);
+         }
+         else
+         {
+            get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e2, d_q,
+                              num_taylor, p_ext);
+         }
          double p_q2_ext = p_ext(0);
 
          double p_gradp_jump = p_q1_ext - p_q2_ext;
 
          double rho_q1, rho_q2;
-         rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
-         rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
-//         if (attr_e1 == 15)
-//         {
-//            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
-//            rho_q2 = rho0DetJ_e2->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
-//         }
-//         else
-//         {
-//            rho_q1 = rho0DetJ_e1->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
-//            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
-//         }
+         if (use_mixed_elem == false)
+         {
+            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+         }
+         else if (attr_e1 == 15)
+         {
+            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+            rho_q2 = rho0DetJ_e2->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+         }
+         else
+         {
+            rho_q1 = rho0DetJ_e1->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+         }
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
                      "Negative density at the face, not good: "
                      << rho_q1 << " " << rho_q2);

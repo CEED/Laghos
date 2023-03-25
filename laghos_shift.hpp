@@ -63,6 +63,8 @@ struct SIOptions
 
    int num_taylor = 1;
 
+   bool use_mixed_elem = false;
+
    int v_shift_type = 0;
    double v_shift_scale = 1.0;
    bool v_shift_diffusion = false;
@@ -142,6 +144,7 @@ public:
    int    num_taylor = 1;
    int    v_shift_type = 0;
    double v_shift_scale = 1.0;
+   bool   use_mixed_elem = false;
 
    MomentumInterfaceIntegrator(const MaterialData &mdata, VectorCoefficient &d)
       : mat_data(mdata), dist(d) { }
@@ -178,6 +181,7 @@ public:
    bool diffusion = false;
    bool problem_visc = false;
    double diffusion_scale = 1.0;
+   bool use_mixed_elem = false;
 
    EnergyInterfaceIntegrator(int m_id, const MaterialData &mdata,
                              const QuadratureData &qdata,

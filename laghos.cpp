@@ -380,6 +380,8 @@ int main(int argc, char *argv[])
    // Number of terms in the Taylor expansion (1 is 1st derivative only).
    si_options.num_taylor = 1;
    int p_order           = 1;
+   // In surrogate integrals, do we take all pressures from the mixed element?
+   si_options.use_mixed_elem = false;
    // Contribution to the momentum RHS:
    // 0: no shifting terms.
    // 1: - < [grad_p.d] psi >

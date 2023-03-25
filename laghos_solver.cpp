@@ -274,6 +274,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    mfi->num_taylor    = si_options.num_taylor;
    mfi->v_shift_type  = si_options.v_shift_type;
    mfi->v_shift_scale = si_options.v_shift_scale;
+   mfi->use_mixed_elem = si_options.use_mixed_elem;
    FaceForceMomentum.AddInteriorFaceIntegrator(mfi);
 
    auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data, qdata, dist_coeff);
@@ -284,6 +285,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    efi_1->diffusion       = si_options.e_shift_diffusion;
    efi_1->problem_visc    = use_viscosity;
    efi_1->diffusion_scale = si_options.e_shift_diffusion_scale;
+   efi_1->use_mixed_elem  = si_options.use_mixed_elem;
    FaceForceEnergy_1.AddInteriorFaceIntegrator(efi_1);
 
    auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data, qdata, dist_coeff);
@@ -294,6 +296,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    efi_2->diffusion       = si_options.e_shift_diffusion;
    efi_2->problem_visc    = use_viscosity;
    efi_2->diffusion_scale = si_options.e_shift_diffusion_scale;
+   efi_2->use_mixed_elem  = si_options.use_mixed_elem;
    FaceForceEnergy_2.AddInteriorFaceIntegrator(efi_2);
 
 //   if (si_options.v_shift_type > 0)
