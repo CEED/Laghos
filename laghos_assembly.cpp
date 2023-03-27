@@ -633,10 +633,10 @@ namespace mfem
 	  
 	  double penaltyVal = 0.0;
 	  if (globalmax_viscous_coef != 0.0){
-	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs)  );
+	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs)  ) *  (Tr.Elem1->Weight() / nor_norm);
 	  }
 	  else {
-	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho;
+	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm);
 	  }
 
 	  fe.CalcShape(eip, shape);

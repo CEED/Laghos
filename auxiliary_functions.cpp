@@ -322,7 +322,7 @@ namespace mfem
 	penaltyScaling_gf = penaltyParameter * (globalmax_cs + 1.0 * globalmax_mu) * globalmax_rho * 1.0;
 	}*/
       
-      penaltyScaling_gf = penaltyParameter * globalmax_h ;
+      penaltyScaling_gf = penaltyParameter /* * globalmax_h */;
       
       // penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
       //     std::cout << " val " << (globalmax_standard_coef + globalmax_viscous_coef) << " visc " << globalmax_viscous_coef << std::endl;
