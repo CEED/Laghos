@@ -73,6 +73,7 @@ struct SIOptions
    int e_shift_type = 0;
    double e_shift_scale = 1.0;
    bool e_shift_diffusion = false;
+   int e_shift_diffusion_type = 0;
    double e_shift_diffusion_scale = 1.0;
 };
 
@@ -181,6 +182,7 @@ public:
    bool diffusion = false;
    bool problem_visc = false;
    double diffusion_scale = 1.0;
+   int diffusion_type = 0;
    bool use_mixed_elem = false;
 
    EnergyInterfaceIntegrator(int m_id, const MaterialData &mdata,

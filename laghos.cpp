@@ -412,6 +412,7 @@ int main(int argc, char *argv[])
    // Activate the energy diffusion term. The LHS gets:
    //    + < {h |grad_v|} [p + grad_p.d] [phi + grad_phi.d] >
    si_options.e_shift_diffusion = true;
+   si_options.e_shift_diffusion_type = 0;
    si_options.e_shift_diffusion_scale = 1.0;
 
    const bool pure_test = (multimat == false);
