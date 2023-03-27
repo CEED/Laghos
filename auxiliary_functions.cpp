@@ -184,7 +184,7 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, ParGridFunction &gammaPressureScaling_gf, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
+    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, ParGridFunction &gammaPressureScaling_gf, double &globalmax_mu, double &globalmax_rho, double &globalmax_cs, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter, const double dt_est)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -297,9 +297,6 @@ namespace mfem
       double globalmax_standard_coef = 0.0;
       double globalmax_viscous_coef = 0.0;
       double globalmin_h = 1000.0;
-      double globalmax_mu = 0.0;
-      double globalmax_rho = 0.0;
-      double globalmax_cs = 0.0;
       double globalmax_h = 0.0;
       double globalmax_smooth_step = 0.0;
       double globalmax_vorticity = 0.0;
@@ -313,12 +310,26 @@ namespace mfem
       MPI_Allreduce(&max_h, &globalmax_h, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_smooth_step, &globalmax_smooth_step, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_vorticity, &globalmax_vorticity, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-
       //  penaltyScaling_gf = penaltyParameter * (globalmax_standard_coef + globalmax_viscous_coef);
       //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_viscous_coef);
       //  penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h);
-      penaltyScaling_gf = penaltyParameter * (globalmax_h + globalmax_h * globalmax_h * globalmax_mu) * globalmax_rho;
+      // penaltyScaling_gf = penaltyParameter * (globalmax_h + globalmax_h * globalmax_h * globalmax_mu) * globalmax_rho;
+      //  penaltyScaling_gf = penaltyParameter * (1.0 + globalmax_h * globalmax_mu) * globalmax_rho;
     
+      /*   if (dt_est < 100.0){
+	penaltyScaling_gf = penaltyParameter * (globalmax_cs + 1.0 * globalmax_mu) * globalmax_rho * dt_est;
+      }
+      else {
+	penaltyScaling_gf = penaltyParameter * (globalmax_cs + 1.0 * globalmax_mu) * globalmax_rho * 1.0;
+	}*/
+      
+      if (dt_est < 100.0){
+	penaltyScaling_gf = penaltyParameter  /*/ dt_est*/;
+      }
+      else {
+	penaltyScaling_gf = penaltyParameter ;
+      }
+      
       // penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
       //     std::cout << " val " << (globalmax_standard_coef + globalmax_viscous_coef) << " visc " << globalmax_viscous_coef << std::endl;
       // std::cout << " old " << (globalmax_rho * globalmax_cs + globalmax_mu / globalmin_h) << std::endl;

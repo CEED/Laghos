@@ -79,7 +79,10 @@ namespace mfem
       ParGridFunction &penaltyScalingface_gf;
       ParGridFunction &gammaPressureScalingface_gf;
       IntegrationRules GLIntRules;
-      
+      double &globalmax_mu;
+      double &globalmax_rho;
+      double &globalmax_cs;
+	
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
       mutable ParBilinearForm Mv;
@@ -153,6 +156,8 @@ namespace mfem
 
     public:
       LagrangianHydroOperator(const int size, const int order_e, const int order_v,
+			      double &globalmax_mu, double &globalmax_rho,
+			      double &globalmax_cs,
 			      ParFiniteElementSpace &h1_fes,
 			      ParFiniteElementSpace &l2_fes,
 			      ParFiniteElementSpace &p_l2_fes,
@@ -182,7 +187,7 @@ namespace mfem
       // Solve for dx_dt, dv_dt and de_dt.
       virtual void Mult(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
 
-      void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
+      void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init, const double dt) const;
       void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
       void UpdateMesh(const Vector &S) const;
 

@@ -148,9 +148,13 @@ namespace mfem
     private:
       const QuadratureDataGL &qdata;
       const ParGridFunction &penaltyScalingface_gf;
-    
+      const ParGridFunction &rhoface_gf;
+      const double &globalmax_rho;
+      const double &globalmax_mu;
+      const double &globalmax_cs;
+      
     public:
-      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, const ParGridFunction &penaltyScalingface_gf) : qdata(qdata), penaltyScalingface_gf(penaltyScalingface_gf) { }
+      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, const ParGridFunction &penaltyScalingface_gf, const ParGridFunction &rhoface_gf, const double &globalmax_rho, const double &globalmax_mu, const double &globalmax_cs) : qdata(qdata), penaltyScalingface_gf(penaltyScalingface_gf), rhoface_gf(rhoface_gf), globalmax_rho(globalmax_rho), globalmax_mu(globalmax_mu), globalmax_cs(globalmax_cs) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,

@@ -322,7 +322,7 @@ int main(int argc, char *argv[])
   ParGridFunction cs_gf(&P_L2FESpace);
   ParGridFunction rho_gf(&P_L2FESpace);
   ParGridFunction penaltyScaling_gf(&P_L2FESpace);
-
+  
   p_gf = 0.0;
   cs_gf = 0.0;
   rho_gf = 0.0;
@@ -340,7 +340,10 @@ int main(int argc, char *argv[])
   rhoface_gf = 0.0;
   penaltyScalingface_gf = 0.0;
   gammaPressureScalingface_gf = 0.0;
-  
+
+  double globalmax_mu = 0.0;
+  double globalmax_cs = 0.0;
+  double globalmax_rho = 0.0;
   FunctionCoefficient rho0_coeff(rho0);
   L2_FECollection l2_fec(order_e, pmesh->Dimension());
   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
@@ -385,7 +388,7 @@ int main(int argc, char *argv[])
     }
   if (impose_visc) { visc = true; }
 
-  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v,
+  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, globalmax_mu, globalmax_rho, globalmax_cs,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, penaltyScaling_gf, penaltyScalingface_gf, gammaPressureScalingface_gf, source, cfl,

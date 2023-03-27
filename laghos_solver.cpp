@@ -85,6 +85,9 @@ namespace mfem
     LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 						     const int order_e,
 						     const int order_v,
+						     double &globalmax_mu,
+						     double &globalmax_rho,
+						     double &globalmax_cs,
 						     ParFiniteElementSpace &h1,
 						     ParFiniteElementSpace &l2,
 						     ParFiniteElementSpace &p_l2_fes,
@@ -164,6 +167,9 @@ namespace mfem
       p_gf(p_gf),
       e_gf(e_gf),
       cs_gf(cs_gf),
+      globalmax_mu(globalmax_mu),
+      globalmax_rho(globalmax_rho),
+      globalmax_cs(globalmax_cs),
       penaltyScaling_gf(penaltyScaling_gf),
       pface_gf(pface_gf),
       csface_gf(csface_gf),
@@ -387,19 +393,19 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyScalingface_gf);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyScalingface_gf, rho0_gf, globalmax_rho, globalmax_mu, globalmax_cs);
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
       n_e_bfi = new NitscheEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, gammaPressureScalingface_gf);
       n_e_bfi->SetIntRule(&b_ir);
-      NitscheEnergyBoundaryForce.AddInteriorFaceIntegrator(n_e_bfi);
+      //  NitscheEnergyBoundaryForce.AddInteriorFaceIntegrator(n_e_bfi);
       // Make a dummy assembly to figure out the sparsity.
       NitscheEnergyBoundaryForce.Assemble();
 
       p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, gammaPressureScalingface_gf, penaltyParameter * C_I_E);
       p_e_bfi->SetIntRule(&b_ir);
-      PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
+      //  PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
       // Make a dummy assembly to figure out the sparsity.
       PenaltyEnergyBoundaryForce.Assemble();
 
@@ -446,7 +452,7 @@ namespace mfem
       ParGridFunction dx;
       dx.MakeRef(&H1, dS_dt, 0);
       dx = v;
-      SolveVelocity(S, dS_dt, S_init);
+      SolveVelocity(S, dS_dt, S_init,0);
       SolveEnergy(S, v, dS_dt);
       qdata_is_current = false;
       bv_qdata_is_current = false;
@@ -457,7 +463,8 @@ namespace mfem
 
     void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 						Vector &dS_dt,
-						const Vector &S_init) const
+						const Vector &S_init,
+						const double dt) const
     {
       
       // reset mesh, needed to update the normal velocity penalty term.
@@ -466,9 +473,9 @@ namespace mfem
       UpdateMesh(S_init);
       // assemble the velocity mass matrix at that state
       Mv.AssembleDomainIntegrators();
+      //  Mv.Assemble();
       // reset the mesh state at the current one
       UpdateMesh(S);
-
       
       //Compute quadrature quantities
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
@@ -482,7 +489,7 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, globalmax_mu, globalmax_rho, globalmax_cs, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V, dt);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -556,13 +563,13 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      //  UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, globalmax_mu, globalmax_rho, globalmax_cs, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V, qdata.dt_est);
     
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
-      penaltyScalingface_gf.ExchangeFaceNbrData();
-      gammaPressureScalingface_gf.ExchangeFaceNbrData();
+      //  penaltyScalingface_gf.ExchangeFaceNbrData();
+      //  gammaPressureScalingface_gf.ExchangeFaceNbrData();
 		
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
@@ -1017,7 +1024,7 @@ namespace mfem
     // -- 1.
     // S is S0.
     hydro_oper->UpdateMesh(S);
-    hydro_oper->SolveVelocity(S, dS_dt, S_init);
+    hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
     hydro_oper->SolveEnergy(S, V, dS_dt);
@@ -1028,7 +1035,7 @@ namespace mfem
     add(S0, 0.5 * dt, dS_dt, S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
-    hydro_oper->SolveVelocity(S, dS_dt, S_init);
+    hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
     hydro_oper->SolveEnergy(S, V, dS_dt);
