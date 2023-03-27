@@ -82,7 +82,8 @@ namespace mfem
       double &globalmax_mu;
       double &globalmax_rho;
       double &globalmax_cs;
-	
+      double &globalmax_viscous_coef;
+      
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
       mutable ParBilinearForm Mv;
@@ -157,7 +158,7 @@ namespace mfem
     public:
       LagrangianHydroOperator(const int size, const int order_e, const int order_v,
 			      double &globalmax_mu, double &globalmax_rho,
-			      double &globalmax_cs,
+			      double &globalmax_cs, double &globalmax_viscous_coef,
 			      ParFiniteElementSpace &h1_fes,
 			      ParFiniteElementSpace &l2_fes,
 			      ParFiniteElementSpace &p_l2_fes,

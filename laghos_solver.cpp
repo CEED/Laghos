@@ -88,6 +88,7 @@ namespace mfem
 						     double &globalmax_mu,
 						     double &globalmax_rho,
 						     double &globalmax_cs,
+						     double &globalmax_viscous_coef,
 						     ParFiniteElementSpace &h1,
 						     ParFiniteElementSpace &l2,
 						     ParFiniteElementSpace &p_l2_fes,
@@ -170,6 +171,7 @@ namespace mfem
       globalmax_mu(globalmax_mu),
       globalmax_rho(globalmax_rho),
       globalmax_cs(globalmax_cs),
+      globalmax_viscous_coef(globalmax_viscous_coef),
       penaltyScaling_gf(penaltyScaling_gf),
       pface_gf(pface_gf),
       csface_gf(csface_gf),
@@ -393,7 +395,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyScalingface_gf, rho0_gf, globalmax_rho, globalmax_mu, globalmax_cs);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyScalingface_gf, rho0_gf, globalmax_rho, globalmax_mu, globalmax_cs, globalmax_viscous_coef);
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
@@ -489,7 +491,7 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, globalmax_mu, globalmax_rho, globalmax_cs, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V, dt);
+      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, globalmax_mu, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V, dt);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();

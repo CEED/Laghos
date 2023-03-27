@@ -344,6 +344,8 @@ int main(int argc, char *argv[])
   double globalmax_mu = 0.0;
   double globalmax_cs = 0.0;
   double globalmax_rho = 0.0;
+  double globalmax_viscous_coef = 0.0;
+ 
   FunctionCoefficient rho0_coeff(rho0);
   L2_FECollection l2_fec(order_e, pmesh->Dimension());
   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
@@ -388,7 +390,7 @@ int main(int argc, char *argv[])
     }
   if (impose_visc) { visc = true; }
 
-  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, globalmax_mu, globalmax_rho, globalmax_cs,
+  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, globalmax_mu, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, penaltyScaling_gf, penaltyScalingface_gf, gammaPressureScalingface_gf, source, cfl,

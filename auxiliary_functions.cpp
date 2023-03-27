@@ -184,7 +184,7 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, ParGridFunction &gammaPressureScaling_gf, double &globalmax_mu, double &globalmax_rho, double &globalmax_cs, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter, const double dt_est)
+    void UpdatePenaltyParameterGL(ParGridFunction &penaltyScaling_gf, ParGridFunction &gammaPressureScaling_gf, double &globalmax_mu, double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter, const double dt_est)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -280,7 +280,7 @@ namespace mfem
 		    const double eps = 1e-12;
 		    visc_coeff += 0.5 * rho_vals * (h+normD) * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
 		    
-		    max_viscous_coef = std::max(max_viscous_coef, visc_coeff / (h+normD));
+		    max_viscous_coef = std::max(max_viscous_coef, visc_coeff);
 		    min_h = std::min(min_h, h);
 		    max_mu = std::max(max_mu, std::fabs(mu));
 		    max_h = std::max(max_h, h);
@@ -295,7 +295,6 @@ namespace mfem
 	}
 
       double globalmax_standard_coef = 0.0;
-      double globalmax_viscous_coef = 0.0;
       double globalmin_h = 1000.0;
       double globalmax_h = 0.0;
       double globalmax_smooth_step = 0.0;
@@ -323,12 +322,7 @@ namespace mfem
 	penaltyScaling_gf = penaltyParameter * (globalmax_cs + 1.0 * globalmax_mu) * globalmax_rho * 1.0;
 	}*/
       
-      if (dt_est < 100.0){
-	penaltyScaling_gf = penaltyParameter  /*/ dt_est*/;
-      }
-      else {
-	penaltyScaling_gf = penaltyParameter ;
-      }
+      penaltyScaling_gf = penaltyParameter * globalmax_h ;
       
       // penaltyScaling_gf = penaltyParameter * (globalmax_rho * globalmax_cs + (0.5 * globalmax_rho * globalmax_h * globalmax_cs * globalmax_vorticity * globalmax_smooth_step + 2.0 * globalmax_rho * globalmax_h * globalmax_h * fabs(globalmax_mu) )/ globalmin_h );
       //     std::cout << " val " << (globalmax_standard_coef + globalmax_viscous_coef) << " visc " << globalmax_viscous_coef << std::endl;

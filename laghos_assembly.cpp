@@ -631,19 +631,13 @@ namespace mfem
 
 	  double density_1 = rhoface_gf.GetValue(Trans_el1,eip);
 	  
-	  //	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * (nor_norm/Tr.Elem1->Weight()) * globalmax_rho * (globalmax_cs + (Tr.Elem1->Weight()/nor_norm) * globalmax_mu);
-	  //	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * density_1 * (globalmax_cs + (Tr.Elem1->Weight()/nor_norm) * globalmax_mu);
-	  //	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho /* (Tr.Elem1->Weight()/nor_norm)*/;
-	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * (nor_norm/Tr.Elem1->Weight()) * globalmax_rho * (globalmax_cs + (Tr.Elem1->Weight()/nor_norm) * globalmax_mu);
-	  /* double penaltyVal = 0.0;
-	  if ( (globalmax_mu != 0.0) && (globalmax_cs != 0.0) ) {
-	    //   penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho  * (1.0 + globalmax_cs * (1.0/globalmax_mu) * (nor_norm/Tr.Elem1->Weight()) + (1.0/globalmax_cs) * globalmax_mu * (Tr.Elem1->Weight()/nor_norm) );
-	    //	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho  *  (Tr.Elem1->Weight()/nor_norm) * (1.0/ globalmax_mu);
-
+	  double penaltyVal = 0.0;
+	  if (globalmax_viscous_coef != 0.0){
+	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs)  );
 	  }
 	  else {
-	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho ;
-	  }*/
+	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho;
+	  }
 
 	  fe.CalcShape(eip, shape);
 	
