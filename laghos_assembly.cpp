@@ -162,7 +162,7 @@ namespace mfem
 	elvect = 0.0;
       }
     }
-    /*
+    
     void VelocityBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
 								 FaceElementTransformations &Tr,
 								 Vector &elvect)
@@ -321,7 +321,7 @@ namespace mfem
     {
       mfem_error("DGDirichletLFIntegrator::AssembleRHSElementVect");
     }
-
+    /*
     void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 							  const FiniteElement &fe2,
 							  FaceElementTransformations &Tr,
@@ -375,8 +375,13 @@ namespace mfem
 	  }
 	  origNormalProd = std::pow(origNormalProd,0.5);
 
-	  //	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip);
-	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * (nor_norm/Tr.Elem1->Weight()) * globalmax_rho * (globalmax_cs + (Tr.Elem1->Weight()/nor_norm) * globalmax_mu);
+	  double penaltyVal = 0.0;
+	  if (globalmax_viscous_coef != 0.0){
+	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
+	  }
+	  else {
+	    penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
+	  }
 
 	  fe.CalcShape(eip, shape);
 
@@ -395,190 +400,6 @@ namespace mfem
 	    }
 	}
     }*/
-
-    void VelocityBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
-								 FaceElementTransformations &Tr,
-								 Vector &elvect)
-    {
-      const int nqp_face = IntRule->GetNPoints();
-      const int dim = el.GetDim();
-      const int h1dofs_cnt = el.GetDof();
-      elvect.SetSize(h1dofs_cnt*dim);
-      elvect = 0.0;
-
-      Vector te_shape(h1dofs_cnt);
-      te_shape = 0.0;
-  
-      for (int q = 0; q  < nqp_face; q++)
-	{
-	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
-	  // Set the integration point in the face and the neighboring elements
-	  Tr.SetAllIntPoints(&ip_f);
-	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
-	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	  Trans_el1.SetIntPoint(&eip);
-	  const int elementNo = Trans_el1.ElementNo;
-	  const int eq = elementNo*nqp_face + q;
-	  Vector nor;
-	  nor.SetSize(dim);
-	  nor = 0.0;
-	  CalcOrtho(Tr.Jacobian(), nor);
-	  double nor_norm = 0.0;
-	  for (int s = 0; s < dim; s++){
-	    nor_norm += nor(s) * nor(s);
-	  }
-	  nor_norm = sqrt(nor_norm);
-	  
-	  const DenseMatrix &Jpr = Trans_el1.Jacobian();
-	  Vector tn(dim), tN(dim);
-	  tn = 0.0;
-	  tN = 0.0;
-	  tn = nor;
-	  tn /= nor_norm;
-
-	  Jpr.MultTranspose(tn,tN);
-	  double origNormalProd = 0.0;
-	  for (int s = 0; s < dim; s++){
-	    origNormalProd += tN(s) * tN(s);
-	  }
-	  origNormalProd = std::pow(origNormalProd,0.5);
-	  tN *= 1.0/origNormalProd;
-	  // tN.Print();
-	  el.CalcShape(eip, te_shape);
-	  double pressure = pface_gf.GetValue(Trans_el1,eip);
-	  double sound_speed = csface_gf.GetValue(Trans_el1,eip);
-	 
-	  DenseMatrix stress(dim);
-	  stress = 0.0;
-	  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
-	 
-	  ComputeStress(pressure,dim,stress);
-	  // ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
-	
-	  // evaluation of the normal stress at the face quadrature points
-	  Vector weightedNormalStress(dim);
-	  weightedNormalStress = 0.0;
-	  
-	  // Quadrature data for partial assembly of the force operator.
-	  stress.Mult( tN, weightedNormalStress);
-	  
-	  for (int i = 0; i < h1dofs_cnt; i++)
-	    {
-	      for (int vd = 0; vd < dim; vd++) // Velocity components.
-		{
-		  elvect(i + vd * h1dofs_cnt) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight;
-		}
-	    }
-	}
-    }
-
-    void VelocityBoundaryForceIntegrator::AssembleRHSElementVect(
-								 const FiniteElement &el, ElementTransformation &Tr, Vector &elvect)
-    {
-      mfem_error("DGDirichletLFIntegrator::AssembleRHSElementVect");
-    }
-
-
-    void EnergyBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
-							       FaceElementTransformations &Tr,
-							       Vector &elvect)
-    {
-      if (Vnpt_gf != NULL){
-	const int nqp_face = IntRule->GetNPoints();
-	const int dim = el.GetDim();
-	const int l2dofs_cnt = el.GetDof();
-	elvect.SetSize(l2dofs_cnt);
-	elvect = 0.0;
-	Vector te_shape(l2dofs_cnt);
-	te_shape = 0.0;
-	
-	for (int q = 0; q  < nqp_face; q++)
-	  {
-	    te_shape = 0.0;
-	    const IntegrationPoint &ip_f = IntRule->IntPoint(q);
-	    // Set the integration point in the face and the neighboring elements
-	    Tr.SetAllIntPoints(&ip_f);
-	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();
-	    ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	    Trans_el1.SetIntPoint(&eip);
-	    const int elementNo = Trans_el1.ElementNo;
-	    const int eq = elementNo*nqp_face + q;
-	
-	    Vector nor;
-	    nor.SetSize(dim);
-	    nor = 0.0;
-	    CalcOrtho(Tr.Jacobian(), nor);
-
-	    double nor_norm = 0.0;
-	    for (int s = 0; s < dim; s++){
-	      nor_norm += nor(s) * nor(s);
-	    }
-	    nor_norm = sqrt(nor_norm);
-	    
-	    const DenseMatrix &Jpr = Trans_el1.Jacobian();
-	    Vector tn(dim), tN(dim);
-	    tn = 0.0;
-	    tN = 0.0;
-	    tn = nor;
-	    tn /= nor_norm;
-	    
-	    Jpr.MultTranspose(tn,tN);
-	    double origNormalProd = 0.0;
-	    for (int s = 0; s < dim; s++){
-	      origNormalProd += tN(s) * tN(s);
-	    }
-	    origNormalProd = std::pow(origNormalProd,0.5);
-	    tN *= 1.0/origNormalProd;
-	    
-	    el.CalcShape(eip, te_shape);
-	    double pressure = pface_gf.GetValue(Trans_el1,eip);
-	    double sound_speed = csface_gf.GetValue(Trans_el1,eip);
-	
-	    DenseMatrix stress(dim);
-	    stress = 0.0;
-	    const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
-	
-	    ComputeStress(pressure,dim,stress);
-	    //  ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
-	
-	    // evaluation of the normal stress at the face quadrature points
-	    Vector weightedNormalStress(dim);
-	    weightedNormalStress = 0.0;
-	    
-	    // Quadrature data for partial assembly of the force operator.
-	    stress.Mult( tN, weightedNormalStress);
-	    
-	    double normalStressProjNormal = 0.0;
-	    for (int s = 0; s < dim; s++){
-	      normalStressProjNormal += weightedNormalStress(s) * tN(s);
-	    }
-	    normalStressProjNormal = normalStressProjNormal;
-	    
-	    Vector vShape;
-	    Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
-	    double vDotn = 0.0;
-	    for (int s = 0; s < dim; s++)
-	      {
-		vDotn += vShape(s) * tN(s);
-	      }
-	    for (int i = 0; i < l2dofs_cnt; i++)
-	      {
-		elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
-	      }
-	  }
-      }
-      else{
-	const int l2dofs_cnt = el.GetDof();
-	elvect.SetSize(l2dofs_cnt);
-	elvect = 0.0;
-      }
-    }
-    
-    void EnergyBoundaryForceIntegrator::AssembleRHSElementVect(
-							       const FiniteElement &el, ElementTransformation &Tr, Vector &elvect)
-    {
-      mfem_error("DGDirichletLFIntegrator::AssembleRHSElementVect");
-    }
 
     void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 							  const FiniteElement &fe2,
