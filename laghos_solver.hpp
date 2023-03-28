@@ -71,15 +71,12 @@ namespace mfem
       ParGridFunction &e_gf;
       ParGridFunction &cs_gf;
       ParGridFunction &rho_gf;
-      ParGridFunction &penaltyScaling_gf;
       // Grid Functions for face terms
       ParGridFunction &pface_gf;
       ParGridFunction &csface_gf;
       ParGridFunction &rhoface_gf;
-      ParGridFunction &penaltyScalingface_gf;
       ParGridFunction &gammaPressureScalingface_gf;
       IntegrationRules GLIntRules;
-      double &globalmax_mu;
       double &globalmax_rho;
       double &globalmax_cs;
       double &globalmax_viscous_coef;
@@ -157,7 +154,7 @@ namespace mfem
 
     public:
       LagrangianHydroOperator(const int size, const int order_e, const int order_v,
-			      double &globalmax_mu, double &globalmax_rho,
+			      double &globalmax_rho,
 			      double &globalmax_cs, double &globalmax_viscous_coef,
 			      ParFiniteElementSpace &h1_fes,
 			      ParFiniteElementSpace &l2_fes,
@@ -174,8 +171,6 @@ namespace mfem
 			      ParGridFunction &e_gf,
 			      ParGridFunction &cs_gf,
 			      ParGridFunction &csface_gf,
-			      ParGridFunction &penaltyScaling_gf,
-			      ParGridFunction &penaltyScalingface_gf,
 			      ParGridFunction &gammaPressureScalingface_gf,
 			      const int source,
 			      const double cfl,

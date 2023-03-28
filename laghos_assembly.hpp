@@ -147,15 +147,13 @@ namespace mfem
     {
     private:
       const QuadratureDataGL &qdata;
-      const ParGridFunction &penaltyScalingface_gf;
-      const ParGridFunction &rhoface_gf;
+      double penaltyParameter;
       const double &globalmax_rho;
-      const double &globalmax_mu;
       const double &globalmax_cs;
       const double &globalmax_viscous_coef;
       
     public:
-      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, const ParGridFunction &penaltyScalingface_gf, const ParGridFunction &rhoface_gf, const double &globalmax_rho, const double &globalmax_mu, const double &globalmax_cs, const double &globalmax_viscous_coef) : qdata(qdata), penaltyScalingface_gf(penaltyScalingface_gf), rhoface_gf(rhoface_gf), globalmax_rho(globalmax_rho), globalmax_mu(globalmax_mu), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) { }
+      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, double penaltyParameter, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : qdata(qdata), penaltyParameter(penaltyParameter), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,
@@ -218,14 +216,17 @@ namespace mfem
     private:
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
-      const ParGridFunction &penaltyScalingface_gf;
       VectorCoefficient *vD;
       VectorCoefficient *vN;
       int nTerms;
       bool fullPenalty;
-      
+      double penaltyParameter;
+      const double &globalmax_rho;
+      const double &globalmax_cs;
+      const double &globalmax_viscous_coef;
+       
     public:
-      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &penaltyScalingface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), penaltyScalingface_gf(penaltyScalingface_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
+      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, double penaltyParameter, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), penaltyParameter(penaltyParameter), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,

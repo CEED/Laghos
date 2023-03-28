@@ -85,7 +85,6 @@ namespace mfem
     LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 						     const int order_e,
 						     const int order_v,
-						     double &globalmax_mu,
 						     double &globalmax_rho,
 						     double &globalmax_cs,
 						     double &globalmax_viscous_coef,
@@ -104,8 +103,6 @@ namespace mfem
 						     ParGridFunction &e_gf,
 						     ParGridFunction &cs_gf,
 						     ParGridFunction &csface_gf,
-						     ParGridFunction &penaltyScaling_gf,
-						     ParGridFunction &penaltyScalingface_gf,
 						     ParGridFunction &gammaPressureScalingface_gf,
 						     const int source,
 						     const double cfl,
@@ -168,14 +165,11 @@ namespace mfem
       p_gf(p_gf),
       e_gf(e_gf),
       cs_gf(cs_gf),
-      globalmax_mu(globalmax_mu),
       globalmax_rho(globalmax_rho),
       globalmax_cs(globalmax_cs),
       globalmax_viscous_coef(globalmax_viscous_coef),
-      penaltyScaling_gf(penaltyScaling_gf),
       pface_gf(pface_gf),
       csface_gf(csface_gf),
-      penaltyScalingface_gf(penaltyScalingface_gf),
       gammaPressureScalingface_gf(gammaPressureScalingface_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
@@ -230,12 +224,10 @@ namespace mfem
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
-      penaltyScaling_gf.ExchangeFaceNbrData();
    
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
-      penaltyScalingface_gf.ExchangeFaceNbrData();
       gammaPressureScalingface_gf.ExchangeFaceNbrData();
       
       switch (pmesh->GetElementBaseGeometry(0))
@@ -395,7 +387,9 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyScalingface_gf, rho0_gf, globalmax_rho, globalmax_mu, globalmax_cs, globalmax_viscous_coef);
+      
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
 
@@ -424,7 +418,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, penaltyScalingface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
 
@@ -491,11 +485,10 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, globalmax_mu, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V, dt);
+      UpdatePenaltyParameterGL(gammaPressureScalingface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
-      penaltyScalingface_gf.ExchangeFaceNbrData();
       gammaPressureScalingface_gf.ExchangeFaceNbrData();
  
       // assemble boundary terms at the most recent state.
@@ -565,13 +558,10 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      //  UpdatePenaltyParameterGL(penaltyScalingface_gf, gammaPressureScalingface_gf, globalmax_mu, globalmax_rho, globalmax_cs, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V, qdata.dt_est);
     
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
-      //  penaltyScalingface_gf.ExchangeFaceNbrData();
-      //  gammaPressureScalingface_gf.ExchangeFaceNbrData();
 		
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);

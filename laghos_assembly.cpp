@@ -376,7 +376,6 @@ namespace mfem
 	  origNormalProd = std::pow(origNormalProd,0.5);
 
 	  //	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip);
-	  double density_1 = rhoface_gf.GetValue(Trans_el1,eip);
 	  double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * (nor_norm/Tr.Elem1->Weight()) * globalmax_rho * (globalmax_cs + (Tr.Elem1->Weight()/nor_norm) * globalmax_mu);
 
 	  fe.CalcShape(eip, shape);
@@ -628,15 +627,13 @@ namespace mfem
 	  }
 	  origNormalProd = std::pow(origNormalProd,0.5);
 	  tN *= 1.0/origNormalProd;
-
-	  double density_1 = rhoface_gf.GetValue(Trans_el1,eip);
 	  
 	  double penaltyVal = 0.0;
 	  if (globalmax_viscous_coef != 0.0){
-	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs)  ) *  (Tr.Elem1->Weight() / nor_norm);
+	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
 	  }
 	  else {
-	    penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip) * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm);
+	    penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
 	  }
 
 	  fe.CalcShape(eip, shape);
@@ -1264,7 +1261,13 @@ namespace mfem
 
 	    fe.CalcShape(eip, shape);
 	    fe.CalcShape(eip, shape_test);
-	    double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el1,eip);
+	    double penaltyVal = 0.0;
+	    if (globalmax_viscous_coef != 0.0){
+	      penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
+	    }
+	    else {
+	      penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
+	    }
 
 	    /////
 	    Vector D_el1(dim);
@@ -1423,7 +1426,13 @@ namespace mfem
 
 	    fe2.CalcShape(eip, shape);
 	    fe2.CalcShape(eip, shape_test);
-	    double penaltyVal = penaltyScalingface_gf.GetValue(Trans_el2,eip);
+	    double penaltyVal = 0.0;
+	    if (globalmax_viscous_coef != 0.0){
+	      penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
+	    }
+	    else {
+	      penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
+	    }
 
 	    /////
 	    Vector D_el2(dim);
