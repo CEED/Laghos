@@ -321,85 +321,6 @@ namespace mfem
     {
       mfem_error("DGDirichletLFIntegrator::AssembleRHSElementVect");
     }
-    /*
-    void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
-							  const FiniteElement &fe2,
-							  FaceElementTransformations &Tr,
-							  DenseMatrix &elmat)
-    {
-      const int nqp_face = IntRule->GetNPoints();
-      const int dim = fe.GetDim();
-      const int h1dofs_cnt = fe.GetDof();
-      elmat.SetSize(h1dofs_cnt*dim);
-      elmat = 0.0;
-      Vector shape(h1dofs_cnt);
-      const int Elem1No = Tr.ElementNo;
-      shape = 0.0;
-      ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-      for (int q = 0; q  < nqp_face; q++)
-	{
-	  const int eq = Elem1No*nqp_face + q;
-	     
-	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
-	  // Set the integration point in the face and the neighboring elements
-	  Tr.SetAllIntPoints(&ip_f);
-	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
-	  Vector nor;
-	  nor.SetSize(dim);
-	  nor = 0.0;
-	  if (dim == 1)
-	    {
-	      nor(0) = 2*eip.x - 1.0;
-	    }
-	  else
-	    {
-	      CalcOrtho(Tr.Jacobian(), nor);
-	    }
-	  double nor_norm = 0.0;
-	  for (int s = 0; s < dim; s++){
-	    nor_norm += nor(s) * nor(s);
-	  }
-	  nor_norm = sqrt(nor_norm);
-      
-	  const DenseMatrix &Jpr = Trans_el1.Jacobian();
-	  Vector tn(dim), tN(dim);
-	  tn = 0.0;
-	  tN = 0.0;
-	  tn = nor;
-	  tn /= nor_norm;
-	  
-	  Jpr.MultTranspose(tn,tN);
-	  double origNormalProd = 0.0;
-	  for (int s = 0; s < dim; s++){
-	    origNormalProd += tN(s) * tN(s);
-	  }
-	  origNormalProd = std::pow(origNormalProd,0.5);
-
-	  double penaltyVal = 0.0;
-	  if (globalmax_viscous_coef != 0.0){
-	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
-	  }
-	  else {
-	    penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
-	  }
-
-	  fe.CalcShape(eip, shape);
-
-	  for (int i = 0; i < h1dofs_cnt; i++)
-	    {
-	      for (int vd = 0; vd < dim; vd++) // Velocity components.
-		{
-		  for (int j = 0; j < h1dofs_cnt; j++)
-		    {
-		      for (int md = 0; md < dim; md++) // Velocity components.
-			{	      
-			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * nor(vd) * (nor(md)/nor_norm) * penaltyVal  * ip_f.weight; 
-			}
-		    }
-		}
-	    }
-	}
-    }*/
 
     void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 							  const FiniteElement &fe2,
@@ -451,10 +372,10 @@ namespace mfem
 	  
 	  double penaltyVal = 0.0;
 	  if (globalmax_viscous_coef != 0.0){
-	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
+	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
 	  }
 	  else {
-	    penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
+	    penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm) *  std::pow(1.0/origNormalProd,2.0);
 	  }
 
 	  fe.CalcShape(eip, shape);
