@@ -1001,16 +1001,6 @@ namespace mfem
 	    }
 	    nor_norm = sqrt(nor_norm);
 
-	    fe.CalcShape(eip, shape);
-	    fe.CalcShape(eip, shape_test);
-	    double penaltyVal = 0.0;
-	    if (globalmax_viscous_coef != 0.0){
-	      penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
-	    }
-	    else {
-	      penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
-	    }
-
 	    /////
 	    Vector D_el1(dim);
 	    Vector tN_el1(dim);
@@ -1025,6 +1015,39 @@ namespace mfem
 	      normD += D_el1(j) * D_el1(j);
 	    }
 	    normD = std::pow(normD,0.5);
+	  
+	    const DenseMatrix &Jpr = Trans_el1.Jacobian();
+	    Vector tOrig(dim), tn(dim);
+	    tOrig = 0.0;
+	    tn = 0.0;
+	    tn = nor;
+	    tn /= nor_norm;
+	    Jpr.MultTranspose(tN_el1,tOrig);
+	    double origNormalProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      origNormalProd += tOrig(s) * tOrig(s);
+	    }
+	    origNormalProd = std::pow(origNormalProd,0.5);
+	    tOrig *= 1.0/origNormalProd;
+
+	    /* Jpr.MultTranspose(tn,tOrig);
+	    double origNormalProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      origNormalProd += tOrig(s) * tOrig(s);
+	    }
+	    origNormalProd = std::pow(origNormalProd,0.5);
+	    tOrig *= 1.0/origNormalProd;*/
+
+	    fe.CalcShape(eip, shape);
+	    fe.CalcShape(eip, shape_test);
+
+	    double penaltyVal = 0.0;
+	    if (globalmax_viscous_coef != 0.0){
+	      penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm)  * std::pow(1.0/origNormalProd,2.0) ;
+	    }
+	    else {
+	      penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm) * std::pow(1.0/origNormalProd,2.0);
+	    }
 	    double sign = 0.0;
 	    for (int j = 0; j < dim; j++) {
 	      sign += D_el1(j)/normD * tN_el1(j);
@@ -1165,17 +1188,7 @@ namespace mfem
 	      nor_norm += nor(s) * nor(s);
 	    }
 	    nor_norm = sqrt(nor_norm);
-
-	    fe2.CalcShape(eip, shape);
-	    fe2.CalcShape(eip, shape_test);
-	    double penaltyVal = 0.0;
-	    if (globalmax_viscous_coef != 0.0){
-	      penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm);
-	    }
-	    else {
-	      penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm);
-	    }
-
+	    
 	    /////
 	    Vector D_el2(dim);
 	    Vector tN_el2(dim);
@@ -1190,6 +1203,38 @@ namespace mfem
 	      normD += D_el2(j) * D_el2(j);
 	    }
 	    normD = std::pow(normD,0.5);
+	    
+	    const DenseMatrix &Jpr = Trans_el2.Jacobian();
+	    Vector tOrig(dim), tn(dim);
+	    tOrig = 0.0;
+	    tn = 0.0;
+	    tn = nor;
+	    tn /= nor_norm;
+	    Jpr.MultTranspose(tN_el2,tOrig);
+	    double origNormalProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      origNormalProd += tOrig(s) * tOrig(s);
+	    }
+	    origNormalProd = std::pow(origNormalProd,0.5);
+	    tOrig *= 1.0/origNormalProd;
+	    /* Jpr.MultTranspose(tn,tOrig);
+	    double origNormalProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      origNormalProd += tOrig(s) * tOrig(s);
+	    }
+	    origNormalProd = std::pow(origNormalProd,0.5);
+	    tOrig *= 1.0/origNormalProd;*/
+	  
+	    fe2.CalcShape(eip, shape);
+	    fe2.CalcShape(eip, shape_test);
+	    
+	    double penaltyVal = 0.0;
+	    if (globalmax_viscous_coef != 0.0){
+	      penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem2->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
+	    }
+	    else {
+	      penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem2->Weight()/nor_norm)  * std::pow(1.0/origNormalProd,2.0) ;
+	    }
 	    double sign = 0.0;
 	    for (int j = 0; j < dim; j++) {
 	      sign += D_el2(j)/normD * tN_el2(j);
