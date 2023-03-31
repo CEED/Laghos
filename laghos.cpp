@@ -704,7 +704,7 @@ int main(int argc, char *argv[])
                                ir_volume, pnameFL);
          p_R_fit_extr.SetPoint(zone_id_20, 0,
                                &hydro.GetRhoDetJw(2), mat_data.gamma_2,
-                               &mat_data.ind0_1, &mat_data.e_2,
+                               &mat_data.ind0_2, &mat_data.e_2,
                                ir_volume, pnameFR);
       }
       else
