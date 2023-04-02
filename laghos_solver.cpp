@@ -115,7 +115,7 @@ namespace mfem
 						     const double penaltyParameter,
 						     const double nitscheVersion,
 						     const bool useEmb, const int gS,
-						     int nT, bool fP, int nGT, double gPenCoef) :
+						     int nT, bool fP) :
       TimeDependentOperator(size),
       H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
       alpha_fes(NULL), alpha_fec(NULL),
@@ -140,13 +140,10 @@ namespace mfem
       efi(NULL),
       v_bfi(NULL),
       e_bfi(NULL),
-      p_e_bfi(NULL),
-      n_e_bfi(NULL),
       nvmi(NULL),
       shifted_v_bfi(NULL),
       shifted_e_bfi(NULL),
       shifted_nvmi(NULL),
-      shifted_ghostPenvmi(NULL),
       wall_dist_coef(NULL),
       distance_vec_space(NULL),
       distance(NULL),
@@ -196,8 +193,6 @@ namespace mfem
       EnergyForce(&L2),
       VelocityBoundaryForce(&H1),
       EnergyBoundaryForce(&L2),
-      PenaltyEnergyBoundaryForce(&L2),
-      NitscheEnergyBoundaryForce(&L2),
       ShiftedVelocityBoundaryForce(&H1),
       ShiftedEnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
@@ -209,8 +204,6 @@ namespace mfem
       be_rhs(L2Vsize),
       nTerms(nT),
       fullPenalty(fP),
-      numberGhostTerms(nGT),
-      ghostPenaltyParameter(gPenCoef),
       C_I_E(0.0),
       C_I_V(0.0)
     {
@@ -387,23 +380,10 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      
       nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
-
-      n_e_bfi = new NitscheEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, gammaPressureScalingface_gf);
-      n_e_bfi->SetIntRule(&b_ir);
-      //  NitscheEnergyBoundaryForce.AddInteriorFaceIntegrator(n_e_bfi);
-      // Make a dummy assembly to figure out the sparsity.
-      NitscheEnergyBoundaryForce.Assemble();
-
-      p_e_bfi = new PenaltyEnergyBoundaryForceIntegrator(gl_qdata, pface_gf, csface_gf, rhoface_gf, gammaPressureScalingface_gf, penaltyParameter * C_I_E);
-      p_e_bfi->SetIntRule(&b_ir);
-      //  PenaltyEnergyBoundaryForce.AddInteriorFaceIntegrator(p_e_bfi);
-      // Make a dummy assembly to figure out the sparsity.
-      PenaltyEnergyBoundaryForce.Assemble();
 
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf);
@@ -421,10 +401,6 @@ namespace mfem
 	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
-
-	shifted_ghostPenvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, ghostPenaltyParameter, numberGhostTerms);
-	shifted_ghostPenvmi->SetIntRule(&b_ir);
-	Mv.AddInteriorFaceIntegrator(shifted_ghostPenvmi);	
       }
       
     }
@@ -572,7 +548,6 @@ namespace mfem
       AssembleEnergyForceMatrix();
       
       e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
-      n_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyBoundaryForceMatrix();
 
       if (useEmbedded){
@@ -603,8 +578,6 @@ namespace mfem
       e_rhs = 0.0;
       e_rhs += EnergyForce;
       e_rhs += EnergyBoundaryForce;
-      e_rhs += PenaltyEnergyBoundaryForce;
-      e_rhs += NitscheEnergyBoundaryForce;
     
       if (useEmbedded){
 	e_rhs += ShiftedEnergyBoundaryForce; 
@@ -953,10 +926,6 @@ namespace mfem
     {
       EnergyBoundaryForce = 0.0;
       EnergyBoundaryForce.Assemble();
-      NitscheEnergyBoundaryForce = 0.0;
-      NitscheEnergyBoundaryForce.Assemble();
-      PenaltyEnergyBoundaryForce = 0.0;
-      PenaltyEnergyBoundaryForce.Assemble();
       be_forcemat_is_assembled = true;
     }
 

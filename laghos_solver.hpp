@@ -102,14 +102,10 @@ namespace mfem
       mutable ParLinearForm EnergyForce;
       mutable ParLinearForm VelocityBoundaryForce;
       mutable ParLinearForm EnergyBoundaryForce;
-      mutable ParLinearForm PenaltyEnergyBoundaryForce;
-      mutable ParLinearForm NitscheEnergyBoundaryForce;
       mutable ParLinearForm ShiftedVelocityBoundaryForce;
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
       const double penaltyParameter;
-      const double ghostPenaltyParameter;
-      const int numberGhostTerms;
       const double nitscheVersion;
       const bool useEmbedded;
       const int geometricShape;
@@ -120,13 +116,10 @@ namespace mfem
       VelocityBoundaryForceIntegrator *v_bfi;
       EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
-      PenaltyEnergyBoundaryForceIntegrator *p_e_bfi;
-      NitscheEnergyBoundaryForceIntegrator *n_e_bfi;
       
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
-      GhostStressFullGradPenaltyIntegrator *shifted_ghostPenvmi;
       
       Dist_Level_Set_Coefficient *wall_dist_coef;
       // in case we are using level set to get distance and normal vectors
@@ -177,7 +170,7 @@ namespace mfem
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter,
-			      const double nitscheVersion, const bool useEmb, const int gS, int nT, bool fP, int nGT, double gPenCoef);
+			      const double nitscheVersion, const bool useEmb, const int gS, int nT, bool fP);
       ~LagrangianHydroOperator();
 
       // Solve for dx_dt, dv_dt and de_dt.
