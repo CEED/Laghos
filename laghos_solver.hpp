@@ -22,6 +22,7 @@
 #include "dist_solver.hpp"
 #include "marking.hpp"
 #include "ghost_penalty.hpp"
+#include "volume_fractions.hpp" 
 
 #ifdef MFEM_USE_MPI
 class Dist_Level_Set_Coefficient;
@@ -129,6 +130,7 @@ namespace mfem
       ParGridFunction *normal;
       ParGridFunction *ls_func;
       ParGridFunction *level_set_gf;
+      ParGridFunction *alphaCut;
       //  
       ShiftedFaceMarker *analyticalSurface;
       VectorCoefficient *dist_vec;

@@ -103,13 +103,8 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	  bool elem2_inside = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::INSIDE);
 	  bool elem2_cut = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::CUT);
 	  bool elem2_outside = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::OUTSIDE);
-	  // ghost faces
-	  // outer surrogate boundaries      
-	  if ( elem1_cut && elem2_inside  ) {
-	    pmesh.SetFaceAttribute(f, 21);	
-	  }
-	  else if (elem1_inside && elem2_cut) {
-	    pmesh.SetFaceAttribute(f, 12);
+	  if ( (elem1_cut && elem2_inside) ||  (elem1_inside && elem2_cut)  ) {
+	    pmesh.SetFaceAttribute(f, 77);	
 	  }
 	}
       }
@@ -134,14 +129,10 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	bool elem2_cut = (attr2 == SBElementType::CUT);
 	bool elem2_outside = (attr2 == SBElementType::OUTSIDE);
 	// outer surrogate boundaries
-	if ( elem1_cut && elem2_inside ) {
-	  pmesh.SetFaceAttribute(faceno, 21);
+	if ( (elem1_cut && elem2_inside) ||  (elem1_inside && elem2_cut)  ) {
+	  pmesh.SetFaceAttribute(f, 77);	
 	}
-	else if (elem1_inside && elem2_cut){
-	  pmesh.SetFaceAttribute(faceno, 12);
-	}
-      }
-    
+      }    
    
     pmesh.ExchangeFaceNbrNodes();
 

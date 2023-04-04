@@ -151,6 +151,7 @@ namespace mfem
       normal(NULL),
       ls_func(NULL),
       level_set_gf(NULL),
+      alphaCut(NULL),
       analyticalSurface(NULL),
       dist_vec(NULL),
       normal_vec(NULL),
@@ -244,6 +245,9 @@ namespace mfem
       alpha_fec = new L2_FECollection(0, pmesh->Dimension());
       alpha_fes = new ParFiniteElementSpace(pmesh, alpha_fec);
       alpha_fes->ExchangeFaceNbrData();
+      alphaCut = new ParGridFunction(alpha_fes);
+      alphaCut->ExchangeFaceNbrData();
+      *alphaCut = 1;
     
       if (useEmbedded){
 	mfem::FiniteElementCollection* lsvec = new H1_FECollection(H1.GetOrder(0)+2,dim);
@@ -273,6 +277,9 @@ namespace mfem
 	//	}
       }
 
+      UpdateAlpha(*alphaCut, H1, *level_set_gf);
+      alphaCut->ExchangeFaceNbrData();
+    
       const int max_elem_attr = pmesh->attributes.Max();
       ess_elem.SetSize(max_elem_attr);
       ess_elem = 1;
@@ -282,6 +289,7 @@ namespace mfem
 	ess_elem[ShiftedFaceMarker::SBElementType::CUT-1] = 0;
       }
 
+    
       // Standard local assembly and inversion for energy mass matrices.
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
@@ -388,17 +396,17 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
       }
@@ -440,7 +448,7 @@ namespace mfem
     {
       
       // reset mesh, needed to update the normal velocity penalty term.
-      Mv.Update();
+      Mv.Update(&H1);
       // set the state at the initial one
       UpdateMesh(S_init);
       // assemble the velocity mass matrix at that state
@@ -475,6 +483,10 @@ namespace mfem
 	Mv.AssembleInteriorFaceIntegrators();
       }
 
+      Mv.Finalize();
+      
+      Mv.ParallelAssemble();
+    
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
       // The monolithic BlockVector stores the unknown fields as follows:

@@ -216,6 +216,7 @@ namespace mfem
     private:
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
+      const ParGridFunction &alpha_gf;
       VectorCoefficient *vD;
       VectorCoefficient *vN;
       int nTerms;
@@ -224,9 +225,8 @@ namespace mfem
       const double &globalmax_rho;
       const double &globalmax_cs;
       const double &globalmax_viscous_coef;
-       
     public:
-      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, double penaltyParameter, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), penaltyParameter(penaltyParameter), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
+      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &alpha_gf, double penaltyParameter, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), qdata(qdata), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,
