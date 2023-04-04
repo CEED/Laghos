@@ -108,7 +108,6 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	  }
 	}
       }
-    pmesh.ExchangeFaceNbrNodes();
 
     const int c_vsize = pfes_sltn->GetVSize();
     for (int f = 0; f < pmesh.GetNSharedFaces(); f++)
@@ -130,7 +129,7 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	bool elem2_outside = (attr2 == SBElementType::OUTSIDE);
 	// outer surrogate boundaries
 	if ( (elem1_cut && elem2_inside) ||  (elem1_inside && elem2_cut)  ) {
-	  pmesh.SetFaceAttribute(f, 77);	
+	  pmesh.SetFaceAttribute(faceno, 77);	
 	}
       }    
    
