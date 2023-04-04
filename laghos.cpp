@@ -591,6 +591,8 @@ int main(int argc, char *argv[])
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy 1", &mat_data.e_1);
       visit_dc.RegisterField("Specific Internal Energy 2", &mat_data.e_2);
+      visit_dc.RegisterField("Density 1", &rho_gf_1);
+      visit_dc.RegisterField("Density 2", &rho_gf_2);
       visit_dc.RegisterField("Level Set", &mat_data.level_set);
       visit_dc.SetCycle(0);
       visit_dc.SetTime(0.0);
