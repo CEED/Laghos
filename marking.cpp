@@ -107,32 +107,14 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	  // outer surrogate boundaries      
 	  if ( elem1_cut && elem2_inside  ) {
 	    pmesh.SetFaceAttribute(f, 21);	
-	    Array<int> dofs;
-	    pfes_sltn->GetFaceVDofs(f, dofs);
-	    for (int k = 0; k < dofs.Size(); k++)
-	      {
-		surrogateNodes(dofs[k]) = 1;	       
-	      }	  
 	  }
 	  else if (elem1_inside && elem2_cut) {
 	    pmesh.SetFaceAttribute(f, 12);
-	    Array<int> dofs;
-	    pfes_sltn->GetFaceVDofs(f, dofs);
-	    
-	    for (int k = 0; k < dofs.Size(); k++)
-	      {
-		surrogateNodes(dofs[k]) = 1;	       
-	      }	  	 
-	  }
-	  else if (elem1_inside && elem2_inside) {
-	    pmesh.SetFaceAttribute(f, 33);
 	  }
 	}
       }
     pmesh.ExchangeFaceNbrNodes();
-    //    surrogateNodes.ExchangeFaceNbrData();   
-    //  std::cout << " owned face " << pmesh.GetNumFaces() << std::endl;
-    // surrogateNodes.ExchangeFaceNbrData();
+
     const int c_vsize = pfes_sltn->GetVSize();
     for (int f = 0; f < pmesh.GetNSharedFaces(); f++)
       {
@@ -154,107 +136,13 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	// outer surrogate boundaries
 	if ( elem1_cut && elem2_inside ) {
 	  pmesh.SetFaceAttribute(faceno, 21);
-	  Array<int> dofs;
-	  if (!ghost_sface){
-	    pfes_sltn->GetFaceVDofs(faceno, dofs);	    
-	  }
-	  else{
-	    pfes_sltn->GetFaceNbrFaceVDofs(faceno, dofs);
-	    FiniteElementSpace::AdjustVDofs(dofs);
-	    for (int j = 0; j < dofs.Size(); j++)
-	      {
-		dofs[j] += c_vsize;
-	      }
-	  }
-	  for (int k = 0; k < dofs.Size(); k++)
-	    {
-	      surrogateNodes(dofs[k]) = 1;
-	    }	  
 	}
 	else if (elem1_inside && elem2_cut){
 	  pmesh.SetFaceAttribute(faceno, 12);
-	  Array<int> dofs;
-	  if (!ghost_sface){
-	    pfes_sltn->GetFaceVDofs(faceno, dofs);	   
-	  }
-	  else{
-	    pfes_sltn->GetFaceNbrFaceVDofs(faceno, dofs);
-	    FiniteElementSpace::AdjustVDofs(dofs);
-	    for (int j = 0; j < dofs.Size(); j++)
-	      {
-		dofs[j] += c_vsize;
-	      }
-	  }
-	  for (int k = 0; k < dofs.Size(); k++)
-	    {
-	      surrogateNodes(dofs[k]) = 1;
-	    }	  
-	}
-	else if (elem1_inside && elem2_inside){
-	  pmesh.SetFaceAttribute(faceno, 33);
 	}
       }
     
-    surrogateNodes.ExchangeFaceNbrData();
-    /*  GridFunctionCoefficient surrogateNodesCoef(&surrogateNodes);
-    parallelSurrogateNodes.ProjectCoefficient(surrogateNodesCoef);
-    parallelSurrogateNodes.ExchangeFaceNbrData();*/
-    //  std::cout << " myid " << myid << std::endl;
-    //    surrogateNodes.Print();
-    
-    // Check elements on the current MPI rank
-    for (int i = 0; i < pmesh.GetNE(); i++)
-      {
-	const IntegrationRule &ir = ls_fes->GetFE(i)->GetNodes();
-	surrogateNodes.GetValues(i, ir, vals);
-	int count = 0;
-	for (int j = 0; j < ir.GetNPoints(); j++)
-	  {
-	    if (vals(j) > 0.0 && pmesh.GetAttribute(i) != CUT) {
-	      pmesh.SetAttribute(i, SBElementType::GHOST);
-	      mat_attr(i) = SBElementType::GHOST;
-	      break;
-	    }
-	  }
-      }
-    mat_attr.ExchangeFaceNbrData(); 
-    pmesh.ExchangeFaceNbrNodes();
-    
-    for (int f = 0; f < pmesh.GetNumFaces(); f++)
-      {
-	auto *ft = pmesh.GetFaceElementTransformations(f, 3);
-	if (ft->Elem2No > 0) {
-	  bool elem1_ghost = (pmesh.GetAttribute(ft->Elem1No) == SBElementType::GHOST);
-	  bool elem1_inside = (pmesh.GetAttribute(ft->Elem1No) == SBElementType::INSIDE);
-	 
-	  bool elem2_inside = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::INSIDE); 
-	  bool elem2_ghost = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::GHOST);
-	  // outer surrogate boundaries      
-	  if ( (elem1_ghost && elem2_inside) || (elem1_inside && elem2_ghost) || (elem1_ghost && elem2_ghost)  ) {
-	    pmesh.SetFaceAttribute(f, 77);
-	  }
-	}
-      }
    
-    for (int f = 0; f < pmesh.GetNSharedFaces(); f++)
-      {
-	auto *ftr = pmesh.GetSharedFaceTransformations(f, 3);
-	int faceno = pmesh.GetSharedFace(f);
-	int Elem2NbrNo = ftr->Elem2No - pmesh.GetNE();
-	auto *nbrftr = ls_fes->GetFaceNbrElementTransformation(Elem2NbrNo);
-	int attr1 = pmesh.GetAttribute(ftr->Elem1No);
-	IntegrationPoint sip; sip.Init(0);
-	int attr2 = mat_attr.GetValue(*ftr->Elem2, sip);
-	bool elem1_inside = (attr1 == SBElementType::INSIDE);
-	bool elem1_ghost = (attr1 == SBElementType::GHOST);
-       
-	bool elem2_inside = (attr2 == SBElementType::INSIDE);
-	bool elem2_ghost = (attr2 == SBElementType::GHOST);
-	if ( (elem1_ghost && elem2_inside) || (elem1_inside && elem2_ghost) || (elem1_ghost && elem2_ghost)  ) {
-	  pmesh.SetFaceAttribute(faceno, 77);	
-	}
-      }
-    
     pmesh.ExchangeFaceNbrNodes();
 
     initial_marking_done = true;

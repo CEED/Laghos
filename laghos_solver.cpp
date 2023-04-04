@@ -590,7 +590,7 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);	 
-	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
+	  if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
 	    e_rhs.GetSubVector(l2dofs, loc_rhs);
 	    Me_inv(e).Mult(loc_rhs, loc_de);
 	    de.SetSubVector(l2dofs, loc_de);
@@ -623,7 +623,7 @@ namespace mfem
 	// Check if any nodes cross bc
 	for (int e = 0; e < NE; e++)
 	  {
-	    if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
+	    if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
 	      // The points (and their numbering) coincide with the nodes of p.
 	      const IntegrationRule &ir = PFace_L2.GetFE(e)->GetNodes();
 	      const int nqp = ir.GetNPoints();
@@ -680,7 +680,7 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, dofs);
-	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
+	  if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
 	    const FiniteElement &fe = *L2.GetFE(e);
 	    ElementTransformation &eltr = *L2.GetElementTransformation(e);
 	    di.AssembleRHSElementVect(fe, eltr, rhs);
@@ -707,7 +707,7 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);
-	  if ((pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::GHOST)){
+	  if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
 	    gf.GetSubVector(l2dofs, loc_e);
 	    loc_ie += Me(e).InnerProduct(loc_e, one);
 	  }
@@ -775,7 +775,7 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ((pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::GHOST)) {
+	      if (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) {
 	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
 		Jpr_b[z].SetSize(dim, dim, nqp);
 		e.GetValues(z_id, ir, e_vals);
@@ -802,7 +802,7 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ((pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::GHOST)) {
+	      if (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) {
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)
