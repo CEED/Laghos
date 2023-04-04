@@ -306,15 +306,6 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
          // The domain area for the 3point is 21.
          const double dx = sqrt(21.0 / glob_NE);
 
-         // The middle of the element after x = 1.
-         return (pure_test) ? tanh(x(0) - 1.0)
-                            : tanh(x(0) - (1.0 + 0.5*dx));
-      }
-      case 11:
-      {
-         // The domain area for the 3point is 21.
-         const double dx = sqrt(21.0 / glob_NE);
-
          // The middle of the element before x = 1.
          // The middle of the element above y = 1.5.
          if (x(0) < 1.0 - 0.5 * dx) { return -1.0; }
@@ -1647,7 +1638,7 @@ void InitWaterAir(MaterialData &mat_data)
    }
 }
 
-void InitTriPoint2Mat(MaterialData &mat_data, int variant)
+void InitTriPoint2Mat(MaterialData &mat_data)
 {
    ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
@@ -1665,13 +1656,13 @@ void InitTriPoint2Mat(MaterialData &mat_data, int variant)
       const int attr = pfes.GetParMesh()->GetAttribute(e);
       Vector center(2);
       pfes.GetParMesh()->GetElementCenter(e, center);
-      const double x = center(0), y = center(1);
+      const double x = center(0);
 
       if (attr == 10 || attr == 15)
       {
          // Left/Top material.
          r = 1.0; p = 1.0;
-         if (variant == 1 && x > 1.0)
+         if (x > 1.0)
          {
             r = 0.125; p = 0.1;
          }
@@ -1685,11 +1676,7 @@ void InitTriPoint2Mat(MaterialData &mat_data, int variant)
       if (attr == 15 || attr == 20)
       {
          // Right/Bottom material.
-         r = 1.0; p = 0.1;   
-         if (variant == 0 && y > 1.5)
-         {
-            r = 0.125;
-         }
+         r = 1.0; p = 0.1;
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;

@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
       }
       if (dim == 2)
       {
-         if (problem == 10 || problem == 11)
+         if (problem == 10)
          {
              mesh = new Mesh(Mesh::MakeCartesian2D(8, 4, Element::QUADRILATERAL,
                                                    true, 7, 3));
@@ -502,8 +502,7 @@ int main(int argc, char *argv[])
    if (problem == 0)  { hydrodynamics::InitTG2Mat(mat_data); }
    if (problem == 8)  { hydrodynamics::InitSod2Mat(mat_data); }
    if (problem == 9)  { hydrodynamics::InitWaterAir(mat_data); }
-   if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data, 0); }
-   if (problem == 11) { hydrodynamics::InitTriPoint2Mat(mat_data, 1); }
+   if (problem == 10) { hydrodynamics::InitTriPoint2Mat(mat_data); }
    if (problem == 12) { hydrodynamics::InitImpact(mat_data); }
    InterfaceRhoCoeff rho_mixed_coeff(mat_data.ind0_1, mat_data.ind0_2,
                                      mat_data.rho0_1, mat_data.rho0_2);
@@ -523,7 +522,6 @@ int main(int argc, char *argv[])
       case 8: visc = true; break;
       case 9: visc = true; break;
       case 10: visc = true; break;
-      case 11: visc = true; break;
       case 12: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
@@ -1133,7 +1131,6 @@ double rho0(const Vector &x)
       case 8: return (x(0) < 0.5) ? 1.0 : 0.125;
       case 9: return (x(0) < 0.7) ? 1000.0 : 50.;
       case 10: return (x(0) > 1.1 && x(1) > 1.5) ? 0.125 : 1.0; // initialized by another function.
-      case 11: return 0.0; // initialized by another  function.
       case 12: return 0.0; // initialized by another  function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
@@ -1154,7 +1151,6 @@ double gamma_func(const Vector &x)
       case 8: return (x(0) < 0.5) ? 2.0 : 1.4;
       case 9: return (x(0) < 0.7) ? 4.4 : 1.4;
       case 10: return 0.0; // initialized by another function.
-      case 11: return 0.0; // initialized by another function.
       case 12: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
@@ -1226,7 +1222,6 @@ void v0(const Vector &x, Vector &v)
       case 8: v = 0.0; break;
       case 9: v = 0.0; break;
       case 10: v = 0.0; break;
-      case 11: v = 0.0; break;
       case 12:
       {
          v(1) = 0.0;
@@ -1311,7 +1306,6 @@ double e0(const Vector &x)
       case 9: return (x(0) < 0.7) ? (1.0e9+gamma_func(x)*6.0e8) / rho0(x) / (gamma_func(x) - 1.0)
                                   : 1.0e5 / rho0(x) / (gamma_func(x) - 1.0);
       case 10: return 0.0; // initialized by another function.
-      case 11: return 0.0; // initialized by another function.
       case 12: return 0.0; // initialized by another function.
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
