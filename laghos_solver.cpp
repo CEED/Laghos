@@ -397,13 +397,13 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -632,7 +632,7 @@ namespace mfem
       double glob_dt_est;
       const MPI_Comm comm = H1.GetParMesh()->GetComm();
       MPI_Allreduce(&qdata.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN, comm);
-      if (useEmbedded){
+      /* if (useEmbedded){
 	// Check if any nodes cross bc
 	for (int e = 0; e < NE; e++)
 	  {
@@ -671,7 +671,7 @@ namespace mfem
 		}
 	    }
 	  }
-      }
+      }*/
       return glob_dt_est;  
     }
 
