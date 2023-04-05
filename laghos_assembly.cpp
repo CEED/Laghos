@@ -401,7 +401,7 @@ namespace mfem
 									FaceElementTransformations &Tr,
 									Vector &elvect)      
     {
-      if (Tr.Attribute == 12 ){
+      if (Tr.Attribute == 77 ){
 	const int dim = el.GetDim();      
 	const IntegrationRule *ir = IntRule;
 	if (ir == NULL)
@@ -413,100 +413,82 @@ namespace mfem
 	const int nqp_face = IntRule->GetNPoints();
 	
 	const int h1dofs_cnt = el.GetDof();
-	elvect.SetSize(2*h1dofs_cnt*dim);
-	elvect = 0.0;
-	Vector te_shape(h1dofs_cnt);
-	te_shape = 0.0;
-	
-	for (int q = 0; q  < nqp_face; q++)
-	  {
-	    const IntegrationPoint &ip_f = ir->IntPoint(q);
-	    // Set the integration point in the face and the neighboring elements
-	    Tr.SetAllIntPoints(&ip_f);
-	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();
-	    ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	    Trans_el1.SetIntPoint(&eip);
-	    
-	    Vector nor;
-	    nor.SetSize(dim);
-	    nor = 0.0;
-	    CalcOrtho(Tr.Jacobian(), nor);
-
-	    el.CalcShape(eip, te_shape);
-	    double pressure = pface_gf.GetValue(Trans_el1,eip);
-	    DenseMatrix stress(dim);
-	    stress = 0.0;
-	    ComputeStress(pressure,dim,stress);
-	    
-	    // evaluation of the normal stress at the face quadrature points
-	    Vector weightedNormalStress(dim);
-	    weightedNormalStress = 0.0;
-	    
-	    // Quadrature data for partial assembly of the force operator.
-	    stress.Mult( nor, weightedNormalStress);
-	    
-	    for (int i = 0; i < h1dofs_cnt; i++)
-	      {
-		for (int vd = 0; vd < dim; vd++) // Velocity components.
-		  {
-		    elvect(i + vd * h1dofs_cnt) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight;
-		  }
-	      }
-	  }
-      }
-      else if (Tr.Attribute == 21 ){
-	const int dim = el2.GetDim();      
-	const IntegrationRule *ir = IntRule;
-	if (ir == NULL)
-	  {
-	    // a simple choice for the integration order; is this OK?
-	    const int order = 5 * max(el2.GetOrder(), 1);
-	    ir = &IntRules.Get(Tr.GetGeometryType(), order);
-	  }
-	const int nqp_face = IntRule->GetNPoints();
-	
-	const int h1dofs_cnt = el2.GetDof();
 	int h1dofs_offset = el2.GetDof()*dim;
 	
 	elvect.SetSize(2*h1dofs_cnt*dim);
 	elvect = 0.0;
-	Vector te_shape(h1dofs_cnt);
-	te_shape = 0.0;
-	
+	Vector te_shape_el1(h1dofs_cnt), te_shape_el2(h1dofs_cnt), nor(dim);
+	te_shape_el1 = 0.0;
+	te_shape_el2 = 0.0;
+	nor = 0.0;
 	for (int q = 0; q  < nqp_face; q++)
 	  {
+	    te_shape_el1 = 0.0;
+	    te_shape_el2 = 0.0;
+	    nor = 0.0;
+	    
 	    const IntegrationPoint &ip_f = ir->IntPoint(q);
 	    // Set the integration point in the face and the neighboring elements
 	    Tr.SetAllIntPoints(&ip_f);
-	    const IntegrationPoint &eip = Tr.GetElement2IntPoint();
+	    const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
+	    const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();	    
+	    ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
 	    ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
-	    Trans_el2.SetIntPoint(&eip);
 	    
-	    Vector nor;
-	    nor.SetSize(dim);
-	    nor = 0.0;
 	    CalcOrtho(Tr.Jacobian(), nor);
-	    nor *= -1.0;
-	    el2.CalcShape(eip, te_shape);
-	    double pressure = pface_gf.GetValue(Trans_el2,eip);
-	    DenseMatrix stress(dim);
-	    stress = 0.0;
-	    ComputeStress(pressure,dim,stress);
+
+	    double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
+	    double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
+	    double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
+	    double gamma_1 =  volumeFraction_el1/sum_volFrac;
+	    double gamma_2 =  volumeFraction_el2/sum_volFrac;
+
+	    if (gamma_1 > 0.99){
+	   
+	      el.CalcShape(eip_el1, te_shape_el1);
+	      double pressure = pface_gf.GetValue(Trans_el1,eip_el1);
+	      DenseMatrix stress(dim);
+	      stress = 0.0;
+	      ComputeStress(pressure,dim,stress);
+	      
+	      // evaluation of the normal stress at the face quadrature points
+	      Vector weightedNormalStress(dim);
+	      weightedNormalStress = 0.0;
+	      
+	      // Quadrature data for partial assembly of the force operator.
+	      stress.Mult( nor, weightedNormalStress);
+	      
+	      for (int i = 0; i < h1dofs_cnt; i++)
+		{
+		  for (int vd = 0; vd < dim; vd++) // Velocity components.
+		    {
+		      elvect(i + vd * h1dofs_cnt) += weightedNormalStress(vd) * te_shape_el1(i) * ip_f.weight;
+		    }
+		}
+	    }
+	    else {
+	      nor *= -1.0;
+	      el2.CalcShape(eip_el2, te_shape_el2);
+	      double pressure = pface_gf.GetValue(Trans_el2,eip_el2);
+	      DenseMatrix stress(dim);
+	      stress = 0.0;
+	      ComputeStress(pressure,dim,stress);
 	    
-	    // evaluation of the normal stress at the face quadrature points
-	    Vector weightedNormalStress(dim);
-	    weightedNormalStress = 0.0;
-	    
-	    // Quadrature data for partial assembly of the force operator.
-	    stress.Mult( nor, weightedNormalStress);
-	    
-	    for (int i = 0; i < h1dofs_cnt; i++)
-	      {
-		for (int vd = 0; vd < dim; vd++) // Velocity components.
-		  {
-		    elvect(i + vd * h1dofs_cnt + h1dofs_offset) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight;
-		  }
-	      }
+	      // evaluation of the normal stress at the face quadrature points
+	      Vector weightedNormalStress(dim);
+	      weightedNormalStress = 0.0;
+	      
+	      // Quadrature data for partial assembly of the force operator.
+	      stress.Mult( nor, weightedNormalStress);
+	      
+	      for (int i = 0; i < h1dofs_cnt; i++)
+		{
+		  for (int vd = 0; vd < dim; vd++) // Velocity components.
+		    {
+		      elvect(i + vd * h1dofs_cnt + h1dofs_offset) += weightedNormalStress(vd) * te_shape_el2(i) * ip_f.weight;
+		    }
+		}
+	    }
 	  }
       }
       else{
@@ -523,13 +505,8 @@ namespace mfem
 								      Vector &elvect)
     {
       if (Vnpt_gf != NULL){ 
-	if (Tr.Attribute == 12 ){
+	if (Tr.Attribute == 77 ){
 	  const int dim = el.GetDim();
-	  DenseMatrix identity(dim);
-	  identity = 0.0;
-	  for (int s = 0; s < dim; s++){
-	    identity(s,s) = 1.0;
-	  }
 
 	  const IntegrationRule *ir = IntRule;
 	  if (ir == NULL)
@@ -540,397 +517,335 @@ namespace mfem
 	    }
 	  const int nqp_face = ir->GetNPoints();
 	  const int l2dofs_cnt = el.GetDof();
+	  int l2dofs_offset = el2.GetDof();
 	  elvect.SetSize(l2dofs_cnt*2);
 	  elvect = 0.0;
-	  Vector te_shape(l2dofs_cnt);
-	  te_shape = 0.0;
-
-	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	  const int elementNo = Trans_el1.ElementNo;
+	  Vector te_shape_el1(l2dofs_cnt), te_shape_el2(l2dofs_cnt), nor(dim);
+	  te_shape_el1 = 0.0;
+	  te_shape_el2 = 0.0;
+	  nor = 0.0;
+	  
 	  ParFiniteElementSpace * pfes = Vnpt_gf->ParFESpace();
-	  Vector loc_data;
-	  Array<int> vdofs;
-	  DofTransformation * doftrans = pfes->GetElementVDofs(elementNo, vdofs);
-	  Vnpt_gf->GetSubVector(vdofs, loc_data);
-	  if (doftrans)
+	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  const int elementNo_el1 = Trans_el1.ElementNo;
+	  Vector loc_data_el1;
+	  Array<int> vdofs_el1;
+	  DofTransformation * doftrans_el1 = pfes->GetElementVDofs(elementNo_el1, vdofs_el1);
+	  Vnpt_gf->GetSubVector(vdofs_el1, loc_data_el1);
+	  if (doftrans_el1)
+	  {
+	    doftrans_el1->InvTransformPrimal(loc_data_el1);
+	  }
+	  
+	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+	  const int elementNo_el2 = Trans_el2.ElementNo;
+	  Vector loc_data_el2;
+	  int nbr_el_no = elementNo_el2 - pfes->GetParMesh()->GetNE();
+	  if (nbr_el_no >= 0)
 	    {
-	      doftrans->InvTransformPrimal(loc_data);
+	      int height = pfes->GetVSize();
+	      Array<int> vdofs_el2;      
+	      pfes->GetFaceNbrElementVDofs(nbr_el_no, vdofs_el2);
+	      
+	      for (int j = 0; j < vdofs_el2.Size(); j++)
+		{
+		  if (vdofs_el2[j] >= 0)
+		    {
+		      vdofs_el2[j] += height;
+		    }
+		  else
+		    {
+		      vdofs_el2[j] -= height;
+		    }
+		}
+	      Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
 	    }
+	  else{
+	    Array<int> vdofs_el2;
+	    DofTransformation * doftrans_el2 = pfes->GetElementVDofs(elementNo_el2, vdofs_el2); 
+	    Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
+	  }
+	  
+	  
 	  
 	  for (int q = 0; q  < nqp_face; q++)
 	    {
-	      te_shape = 0.0;
+	      te_shape_el1 = 0.0;
+	      te_shape_el2 = 0.0;
+	      nor = 0.0;
+	      
 	      const IntegrationPoint &ip_f = ir->IntPoint(q);
 	      // Set the integration point in the face and the neighboring elements
 	      Tr.SetAllIntPoints(&ip_f);
-	      const IntegrationPoint &eip = Tr.GetElement1IntPoint();
-
-	      Vector nor;
-	      nor.SetSize(dim);
-	      nor = 0.0;
+	      const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
+	      const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
+	    
+	      double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
+	      double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
+	      double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
+	      double gamma_1 =  volumeFraction_el1/sum_volFrac;
+	      double gamma_2 =  volumeFraction_el2/sum_volFrac;
+	    
 	      CalcOrtho(Tr.Jacobian(), nor);
-	      el.CalcShape(eip, te_shape);
-	      double pressure = pface_gf.GetValue(Trans_el1,eip);
-	      DenseMatrix stress(dim);
-	      stress = 0.0;
-	      ComputeStress(pressure,dim,stress);
-	    
-	      // evaluation of the normal stress at the face quadrature points
-	      Vector weightedNormalStress(dim);
-	      weightedNormalStress = 0.0;
 
-	      double nor_norm = 0.0;
-	      for (int s = 0; s < dim; s++){
-		nor_norm += nor(s) * nor(s);
-	      }
-	      nor_norm = sqrt(nor_norm);
-	    
-	      int h1dofs_cnt = 0.0;
-	      Vector velocity_shape, gradUResD_el1;
-	      DenseMatrix nodalGrad_el1, gradUResDirD_el1, taylorExp_el1;
-	      const FiniteElement *FElem = pfes->GetFE(elementNo);
-	      h1dofs_cnt = FElem->GetDof();
-	      velocity_shape.SetSize(h1dofs_cnt);
-	      velocity_shape = 0.0;
-	      FElem->CalcShape(eip, velocity_shape);
-	      FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
+	      if (gamma_1 > 0.99){
+		el.CalcShape(eip_el1, te_shape_el1);
+		double pressure = pface_gf.GetValue(Trans_el1,eip_el1);
+		DenseMatrix stress(dim);
+		stress = 0.0;
+		ComputeStress(pressure,dim,stress);
 		
-	      gradUResD_el1.SetSize(h1dofs_cnt);
-	      gradUResDirD_el1.SetSize(h1dofs_cnt);
-	      taylorExp_el1.SetSize(h1dofs_cnt);
-	      
-	      gradUResD_el1 = 0.0;
-	      gradUResDirD_el1 = 0.0;
-	      taylorExp_el1 = 0.0;
-
-	      /////
-	      Vector D_el1(dim);
-	      Vector tN_el1(dim);
-	      D_el1 = 0.0;
-	      tN_el1 = 0.0; 
-	      vD->Eval(D_el1, Trans_el1, eip);
-	      vN->Eval(tN_el1, Trans_el1, eip);
-	      /////
-	      
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int j = 0; j < dim; j++){
-		    gradUResDirD_el1(s,k) += nodalGrad_el1(k + j * h1dofs_cnt, s) * D_el1(j);
-		  }
+		// evaluation of the normal stress at the face quadrature points
+		Vector weightedNormalStress(dim);
+		weightedNormalStress = 0.0;
+		
+		double nor_norm = 0.0;
+		for (int s = 0; s < dim; s++){
+		  nor_norm += nor(s) * nor(s);
 		}
-	      }
-
-	      DenseMatrix tmp_el1(h1dofs_cnt);
-	      DenseMatrix dummy_tmp_el1(h1dofs_cnt);
-	      tmp_el1 = gradUResDirD_el1;
-	      taylorExp_el1 = gradUResDirD_el1;
-	      dummy_tmp_el1 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape(s);  
-		}
-	      }
-	      
-	      for ( int p = 1; p < nTerms; p++){
-		dummy_tmp_el1 = 0.0;
+		nor_norm = sqrt(nor_norm);
+		
+		int h1dofs_cnt = 0.0;
+		Vector velocity_shape, gradUResD_el1;
+		DenseMatrix nodalGrad_el1, gradUResDirD_el1, taylorExp_el1;
+		const FiniteElement *FElem = pfes->GetFE(elementNo_el1);
+		h1dofs_cnt = FElem->GetDof();
+		velocity_shape.SetSize(h1dofs_cnt);
+		velocity_shape = 0.0;
+		FElem->CalcShape(eip_el1, velocity_shape);
+		FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
+		
+		gradUResD_el1.SetSize(h1dofs_cnt);
+		gradUResDirD_el1.SetSize(h1dofs_cnt);
+		taylorExp_el1.SetSize(h1dofs_cnt);
+		
+		gradUResD_el1 = 0.0;
+		gradUResDirD_el1 = 0.0;
 		taylorExp_el1 = 0.0;
+		
+		/////
+		Vector D_el1(dim);
+		Vector tN_el1(dim);
+		D_el1 = 0.0;
+		tN_el1 = 0.0; 
+		vD->Eval(D_el1, Trans_el1, eip_el1);
+		vN->Eval(tN_el1, Trans_el1, eip_el1);
+		/////
+		
 		for (int k = 0; k < h1dofs_cnt; k++){
 		  for (int s = 0; s < h1dofs_cnt; s++){
-		    for (int r = 0; r < h1dofs_cnt; r++){
-		      taylorExp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s) * (1.0/factorial(p+1));
-		      dummy_tmp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s);
+		    for (int j = 0; j < dim; j++){
+		      gradUResDirD_el1(s,k) += nodalGrad_el1(k + j * h1dofs_cnt, s) * D_el1(j);
 		    }
 		  }
-		}
-		tmp_el1 = dummy_tmp_el1;
+	      }
+		
+		DenseMatrix tmp_el1(h1dofs_cnt);
+		DenseMatrix dummy_tmp_el1(h1dofs_cnt);
+		tmp_el1 = gradUResDirD_el1;
+		taylorExp_el1 = gradUResDirD_el1;
+		dummy_tmp_el1 = 0.0;
 		for (int k = 0; k < h1dofs_cnt; k++){
 		  for (int s = 0; s < h1dofs_cnt; s++){
 		    gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape(s);  
 		  }
 		}
-	      }
-	      
-	      ////
-	      velocity_shape += gradUResD_el1;
-	      ////
-	      
-	      Vector vShape(dim);
-	      vShape = 0.0;
-	      for (int k = 0; k < dim; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  vShape(k) += velocity_shape(s) * loc_data(s + h1dofs_cnt * k);
+		
+		for ( int p = 1; p < nTerms; p++){
+		  dummy_tmp_el1 = 0.0;
+		  taylorExp_el1 = 0.0;
+		  for (int k = 0; k < h1dofs_cnt; k++){
+		    for (int s = 0; s < h1dofs_cnt; s++){
+		      for (int r = 0; r < h1dofs_cnt; r++){
+			taylorExp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s) * (1.0/factorial(p+1));
+			dummy_tmp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s);
+		      }
+		    }
+		  }
+		  tmp_el1 = dummy_tmp_el1;
+		  for (int k = 0; k < h1dofs_cnt; k++){
+		    for (int s = 0; s < h1dofs_cnt; s++){
+		      gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape(s);  
+		    }
+		  }
 		}
-	      }
-
-	      double nTildaDotN = 0.0;
-	      for (int s = 0; s < dim; s++){
-		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
-	      }
-
-	      // Quadrature data for partial assembly of the force operator.
-	      // stress.Mult( nor, weightedNormalStress);
-	      stress.Mult( tN_el1, weightedNormalStress);
-
-	      double normalStressProjNormal = 0.0;
-	      for (int s = 0; s < dim; s++){
-		//	normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
-		normalStressProjNormal += weightedNormalStress(s) * tN_el1(s);
-	      }
-
-	      double tangentStressProjTangent = 0.0;
-	      for (int s = 0; s < dim; s++){
+		
+		////
+		velocity_shape += gradUResD_el1;
+		////
+		
+		Vector vShape(dim);
+		vShape = 0.0;
 		for (int k = 0; k < dim; k++){
-		  tangentStressProjTangent += stress(s,k) * (identity(s,k) - tN_el1(s) * tN_el1(k));
+		  for (int s = 0; s < h1dofs_cnt; s++){
+		    vShape(k) += velocity_shape(s) * loc_data_el1(s + h1dofs_cnt * k);
+		  }
 		}
-	      }
-
-	      double vDotn = 0.0;
-	      for (int s = 0; s < dim; s++)
-		{
-		  //  vDotn += vShape(s) * nor(s) / nor_norm;
-		  vDotn += vShape(s) * tN_el1(s);
+		
+		double nTildaDotN = 0.0;
+		for (int s = 0; s < dim; s++){
+		  nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
 		}
-	      
-	      double vDotTildaDotTangent = 0.0;
-	      for (int s = 0; s < dim; s++)
-		{
-		  for (int k = 0; k < dim; k++)
-		    {
-		      vDotTildaDotTangent += vShape(s) * (nor(k) / nor_norm) * (identity(s,k) - tN_el1(s) * tN_el1(k));
-		    }
+		
+		// Quadrature data for partial assembly of the force operator.
+	      // stress.Mult( nor, weightedNormalStress);
+		stress.Mult( tN_el1, weightedNormalStress);
+		
+		double normalStressProjNormal = 0.0;
+		for (int s = 0; s < dim; s++){
+		  //	normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		  normalStressProjNormal += weightedNormalStress(s) * tN_el1(s);
 		}
-
-	      for (int i = 0; i < l2dofs_cnt; i++)
-		{
-		  //  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
-		  elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
-		  //  elvect(i) -= tangentStressProjTangent * te_shape(i) * ip_f.weight * vDotTildaDotTangent * nor_norm;
-		}
-	    }
-	}
-	else if (Tr.Attribute == 21 ){
-	  const int dim = el2.GetDim();
-	  DenseMatrix identity(dim);
-	  identity = 0.0;
-	  for (int s = 0; s < dim; s++){
-	    identity(s,s) = 1.0;
-	  }
-
-	  const IntegrationRule *ir = IntRule;
-	  if (ir == NULL)
-	    {
-	      // a simple choice for the integration order; is this OK?
-	      const int order = 5 * max(el2.GetOrder(), 1);
-	      ir = &IntRules.Get(Tr.GetGeometryType(), order);
-	    }
-	  const int nqp_face = ir->GetNPoints();
-	  const int l2dofs_cnt = el2.GetDof();
-	  int l2dofs_offset = el2.GetDof();
-	  elvect.SetSize(l2dofs_cnt*2);
-	  elvect = 0.0;
-	  Vector te_shape(l2dofs_cnt);
-	  te_shape = 0.0;
-	  
-	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
-	  const int elementNo = Trans_el2.ElementNo;
-	  
-	  ParFiniteElementSpace * pfes = Vnpt_gf->ParFESpace();
-	  Vector loc_data;
-	  int nbr_el_no = elementNo - pfes->GetParMesh()->GetNE();
-	  if (nbr_el_no >= 0)
-	    {
-	      int height = pfes->GetVSize();
-	      Array<int> vdofs;      
-	      pfes->GetFaceNbrElementVDofs(nbr_el_no, vdofs);
-	      
-	      for (int j = 0; j < vdofs.Size(); j++)
-		{
-		  if (vdofs[j] >= 0)
-		    {
-		      vdofs[j] += height;
-		    }
-		  else
-		    {
-		      vdofs[j] -= height;
-		    }
-		}
-	      Vnpt_gf->GetSubVector(vdofs, loc_data);
-	    }
-	  else{
-	    Array<int> vdofs;
-	    DofTransformation * doftrans = pfes->GetElementVDofs(elementNo, vdofs); 
-	    Vnpt_gf->GetSubVector(vdofs, loc_data);
-	  }
-	  
-	  for (int q = 0; q  < nqp_face; q++)
-	    {
-	      te_shape = 0.0;
-	      const IntegrationPoint &ip_f = ir->IntPoint(q);
-	      // Set the integration point in the face and the neighboring elements
-	      Tr.SetAllIntPoints(&ip_f);
-	      const IntegrationPoint &eip = Tr.GetElement2IntPoint();
-	    
-	      Vector nor;
-	      nor.SetSize(dim);
-	      nor = 0.0;
-	      CalcOrtho(Tr.Jacobian(), nor);
-	      nor *= -1.0;
-	      el2.CalcShape(eip, te_shape);
-	      double pressure = pface_gf.GetValue(Trans_el2,eip);
-	      DenseMatrix stress(dim);
-	      stress = 0.0;
-	      ComputeStress(pressure,dim,stress);
-	    
-	      // evaluation of the normal stress at the face quadrature points
-	      Vector weightedNormalStress(dim);
-	      weightedNormalStress = 0.0;
-
-	      double nor_norm = 0.0;
-	      for (int s = 0; s < dim; s++){
-		nor_norm += nor(s) * nor(s);
-	      }
-	      nor_norm = sqrt(nor_norm);
-
-	      int h1dofs_cnt = 0.0;
-	      Vector velocity_shape, gradUResD_el2;
-	      DenseMatrix nodalGrad_el2, gradUResDirD_el2, taylorExp_el2;
-	      if (nbr_el_no >= 0){
-		const FiniteElement *FElem = pfes->GetFaceNbrFE(nbr_el_no);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape.SetSize(h1dofs_cnt);
-		velocity_shape = 0.0;
-		FElem->CalcShape(eip, velocity_shape);
-		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
+		
+		double vDotn = 0.0;
+		for (int s = 0; s < dim; s++)
+		  {
+		    //  vDotn += vShape(s) * nor(s) / nor_norm;
+		    vDotn += vShape(s) * tN_el1(s);
+		  }
+		
+		for (int i = 0; i < l2dofs_cnt; i++)
+		  {
+		    elvect(i) -= normalStressProjNormal * te_shape_el1(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+		  }
 	      }
 	      else {
-		const FiniteElement *FElem = pfes->GetFE(elementNo);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape.SetSize(h1dofs_cnt);
-		velocity_shape = 0.0;
-		FElem->CalcShape(eip, velocity_shape);
-		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
-	      }
-
-	      gradUResD_el2.SetSize(h1dofs_cnt);
-	      gradUResDirD_el2.SetSize(h1dofs_cnt);
-	      taylorExp_el2.SetSize(h1dofs_cnt);
-	      
-	      gradUResD_el2 = 0.0;
-	      gradUResDirD_el2 = 0.0;
-	      taylorExp_el2 = 0.0;
-
-	      /////
-	      Vector D_el2(dim);
-	      Vector tN_el2(dim);
-	      D_el2 = 0.0;
-	      tN_el2 = 0.0;
-	      vD->Eval(D_el2, Trans_el2, eip);
-	      vN->Eval(tN_el2, Trans_el2, eip);
-	      /////
-	     
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int j = 0; j < dim; j++){
-		    gradUResDirD_el2(s,k) += nodalGrad_el2(k + j * h1dofs_cnt, s) * D_el2(j);
-		  }
+		nor *= -1.0;
+		el2.CalcShape(eip_el2, te_shape_el2);
+		double pressure = pface_gf.GetValue(Trans_el2,eip_el2);
+		DenseMatrix stress(dim);
+		stress = 0.0;
+		ComputeStress(pressure,dim,stress);
+		
+		// evaluation of the normal stress at the face quadrature points
+		Vector weightedNormalStress(dim);
+		weightedNormalStress = 0.0;
+		
+		double nor_norm = 0.0;
+		for (int s = 0; s < dim; s++){
+		  nor_norm += nor(s) * nor(s);
 		}
-	      }
-
-	      DenseMatrix tmp_el2(h1dofs_cnt);
-	      DenseMatrix dummy_tmp_el2(h1dofs_cnt);
-	      tmp_el2 = gradUResDirD_el2;
-	      taylorExp_el2 = gradUResDirD_el2;
-	      dummy_tmp_el2 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape(s);  
+		nor_norm = sqrt(nor_norm);
+		
+		int h1dofs_cnt = 0.0;
+		Vector velocity_shape, gradUResD_el2;
+		DenseMatrix nodalGrad_el2, gradUResDirD_el2, taylorExp_el2;
+		if (nbr_el_no >= 0){
+		  const FiniteElement *FElem = pfes->GetFaceNbrFE(nbr_el_no);
+		  h1dofs_cnt = FElem->GetDof();
+		  velocity_shape.SetSize(h1dofs_cnt);
+		  velocity_shape = 0.0;
+		  FElem->CalcShape(eip_el2, velocity_shape);
+		  FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
 		}
-	      }
-	      
-	      for ( int p = 1; p < nTerms; p++){
-		dummy_tmp_el2 = 0.0;
+		else {
+		  const FiniteElement *FElem = pfes->GetFE(elementNo_el2);
+		  h1dofs_cnt = FElem->GetDof();
+		  velocity_shape.SetSize(h1dofs_cnt);
+		  velocity_shape = 0.0;
+		  FElem->CalcShape(eip_el2, velocity_shape);
+		  FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
+		}
+		
+		gradUResD_el2.SetSize(h1dofs_cnt);
+		gradUResDirD_el2.SetSize(h1dofs_cnt);
+		taylorExp_el2.SetSize(h1dofs_cnt);
+		
+		gradUResD_el2 = 0.0;
+		gradUResDirD_el2 = 0.0;
 		taylorExp_el2 = 0.0;
+		
+		/////
+		Vector D_el2(dim);
+		Vector tN_el2(dim);
+		D_el2 = 0.0;
+		tN_el2 = 0.0;
+		vD->Eval(D_el2, Trans_el2, eip_el2);
+		vN->Eval(tN_el2, Trans_el2, eip_el2);
+		/////
+		
 		for (int k = 0; k < h1dofs_cnt; k++){
 		  for (int s = 0; s < h1dofs_cnt; s++){
-		    for (int r = 0; r < h1dofs_cnt; r++){
-		      taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
-		      dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
+		    for (int j = 0; j < dim; j++){
+		    gradUResDirD_el2(s,k) += nodalGrad_el2(k + j * h1dofs_cnt, s) * D_el2(j);
 		    }
 		  }
 		}
-		tmp_el2 = dummy_tmp_el2;
+		
+		DenseMatrix tmp_el2(h1dofs_cnt);
+		DenseMatrix dummy_tmp_el2(h1dofs_cnt);
+		tmp_el2 = gradUResDirD_el2;
+		taylorExp_el2 = gradUResDirD_el2;
+		dummy_tmp_el2 = 0.0;
 		for (int k = 0; k < h1dofs_cnt; k++){
 		  for (int s = 0; s < h1dofs_cnt; s++){
 		    gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape(s);  
 		  }
 		}
-	      }
-	      
-	      ////
-	      velocity_shape += gradUResD_el2;
-	      //
-
-	      Vector vShape(dim);
-	      vShape = 0.0;
-	      for (int k = 0; k < dim; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  vShape(k) += velocity_shape(s) * loc_data(s + h1dofs_cnt * k);
-		}
-	      }
-
-	      double nTildaDotN = 0.0;
-	      for (int s = 0; s < dim; s++){
-		nTildaDotN += nor(s) * tN_el2(s) / nor_norm;
-	      }
-
-	      // Quadrature data for partial assembly of the force operator.
-	      //  stress.Mult( nor, weightedNormalStress);
-	      stress.Mult( tN_el2, weightedNormalStress);
-	    
-	      double normalStressProjNormal = 0.0;
-	      for (int s = 0; s < dim; s++){
-		//	normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
-		normalStressProjNormal += weightedNormalStress(s) * tN_el2(s);
-	      }
-	      
-	      double tangentStressProjTangent = 0.0;
-	      for (int s = 0; s < dim; s++){
-		for (int k = 0; k < dim; k++){
-		  tangentStressProjTangent += stress(s,k) * (identity(s,k) - tN_el2(s) * tN_el2(k));
-		}
-	      }
-
-	      double vDotn = 0.0;
-	      for (int s = 0; s < dim; s++)
-		{
-		  vDotn += vShape(s) * tN_el2(s);
-		  //  vDotn += vShape(s) * nor(s) / nor_norm;
-		}
-
-	      double vDotTildaDotTangent = 0.0;
-	      for (int s = 0; s < dim; s++)
-		{
-		  for (int k = 0; k < dim; k++)
-		    {
-		      vDotTildaDotTangent += vShape(s) * (nor(k) / nor_norm) * (identity(s,k) - tN_el2(s) * tN_el2(k));
+		
+		for ( int p = 1; p < nTerms; p++){
+		  dummy_tmp_el2 = 0.0;
+		  taylorExp_el2 = 0.0;
+		  for (int k = 0; k < h1dofs_cnt; k++){
+		    for (int s = 0; s < h1dofs_cnt; s++){
+		      for (int r = 0; r < h1dofs_cnt; r++){
+			taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
+			dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
+		      }
 		    }
+		  }
+		  tmp_el2 = dummy_tmp_el2;
+		  for (int k = 0; k < h1dofs_cnt; k++){
+		    for (int s = 0; s < h1dofs_cnt; s++){
+		    gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape(s);  
+		    }
+		  }
 		}
-	      
-	      for (int i = 0; i < l2dofs_cnt; i++)
-		{
-		  //  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nor_norm;
-
-		  elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
-
-		  //	  elvect(i + l2dofs_offset) -= tangentStressProjTangent * te_shape(i) * ip_f.weight * vDotTildaDotTangent * nor_norm;
-	
+		
+		////
+		velocity_shape += gradUResD_el2;
+		//
+		
+		Vector vShape(dim);
+		vShape = 0.0;
+		for (int k = 0; k < dim; k++){
+		  for (int s = 0; s < h1dofs_cnt; s++){
+		    vShape(k) += velocity_shape(s) * loc_data_el2(s + h1dofs_cnt * k);
+		  }
 		}
+
+		double nTildaDotN = 0.0;
+		for (int s = 0; s < dim; s++){
+		  nTildaDotN += nor(s) * tN_el2(s) / nor_norm;
+		}
+		
+		// Quadrature data for partial assembly of the force operator.
+		//  stress.Mult( nor, weightedNormalStress);
+		stress.Mult( tN_el2, weightedNormalStress);
+		
+		double normalStressProjNormal = 0.0;
+		for (int s = 0; s < dim; s++){
+		  //	normalStressProjNormal += weightedNormalStress(s) * nor(s) / (nor_norm * nor_norm);
+		  normalStressProjNormal += weightedNormalStress(s) * tN_el2(s);
+		}
+		double vDotn = 0.0;
+		for (int s = 0; s < dim; s++)
+		  {
+		    vDotn += vShape(s) * tN_el2(s);
+		    //  vDotn += vShape(s) * nor(s) / nor_norm;
+		  }
+		
+		for (int i = 0; i < l2dofs_cnt; i++)
+		  {
+		    elvect(i + l2dofs_offset) -= normalStressProjNormal * te_shape_el2(i) * ip_f.weight * vDotn * nTildaDotN * nor_norm;
+		    
+		  }
+	      }	  
 	    }
 	}
 	else{
-	  const int dim = el.GetDim();
-	  const int dofs_cnt = el.GetDof();
-	  elvect.SetSize(2*dofs_cnt);
+	  const int l2dofs_cnt = el.GetDof();
+	  elvect.SetSize(2*l2dofs_cnt);
 	  elvect = 0.0;
 	}
       }
@@ -939,7 +854,8 @@ namespace mfem
 	elvect.SetSize(2*l2dofs_cnt);
 	elvect = 0.0;
       }
-    }
+    }      
+ 
 
     void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 								 const FiniteElement &fe2,

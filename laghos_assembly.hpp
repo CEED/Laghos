@@ -168,10 +168,11 @@ namespace mfem
     private:
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
+      const ParGridFunction &alpha_gf;
       const ParGridFunction &pface_gf;
      
     public:
-      ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf) : pmesh(pmesh), qdata(qdata), pface_gf(pface_gf) { }
+      ShiftedVelocityBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &alpha_gf, const ParGridFunction &pface_gf) : pmesh(pmesh), qdata(qdata), alpha_gf(alpha_gf), pface_gf(pface_gf) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
@@ -188,6 +189,7 @@ namespace mfem
     private:
       const ParMesh *pmesh;
       const QuadratureDataGL &qdata;
+      const ParGridFunction &alpha_gf;
       const ParGridFunction &pface_gf;
       const ParGridFunction &v_gf;
       const ParGridFunction *Vnpt_gf;
@@ -196,7 +198,7 @@ namespace mfem
       int nTerms;
 
     public:
-      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms) :  pmesh(pmesh), qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), vD(dist_vec), vN(normal_vec), nTerms(nTerms)  { }
+      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &alpha_gf, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms) :  pmesh(pmesh), qdata(qdata), alpha_gf(alpha_gf), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), vD(dist_vec), vN(normal_vec), nTerms(nTerms)  { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
