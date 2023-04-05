@@ -40,6 +40,7 @@
 #include "laghos_ale.hpp"
 #include "laghos_materials.hpp"
 #include "riemann1D.hpp"
+#include "extrapolator.hpp"
 
 using std::cout;
 using std::endl;
@@ -415,6 +416,8 @@ int main(int argc, char *argv[])
    si_options.e_shift_diffusion_type = 0;
    si_options.e_shift_diffusion_scale = 1.0;
 
+   bool extrap_final = false;
+
    const bool pure_test = (multimat == false);
    const bool calc_dist = (si_options.v_shift_type > 0 ||
                            si_options.e_shift_type > 0) ? true : false;
@@ -772,8 +775,7 @@ int main(int argc, char *argv[])
       }
    }
 
-   double energy_old = energy_init,
-          energy_new = energy_init;
+   double energy_new = energy_init;
 
    int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)
@@ -880,7 +882,6 @@ int main(int argc, char *argv[])
 
       // Shifting-related procedures.
       if (calc_dist) { dist_solver->ComputeVectorDistance(coeff_xi, dist); }
-
       if (extract1D)
       {
          //v_extr.WriteValue(t);
@@ -913,7 +914,7 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         energy_old = energy_new;
+         double energy_old = energy_new;
          energy_new =
             hydro.InternalEnergy(mat_data.e_1, mat_data.e_2) +
             hydro.KineticEnergy(v_gf);
@@ -955,6 +956,33 @@ int main(int argc, char *argv[])
          }
          if (visualization)
          {
+            if (last_step && extrap_final)
+            {
+               Extrapolator xtrap;
+               xtrap.xtrap_type     = Extrapolator::ASLAM;
+               xtrap.advection_mode = AdvectionOper::LO;
+               xtrap.xtrap_degree   = 1;
+
+               ParGridFunction lset_1(mat_data.level_set),
+                               lset_2(mat_data.level_set);
+               // First material is for level_set < 0, so we need to flip.
+               lset_1 *= -1;
+               GridFunctionCoefficient lset_1_coeff(&lset_1),
+                                       lset_2_coeff(&lset_2);
+
+               // Extrapolate rho_1.
+               ParGridFunction r1(rho_gf_1);
+               xtrap.Extrapolate(lset_1_coeff, mat_data.alpha_1,
+                                 rho_gf_1, 5.0, r1);
+               rho_gf_1 = 1;
+
+               // Extrapolate rho_2.
+               ParGridFunction r2(rho_gf_2);
+               xtrap.Extrapolate(lset_2_coeff, mat_data.alpha_2,
+                                 rho_gf_2, 5.0, r2, true);
+               rho_gf_2 = r2;
+            }
+
             visualize(mat_data, rho_gf_1, rho_gf_2,
                       v_gf, dist, marker.mat_attr, face_attr);
          }
