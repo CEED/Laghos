@@ -941,10 +941,20 @@ namespace mfem
 	      vD->Eval(D_el1, Trans_el1, eip_el1);
 	      vN->Eval(tN_el1, Trans_el1, eip_el1);
 	      /////
+	      double normD = 0.0;
+	      for (int s = 0; s < dim; s++){
+		normD += D_el1(s) * D_el1(s);
+	      }
+	      normD = std::sqrt(normD);
+	      
 	      const DenseMatrix &Jpr_el1 = Trans_el1.Jacobian();
-	      Vector tOrig_el1(dim);
+	      Vector tOrig_el1(dim), tn(dim);
 	      tOrig_el1 = 0.0;
+	      tn = 0.0;
+	      tn = nor;
+	      tn /= nor_norm;
 	      Jpr_el1.MultTranspose(tN_el1,tOrig_el1);
+	      // Jpr_el1.MultTranspose(tn,tOrig_el1);
 	      double origNormalProd_el1 = 0.0;
 	      for (int s = 0; s < dim; s++){
 		origNormalProd_el1 += tOrig_el1(s) * tOrig_el1(s);
@@ -962,10 +972,10 @@ namespace mfem
 
 	      double penaltyVal = 0.0;
 	      if (globalmax_viscous_coef != 0.0){
-		penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el1,2.0);
+		penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::fabs(normD*nor_norm/Tr.Elem1->Weight()));
 	      }
 	      else {
-		penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el1,2.0);
+		penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::fabs(normD*nor_norm/Tr.Elem1->Weight()));
 	      }
 
 	    for (int k = 0; k < h1dofs_cnt; k++){
@@ -1036,6 +1046,7 @@ namespace mfem
 	    
 	    }
 	    else {
+	      nor *= -1.0;
 	      /////
 	      Vector D_el2(dim);
 	      Vector tN_el2(dim);
@@ -1044,10 +1055,21 @@ namespace mfem
 	      vD->Eval(D_el2, Trans_el2, eip_el2);
 	      vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
+
+	      double normD = 0.0;
+	      for (int s = 0; s < dim; s++){
+		normD += D_el2(s) * D_el2(s);
+	      }
+	      normD = std::sqrt(normD);
 	      
+	      Vector tn(dim);
+	      tn = 0.0;
+	      tn = nor;
+	      tn /= nor_norm;
 	      const DenseMatrix &Jpr_el2 = Trans_el2.Jacobian();
 	      Vector tOrig_el2(dim);
 	      tOrig_el2 = 0.0;
+	      // Jpr_el2.MultTranspose(tn,tOrig_el2);
 	      Jpr_el2.MultTranspose(tN_el2,tOrig_el2);
 	      double origNormalProd_el2 = 0.0;
 	      for (int s = 0; s < dim; s++){
@@ -1066,10 +1088,10 @@ namespace mfem
 
 	      double penaltyVal = 0.0;
 	      if (globalmax_viscous_coef != 0.0){
-		penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem2->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el2,2.0);
+		penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem2->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el2,2.0-2.0*std::fabs(normD*nor_norm/Tr.Elem2->Weight()));
 	      }
 	      else {
-		penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem2->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el2,2.0);
+		penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem2->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el2,2.0-2.0*std::fabs(normD*nor_norm/Tr.Elem2->Weight()));
 	      }
 
 	
@@ -1132,18 +1154,12 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test_el2(i) * shape_el2(j) * nor_norm * tN_el2(vd) * tN_el2(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN;
-			    
+			    elmat(i + vd * h1dofs_cnt + h1dofs_offset, j + md * h1dofs_cnt + h1dofs_offset) += shape_test_el2(i) * shape_el2(j) * nor_norm * tN_el2(vd) * tN_el2(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN;		    
 			  }
 		      }
 		  }
 	      }
-
 	    }	  
-
-	  
-
-
 	  }
       }
       else{
