@@ -440,11 +440,20 @@ int main(int argc, char *argv[])
    }
 
    // Interface function.
-   ParFiniteElementSpace pfes_xi(pmesh, &H1FEC);
-   mat_data.level_set.SetSpace(&pfes_xi);
+   ParFiniteElementSpace pfes_xi_H1(pmesh, &H1FEC),
+                         pfes_xi_L2(pmesh, &l2_fec);
+   if (pure_test) { mat_data.level_set.SetSpace(&pfes_xi_L2); }
+   else           { mat_data.level_set.SetSpace(&pfes_xi_H1); }
    hydrodynamics::InterfaceCoeff coeff_ls_0(problem, *pmesh, pure_test);
-   PLapDistanceSolver ds(7);
-   ds.ComputeScalarDistance(coeff_ls_0, mat_data.level_set);
+   if (pure_test)
+   {
+      mat_data.level_set.ProjectCoefficient(coeff_ls_0);
+   }
+   else
+   {
+      PLapDistanceSolver ds(7);
+      ds.ComputeScalarDistance(coeff_ls_0, mat_data.level_set);
+   }
    GridFunctionCoefficient coeff_xi(&mat_data.level_set);
 
    if (calc_dist) { dist_solver->ComputeVectorDistance(coeff_xi, dist); }

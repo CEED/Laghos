@@ -303,6 +303,13 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
       }
       case 10:
       {
+         if (pure_test)
+         {
+            if (x(0) < 1.0) { return -1.0; }
+            if (x(1) > 1.5) { return -1.0; }
+            return 1.0;
+         }
+
          // The domain area for the 3point is 21.
          const double dx = sqrt(21.0 / glob_NE);
 
