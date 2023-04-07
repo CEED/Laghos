@@ -381,7 +381,6 @@ namespace mfem
 	  }
 
 	  fe.CalcShape(eip, shape);
-	
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -390,7 +389,7 @@ namespace mfem
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal  * ip_f.weight * nor_norm;
+			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tn(vd) * tn(md) * penaltyVal  * ip_f.weight * nor_norm;
 			}
 		    }
 		}
