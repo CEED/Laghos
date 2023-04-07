@@ -184,13 +184,12 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(ParGridFunction &gammaPressureScaling_gf, double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
+    void UpdatePenaltyParameterGL(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
       const ParMesh * pmesh = p_fespace->GetParMesh();
       int dim = pmesh->Dimension();
-      gammaPressureScaling_gf = 0.0;
     
       double max_viscous_coef = 0.0;
       double max_cs = 0.0;
@@ -227,54 +226,54 @@ namespace mfem
 		//}
 		//		normD = std::pow(normD,0.5);
 		////
-		double visc_coeff = 0.0;
-		DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
-		// Compression-based length scale at the point. The first
-		// eigenvector of the symmetric velocity lgradient gives the
-		// direction of maximal compression. This is used to define the
-		// relative change of the initial length scale.
-		v.GetVectorGradient(Tr, sgrad_v);
-		
-		double vorticity_coeff = 1.0;
-		if (use_vorticity)
-		  {
-		    const double grad_norm = sgrad_v.FNorm();
-		    const double div_v = fabs(sgrad_v.Trace());
-		    vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-		  }
-		
-		sgrad_v.Symmetrize();
-		double eig_val_data[3], eig_vec_data[9];
-		if (dim==1)
-		  {
-		    eig_val_data[0] = sgrad_v(0, 0);
-		    eig_vec_data[0] = 1.;
-		  }
-		else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
-		Vector compr_dir(eig_vec_data, dim);
-		mfem::Mult(Tr.Jacobian(), qdata.Jac0inv(e*nqp + q), Jpi);
-		Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
-		// Change of the initial mesh size in the compression direction.
-		const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
-		gammaPressureScaling_gf(e * nqp + q) = rho_vals * h;
-	
-		// Measure of maximal compression.
-		const double mu = eig_val_data[0];
-		visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
-		    
-		// The following represents a "smooth" version of the statement
-		// "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-		// eps must be scaled appropriately if a different unit system is
-		// being used.
-		   
-		const double eps = 1e-12;
-		visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		    
-		max_viscous_coef = std::max(max_viscous_coef, visc_coeff);
+		if (use_viscosity){
+		  double visc_coeff = 0.0;
+		  DenseMatrix Jpi(dim), sgrad_v(dim), Jinv(dim);
+		  // Compression-based length scale at the point. The first
+		  // eigenvector of the symmetric velocity lgradient gives the
+		  // direction of maximal compression. This is used to define the
+		  // relative change of the initial length scale.
+		  v.GetVectorGradient(Tr, sgrad_v);
+		  
+		  double vorticity_coeff = 1.0;
+		  if (use_vorticity)
+		    {
+		      const double grad_norm = sgrad_v.FNorm();
+		      const double div_v = fabs(sgrad_v.Trace());
+		      vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+		    }
+		  
+		  sgrad_v.Symmetrize();
+		  double eig_val_data[3], eig_vec_data[9];
+		  if (dim==1)
+		    {
+		      eig_val_data[0] = sgrad_v(0, 0);
+		      eig_vec_data[0] = 1.;
+		    }
+		  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+		  Vector compr_dir(eig_vec_data, dim);
+		  mfem::Mult(Tr.Jacobian(), qdata.Jac0inv(e*nqp + q), Jpi);
+		  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
+		  // Change of the initial mesh size in the compression direction.
+		  const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
+		  
+		  // Measure of maximal compression.
+		  const double mu = eig_val_data[0];
+		  visc_coeff = 2.0 * rho_vals * h * h * fabs(mu);
+		  
+		  // The following represents a "smooth" version of the statement
+		  // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+		  // eps must be scaled appropriately if a different unit system is
+		  // being used.
+		  
+		  const double eps = 1e-12;
+		  visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+		  
+		  max_viscous_coef = std::max(max_viscous_coef, visc_coeff);
+		}
 	      }
 	  }
 	}
-      
       MPI_Allreduce(&max_viscous_coef, &globalmax_viscous_coef, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_rho, &globalmax_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_cs, &globalmax_cs, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());

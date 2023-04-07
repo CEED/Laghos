@@ -76,7 +76,6 @@ namespace mfem
       ParGridFunction &pface_gf;
       ParGridFunction &csface_gf;
       ParGridFunction &rhoface_gf;
-      ParGridFunction &gammaPressureScalingface_gf;
       IntegrationRules GLIntRules;
       double &globalmax_rho;
       double &globalmax_cs;
@@ -166,7 +165,6 @@ namespace mfem
 			      ParGridFunction &e_gf,
 			      ParGridFunction &cs_gf,
 			      ParGridFunction &csface_gf,
-			      ParGridFunction &gammaPressureScalingface_gf,
 			      const int source,
 			      const double cfl,
 			      const bool visc, const bool vort,

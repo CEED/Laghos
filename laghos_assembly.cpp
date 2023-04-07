@@ -371,8 +371,9 @@ namespace mfem
 	  
 	  double penaltyVal = 0.0;
 	  if (globalmax_viscous_coef != 0.0){
-	    double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem1->Weight() / nor_norm);
-	    //	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
+	    // double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem1->Weight() / nor_norm);
+	    double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs;
+	    //  penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
 	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + aMax + 1.0/aMax) * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
 	  }
 	  else {

@@ -103,7 +103,6 @@ namespace mfem
 						     ParGridFunction &e_gf,
 						     ParGridFunction &cs_gf,
 						     ParGridFunction &csface_gf,
-						     ParGridFunction &gammaPressureScalingface_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -168,7 +167,6 @@ namespace mfem
       globalmax_viscous_coef(globalmax_viscous_coef),
       pface_gf(pface_gf),
       csface_gf(csface_gf),
-      gammaPressureScalingface_gf(gammaPressureScalingface_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -222,7 +220,6 @@ namespace mfem
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
-      gammaPressureScalingface_gf.ExchangeFaceNbrData();
       
       switch (pmesh->GetElementBaseGeometry(0))
 	{
@@ -470,11 +467,10 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(gammaPressureScalingface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
-      gammaPressureScalingface_gf.ExchangeFaceNbrData();
  
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
