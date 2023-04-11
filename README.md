@@ -264,7 +264,7 @@ To make sure the results are correct, we tabulate reference final iterations
 6. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
 7. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa`
 8. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
-9. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -fa`
+9. `mpirun -np 8 ./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -pa`
 
 | `run` | `step` | `dt` | `e` |
 | ----- | ------ | ---- | --- |
@@ -276,7 +276,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  6. | 2872 | 0.000064 | 5.6547039096e+01 |
 |  7. |  858 | 0.000474 | 5.6691500623e+01 |
 |  8. |  776 | 0.000045 | 4.0982431726e+02 |
-|  9. | 2462 | 0.000050 | 1.1792848684e+02 |
+|  9. | 2462 | 0.000050 | 1.1792848680e+02 |
 
 Similar GPU runs using the MFEM CUDA *device* can be run as follows:
 
@@ -284,10 +284,11 @@ Similar GPU runs using the MFEM CUDA *device* can be run as follows:
 2. `./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -d cuda`
 3. `./laghos -p 1 -dim 2 -rs 3 -tf 0.80 -pa -d cuda`
 4. `./laghos -p 1 -dim 3 -rs 2 -tf 0.60 -pa -d cuda`
-5. `./laghos -p 2 -dim 1 -rs 5 -tf 0.20 -fa`
+5. -- this is a 1D test that is not supported on the device --
 6. `./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -d cuda`
 7. `./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa -cgt 1e-12 -d cuda`
 8. `./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -d cuda`
+9. `./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -pa -d cuda`
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
