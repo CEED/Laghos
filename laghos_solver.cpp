@@ -173,7 +173,7 @@ namespace mfem
       GLIntRules(0, Quadrature1D::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-      b_ir(GLIntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW() )),
+      b_ir(GLIntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), 4.0*(H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW()) )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(dim, NE, P_L2.GetFE(0)->GetNodes().GetNPoints()),
       gl_qdata(dim, NE, PFace_L2.GetFE(0)->GetNodes().GetNPoints()),
@@ -386,7 +386,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
@@ -404,7 +404,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, penaltyParameter * C_I_V, globalmax_rho, globalmax_cs, globalmax_viscous_coef, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
       }

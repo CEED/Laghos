@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
 
   // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
   int quadRule_face =  H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW();
-  L2_FECollection PFace_L2FEC((int)(quadRule_face), dim, BasisType::GaussLobatto);
+  L2_FECollection PFace_L2FEC((int)(3.0*quadRule_face), dim, BasisType::GaussLobatto);
   ParFiniteElementSpace PFace_L2FESpace(pmesh, &PFace_L2FEC);
 
   // Define the explicit ODE solver used for time integration.
