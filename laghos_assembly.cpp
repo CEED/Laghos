@@ -342,6 +342,8 @@ namespace mfem
 	  // Set the integration point in the face and the neighboring elements
 	  Tr.SetAllIntPoints(&ip_f);
 	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	  // std::cout << " Aip.x " << eip.x << " Aip.y " << eip.y << std::endl;
+	 
 	  Vector nor;
 	  nor.SetSize(dim);
 	  nor = 0.0;

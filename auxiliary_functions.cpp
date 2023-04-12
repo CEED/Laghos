@@ -148,6 +148,7 @@ namespace mfem
 	      {
 		const IntegrationPoint &ip = ir.IntPoint(q);
 		Tr.SetIntPoint(&ip);
+		//	std::cout << " ip.x " << ip.x << " ip.y " << ip.y << std::endl;
 		const double gamma_val = gamma_gf.GetValue(Tr, ip);
 		const double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
 		const double rho_val = rho_gf.GetValue(Tr, ip);
