@@ -970,7 +970,7 @@ int main(int argc, char *argv[])
                Extrapolator xtrap;
                xtrap.xtrap_type     = Extrapolator::ASLAM;
                xtrap.advection_mode = AdvectionOper::LO;
-               xtrap.xtrap_degree   = 1;
+               xtrap.xtrap_degree   = 0;
 
                ParGridFunction lset_1(mat_data.level_set),
                                lset_2(mat_data.level_set);
@@ -982,13 +982,13 @@ int main(int argc, char *argv[])
                // Extrapolate rho_1.
                ParGridFunction r1(rho_gf_1);
                xtrap.Extrapolate(lset_1_coeff, mat_data.alpha_1,
-                                 rho_gf_1, 5.0, r1);
-               rho_gf_1 = 1;
+                                 rho_gf_1, 1.0, r1, true);
+               rho_gf_1 = r1;
 
                // Extrapolate rho_2.
                ParGridFunction r2(rho_gf_2);
                xtrap.Extrapolate(lset_2_coeff, mat_data.alpha_2,
-                                 rho_gf_2, 5.0, r2, true);
+                                 rho_gf_2, 1.0, r2, true);
                rho_gf_2 = r2;
             }
 

@@ -310,8 +310,10 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
             return 1.0;
          }
 
-         // The domain area for the 3point is 21.
-         const double dx = sqrt(21.0 / glob_NE);
+         // The domain volume for the 3point is 21 in 2D, and 63 in 3D.
+         double dx;
+         if (dim == 2) { dx = sqrt(21.0 / glob_NE); }
+         else          { dx =  pow(63.0 / glob_NE, 1.0/3.0); }
 
          // The middle of the element before x = 1.
          // The middle of the element above y = 1.5.
@@ -1650,6 +1652,7 @@ void InitTriPoint2Mat(MaterialData &mat_data)
    ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
    const int NE    = pfes.GetNE();
    const int ndofs = mat_data.e_1.Size() / NE;
+   const int dim  = pfes.GetMesh()->Dimension();
    double r, p;
 
    mat_data.gamma_1 = 1.5;
@@ -1661,9 +1664,10 @@ void InitTriPoint2Mat(MaterialData &mat_data)
    for (int e = 0; e < NE; e++)
    {
       const int attr = pfes.GetParMesh()->GetAttribute(e);
-      Vector center(2);
+      Vector center(dim);
       pfes.GetParMesh()->GetElementCenter(e, center);
-      const double x = center(0);
+      const double x = center(0),
+                   z = (dim == 3) ? center(2) : 0.0;
 
       if (attr == 10 || attr == 15)
       {
@@ -1671,7 +1675,8 @@ void InitTriPoint2Mat(MaterialData &mat_data)
          r = 1.0; p = 1.0;
          if (x > 1.0)
          {
-            r = 0.125; p = 0.1;
+            p = 0.1;
+            if (z < 1.5) { r = 0.125; }
          }
          for (int i = 0; i < ndofs; i++)
          {
@@ -1684,6 +1689,7 @@ void InitTriPoint2Mat(MaterialData &mat_data)
       {
          // Right/Bottom material.
          r = 1.0; p = 0.1;
+         if (z > 1.5) { r = 0.125; }
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = r;

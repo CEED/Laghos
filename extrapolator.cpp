@@ -244,7 +244,7 @@ void Extrapolator::Extrapolate(Coefficient &level_set,
    }
    MPI_Allreduce(MPI_IN_PLACE, &h_min, 1, MPI_DOUBLE, MPI_MIN, pmesh.GetComm());
    // The propagation speed is 1.
-   double dt = 0.25 * h_min / order / 1.0;
+   double dt = 0.15 * h_min / order / 1.0;
    double half_dt = 0.5 * dt;
    if (advection_mode == AdvectionOper::LO)
    {
