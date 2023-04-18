@@ -185,7 +185,7 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
+    void UpdatePenaltyParameterGL(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, ParGridFunction &viscous_gf, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -195,6 +195,7 @@ namespace mfem
       double max_viscous_coef = 0.0;
       double max_cs = 0.0;
       double max_rho = 0.0;
+      viscous_gf = 0.0;
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
@@ -269,12 +270,16 @@ namespace mfem
 		  
 		  const double eps = 1e-12;
 		  visc_coeff += 0.5 * rho_vals * h * sound_speed * vorticity_coeff * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
-		  
+		  viscous_gf(e * nqp + q) = visc_coeff;
 		  max_viscous_coef = std::max(max_viscous_coef, visc_coeff);
 		}
 	      }
 	  }
 	}
+      globalmax_viscous_coef = 0.0;
+      globalmax_rho = 0.0;
+      globalmax_cs = 0.0;
+      
       MPI_Allreduce(&max_viscous_coef, &globalmax_viscous_coef, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_rho, &globalmax_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_cs, &globalmax_cs, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());

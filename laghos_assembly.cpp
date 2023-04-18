@@ -940,14 +940,18 @@ namespace mfem
 	      normD = std::sqrt(normD);
 	      // normD = 0.0;
 	      const DenseMatrix &Jpr_el1 = Trans_el1.Jacobian();
+
+	      double density = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	      double sound_speed = csface_gf.GetValue(Trans_el1,eip_el1);
+	      double viscCoeff = viscousface_gf.GetValue(Trans_el1,eip_el1);
 	      
 	      Vector tOrig_el1(dim), tn(dim);
 	      tOrig_el1 = 0.0;
 	      tn = 0.0;
 	      tn = nor;
 	      tn /= nor_norm;
-	      Jpr_el1.MultTranspose(tn,tOrig_el1);
-	      //  Jpr_el1.MultTranspose(tN_el1,tOrig_el1);
+	      //  Jpr_el1.MultTranspose(tn,tOrig_el1);
+	      Jpr_el1.MultTranspose(tN_el1,tOrig_el1);
 	      double origNormalProd_el1 = 0.0;
 	      for (int s = 0; s < dim; s++){
 		origNormalProd_el1 += tOrig_el1(s) * tOrig_el1(s);
@@ -964,19 +968,21 @@ namespace mfem
 	      }
 
 	      double penaltyVal = 0.0;
-	      if (globalmax_viscous_coef != 0.0){
-		double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem1->Weight() / nor_norm + normD);
+	      if ( (globalmax_viscous_coef != 0.0) && (sound_speed > 0.0) && (viscCoeff > 0.0)){
+		double aMax = (density/viscCoeff) * sound_speed *  (Tr.Elem1->Weight() / nor_norm + normD);
+		//double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem2->Weight() / nor_norm + normD);
+
 		//	penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
 		//	penaltyVal = penaltyParameter * globalmax_rho * (1.0 + aMax + 1.0/aMax) * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
-		penaltyVal = penaltyParameter * globalmax_rho * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
+		penaltyVal = penaltyParameter * density * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
 		//
 		//	std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd_el1 << " pen " << penaltyVal << std::endl;
 	      }
 	      else {
 		//	penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
-		penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));	   
+		penaltyVal = penaltyParameter * density * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
 	      }
-	      
+	      //  std::cout << " pen " << penaltyVal << " sound " << sound_speed << std::endl; 
 	      for (int k = 0; k < h1dofs_cnt; k++){
 	      for (int s = 0; s < h1dofs_cnt; s++){
 		for (int j = 0; j < dim; j++){
@@ -1074,17 +1080,21 @@ namespace mfem
 		normD += D_el2(s) * D_el2(s);
 	      }
 	      normD = std::sqrt(normD);
-	      // normD = 0.0;
+	      //  normD = 0.0;
 	      Vector tn(dim);
 	      tn = 0.0;
 	      tn = nor;
 	      tn /= nor_norm;
 	      const DenseMatrix &Jpr_el2 = Trans_el2.Jacobian();
-	      
+
+	      double density = rhoface_gf.GetValue(Trans_el2,eip_el2);
+	      double sound_speed = csface_gf.GetValue(Trans_el2,eip_el2);
+	      double viscCoeff = viscousface_gf.GetValue(Trans_el2,eip_el2);
+	
 	      Vector tOrig_el2(dim);
 	      tOrig_el2 = 0.0;
-	      Jpr_el2.MultTranspose(tn,tOrig_el2);
-	      //  Jpr_el2.MultTranspose(tN_el2,tOrig_el2);
+	      //  Jpr_el2.MultTranspose(tn,tOrig_el2);
+	      Jpr_el2.MultTranspose(tN_el2,tOrig_el2);
 	      double origNormalProd_el2 = 0.0;
 	      for (int s = 0; s < dim; s++){
 		origNormalProd_el2 += tOrig_el2(s) * tOrig_el2(s);
@@ -1101,15 +1111,20 @@ namespace mfem
 	      }
 
 	      double penaltyVal = 0.0;
-	      if (globalmax_viscous_coef != 0.0){
-		double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem2->Weight() / nor_norm + normD);
+	      if ( (globalmax_viscous_coef != 0.0) && (sound_speed > 0.0) && (viscCoeff > 0.0)){
+		double aMax = (density/viscCoeff) * sound_speed *  (Tr.Elem2->Weight() / nor_norm + normD);
+		//	double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem2->Weight() / nor_norm + normD);
+
 		//	penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem2->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el2,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
-		penaltyVal = penaltyParameter * globalmax_rho * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));	
+		penaltyVal = penaltyParameter * density * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
+
 	      }
 	      else {
-		penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
+		penaltyVal = penaltyParameter * density * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
+
 	      }
-	
+	      // std::cout << " pen " << penaltyVal << " sound " << sound_speed << std::endl; 
+	    
 	      for (int k = 0; k < h1dofs_cnt; k++){
 	      for (int s = 0; s < h1dofs_cnt; s++){
 		for (int j = 0; j < dim; j++){

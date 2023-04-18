@@ -103,6 +103,7 @@ namespace mfem
 						     ParGridFunction &e_gf,
 						     ParGridFunction &cs_gf,
 						     ParGridFunction &csface_gf,
+						     ParGridFunction &viscousface_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -167,6 +168,7 @@ namespace mfem
       globalmax_viscous_coef(globalmax_viscous_coef),
       pface_gf(pface_gf),
       csface_gf(csface_gf),
+      viscousface_gf(viscousface_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -220,6 +222,7 @@ namespace mfem
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
+      viscousface_gf.ExchangeFaceNbrData();
       
       switch (pmesh->GetElementBaseGeometry(0))
 	{
@@ -404,7 +407,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, viscousface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
       }
@@ -467,10 +470,11 @@ namespace mfem
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, viscousface_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
+      viscousface_gf.ExchangeFaceNbrData();
  
       // assemble boundary terms at the most recent state.
       Mv.AssembleBoundaryFaceIntegrators();
@@ -547,7 +551,8 @@ namespace mfem
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
-		
+      viscousface_gf.ExchangeFaceNbrData();
+ 
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;
