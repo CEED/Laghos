@@ -80,10 +80,10 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 
    // Extrapolate e_1.
    xtrap.Extrapolate(lset_1_coeff, mat_data.alpha_1,
-                     mat_data.e_1, 5.0, e_1);
+                     mat_data.e_1, 2.0, e_1);
    // Extrapolate e_2.
    xtrap.Extrapolate(lset_2_coeff, mat_data.alpha_2,
-                     mat_data.e_2, 5.0, e_2);
+                     mat_data.e_2, 2.0, e_2);
 
    e_1_max = e_1.Max();
    MPI_Allreduce(MPI_IN_PLACE, &e_1_max, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
@@ -99,10 +99,10 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 
    // Extrapolate rho_1.
    xtrap.Extrapolate(lset_1_coeff, mat_data.alpha_1,
-                     r1, 5.0, rho_1);
+                     r1, 2.0, rho_1);
    // Extrapolate rho_2.
    xtrap.Extrapolate(lset_2_coeff, mat_data.alpha_2,
-                     r2, 5.0, rho_2);
+                     r2, 2.0, rho_2);
 }
 
 void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,

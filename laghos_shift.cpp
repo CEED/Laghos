@@ -1007,22 +1007,22 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    if ( (attr_face == 10 && attr_e1 == 10) ||
         (attr_face == 20 && attr_e1 == 15) )
    {
-      p_e1           = &mat_data.p_1->GetPressure();
+      p_e1        = &mat_data.p_1->GetPressure();
       rho0DetJ_e1 = &mat_data.rho0DetJ_1;
-      gamma_e1       =  mat_data.gamma_1;
-      p_e2           = &mat_data.p_2->GetPressure();
+      gamma_e1    =  mat_data.gamma_1;
+      p_e2        = &mat_data.p_2->GetPressure();
       rho0DetJ_e2 = &mat_data.rho0DetJ_2;
-      gamma_e2       =  mat_data.gamma_2;
+      gamma_e2    =  mat_data.gamma_2;
    }
    else if ( (attr_face == 10 && attr_e1 == 15) ||
              (attr_face == 20 && attr_e1 == 20) )
    {
-      p_e1           = &mat_data.p_2->GetPressure();
+      p_e1        = &mat_data.p_2->GetPressure();
       rho0DetJ_e1 = &mat_data.rho0DetJ_2;
-      gamma_e1       =  mat_data.gamma_2;
-      p_e2           = &mat_data.p_1->GetPressure();
+      gamma_e1    =  mat_data.gamma_2;
+      p_e2        = &mat_data.p_1->GetPressure();
       rho0DetJ_e2 = &mat_data.rho0DetJ_1;
-      gamma_e1       =  mat_data.gamma_1;
+      gamma_e1    =  mat_data.gamma_1;
    }
    else { MFEM_ABORT("Invalid marking configuration."); return; }
 
@@ -1254,26 +1254,6 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
          double p_gradp_jump = p_q1_ext - p_q2_ext;
 
-         double rho_q1, rho_q2;
-         if (use_mixed_elem == false)
-         {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
-         }
-         else if (attr_e1 == 15)
-         {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
-         }
-         else
-         {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
-         }
-         MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
-                     "Negative density at the face, not good: "
-                     << rho_q1 << " " << rho_q2);
-
          double h_1, h_2, mu_1, mu_2, visc_q1, visc_q2;
 
          // Distance with grad_v.
@@ -1298,6 +1278,26 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          }
          else
          {
+            double rho_q1, rho_q2;
+            if (use_mixed_elem == false)
+            {
+               rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+               rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+            }
+            else if (attr_e1 == 15)
+            {
+               rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+               rho_q2 = rho0DetJ_e2->GetValue(Trans_e1, ip_e1) / Trans_e1.Weight();
+            }
+            else
+            {
+               rho_q1 = rho0DetJ_e1->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+               rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e2) / Trans_e2.Weight();
+            }
+            MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
+                        "Negative density at the face, not good: "
+                        << rho_q1 << " " << rho_q2);
+
             // As in the volumetric viscosity.
             v_grad_q1.Symmetrize();
             v_grad_q2.Symmetrize();
