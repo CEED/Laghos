@@ -146,12 +146,12 @@ mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 2.0 -rs 1 -mm -
 init dist norm: 0
 Material marker: 320.000000000000
 Face marker:     65.246201547914
-alpha norm: 11.873295485188
-v norm:     5.213239991767
-rho1 norm:  2.607286183785
-rho2 norm:  8.996985859488
-e1 norm:    19.972460849245
-e2 norm:    3.697261448198
+alpha norm: 11.870950365372
+v norm:     5.214446395624
+rho1 norm:  2.606634576706
+rho2 norm:  8.997884742336
+e1 norm:    19.965948153202
+e2 norm:    3.687392599414
 dist norm:  0.000000000000
 
 mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4
@@ -159,10 +159,10 @@ init dist norm: 1.80383765302
 Material marker: 320.000000000000
 Face marker:     65.246201547914
 alpha norm: 9.604839728091
-v norm:     0.873718791774
-rho1 norm:  2.892886349688
-rho2 norm:  10.060199394635
-e1 norm:    20.333168964840
-e2 norm:    3.323675781189
-dist norm:  1.859186248665
+v norm:     0.873732783312
+rho1 norm:  2.892887571509
+rho2 norm:  10.060187523348
+e1 norm:    20.333096411516
+e2 norm:    3.323646667597
+dist norm:  1.859187503930
 
