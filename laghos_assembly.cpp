@@ -356,42 +356,70 @@ namespace mfem
 	    nor_norm += nor(s) * nor(s);
 	  }
 	  nor_norm = sqrt(nor_norm);
+	  double density = rhoface_gf.GetValue(Tr,eip);
+	     
+	  
 	  // std::cout << " norX " << nor(0) / nor_norm << " norY " << nor(1) / nor_norm << std::endl;
 	  // Trans_el1.SetIntPoint(&eip);
 	  //  std::cout << " eip x " << eip.x << " eip y " << eip.y << std::endl;
 	  const DenseMatrix &Jpr = Trans_el1.Jacobian();
+	  // std::cout << " Dt " << Jpr.Det() << std::endl;
 	  DenseMatrix Jpi(dim);
 	  Jpi = 0.0;
 	  mfem::Mult(Jpr, qdata.Jac0inv(eq), Jpi);
-		     
-	  Vector tn(dim), tN(dim);
+	  // std::cout << " Jpr Det " << Jpr.Det() << " Jpi " << Jpi.Det() << std::endl;
+	  Vector tn(dim), tN(dim), tN_pr(dim);
 	  tn = 0.0;
 	  tN = 0.0;
+	  tN_pr = 0.0;
 	  tn = nor;
 	  tn /= nor_norm;
 	  
-	  Jpr.MultTranspose(tn,tN);
-	  // Jpi.MultTranspose(tn,tN);
+	  Jpi.MultTranspose(tn,tN);
 	  double origNormalProd = 0.0;
 	  for (int s = 0; s < dim; s++){
 	    origNormalProd += tN(s) * tN(s);
 	  }
 	  origNormalProd = std::pow(origNormalProd,0.5);
 	  tN *= 1.0/origNormalProd;
-	
+
+	  double origNormalProd_tn = 0.0;
+	  Jpr.MultTranspose(tn,tN_pr);
+	  for (int s = 0; s < dim; s++){
+	    origNormalProd_tn += tN_pr(s) * tN_pr(s);
+	  }
+	  origNormalProd_tn = std::pow(origNormalProd_tn,0.5);
+
+	  Vector nor_pi;
+	  nor_pi.SetSize(dim);
+	  nor_pi = 0.0;
+	  double nor_norm_pi = 0.0;
+	  CalcOrtho(Jpi, nor_pi);
+	  for (int g = 0; g < dim; g++){
+	    nor_norm_pi += nor_pi(g) * nor_pi(g);
+	  }
+	  nor_norm_pi = std::pow(nor_norm_pi,0.5);
+	  
+	  // std::cout << " val_pr " << 1.0/origNormalProd_tn << " val_pi " << 1.0/origNormalProd << " vol " << Tr.Elem1->Weight() << std::endl; 
 	  //  std::cout << " tN(0) " << tN(0) << " tN(1) " << tN(1) << std::endl;
 	  double penaltyVal = 0.0;
 	  if (globalmax_viscous_coef != 0.0){
-	    double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * (Tr.Elem1->Weight() / nor_norm);
+	    //	    double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * (Tr.Elem1->Weight() / nor_norm);
 	    //  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs;
 	    //  penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
-	    penaltyVal = penaltyParameter * globalmax_rho * (1.0 + aMax + 1.0/aMax) * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0*order_v);
+	    //  penaltyVal = penaltyParameter * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm) * (1.0 + aMax + 1.0/aMax) * std::pow(1.0/origNormalProd,2.0*order_v);
 	    //   std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd << " pen " << penaltyVal << std::endl;
-	  
+	    penaltyVal = penaltyParameter * std::abs(density) * origNormalProd;
+	    //	    std::cout << " dens " << density << " abs " << std::abs(density) << std::endl;
+	    if (density < 0.0){
+	      std::cout << " shit " << std::endl;
+	    }
 	  }
 	  else {
-	    penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight()/nor_norm) * std::pow(1.0/origNormalProd,2.0*order_v);
+	    // penaltyVal = penaltyParameter * globalmax_rho  * (Tr.Elem1->Weight()/nor_norm) * std::pow(1.0/origNormalProd,2.0*order_v);
+	    penaltyVal = penaltyParameter * std::abs(density) * origNormalProd;
 	  }
+	  //  std::cout << " val " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  // std::cout << " nCn " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  fe.CalcShape(eip, shape);
 	  for (int i = 0; i < h1dofs_cnt; i++)
@@ -402,7 +430,7 @@ namespace mfem
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tn(vd) * tn(md) * penaltyVal * ip_f.weight * nor_norm;
+			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal * ip_f.weight * nor_norm;
 			}
 		    }
 		}

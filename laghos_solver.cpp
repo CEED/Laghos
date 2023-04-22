@@ -307,8 +307,6 @@ namespace mfem
       // Standard assembly for the velocity mass matrix.
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
       Mv.AddDomainIntegrator(vmi, ess_elem);
-      Mv.Assemble();
-      Mv_spmat_copy = Mv.SpMat();
 
       // Values of rho0DetJ0 and Jac0inv at all quadrature points.
       // Initial local mesh size (assumes all mesh elements are the same).
@@ -365,6 +363,19 @@ namespace mfem
 	}
       qdata.h0 /= (double) H1.GetOrder(0);
       gl_qdata.h0 = qdata.h0;
+
+
+     //Compute quadrature quantities
+      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, viscousface_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      rhoface_gf.ExchangeFaceNbrData();
+      pface_gf.ExchangeFaceNbrData();
+      csface_gf.ExchangeFaceNbrData();
+      viscousface_gf.ExchangeFaceNbrData();
+ 
+      
       fi = new ForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi, ess_elem);
@@ -389,7 +400,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyParameter * C_I_V * qdata.h0, order_v, rhoface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
@@ -411,7 +422,9 @@ namespace mfem
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
       }
-      
+
+      Mv.Assemble();
+      Mv_spmat_copy = Mv.SpMat();
     }
 
     LagrangianHydroOperator::~LagrangianHydroOperator() {
@@ -449,14 +462,14 @@ namespace mfem
     {
       
       // reset mesh, needed to update the normal velocity penalty term.
-      Mv.Update(&H1);
+      /* Mv.Update(&H1);
       // set the state at the initial one
       UpdateMesh(S_init);
       // assemble the velocity mass matrix at that state
       Mv.AssembleDomainIntegrators();
       //  Mv.Assemble();
       // reset the mesh state at the current one
-      UpdateMesh(S);
+      UpdateMesh(S);*/
       
       //Compute quadrature quantities
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
@@ -477,16 +490,16 @@ namespace mfem
       viscousface_gf.ExchangeFaceNbrData();
  
       // assemble boundary terms at the most recent state.
-      Mv.AssembleBoundaryFaceIntegrators();
+      //  Mv.AssembleBoundaryFaceIntegrators();
        
       if (analyticalSurface != NULL){
 	// assemble boundary terms at the most recent state.
-	Mv.AssembleInteriorFaceIntegrators();
+	//	Mv.AssembleInteriorFaceIntegrators();
       }
 
-      Mv.Finalize();
+      //  Mv.Finalize();
       
-      Mv.ParallelAssemble();
+      //  Mv.ParallelAssemble();
     
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
