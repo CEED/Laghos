@@ -374,7 +374,6 @@ namespace mfem
 	  tN_pr = 0.0;
 	  tn = nor;
 	  tn /= nor_norm;
-	  
 	  Jpi.MultTranspose(tn,tN);
 	  double origNormalProd = 0.0;
 	  for (int s = 0; s < dim; s++){
@@ -382,7 +381,6 @@ namespace mfem
 	  }
 	  origNormalProd = std::pow(origNormalProd,0.5);
 	  tN *= 1.0/origNormalProd;
-
 	  double origNormalProd_tn = 0.0;
 	  Jpr.MultTranspose(tn,tN_pr);
 	  for (int s = 0; s < dim; s++){
@@ -399,26 +397,30 @@ namespace mfem
 	    nor_norm_pi += nor_pi(g) * nor_pi(g);
 	  }
 	  nor_norm_pi = std::pow(nor_norm_pi,0.5);
-	  
+	  // std::cout << " orig " << origNormalProd << std::endl;
 	  // std::cout << " val_pr " << 1.0/origNormalProd_tn << " val_pi " << 1.0/origNormalProd << " vol " << Tr.Elem1->Weight() << std::endl; 
 	  //  std::cout << " tN(0) " << tN(0) << " tN(1) " << tN(1) << std::endl;
 	  double penaltyVal = 0.0;
 	  if (globalmax_viscous_coef != 0.0){
-	    //	    double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * (Tr.Elem1->Weight() / nor_norm);
+	    double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * (Tr.Elem1->Weight() / nor_norm);
+	    // std::cout << " aM " << aMax << std::endl;
 	    //  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs;
 	    //  penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
 	    //  penaltyVal = penaltyParameter * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm) * (1.0 + aMax + 1.0/aMax) * std::pow(1.0/origNormalProd,2.0*order_v);
 	    //   std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd << " pen " << penaltyVal << std::endl;
-	    penaltyVal = penaltyParameter * std::abs(density) * origNormalProd;
+
+	    penaltyVal = std::abs(density) * std::pow(penaltyParameter,1+aMax+1.0/aMax)/* * origNormalProd*/;
 	    //	    std::cout << " dens " << density << " abs " << std::abs(density) << std::endl;
 	    if (density < 0.0){
 	      std::cout << " shit " << std::endl;
 	    }
 	  }
 	  else {
+	    std::cout << " no " << std::endl;
 	    // penaltyVal = penaltyParameter * globalmax_rho  * (Tr.Elem1->Weight()/nor_norm) * std::pow(1.0/origNormalProd,2.0*order_v);
-	    penaltyVal = penaltyParameter * std::abs(density) * origNormalProd;
+	    penaltyVal = std::abs(density) *  std::pow(penaltyParameter,1.0) /* * origNormalProd*/;
 	  }
+	  // std::cout << " penVa; " << penaltyVal << std::endl;
 	  //  std::cout << " val " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  // std::cout << " nCn " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  fe.CalcShape(eip, shape);
@@ -430,7 +432,7 @@ namespace mfem
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal * ip_f.weight * nor_norm;
+			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tn(vd) * tn(md) * penaltyVal * ip_f.weight * nor_norm;
 			}
 		    }
 		}

@@ -400,7 +400,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, penaltyParameter * C_I_V * qdata.h0, order_v, rhoface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, 2.0 * penaltyParameter * C_I_V, order_v, rhoface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
@@ -418,7 +418,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, viscousface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, viscousface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
       }
