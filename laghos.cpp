@@ -328,11 +328,13 @@ int main(int argc, char *argv[])
   ParGridFunction csface_gf(&PFace_L2FESpace);
   ParGridFunction rhoface_gf(&PFace_L2FESpace);
   ParGridFunction viscousface_gf(&PFace_L2FESpace);
+  ParGridFunction rho0DetJ0face_gf(&PFace_L2FESpace);
   
   pface_gf = 0.0;
   csface_gf = 0.0;
   rhoface_gf = 0.0;
   viscousface_gf = 0.0;
+  rho0DetJ0face_gf = 0.0;
 
   double globalmax_cs = 0.0;
   double globalmax_rho = 0.0;
@@ -385,7 +387,7 @@ int main(int argc, char *argv[])
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
-					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, source, cfl,
+					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0face_gf, source, cfl,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
 					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);

@@ -203,8 +203,9 @@ namespace mfem
 	 
 	  DenseMatrix stress(dim);
 	  stress = 0.0;
-	  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
-	 
+	  //  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	  const double rho = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
+	    
 	  ComputeStress(pressure,dim,stress);
 	  // ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	
@@ -274,8 +275,9 @@ namespace mfem
 	
 	    DenseMatrix stress(dim);
 	    stress = 0.0;
-	    const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
-	
+	    // const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	    const double rho = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
+	    
 	    ComputeStress(pressure,dim,stress);
 	    //    ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	
@@ -381,6 +383,7 @@ namespace mfem
 	  }
 	  origNormalProd = std::pow(origNormalProd,0.5);
 	  tN *= 1.0/origNormalProd;
+	  tN.Print();
 	  double origNormalProd_tn = 0.0;
 	  Jpr.MultTranspose(tn,tN_pr);
 	  for (int s = 0; s < dim; s++){
@@ -420,7 +423,6 @@ namespace mfem
 	    // penaltyVal = penaltyParameter * globalmax_rho  * (Tr.Elem1->Weight()/nor_norm) * std::pow(1.0/origNormalProd,2.0*order_v);
 	    penaltyVal = std::abs(density) *  std::pow(penaltyParameter,1.0) /* * origNormalProd*/;
 	  }
-	  // std::cout << " penVa; " << penaltyVal << std::endl;
 	  //  std::cout << " val " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  // std::cout << " nCn " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  fe.CalcShape(eip, shape);

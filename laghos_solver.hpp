@@ -77,6 +77,7 @@ namespace mfem
       ParGridFunction &csface_gf;
       ParGridFunction &rhoface_gf;
       ParGridFunction &viscousface_gf;
+      ParGridFunction &rho0DetJ0face_gf;   
       IntegrationRules GLIntRules;
       double &globalmax_rho;
       double &globalmax_cs;
@@ -167,6 +168,7 @@ namespace mfem
 			      ParGridFunction &cs_gf,
 			      ParGridFunction &csface_gf,
 			      ParGridFunction &viscousface_gf,
+			      ParGridFunction &rho0DetJ0face_gf,
 			      const int source,
 			      const double cfl,
 			      const bool visc, const bool vort,

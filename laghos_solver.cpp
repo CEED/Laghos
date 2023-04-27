@@ -104,6 +104,7 @@ namespace mfem
 						     ParGridFunction &cs_gf,
 						     ParGridFunction &csface_gf,
 						     ParGridFunction &viscousface_gf,
+						     ParGridFunction &rho0DetJ0face_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -169,6 +170,7 @@ namespace mfem
       pface_gf(pface_gf),
       csface_gf(csface_gf),
       viscousface_gf(viscousface_gf),
+      rho0DetJ0face_gf(rho0DetJ0face_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -223,6 +225,7 @@ namespace mfem
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
+      rho0DetJ0face_gf.ExchangeFaceNbrData();
       
       switch (pmesh->GetElementBaseGeometry(0))
 	{
@@ -345,8 +348,10 @@ namespace mfem
 	      Jinv.GetInverseMatrix(gl_qdata.Jac0inv(e * gl_nqp + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
 	      gl_qdata.rho0DetJ0(e * gl_nqp + q) = rho0DetJ0;
+	      rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0;
 	    }
 	}
+      rho0DetJ0face_gf.ExchangeFaceNbrData();
       
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
       
@@ -388,13 +393,13 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
 
-      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, use_viscosity, use_vorticity);
+      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, use_viscosity, use_vorticity);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
       
-      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, use_viscosity, use_vorticity);
+      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, use_viscosity, use_vorticity);
       e_bfi->SetIntRule(&b_ir);
       EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
