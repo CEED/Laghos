@@ -130,8 +130,8 @@ Laghos has the following external dependencies:
 - *hypre*, used for parallel linear algebra, we recommend version 2.11.2<br>
    https://computation.llnl.gov/casc/hypre/software.html
 
--  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
-   http://glaros.dtc.umn.edu/gkhome/metis/metis/download
+-  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](https://github.com/mfem/tpls/blob/gh-pages/metis-4.0.3.tar.gz) <br>
+   https://github.com/mfem/tpls
 
 - MFEM, used for (high-order) finite element discretization, its GitHub master branch <br>
   https://github.com/mfem/mfem
