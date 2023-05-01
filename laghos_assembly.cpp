@@ -200,27 +200,78 @@ namespace mfem
 	  el.CalcShape(eip, te_shape);
 	  double pressure = pface_gf.GetValue(Trans_el1,eip);
 	  double sound_speed = csface_gf.GetValue(Trans_el1,eip);
-	 
+	  Vector Jac0inv_vec(dim*dim);
+	  Jac0inv_vec = 0.0;
+	  Jac0invface_gf.GetVectorValue(elementNo,eip,Jac0inv_vec);
+
+	  DenseMatrix Jac0inv(dim);
+	  if (dim == 2){
+	    Jac0inv(0,0) = Jac0inv_vec(0);
+	    Jac0inv(0,1) = Jac0inv_vec(1);
+	    Jac0inv(1,0) = Jac0inv_vec(2);
+	    Jac0inv(1,1) = Jac0inv_vec(3);
+	  }
+	  else {
+	    Jac0inv(0,0) = Jac0inv_vec(0);
+	    Jac0inv(0,1) = Jac0inv_vec(1);
+	    Jac0inv(0,2) = Jac0inv_vec(2);
+	    Jac0inv(1,0) = Jac0inv_vec(3);
+	    Jac0inv(1,1) = Jac0inv_vec(4);
+	    Jac0inv(1,2) = Jac0inv_vec(5);
+	    Jac0inv(2,0) = Jac0inv_vec(6);
+	    Jac0inv(2,1) = Jac0inv_vec(7);
+	    Jac0inv(2,2) = Jac0inv_vec(8);
+	  }
+
+	  double nor_norm = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    nor_norm += nor(s) * nor(s);
+	  }
+	  nor_norm = sqrt(nor_norm);
+	
+	  const DenseMatrix &Jpr = Trans_el1.Jacobian();
+	  // std::cout << " Dt " << Jpr.Det() << std::endl;
+	  DenseMatrix Jpi(dim);
+	  Jpi = 0.0;
+	  mfem::Mult(Jpr, Jac0inv, Jpi);
+	  Vector tn(dim), tN(dim);
+	  tn = 0.0;
+	  tN = 0.0;
+	  tn = nor;
+	  tn /= nor_norm;
+	  Jpi.MultTranspose(tn,tN);
+	  double origNormalProd = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    origNormalProd += tN(s) * tN(s);
+	  }
+	  origNormalProd = std::pow(origNormalProd,0.5);
+	  tN *= 1.0/origNormalProd;
+	  /* std::cout << " current " << std::endl;
+	  tn.Print();
+	  std::cout << " origin " << std::endl;
+	  tN.Print();*/
+	
 	  DenseMatrix stress(dim);
 	  stress = 0.0;
 	  //  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
 	  const double rho = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
 	    
 	  ComputeStress(pressure,dim,stress);
-	  // ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	  //  ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	
 	  // evaluation of the normal stress at the face quadrature points
 	  Vector weightedNormalStress(dim);
 	  weightedNormalStress = 0.0;
 	  
 	  // Quadrature data for partial assembly of the force operator.
-	  stress.Mult( nor, weightedNormalStress);
+	  stress.Mult( tn, weightedNormalStress);
+	  // stress.Mult( tN, weightedNormalStress);
 	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
 		{
-		  elvect(i + vd * h1dofs_cnt) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight;
+		  elvect(i + vd * h1dofs_cnt) += weightedNormalStress(vd) * te_shape(i) * ip_f.weight * nor_norm;
 		}
 	    }
 	}
@@ -272,37 +323,88 @@ namespace mfem
 	    el.CalcShape(eip, te_shape);
 	    double pressure = pface_gf.GetValue(Trans_el1,eip);
 	    double sound_speed = csface_gf.GetValue(Trans_el1,eip);
+
+	    Vector Jac0inv_vec(dim*dim);
+	    Jac0inv_vec = 0.0;
+	    Jac0invface_gf.GetVectorValue(elementNo,eip,Jac0inv_vec);
+
+	    DenseMatrix Jac0inv(dim);
+	    if (dim == 2){
+	      Jac0inv(0,0) = Jac0inv_vec(0);
+	      Jac0inv(0,1) = Jac0inv_vec(1);
+	      Jac0inv(1,0) = Jac0inv_vec(2);
+	      Jac0inv(1,1) = Jac0inv_vec(3);
+	    }
+	    else {
+	      Jac0inv(0,0) = Jac0inv_vec(0);
+	      Jac0inv(0,1) = Jac0inv_vec(1);
+	      Jac0inv(0,2) = Jac0inv_vec(2);
+	      Jac0inv(1,0) = Jac0inv_vec(3);
+	      Jac0inv(1,1) = Jac0inv_vec(4);
+	      Jac0inv(1,2) = Jac0inv_vec(5);
+	      Jac0inv(2,0) = Jac0inv_vec(6);
+	      Jac0inv(2,1) = Jac0inv_vec(7);
+	      Jac0inv(2,2) = Jac0inv_vec(8);
+	    }
+
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
 	
+	    const DenseMatrix &Jpr = Trans_el1.Jacobian();
+	    // std::cout << " Dt " << Jpr.Det() << std::endl;
+	    DenseMatrix Jpi(dim);
+	    Jpi = 0.0;
+	    mfem::Mult(Jpr, Jac0inv, Jpi);
+	    Vector tn(dim), tN(dim);
+	    tn = 0.0;
+	    tN = 0.0;
+	    tn = nor;
+	    tn /= nor_norm;
+	    Jpi.MultTranspose(tn,tN);
+	    double origNormalProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      origNormalProd += tN(s) * tN(s);
+	    }
+	    origNormalProd = std::pow(origNormalProd,0.5);
+	    tN *= 1.0/origNormalProd;
+	    /* std::cout << " current " << std::endl;
+	    tn.Print();
+	    std::cout << " origin " << std::endl;
+	    tN.Print();*/	 
+	    
 	    DenseMatrix stress(dim);
 	    stress = 0.0;
 	    // const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
 	    const double rho = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
 	    
 	    ComputeStress(pressure,dim,stress);
-	    //    ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	    //  ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	
 	    // evaluation of the normal stress at the face quadrature points
 	    Vector weightedNormalStress(dim);
 	    weightedNormalStress = 0.0;
 	    
 	    // Quadrature data for partial assembly of the force operator.
-	    stress.Mult( nor, weightedNormalStress);
-	    
+	    stress.Mult( tn, weightedNormalStress);
+	    // stress.Mult( tN, weightedNormalStress);
+
 	    double normalStressProjNormal = 0.0;
-	    double nor_norm = 0.0;
 	    for (int s = 0; s < dim; s++){
-	      normalStressProjNormal += weightedNormalStress(s) * nor(s);
-	      nor_norm += nor(s) * nor(s);
+	      // normalStressProjNormal += weightedNormalStress(s) * tN(s);
+	      normalStressProjNormal += weightedNormalStress(s) * tn(s);
 	    }
-	    nor_norm = sqrt(nor_norm);
-	    normalStressProjNormal = normalStressProjNormal/nor_norm;
+	    normalStressProjNormal = normalStressProjNormal*nor_norm;
 	    
 	    Vector vShape;
 	    Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
 	    double vDotn = 0.0;
 	    for (int s = 0; s < dim; s++)
 	      {
-		vDotn += vShape(s) * nor(s)/nor_norm;
+		//	vDotn += vShape(s) * tN(s);
+		vDotn += vShape(s) * tn(s);
 	      }
 	    for (int i = 0; i < l2dofs_cnt; i++)
 	      {
@@ -336,7 +438,6 @@ namespace mfem
       Vector shape(h1dofs_cnt);
       const int Elem1No = Tr.ElementNo;
       shape = 0.0;
-      ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const int eq = Elem1No*nqp_face + q;
@@ -344,6 +445,10 @@ namespace mfem
 	  // Set the integration point in the face and the neighboring elements
 	  Tr.SetAllIntPoints(&ip_f);
 	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  Trans_el1.SetIntPoint(&eip);
+	  const int elementNo = Trans_el1.ElementNo;
+	 
 	  // std::cout << " Aip.x " << eip.x << " Aip.y " << eip.y << std::endl;
 	 
 	  Vector nor;
@@ -353,27 +458,46 @@ namespace mfem
 	  //  Vector x;
 	  //  Trans_el1.Transform(eip, x);
 	  // std::cout << " x(0) " << x(0) << " x(1) " << x(1) << std::endl;
+	  double density = rhoface_gf.GetValue(Trans_el1,eip);
+	  // double density = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
+	  
+	  Vector Jac0inv_vec(dim*dim);
+	  Jac0inv_vec = 0.0;
+	  Jac0invface_gf.GetVectorValue(elementNo,eip,Jac0inv_vec);
+	  
+	  DenseMatrix Jac0inv(dim);
+	  if (dim == 2){
+	    Jac0inv(0,0) = Jac0inv_vec(0);
+	    Jac0inv(0,1) = Jac0inv_vec(1);
+	    Jac0inv(1,0) = Jac0inv_vec(2);
+	    Jac0inv(1,1) = Jac0inv_vec(3);
+	  }
+	  else {
+	    Jac0inv(0,0) = Jac0inv_vec(0);
+	    Jac0inv(0,1) = Jac0inv_vec(1);
+	    Jac0inv(0,2) = Jac0inv_vec(2);
+	    Jac0inv(1,0) = Jac0inv_vec(3);
+	    Jac0inv(1,1) = Jac0inv_vec(4);
+	    Jac0inv(1,2) = Jac0inv_vec(5);
+	    Jac0inv(2,0) = Jac0inv_vec(6);
+	    Jac0inv(2,1) = Jac0inv_vec(7);
+	    Jac0inv(2,2) = Jac0inv_vec(8);
+	  }
+	  
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
 	    nor_norm += nor(s) * nor(s);
 	  }
 	  nor_norm = sqrt(nor_norm);
-	  double density = rhoface_gf.GetValue(Tr,eip);
-	     
 	  
-	  // std::cout << " norX " << nor(0) / nor_norm << " norY " << nor(1) / nor_norm << std::endl;
-	  // Trans_el1.SetIntPoint(&eip);
-	  //  std::cout << " eip x " << eip.x << " eip y " << eip.y << std::endl;
 	  const DenseMatrix &Jpr = Trans_el1.Jacobian();
 	  // std::cout << " Dt " << Jpr.Det() << std::endl;
 	  DenseMatrix Jpi(dim);
 	  Jpi = 0.0;
-	  mfem::Mult(Jpr, qdata.Jac0inv(eq), Jpi);
-	  // std::cout << " Jpr Det " << Jpr.Det() << " Jpi " << Jpi.Det() << std::endl;
-	  Vector tn(dim), tN(dim), tN_pr(dim);
+	  mfem::Mult(Jpr, Jac0inv, Jpi);
+	  Vector tn(dim), tN(dim);
 	  tn = 0.0;
 	  tN = 0.0;
-	  tN_pr = 0.0;
 	  tn = nor;
 	  tn /= nor_norm;
 	  Jpi.MultTranspose(tn,tN);
@@ -383,48 +507,32 @@ namespace mfem
 	  }
 	  origNormalProd = std::pow(origNormalProd,0.5);
 	  tN *= 1.0/origNormalProd;
+	  Vector transip;
+	  Trans_el1.Transform(eip, transip);
+	  transip.Print();
 	  tN.Print();
-	  double origNormalProd_tn = 0.0;
-	  Jpr.MultTranspose(tn,tN_pr);
-	  for (int s = 0; s < dim; s++){
-	    origNormalProd_tn += tN_pr(s) * tN_pr(s);
-	  }
-	  origNormalProd_tn = std::pow(origNormalProd_tn,0.5);
-
-	  Vector nor_pi;
-	  nor_pi.SetSize(dim);
-	  nor_pi = 0.0;
-	  double nor_norm_pi = 0.0;
-	  CalcOrtho(Jpi, nor_pi);
-	  for (int g = 0; g < dim; g++){
-	    nor_norm_pi += nor_pi(g) * nor_pi(g);
-	  }
-	  nor_norm_pi = std::pow(nor_norm_pi,0.5);
+	  /* std::cout << " current " << std::endl;
+	  tn.Print();
+	  std::cout << " origin " << std::endl;
+	  tN.Print();*/
+	  
 	  // std::cout << " orig " << origNormalProd << std::endl;
 	  // std::cout << " val_pr " << 1.0/origNormalProd_tn << " val_pi " << 1.0/origNormalProd << " vol " << Tr.Elem1->Weight() << std::endl; 
 	  //  std::cout << " tN(0) " << tN(0) << " tN(1) " << tN(1) << std::endl;
 	  double penaltyVal = 0.0;
-	  if (globalmax_viscous_coef != 0.0){
-	    double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * (Tr.Elem1->Weight() / nor_norm);
-	    // std::cout << " aM " << aMax << std::endl;
-	    //  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs;
-	    //  penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
-	    //  penaltyVal = penaltyParameter * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm) * (1.0 + aMax + 1.0/aMax) * std::pow(1.0/origNormalProd,2.0*order_v);
-	    //   std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd << " pen " << penaltyVal << std::endl;
-
-	    penaltyVal = std::abs(density) * std::pow(penaltyParameter,1+aMax+1.0/aMax)/* * origNormalProd*/;
-	    //	    std::cout << " dens " << density << " abs " << std::abs(density) << std::endl;
-	    if (density < 0.0){
-	      std::cout << " shit " << std::endl;
-	    }
-	  }
-	  else {
-	    std::cout << " no " << std::endl;
-	    // penaltyVal = penaltyParameter * globalmax_rho  * (Tr.Elem1->Weight()/nor_norm) * std::pow(1.0/origNormalProd,2.0*order_v);
-	    penaltyVal = std::abs(density) *  std::pow(penaltyParameter,1.0) /* * origNormalProd*/;
-	  }
+	  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * (Tr.Elem1->Weight() / nor_norm);
+	  // std::cout << " aM " << aMax << std::endl;
+	  //  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs;
+	  //  penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
+	  //  penaltyVal = penaltyParameter * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm) * (1.0 + aMax + 1.0/aMax) * std::pow(1.0/origNormalProd,2.0*order_v);
+	  //   std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd << " pen " << penaltyVal << std::endl;
+	  penaltyVal =  4.0 * penaltyParameter * globalmax_rho * ( nor_norm / Tr.Elem1->Weight()) * 4.0 * 5.0 ;
+	  std::cout << " penV " << penaltyVal << std::endl;
+	  // penaltyVal = 4 * globalmax_rho * std::pow(penaltyParameter, 1.0*(1+aMax+1.0/aMax))/* * origNormalProd*/;
+	  //	    std::cout << " dens " << density << " abs " << std::abs(density) << std::endl;
 	  //  std::cout << " val " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  // std::cout << " nCn " << std::pow(1.0/origNormalProd,2.0) << std::endl;
+	  //std::cout << " pen " << penaltyVal << std::endl;
 	  fe.CalcShape(eip, shape);
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
@@ -434,7 +542,8 @@ namespace mfem
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tn(vd) * tn(md) * penaltyVal * ip_f.weight * nor_norm;
+			  //		  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal * ip_f.weight * nor_norm;
+			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal * ip_f.weight * nor_norm;
 			}
 		    }
 		}

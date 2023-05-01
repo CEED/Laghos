@@ -105,6 +105,7 @@ namespace mfem
 						     ParGridFunction &csface_gf,
 						     ParGridFunction &viscousface_gf,
 						     ParGridFunction &rho0DetJ0face_gf,
+						     ParGridFunction &Jac0invface_gf,
 						     const int source,
 						     const double cfl,
 						     const bool visc,
@@ -171,6 +172,7 @@ namespace mfem
       csface_gf(csface_gf),
       viscousface_gf(viscousface_gf),
       rho0DetJ0face_gf(rho0DetJ0face_gf),
+      Jac0invface_gf(Jac0invface_gf),
       Mv(&H1), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
@@ -226,6 +228,7 @@ namespace mfem
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
       rho0DetJ0face_gf.ExchangeFaceNbrData();
+      Jac0invface_gf.ExchangeFaceNbrData();
       
       switch (pmesh->GetElementBaseGeometry(0))
 	{
@@ -393,19 +396,19 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
 
-      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, use_viscosity, use_vorticity);
+      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
       
-      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, use_viscosity, use_vorticity);
+      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       e_bfi->SetIntRule(&b_ir);
       EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, 2.0 * penaltyParameter * C_I_V, order_v, rhoface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, 2.0 * penaltyParameter * C_I_V, order_v, rhoface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);

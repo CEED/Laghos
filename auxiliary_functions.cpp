@@ -279,7 +279,6 @@ namespace mfem
       globalmax_viscous_coef = 0.0;
       globalmax_rho = 0.0;
       globalmax_cs = 0.0;
-      
       MPI_Allreduce(&max_viscous_coef, &globalmax_viscous_coef, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_rho, &globalmax_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
       MPI_Allreduce(&max_cs, &globalmax_cs, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());

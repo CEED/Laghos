@@ -114,7 +114,46 @@ namespace mfem
     void ComputeViscousStressGL(ElementTransformation &T, const ParGridFunction &v, const QuadratureDataGL &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
   
     double smooth_step_01(double x, double eps);
-
+    
+    class Jac0InvVectorFunctionCoefficient : public VectorCoefficient
+    {
+    protected:
+      int dim;
+    public:
+      Jac0InvVectorFunctionCoefficient(int dim, int dof)
+	: dim(dim), VectorCoefficient(dof) { }
+      
+      using VectorCoefficient::Eval;
+      virtual void Eval(Vector &V, ElementTransformation &T,
+			const IntegrationPoint &ip)
+      {
+	
+	T.SetIntPoint(&ip);
+	DenseMatrixInverse Jinv(T.Jacobian());
+	DenseMatrix Jinv_dummy(dim);
+	Jinv_dummy = 0.0;
+	Jinv.GetInverseMatrix(Jinv_dummy);
+	
+	if (dim == 2){
+	  V(0) = Jinv_dummy(0,0);
+	  V(1) = Jinv_dummy(0,1);
+	  V(2) = Jinv_dummy(1,0);
+	  V(3) = Jinv_dummy(1,1);
+	}
+	else {
+	  V(0) = Jinv_dummy(0,0);
+	  V(1) = Jinv_dummy(0,1);
+	  V(2) = Jinv_dummy(0,2);
+	  V(3) = Jinv_dummy(1,0);
+	  V(4) = Jinv_dummy(1,1);
+	  V(5) = Jinv_dummy(1,2);
+	  V(6) = Jinv_dummy(2,0);
+	  V(7) = Jinv_dummy(2,1);
+	  V(8) = Jinv_dummy(2,2);
+	}
+      } 
+    };
+      
   } // namespace hydrodynamics
   
 } // namespace mfem

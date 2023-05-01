@@ -102,12 +102,12 @@ namespace mfem
       const ParGridFunction &v_gf;
       const ParGridFunction &csface_gf;
       const ParGridFunction &rho0DetJ0face_gf;
-      
+      const ParGridFunction &Jac0invface_gf;
       const bool use_viscosity;
       const bool use_vorticity;
       
     public:
-      VelocityBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity) { }
+      VelocityBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf, const ParGridFunction &Jac0invface_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
@@ -127,12 +127,13 @@ namespace mfem
       const ParGridFunction *Vnpt_gf;
       const ParGridFunction &csface_gf;
       const ParGridFunction &rho0DetJ0face_gf;
-	
+      const ParGridFunction &Jac0invface_gf;
+     	
       const bool use_viscosity;
       const bool use_vorticity;
       
     public:
-      EnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf, const bool use_viscosity, const bool use_vorticity) :  qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) { }
+      EnergyBoundaryForceIntegrator(QuadratureDataGL &qdata, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf,  const ParGridFunction &Jac0invface_gf , const bool use_viscosity, const bool use_vorticity) :  qdata(qdata), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
@@ -156,9 +157,11 @@ namespace mfem
       const double &globalmax_cs;
       const double &globalmax_viscous_coef;
       const ParGridFunction &rhoface_gf;
+      const ParGridFunction &Jac0invface_gf;
+      const ParGridFunction &rho0DetJ0face_gf;
       
     public:
-      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : qdata(qdata), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
+      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : qdata(qdata), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,
