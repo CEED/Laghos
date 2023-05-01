@@ -509,8 +509,8 @@ namespace mfem
 	  tN *= 1.0/origNormalProd;
 	  Vector transip;
 	  Trans_el1.Transform(eip, transip);
-	  transip.Print();
-	  tN.Print();
+	  // transip.Print();
+	  // tN.Print();
 	  /* std::cout << " current " << std::endl;
 	  tn.Print();
 	  std::cout << " origin " << std::endl;
@@ -527,7 +527,7 @@ namespace mfem
 	  //  penaltyVal = penaltyParameter * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm) * (1.0 + aMax + 1.0/aMax) * std::pow(1.0/origNormalProd,2.0*order_v);
 	  //   std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd << " pen " << penaltyVal << std::endl;
 	  penaltyVal =  4.0 * penaltyParameter * globalmax_rho * ( nor_norm / Tr.Elem1->Weight()) * 4.0 * 5.0 ;
-	  std::cout << " penV " << penaltyVal << std::endl;
+	  //	  std::cout << " penV " << penaltyVal << std::endl;
 	  // penaltyVal = 4 * globalmax_rho * std::pow(penaltyParameter, 1.0*(1+aMax+1.0/aMax))/* * origNormalProd*/;
 	  //	    std::cout << " dens " << density << " abs " << std::abs(density) << std::endl;
 	  //  std::cout << " val " << std::pow(1.0/origNormalProd,2.0) << std::endl;
