@@ -436,18 +436,19 @@ namespace mfem
       elmat.SetSize(h1dofs_cnt*dim);
       elmat = 0.0;
       Vector shape(h1dofs_cnt);
-      const int Elem1No = Tr.ElementNo;
       shape = 0.0;
+      std::cout << " f " << nqp_face << std::endl;
       for (int q = 0; q  < nqp_face; q++)
 	{
-	  const int eq = Elem1No*nqp_face + q;
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
 	  // Set the integration point in the face and the neighboring elements
 	  Tr.SetAllIntPoints(&ip_f);
 	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
 	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  
 	  Trans_el1.SetIntPoint(&eip);
 	  const int elementNo = Trans_el1.ElementNo;
+	  const int eq = elementNo*nqp_face + q;
 	 
 	  // std::cout << " Aip.x " << eip.x << " Aip.y " << eip.y << std::endl;
 	 
@@ -500,6 +501,11 @@ namespace mfem
 	  tN = 0.0;
 	  tn = nor;
 	  tn /= nor_norm;
+	  double proj = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    proj += std::abs(tn(s));
+	  }
+	  std::cout << " proj " << proj << std::endl;
 	  Jpi.MultTranspose(tn,tN);
 	  double origNormalProd = 0.0;
 	  for (int s = 0; s < dim; s++){
@@ -515,18 +521,19 @@ namespace mfem
 	  tn.Print();
 	  std::cout << " origin " << std::endl;
 	  tN.Print();*/
-	  
 	  // std::cout << " orig " << origNormalProd << std::endl;
 	  // std::cout << " val_pr " << 1.0/origNormalProd_tn << " val_pi " << 1.0/origNormalProd << " vol " << Tr.Elem1->Weight() << std::endl; 
 	  //  std::cout << " tN(0) " << tN(0) << " tN(1) " << tN(1) << std::endl;
 	  double penaltyVal = 0.0;
-	  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * (Tr.Elem1->Weight() / nor_norm);
+	  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * 4.0;
 	  // std::cout << " aM " << aMax << std::endl;
 	  //  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs;
 	  //  penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) *  (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd,2.0);
 	  //  penaltyVal = penaltyParameter * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm) * (1.0 + aMax + 1.0/aMax) * std::pow(1.0/origNormalProd,2.0*order_v);
 	  //   std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd << " pen " << penaltyVal << std::endl;
-	  penaltyVal =  4.0 * penaltyParameter * globalmax_rho * ( nor_norm / Tr.Elem1->Weight()) * 4.0 * 5.0 ;
+	  //  penaltyVal =  4.0 * std::pow(penaltyParameter * (1.0 * 1.0/aMax + aMax),proj) /* * std::pow(penaltyParameter,proj)*/ * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	
 	  //	  std::cout << " penV " << penaltyVal << std::endl;
 	  // penaltyVal = 4 * globalmax_rho * std::pow(penaltyParameter, 1.0*(1+aMax+1.0/aMax))/* * origNormalProd*/;
 	  //	    std::cout << " dens " << density << " abs " << std::abs(density) << std::endl;
@@ -534,6 +541,7 @@ namespace mfem
 	  // std::cout << " nCn " << std::pow(1.0/origNormalProd,2.0) << std::endl;
 	  //std::cout << " pen " << penaltyVal << std::endl;
 	  fe.CalcShape(eip, shape);
+	  std::cout << " pen " << penaltyVal << std::endl;
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -542,8 +550,8 @@ namespace mfem
 		    {
 		      for (int md = 0; md < dim; md++) // Velocity components.
 			{	      
-			  //		  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal * ip_f.weight * nor_norm;
-			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal * ip_f.weight * nor_norm;
+			  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tn(vd) * tn(md) * penaltyVal * ip_f.weight * nor_norm;
+			  //  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tN(vd) * tN(md) * penaltyVal * ip_f.weight * nor_norm;
 			}
 		    }
 		}
@@ -1107,21 +1115,29 @@ namespace mfem
 	      for (int s = 0; s < dim; s++){
 		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
 	      }
+	      double proj = 0.0;
+	      for (int s = 0; s < dim; s++){
+		proj += std::abs(tn(s));
+	      }
 
 	      double penaltyVal = 0.0;
 	      if ( (globalmax_viscous_coef != 0.0) && (sound_speed > 0.0) && (viscCoeff > 0.0)){
-		double aMax = (density/viscCoeff) * sound_speed *  (Tr.Elem1->Weight() / nor_norm + normD);
+		//	double aMax = (density/viscCoeff) * sound_speed *  (Tr.Elem1->Weight() / nor_norm + normD);
 		//double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem2->Weight() / nor_norm + normD);
-
-		//	penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
+		double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * 4.0;
+		//	penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_c-oef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem1->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
 		//	penaltyVal = penaltyParameter * globalmax_rho * (1.0 + aMax + 1.0/aMax) * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
-		penaltyVal = penaltyParameter * density * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
+		//	penaltyVal = penaltyParameter * density * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
+		penaltyVal =  4.0 * std::pow(penaltyParameter * (1.0 * 1.0/aMax + aMax),proj) /* * std::pow(penaltyParameter,proj)*/ * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+
 		//
 		//	std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd_el1 << " pen " << penaltyVal << std::endl;
 	      }
 	      else {
 		//	penaltyVal = penaltyParameter * globalmax_rho * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
-		penaltyVal = penaltyParameter * density * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
+		//	penaltyVal = penaltyParameter * density * (Tr.Elem1->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el1,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem1->Weight()),1.0));
+		penaltyVal =  4.0 * std::pow(penaltyParameter,proj) /* * std::pow(penaltyParameter,proj)*/ * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+
 	      }
 	      //  std::cout << " pen " << penaltyVal << " sound " << sound_speed << std::endl; 
 	      for (int k = 0; k < h1dofs_cnt; k++){
@@ -1250,19 +1266,26 @@ namespace mfem
 	      for (int s = 0; s < dim; s++){
 		nTildaDotN += nor(s) * tN_el2(s) / nor_norm;
 	      }
+	      double proj = 0.0;
+	      for (int s = 0; s < dim; s++){
+		proj += std::abs(tn(s));
+	      }
 
 	      double penaltyVal = 0.0;
 	      if ( (globalmax_viscous_coef != 0.0) && (sound_speed > 0.0) && (viscCoeff > 0.0)){
-		double aMax = (density/viscCoeff) * sound_speed *  (Tr.Elem2->Weight() / nor_norm + normD);
+		//	double aMax = (density/viscCoeff) * sound_speed *  (Tr.Elem2->Weight() / nor_norm + normD);
+		double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * 4.0;
+
 		//	double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs *  (Tr.Elem2->Weight() / nor_norm + normD);
 
 		//	penaltyVal = penaltyParameter * globalmax_rho * (1.0 + ((globalmax_viscous_coef/globalmax_rho)*(1.0/globalmax_cs * globalmax_cs) + (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * globalmax_cs) ) * (Tr.Elem2->Weight() / nor_norm) * std::pow(1.0/origNormalProd_el2,2.0-2.0*std::max(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
-		penaltyVal = penaltyParameter * density * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
+		//		penaltyVal = penaltyParameter * density * (1.0 + std::pow(aMax,1.0) + std::pow(1.0/aMax,1.0)) * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
+		penaltyVal =  4.0 * std::pow(penaltyParameter * (1.0 * 1.0/aMax + aMax),proj) /* * std::pow(penaltyParameter,proj)*/ * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 
 	      }
 	      else {
-		penaltyVal = penaltyParameter * density * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
-
+		//	penaltyVal = penaltyParameter * density * (Tr.Elem2->Weight() / nor_norm + normD) * std::pow(1.0/origNormalProd_el2,2.0*order_v-2.0*std::min(std::fabs(normD*nor_norm/Tr.Elem2->Weight()),1.0));
+		penaltyVal =  4.0 * std::pow(penaltyParameter,proj) /* * std::pow(penaltyParameter,proj)*/ * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	      }
 	      // std::cout << " pen " << penaltyVal << " sound " << sound_speed << std::endl; 
 	    
@@ -1276,27 +1299,27 @@ namespace mfem
 
 	      DenseMatrix tmp_el2(h1dofs_cnt);
 	      DenseMatrix dummy_tmp_el2(h1dofs_cnt);
-	    tmp_el2 = gradUResDirD_el2;
-	    taylorExp_el2 = gradUResDirD_el2;
-	    dummy_tmp_el2 = 0.0;
-	    for (int k = 0; k < h1dofs_cnt; k++){
-	      for (int s = 0; s < h1dofs_cnt; s++){
-		gradUResD_el2(k) += taylorExp_el2(k,s) * shape_el2(s);  
-	      }
-	    }
-	    Vector test_gradUResD_el2(h1dofs_cnt);
-	    test_gradUResD_el2 = gradUResD_el2;
-	    
-	    for ( int p = 1; p < nTerms; p++){
+	      tmp_el2 = gradUResDirD_el2;
+	      taylorExp_el2 = gradUResDirD_el2;
 	      dummy_tmp_el2 = 0.0;
-	      taylorExp_el2 = 0.0;
 	      for (int k = 0; k < h1dofs_cnt; k++){
 		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int r = 0; r < h1dofs_cnt; r++){
-		    taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
-		    dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
-		  }
+		  gradUResD_el2(k) += taylorExp_el2(k,s) * shape_el2(s);  
 		}
+	      }
+	      Vector test_gradUResD_el2(h1dofs_cnt);
+	      test_gradUResD_el2 = gradUResD_el2;
+	    
+	      for ( int p = 1; p < nTerms; p++){
+		dummy_tmp_el2 = 0.0;
+		taylorExp_el2 = 0.0;
+		for (int k = 0; k < h1dofs_cnt; k++){
+		  for (int s = 0; s < h1dofs_cnt; s++){
+		    for (int r = 0; r < h1dofs_cnt; r++){
+		      taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
+		      dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
+		    }
+		  }
 	      }
 	      tmp_el2 = dummy_tmp_el2;
 	      for (int k = 0; k < h1dofs_cnt; k++){
