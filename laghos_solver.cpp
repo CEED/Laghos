@@ -466,16 +466,6 @@ namespace mfem
 						const double dt) const
     {
       
-      // reset mesh, needed to update the normal velocity penalty term.
-      /* Mv.Update(&H1);
-      // set the state at the initial one
-      UpdateMesh(S_init);
-      // assemble the velocity mass matrix at that state
-      Mv.AssembleDomainIntegrators();
-      //  Mv.Assemble();
-      // reset the mesh state at the current one
-      UpdateMesh(S);*/
-      
       //Compute quadrature quantities
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
@@ -494,18 +484,6 @@ namespace mfem
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
  
-      // assemble boundary terms at the most recent state.
-      //  Mv.AssembleBoundaryFaceIntegrators();
-       
-      if (analyticalSurface != NULL){
-	// assemble boundary terms at the most recent state.
-	//	Mv.AssembleInteriorFaceIntegrators();
-      }
-
-      //  Mv.Finalize();
-      
-      //  Mv.ParallelAssemble();
-    
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
       // The monolithic BlockVector stores the unknown fields as follows:
@@ -622,7 +600,7 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);	 
-	  if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
+	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
 	    e_rhs.GetSubVector(l2dofs, loc_rhs);
 	    Me_inv(e).Mult(loc_rhs, loc_de);
 	    de.SetSubVector(l2dofs, loc_de);
@@ -651,46 +629,6 @@ namespace mfem
       double glob_dt_est;
       const MPI_Comm comm = H1.GetParMesh()->GetComm();
       MPI_Allreduce(&qdata.dt_est, &glob_dt_est, 1, MPI_DOUBLE, MPI_MIN, comm);
-      /* if (useEmbedded){
-	// Check if any nodes cross bc
-	for (int e = 0; e < NE; e++)
-	  {
-	    if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
-	      // The points (and their numbering) coincide with the nodes of p.
-	      const IntegrationRule &ir = PFace_L2.GetFE(e)->GetNodes();
-	      const int nqp = ir.GetNPoints();
-	    
-	      ElementTransformation &Tr = *(PFace_L2.GetElementTransformation(e));
-	      for (int q = 0; q < nqp; q++)
-		{
-		  const IntegrationPoint &ip_f = ir.IntPoint(q);
-		  // Set the integration point in the face and the neighboring elements
-		  Tr.SetIntPoint(&ip_f);
-		  /////
-		  Vector D_el1(dim);
-		  Vector tN_el1(dim);
-		  D_el1 = 0.0;
-		  tN_el1 = 0.0; 	    
-		  dist_vec->Eval(D_el1, Tr, ip_f);
-		  normal_vec->Eval(tN_el1, Tr, ip_f);
-		/////
-		  double normD = 0.0;
-		  for (int j = 0; j < dim; j++){
-		    normD += D_el1(j) * D_el1(j);
-		}
-		  normD = std::pow(normD,0.5);
-		  double sign = 0.0;
-		for (int j = 0; j < dim; j++) {
-		  sign += D_el1(j)/normD * tN_el1(j);
-		}
-		if (sign < 0.0) {
-		  std::cout << " NEGATIVE " << std::endl;
-		  return -1.0;
-		}
-		}
-	    }
-	  }
-      }*/
       return glob_dt_est;  
     }
 
@@ -712,7 +650,7 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, dofs);
-	  if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
+	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE)  ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
 	    const FiniteElement &fe = *L2.GetFE(e);
 	    ElementTransformation &eltr = *L2.GetElementTransformation(e);
 	    di.AssembleRHSElementVect(fe, eltr, rhs);
@@ -739,7 +677,7 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);
-	  if (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
+	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
 	    gf.GetSubVector(l2dofs, loc_e);
 	    loc_ie += Me(e).InnerProduct(loc_e, one);
 	  }
@@ -807,7 +745,7 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) {
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ) {
 	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
 		Jpr_b[z].SetSize(dim, dim, nqp);
 		e.GetValues(z_id, ir, e_vals);
@@ -834,7 +772,7 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) {
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ){
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)
