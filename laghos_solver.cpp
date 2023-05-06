@@ -282,8 +282,7 @@ namespace mfem
 	normal_vec = new Normal_Vector_Coefficient(dim, geometricShape);
 	//	}
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();
-	
+	alphaCut->ExchangeFaceNbrData();	
       }
 
     
@@ -293,14 +292,12 @@ namespace mfem
       //    Set the entry corresponding to the inactive attribute to 0
       if (useEmbedded && (max_elem_attr >= 2)){
 	ess_elem[ShiftedFaceMarker::SBElementType::OUTSIDE-1] = 0;
-	ess_elem[ShiftedFaceMarker::SBElementType::CUT-1] = 0;
       }
-
-    
+   
       // Standard local assembly and inversion for energy mass matrices.
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
-      MassIntegrator mi(rho0_coeff, &ir);
+      WeightedMassIntegrator mi(*alphaCut, rho0_gf, &ir);
       for (int e = 0; e < NE; e++)
 	{
 	  DenseMatrixInverse inv(&Me(e));
@@ -311,7 +308,7 @@ namespace mfem
 	  inv.GetInverseMatrix(Me_inv(e));
 	}
       // Standard assembly for the velocity mass matrix.
-      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
+      WeightedVectorMassIntegrator *vmi = new WeightedVectorMassIntegrator(*alphaCut, rho0_gf, &ir);
       Mv.AddDomainIntegrator(vmi, ess_elem);
 
       // Values of rho0DetJ0 and Jac0inv at all quadrature points.
@@ -384,31 +381,31 @@ namespace mfem
       viscousface_gf.ExchangeFaceNbrData();
  
       
-      fi = new ForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
+      fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       Force.Assemble();
 
-      efi = new EnergyForceIntegrator(qdata, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
+      efi = new EnergyForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       efi->SetIntRule(&ir);
       EnergyForce.AddDomainIntegrator(efi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
 
-      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
+      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, *alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
       
-      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
+      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, *alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       e_bfi->SetIntRule(&b_ir);
       EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, 2.0 * penaltyParameter * C_I_V, order_v, rhoface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, *alphaCut, 2.0 * penaltyParameter * C_I_V, order_v, rhoface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);

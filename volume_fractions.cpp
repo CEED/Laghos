@@ -22,7 +22,6 @@ using namespace std;
 namespace mfem
 {
 
-
   void UpdateAlpha(ParGridFunction &alpha, ParFiniteElementSpace &h1_fes, ParGridFunction &func)
   {
     IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
@@ -39,15 +38,11 @@ namespace mfem
 	    Tr.SetIntPoint(&ip);
 	    double distVal = func.GetValue(Tr,ip);
 	    const bool checkIntegrationPtLocation = (distVal >= 0.0) ? 1.0:0.0;
-	    if (checkIntegrationPtLocation == 0.0){
-	      alpha(e) = 0.0;
-	      break;
-	    }
-	    //	    volume   += ip.weight * Tr.Weight();
-	    //  volume_1 += ip.weight * Tr.Weight() * checkIntegrationPtLocation;
+	    volume   += ip.weight * Tr.Weight();
+	    volume_1 += ip.weight * Tr.Weight() * checkIntegrationPtLocation;
 	  }  
-	//	alpha(e) = volume_1 / volume;
-	if (alpha(e) == 1.0){
+	alpha(e) = volume_1 / volume;
+	if (alpha(e) == 0.0){
 	  const FiniteElement *FElem = h1_fes.GetFE(e);
 	  const IntegrationRule &ir = FElem->GetNodes();
 	  ElementTransformation &T = *(h1_fes.GetElementTransformation(e));
@@ -57,8 +52,8 @@ namespace mfem
 	      double distVal = func.GetValue(T,ip);
 	      const bool checkIntegrationPtLocation = (distVal >= 0.0) ? 1.0:0.0;   
 	  
-	      if(checkIntegrationPtLocation == 0.0){
-		alpha(e) = 0.0;
+	      if(checkIntegrationPtLocation){
+		alpha(e) = 1.0/nqp;
 		break;
 	      }
 	    }
