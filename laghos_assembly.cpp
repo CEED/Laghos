@@ -30,6 +30,133 @@ namespace mfem
       return factorial;
     }
 
+    void shift_shape(const ParMesh *pmesh,
+		     const ParFiniteElementSpace &pfes_e_const,
+		     const ParFiniteElementSpace &pfes_p,
+		     int e_id,
+		     const IntegrationPoint &ip, const Vector &dist,
+		     int nterms, Vector &shape_shift)
+    {
+      auto pfes_e = const_cast<ParFiniteElementSpace *>(&pfes_e_const);
+      const int NE = pfes_e->GetNE();
+      const FiniteElement &el_e =
+	(e_id < NE) ? *pfes_e->GetFE(e_id) : *pfes_e->GetFaceNbrFE(e_id - NE);
+      const FiniteElement &el_p =
+	(e_id < NE) ? *pfes_p.GetFE(e_id) : *pfes_p.GetFaceNbrFE(e_id - NE);
+      const int dim = pfes_e->GetMesh()->Dimension(),
+	dof_e = el_e.GetDof(), dof_p = el_p.GetDof();
+
+      ElementTransformation *el_tr = NULL;
+      if (e_id < NE)
+	{
+	  el_tr = pfes_e->GetElementTransformation(e_id);
+	}
+      else
+	{
+	  el_tr = pfes_e->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE);
+	}
+      DenseMatrix grad_phys;
+      DenseMatrix Transfer_pe;
+      el_p.Project(el_e, *el_tr, Transfer_pe);
+      el_p.ProjectGrad(el_p, *el_tr, grad_phys);
+
+      Vector s(dim*dof_p), t(dof_p);
+      for (int j = 0; j < dof_e; j++)
+	{
+	  // Shape function transformed into the p space.
+	  Vector u_shape_e(dof_e), u_shape_p(dof_p);
+	  u_shape_e = 0.0;
+	  u_shape_e(j) = 1.0;
+	  Transfer_pe.Mult(u_shape_e, u_shape_p);
+
+	  t = u_shape_p;
+	  int factorial = 1;
+	  for (int i = 1; i < nterms + 1; i++)
+	    {
+	      factorial = factorial*i;
+	      grad_phys.Mult(t, s);
+	      for (int j = 0; j < dof_p; j++)
+		{
+		  t(j) = 0.0;
+		  for(int d = 0; d < dim; d++)
+		    {
+		      t(j) = t(j) + s(j + d * dof_p) * dist(d);
+		    }
+		}
+	      u_shape_p.Add(1.0/double(factorial), t);
+	    }
+
+	  el_tr->SetIntPoint(&ip);
+	  el_p.CalcPhysShape(*el_tr, t);
+	  shape_shift(j) = t * u_shape_p;
+	}
+    }
+
+    void get_shifted_value(const ParMesh *pmesh,
+			   const ParGridFunction &g, int e_id,
+			   const IntegrationPoint &ip, const Vector &dist,
+			   int nterms, Vector &shifted_vec)
+    {
+      auto pfes = const_cast<ParFiniteElementSpace *>(g.ParFESpace());
+      const int NE = pfes->GetNE();
+      const FiniteElement &el =
+	(e_id < NE) ? *pfes->GetFE(e_id) : *pfes->GetFaceNbrFE(e_id - NE);
+      const int dim = pfes->GetMesh()->Dimension(), dof = el.GetDof();
+      const int vdim = pfes->GetVDim();
+
+      ElementTransformation *el_tr =  NULL;
+      if (e_id < NE)
+	{
+	  el_tr = (pfes->GetElementTransformation(e_id));
+	}
+      else
+	{
+	  el_tr = pfes->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE);
+	}
+      DenseMatrix grad_phys;
+      el.ProjectGrad(el, *el_tr, grad_phys);
+
+      Array<int> vdofs;
+      Vector u(dof), s(dim*dof), t(dof), g_loc(vdim*dof);
+      if (e_id < NE)
+	{
+	  g.FESpace()->GetElementVDofs(e_id, vdofs);
+	  g.GetSubVector(vdofs, g_loc);
+	}
+      else
+	{
+	  g.ParFESpace()->GetFaceNbrElementVDofs(e_id - NE, vdofs);
+	  g.FaceNbrData().GetSubVector(vdofs, g_loc);
+	}
+
+      for (int c = 0; c < vdim; c++)
+	{
+	  u.SetDataAndSize(g_loc.GetData() + c*dof, dof);
+
+	  t = u;
+	  int factorial = 1;
+	  for (int i = 1; i < nterms + 1; i++)
+	    {
+	      factorial = factorial*i;
+	      grad_phys.Mult(t, s);
+	      for (int j = 0; j < dof; j++)
+		{
+		  t(j) = 0.0;
+		  for(int d = 0; d < dim; d++)
+		    {
+		      t(j) = t(j) + s(j + d * dof) * dist(d);
+		    }
+		}
+	      u.Add(1.0/double(factorial), t);
+	    }
+
+	  el_tr->SetIntPoint(&ip);
+	  el.CalcPhysShape(*el_tr, t);
+	  shifted_vec(c) = t * u;
+	}
+    }
+
+    
     void WeightedVectorMassIntegrator::AssembleElementMatrix(const FiniteElement &el,
 							     ElementTransformation &Trans,
 							     DenseMatrix &elmat)

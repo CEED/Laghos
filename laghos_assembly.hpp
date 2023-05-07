@@ -32,6 +32,15 @@ namespace mfem
   namespace hydrodynamics
   {
     double factorial(int nTerms);
+    void shift_shape(const ParFiniteElementSpace &pfes_e_const,
+		     const ParFiniteElementSpace &pfes_p,
+		     int e_id,
+		     const IntegrationPoint &ip, const Vector &dist,
+		     int nterms, Vector &shape_shift);
+    void get_shifted_value(const ParGridFunction &g, int e_id,
+			   const IntegrationPoint &ip, const Vector &dist,
+			   int nterms, Vector &shifted_vec);
+      
   
     // This class is used only for visualization. It assembles (rho, phi) in each
     // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
