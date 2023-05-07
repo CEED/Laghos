@@ -14,9 +14,9 @@
 namespace mfem
 {
 
-void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
-{
-      MPI_Comm comm = pmesh.GetComm();
+  void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
+  {
+    MPI_Comm comm = pmesh.GetComm();
     int myid;
     MPI_Comm_rank(comm, &myid);
 
@@ -30,18 +30,18 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
     // This tolerance is relevant for points that are exactly on the zero LS.
     const double eps = 1e-16;
     auto outside_of_domain = [&](double value)
-      {
-	if (include_cut_cell)
-	  {
-	    // Points on the zero LS are considered outside the domain.
-	    return (value - eps < 0.0);
-	  }
-	else
-	  {
-	    // Points on the zero LS are considered inside the domain.
-	    return (value + eps < 0.0);
-	  }
-      };
+    {
+      if (include_cut_cell)
+	{
+	  // Points on the zero LS are considered outside the domain.
+	  return (value - eps < 0.0);
+	}
+      else
+	{
+	  // Points on the zero LS are considered inside the domain.
+	  return (value + eps < 0.0);
+	}
+    };
     ParFiniteElementSpace * ls_fes = ls_func.ParFESpace();
     Vector vals;
     // Check elements on the current MPI rank
@@ -103,18 +103,21 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	  bool elem2_inside = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::INSIDE);
 	  bool elem2_cut = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::CUT);
 	  bool elem2_outside = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::OUTSIDE);
-	  if ( (elem1_cut && elem2_inside) ||  (elem1_inside && elem2_cut)  ) {
-	    pmesh.SetFaceAttribute(f, 77);	
-	  }
-	}
+	  // ghost faces
+	  if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ||  (elem1_cut && elem2_cut) ) {
+            pmesh.SetFaceAttribute(f, 77);
+          }
+          // outer surrogate boundaries
+	  if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
+            pmesh.SetFaceAttribute(f, 11);
+          }
+        }
       }
 
-    const int c_vsize = pfes_sltn->GetVSize();
     for (int f = 0; f < pmesh.GetNSharedFaces(); f++)
       {
 	auto *ftr = pmesh.GetSharedFaceTransformations(f, 3);
 	int faceno = pmesh.GetSharedFace(f);
-	const bool ghost_sface = (faceno >= pmesh.GetNumFaces());
 	int Elem2NbrNo = ftr->Elem2No - pmesh.GetNE();
 	auto *nbrftr = ls_fes->GetFaceNbrElementTransformation(Elem2NbrNo);
 	int attr1 = pmesh.GetAttribute(ftr->Elem1No);
@@ -127,22 +130,26 @@ void ShiftedFaceMarker::MarkElements(const ParGridFunction &ls_func)
 	bool elem2_inside = (attr2 == SBElementType::INSIDE);
 	bool elem2_cut = (attr2 == SBElementType::CUT);
 	bool elem2_outside = (attr2 == SBElementType::OUTSIDE);
-	// outer surrogate boundaries
-	if ( (elem1_cut && elem2_inside) ||  (elem1_inside && elem2_cut)  ) {
-	  pmesh.SetFaceAttribute(faceno, 77);	
-	}
-      }    
-   
+	// ghost faces
+	if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ||  (elem1_cut && elem2_cut) ) {
+          pmesh.SetFaceAttribute(faceno, 77);
+        }
+        // outer surrogate boundaries
+        if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
+          pmesh.SetFaceAttribute(faceno, 11);
+        }
+      }
+
     pmesh.ExchangeFaceNbrNodes();
 
     initial_marking_done = true;
-   std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
-   // Synchronize
-   for (int i = 0; i < ess_inactive.Size() ; i++) { ess_inactive[i] += 1; }
-   pfes_sltn->Synchronize(ess_inactive);
-   for (int i = 0; i < ess_inactive.Size() ; i++) { ess_inactive[i] -= 1; }
-   pmesh.SetAttributes();
-}
+    std::cout << " myid " << myid << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
+    // Synchronize
+    for (int i = 0; i < ess_inactive.Size() ; i++) { ess_inactive[i] += 1; }
+    pfes_sltn->Synchronize(ess_inactive);
+    for (int i = 0; i < ess_inactive.Size() ; i++) { ess_inactive[i] -= 1; }
+    pmesh.SetAttributes();
+  }
 
   Array<int>& ShiftedFaceMarker::GetEss_Vdofs(){
     return ess_inactive;
