@@ -114,7 +114,7 @@ namespace mfem
 	}
       else
 	{
-	  pfes->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
+	  //  pfes->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
 	}
       DenseMatrix grad_phys;
       el.ProjectGrad(el, el_tr, grad_phys);
