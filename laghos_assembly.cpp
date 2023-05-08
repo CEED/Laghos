@@ -45,19 +45,20 @@ namespace mfem
       const int dim = pfes_e->GetMesh()->Dimension(),
 	dof_e = el_e.GetDof(), dof_p = el_p.GetDof();
 
-      ElementTransformation *el_tr = NULL;
+      IsoparametricTransformation el_tr;
       if (e_id < NE)
 	{
-	  el_tr = pfes_e->GetElementTransformation(e_id);
+	  pfes_e->GetElementTransformation(e_id, &el_tr);
 	}
       else
 	{
-	  el_tr = pfes_e->GetFaceNbrElementTransformation(e_id - NE);
+	  //  pfes_e->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
 	}
+     
       DenseMatrix grad_phys;
       DenseMatrix Transfer_pe;
-      el_p.Project(el_e, *el_tr, Transfer_pe);
-      el_p.ProjectGrad(el_p, *el_tr, grad_phys);
+      el_p.Project(el_e, el_tr, Transfer_pe);
+      el_p.ProjectGrad(el_p, el_tr, grad_phys);
 
       Vector s(dim*dof_p), t(dof_p);
       for (int j = 0; j < dof_e; j++)
@@ -85,8 +86,8 @@ namespace mfem
 	      u_shape_p.Add(1.0/double(factorial), t);
 	    }
 
-	  el_tr->SetIntPoint(&ip);
-	  el_p.CalcPhysShape(*el_tr, t);
+	  el_tr.SetIntPoint(&ip);
+	  el_p.CalcPhysShape(el_tr, t);
 	  shape_shift(j) = t * u_shape_p;
 	}
     }
@@ -851,7 +852,7 @@ namespace mfem
       }
     }
 
-
+    
     void ShiftedEnergyBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
 								      const FiniteElement &el2,
 								      FaceElementTransformations &Tr,
@@ -984,10 +985,426 @@ namespace mfem
 	elvect.SetSize(2*l2dofs_cnt);
 	elvect = 0.0;
       }
-    }      
+      }     
 
-    
+    /*
+    void ShiftedEnergyBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+								      const FiniteElement &el2,
+								      FaceElementTransformations &Tr,
+								      Vector &elvect)
+    {
+      if (Vnpt_gf != NULL){ 
+	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	  const int dim = el.GetDim();
+	  const int nqp_face = IntRule->GetNPoints();
+
+	  const int l2dofs_cnt = el.GetDof();
+	  int l2dofs_offset = el2.GetDof();
+	  elvect.SetSize(l2dofs_cnt*2);
+	  elvect = 0.0;
+	  Vector te_shape_el1(l2dofs_cnt), te_shape_el2(l2dofs_cnt), nor(dim);
+	  te_shape_el1 = 0.0;
+	  te_shape_el2 = 0.0;
+	  nor = 0.0;
+	  
+	  ParFiniteElementSpace * pfes = Vnpt_gf->ParFESpace();
+	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  const int elementNo_el1 = Trans_el1.ElementNo;
+	  Vector loc_data_el1;
+	  Array<int> vdofs_el1;
+	  DofTransformation * doftrans_el1 = pfes->GetElementVDofs(elementNo_el1, vdofs_el1);
+	  Vnpt_gf->GetSubVector(vdofs_el1, loc_data_el1);
+	  if (doftrans_el1)
+	    {
+	      doftrans_el1->InvTransformPrimal(loc_data_el1);
+	    }
+	  
+	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+	  const int elementNo_el2 = Trans_el2.ElementNo;
+	  Vector loc_data_el2;
+	  int nbr_el_no = elementNo_el2 - pfes->GetParMesh()->GetNE();
+	  if (nbr_el_no >= 0)
+	    {
+	      int height = pfes->GetVSize();
+	      Array<int> vdofs_el2;      
+	      pfes->GetFaceNbrElementVDofs(nbr_el_no, vdofs_el2);
+	      
+	      for (int j = 0; j < vdofs_el2.Size(); j++)
+		{
+		  if (vdofs_el2[j] >= 0)
+		    {
+		      vdofs_el2[j] += height;
+		    }
+		  else
+		    {
+		      vdofs_el2[j] -= height;
+		    }
+		}
+	      Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
+	    }
+	  else{
+	    Array<int> vdofs_el2;
+	    DofTransformation * doftrans_el2 = pfes->GetElementVDofs(elementNo_el2, vdofs_el2); 
+	    Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
+	  }
+
+	  for (int q = 0; q  < nqp_face; q++)
+	    {
+	      te_shape_el1 = 0.0;
+	      te_shape_el2 = 0.0;
+	      nor = 0.0;
+	      
+	      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+	      // Set the integration point in the face and the neighboring elements
+	      Tr.SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
+	      const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
+	    
+	      double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
+	      double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
+	      double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
+	      double gamma_1 =  volumeFraction_el1/sum_volFrac;
+	      double gamma_2 =  volumeFraction_el2/sum_volFrac;
+	    
+	      CalcOrtho(Tr.Jacobian(), nor);
+	      double nor_norm = 0.0;
+	      for (int s = 0; s < dim; s++){
+		nor_norm += nor(s) * nor(s);
+	      }
+	      nor_norm = sqrt(nor_norm);
+	      
+	      el.CalcShape(eip_el1, te_shape_el1);
+	      el2.CalcShape(eip_el2, te_shape_el2);
+	
+	      double pressure_el1 = pface_gf.GetValue(Trans_el1,eip_el1);
+	      double pressure_el2 = pface_gf.GetValue(Trans_el2,eip_el2);
+	     
+	      DenseMatrix stress_el1(dim), stress_el2(dim);
+	      stress_el1 = 0.0;
+	      stress_el2 = 0.0;
+	      ComputeStress(pressure_el1,dim,stress_el1);
+	      ComputeStress(pressure_el2,dim,stress_el2);
+	
+	      /////////////      
+	      int h1dofs_cnt = 0.0;
+	      Vector velocity_shape_el1, gradUResD_el1;
+	      DenseMatrix nodalGrad_el1, gradUResDirD_el1, taylorExp_el1;
+	      const FiniteElement *FElem = pfes->GetFE(elementNo_el1);
+	      h1dofs_cnt = FElem->GetDof();
+	      velocity_shape_el1.SetSize(h1dofs_cnt);
+	      velocity_shape_el1 = 0.0;
+	      FElem->CalcShape(eip_el1, velocity_shape_el1);
+	      FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
+	      
+	      gradUResD_el1.SetSize(h1dofs_cnt);
+	      gradUResDirD_el1.SetSize(h1dofs_cnt);
+	      taylorExp_el1.SetSize(h1dofs_cnt);
+	      
+	      gradUResD_el1 = 0.0;
+	      gradUResDirD_el1 = 0.0;
+	      taylorExp_el1 = 0.0;
+	      
+	      /////
+	      Vector D_el1(dim);
+	      Vector tN_el1(dim);
+	      D_el1 = 0.0;
+	      tN_el1 = 0.0; 
+	      vD->Eval(D_el1, Trans_el1, eip_el1);
+	      vN->Eval(tN_el1, Trans_el1, eip_el1);
+	      /////
+
+	      double nTildaDotN = 0.0;
+	      for (int s = 0; s < dim; s++){
+		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
+	      }
+		
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  for (int j = 0; j < dim; j++){
+		    gradUResDirD_el1(s,k) += nodalGrad_el1(k + j * h1dofs_cnt, s) * D_el1(j);
+		  }
+		}
+	      }
+		
+	      DenseMatrix tmp_el1(h1dofs_cnt);
+	      DenseMatrix dummy_tmp_el1(h1dofs_cnt);
+	      tmp_el1 = gradUResDirD_el1;
+	      taylorExp_el1 = gradUResDirD_el1;
+	      dummy_tmp_el1 = 0.0;
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape_el1(s);  
+		}
+	      }
+		
+	      for ( int p = 1; p < nTerms; p++){
+		dummy_tmp_el1 = 0.0;
+		taylorExp_el1 = 0.0;
+		for (int k = 0; k < h1dofs_cnt; k++){
+		  for (int s = 0; s < h1dofs_cnt; s++){
+		    for (int r = 0; r < h1dofs_cnt; r++){
+		      taylorExp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s) * (1.0/factorial(p+1));
+		      dummy_tmp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s);
+		    }
+		  }
+		}
+		tmp_el1 = dummy_tmp_el1;
+		for (int k = 0; k < h1dofs_cnt; k++){
+		  for (int s = 0; s < h1dofs_cnt; s++){
+		    gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape_el1(s);  
+		  }
+		}
+	      }
+		
+	      ////
+	      velocity_shape_el1 += gradUResD_el1;
+	      ////
+		
+	      Vector vShape_el1(dim);
+	      vShape_el1 = 0.0;
+	      for (int k = 0; k < dim; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  vShape_el1(k) += velocity_shape_el1(s) * loc_data_el1(s + h1dofs_cnt * k);
+		}
+	      }
+	  
+	      double vDotn_el1 = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  vDotn_el1 += vShape_el1(s) * tN_el1(s);
+		}
+	
+	      ////////////////	
+	      Vector velocity_shape_el2, gradUResD_el2;
+	      DenseMatrix nodalGrad_el2, gradUResDirD_el2, taylorExp_el2;
+	      if (nbr_el_no >= 0){
+		const FiniteElement *FElem = pfes->GetFaceNbrFE(nbr_el_no);
+		h1dofs_cnt = FElem->GetDof();
+		velocity_shape_el2.SetSize(h1dofs_cnt);
+		velocity_shape_el2 = 0.0;
+		FElem->CalcShape(eip_el2, velocity_shape_el2);
+		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
+	      }
+	      else {
+		const FiniteElement *FElem = pfes->GetFE(elementNo_el2);
+		h1dofs_cnt = FElem->GetDof();
+		velocity_shape_el2.SetSize(h1dofs_cnt);
+		velocity_shape_el2 = 0.0;
+		FElem->CalcShape(eip_el2, velocity_shape_el2);
+		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
+	      }
+		
+	      gradUResD_el2.SetSize(h1dofs_cnt);
+	      gradUResDirD_el2.SetSize(h1dofs_cnt);
+	      taylorExp_el2.SetSize(h1dofs_cnt);
+		
+	      gradUResD_el2 = 0.0;
+	      gradUResDirD_el2 = 0.0;
+	      taylorExp_el2 = 0.0;
+		
+	      /////
+	      Vector D_el2(dim);
+	      Vector tN_el2(dim);
+	      D_el2 = 0.0;
+	      tN_el2 = 0.0;
+	      vD->Eval(D_el2, Trans_el2, eip_el2);
+	      vN->Eval(tN_el2, Trans_el2, eip_el2);
+	      /////
+		
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  for (int j = 0; j < dim; j++){
+		    gradUResDirD_el2(s,k) += nodalGrad_el2(k + j * h1dofs_cnt, s) * D_el2(j);
+		  }
+		}
+	      }
+		
+	      DenseMatrix tmp_el2(h1dofs_cnt);
+	      DenseMatrix dummy_tmp_el2(h1dofs_cnt);
+	      tmp_el2 = gradUResDirD_el2;
+	      taylorExp_el2 = gradUResDirD_el2;
+	      dummy_tmp_el2 = 0.0;
+	      for (int k = 0; k < h1dofs_cnt; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape_el2(s);  
+		}
+	      }
+		
+	      for ( int p = 1; p < nTerms; p++){
+		dummy_tmp_el2 = 0.0;
+		taylorExp_el2 = 0.0;
+		for (int k = 0; k < h1dofs_cnt; k++){
+		  for (int s = 0; s < h1dofs_cnt; s++){
+		    for (int r = 0; r < h1dofs_cnt; r++){
+		      taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
+		      dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
+		    }
+		  }
+		}
+		tmp_el2 = dummy_tmp_el2;
+		for (int k = 0; k < h1dofs_cnt; k++){
+		  for (int s = 0; s < h1dofs_cnt; s++){
+		    gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape_el2(s);  
+		  }
+		}
+	      }
+		
+	      ////
+	      velocity_shape_el2 += gradUResD_el2;
+	      //
+		
+	      Vector vShape_el2(dim);
+	      vShape_el2 = 0.0;
+	      for (int k = 0; k < dim; k++){
+		for (int s = 0; s < h1dofs_cnt; s++){
+		  vShape_el2(k) += velocity_shape_el2(s) * loc_data_el2(s + h1dofs_cnt * k);
+		}
+	      }
+	      double vDotn_el2 = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  vDotn_el2 += vShape_el2(s) * tN_el1(s);
+		}
+	      ///////	
+	      for (int i = 0; i < l2dofs_cnt; i++)
+		{
+		  for (int vd = 0; vd < dim; vd++)
+		    {
+		      for (int md = 0; md < dim; md++)
+			{
+			  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) / nor_norm - volumeFraction_el2 * nor(vd) / nor_norm ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * ip_f.weight * tN_el1(md);
+			  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) / nor_norm - volumeFraction_el2 * nor(vd) / nor_norm ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * ip_f.weight * tN_el1(md);
+			}
+		    }
+		}
+	    }	  
+	}
+	else{
+	  const int l2dofs_cnt = el.GetDof();
+	  elvect.SetSize(2*l2dofs_cnt);
+	  elvect = 0.0;
+	}
+      }
+      else{
+	const int l2dofs_cnt = el.GetDof();
+	elvect.SetSize(2*l2dofs_cnt);
+	elvect = 0.0;
+      }
+    }      */
+
+
     void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
+								 const FiniteElement &fe2,
+								 FaceElementTransformations &Tr,
+								 DenseMatrix &elmat)
+    {
+      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	const int dim = fe.GetDim();
+	DenseMatrix identity(dim);
+	identity = 0.0;
+	for (int s = 0; s < dim; s++){
+	  identity(s,s) = 1.0;
+	}
+	const int nqp_face = IntRule->GetNPoints();
+	const int h1dofs_cnt = fe.GetDof();
+	elmat.SetSize(2*h1dofs_cnt*dim);
+	elmat = 0.0;
+	
+	Vector shape_el1(h1dofs_cnt), shape_test_el1(h1dofs_cnt), nor(dim);
+	Vector shape_el2(h1dofs_cnt), shape_test_el2(h1dofs_cnt);
+	ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+
+	int h1dofs_offset = fe2.GetDof()*dim;
+
+	for (int q = 0; q < nqp_face; q++)
+	  {
+	    nor = 0.0;
+	    
+	    shape_el1 = 0.0;
+	    shape_test_el1 = 0.0;
+	    shape_el2 = 0.0;
+	    shape_test_el2 = 0.0;
+
+	    const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    Tr.SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
+	    const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
+	    
+	    CalcOrtho(Tr.Jacobian(), nor);
+
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
+
+	    Vector tn(dim);
+	    tn = 0.0;
+	    tn = nor;
+	    tn /= nor_norm;
+	    
+	    double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
+	    double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
+	    double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
+	    double gamma_1 =  volumeFraction_el1/sum_volFrac;
+	    double gamma_2 =  volumeFraction_el2/sum_volFrac;
+	    
+	    /////
+	    Vector D_el1(dim);
+	    Vector tN_el1(dim);
+	    D_el1 = 0.0;
+	    tN_el1 = 0.0; 	    
+	    vD->Eval(D_el1, Trans_el1, eip_el1);
+	    vN->Eval(tN_el1, Trans_el1, eip_el1);
+	    /////
+	    
+	    
+	    double nTildaDotN = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
+	    }
+	    
+	    double penaltyVal = 0.0;
+	    penaltyVal =  4.0 * penaltyParameter * globalmax_rho ;
+
+	    fe.CalcShape(eip_el1, shape_el1);
+	    shift_shape(h1, h1, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, shape_el1);
+	    
+	    //////////
+	    
+	    fe2.CalcShape(eip_el2, shape_el2);	    
+	    shift_shape(h1, h1, Trans_el2.ElementNo, eip_el2, D_el1, nTerms, shape_el2);
+	    
+	    for (int i = 0; i < h1dofs_cnt; i++)
+	      {
+		for (int vd = 0; vd < dim; vd++) // Velocity components.
+		  {
+		    for (int j = 0; j < h1dofs_cnt; j++)
+		      {
+			for (int md = 0; md < dim; md++) // Velocity components.
+			  {	      
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
+	
+			  }
+		      }
+		  }
+	      }	    
+	  }
+      }
+      else{
+	const int dim = fe.GetDim();
+	const int h1dofs_cnt = fe.GetDof();
+	elmat.SetSize(2*h1dofs_cnt*dim);
+	elmat = 0.0;    
+      }
+    }
+    
+    /* void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 								 const FiniteElement &fe2,
 								 FaceElementTransformations &Tr,
 								 DenseMatrix &elmat)
@@ -1220,7 +1637,7 @@ namespace mfem
 	elmat.SetSize(2*h1dofs_cnt*dim);
 	elmat = 0.0;    
       }
-    }
+    }*/
     
   } // namespace hydrodynamics
   

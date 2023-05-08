@@ -108,6 +108,8 @@ namespace mfem
 						     ParGridFunction &Jac0invface_gf,
 						     const int source,
 						     const double cfl,
+						     const int numberGhostTerms,
+						     const int ghostPenaltyCoefficient,
 						     const bool visc,
 						     const bool vort,
 						     const double cgt,
@@ -131,6 +133,8 @@ namespace mfem
       l2dofs_cnt(L2.GetFE(0)->GetDof()),
       h1dofs_cnt(H1.GetFE(0)->GetDof()),
       source_type(source), cfl(cfl),
+      numberGhostTerms(numberGhostTerms),
+      ghostPenaltyCoefficient(ghostPenaltyCoefficient),			     
       use_viscosity(visc),
       use_vorticity(vort),
       cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
@@ -146,6 +150,7 @@ namespace mfem
       shifted_v_bfi(NULL),
       shifted_e_bfi(NULL),
       shifted_nvmi(NULL),
+      ghost_nvmi(NULL),
       wall_dist_coef(NULL),
       distance_vec_space(NULL),
       distance(NULL),
@@ -423,9 +428,14 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf,  dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, h1, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf,  dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
+
+	ghost_nvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, ghostPenaltyCoefficient, numberGhostTerms);
+	ghost_nvmi->SetIntRule(&b_ir);
+	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
+
       }
 
       Mv.Assemble();

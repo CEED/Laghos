@@ -61,6 +61,8 @@ namespace mfem
       Array<int> ess_tdofs;
       const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
       const double cfl;
+      const int numberGhostTerms;
+      const int ghostPenaltyCoefficient;		     
       const bool use_viscosity, use_vorticity;
       const double cg_rel_tol;
       const int cg_max_iter;
@@ -124,6 +126,7 @@ namespace mfem
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
+      GhostStressFullGradPenaltyIntegrator *ghost_nvmi;
       
       Dist_Level_Set_Coefficient *wall_dist_coef;
       // in case we are using level set to get distance and normal vectors
@@ -174,6 +177,8 @@ namespace mfem
 			      ParGridFunction &Jac0invface_gf,
 			      const int source,
 			      const double cfl,
+			      const int numberGhostTerms,
+			      const int ghostPenaltyCoefficient,
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter,
