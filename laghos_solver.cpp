@@ -413,15 +413,15 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
-      	ShiftedEnergyBoundaryForce.Assemble();
+	ShiftedEnergyBoundaryForce.Assemble();
 
 	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf,  dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
@@ -553,6 +553,7 @@ namespace mfem
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;
       v_updated.MakeRef(&H1, *sptr, 0);
+      v_updated.ExchangeFaceNbrData();
       
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyForceMatrix();

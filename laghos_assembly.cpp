@@ -30,8 +30,7 @@ namespace mfem
       return factorial;
     }
 
-    void shift_shape(const ParMesh *pmesh,
-		     const ParFiniteElementSpace &pfes_e_const,
+    void shift_shape(const ParFiniteElementSpace &pfes_e_const,
 		     const ParFiniteElementSpace &pfes_p,
 		     int e_id,
 		     const IntegrationPoint &ip, const Vector &dist,
@@ -53,7 +52,7 @@ namespace mfem
 	}
       else
 	{
-	  el_tr = pfes_e->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE);
+	  el_tr = pfes_e->GetFaceNbrElementTransformation(e_id - NE);
 	}
       DenseMatrix grad_phys;
       DenseMatrix Transfer_pe;
@@ -92,8 +91,8 @@ namespace mfem
 	}
     }
 
-    void get_shifted_value(const ParMesh *pmesh,
-			   const ParGridFunction &g, int e_id,
+
+    void get_shifted_value(const ParGridFunction &g, int e_id,
 			   const IntegrationPoint &ip, const Vector &dist,
 			   int nterms, Vector &shifted_vec)
     {
@@ -103,19 +102,23 @@ namespace mfem
 	(e_id < NE) ? *pfes->GetFE(e_id) : *pfes->GetFaceNbrFE(e_id - NE);
       const int dim = pfes->GetMesh()->Dimension(), dof = el.GetDof();
       const int vdim = pfes->GetVDim();
-
-      ElementTransformation *el_tr =  NULL;
+      /* ElementTransformation *el_tr = NULL;
       if (e_id < NE)
 	{
-	  el_tr = (pfes->GetElementTransformation(e_id));
+	  el_tr = pfes->GetElementTransformation(e_id);
+	}*/
+      IsoparametricTransformation el_tr;
+      if (e_id < NE)
+	{
+	  pfes->GetElementTransformation(e_id, &el_tr);
 	}
       else
 	{
-	  el_tr = pfes->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE);
+	  pfes->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
 	}
       DenseMatrix grad_phys;
-      el.ProjectGrad(el, *el_tr, grad_phys);
-
+      el.ProjectGrad(el, el_tr, grad_phys);
+      
       Array<int> vdofs;
       Vector u(dof), s(dim*dof), t(dof), g_loc(vdim*dof);
       if (e_id < NE)
@@ -128,11 +131,11 @@ namespace mfem
 	  g.ParFESpace()->GetFaceNbrElementVDofs(e_id - NE, vdofs);
 	  g.FaceNbrData().GetSubVector(vdofs, g_loc);
 	}
-
+      
       for (int c = 0; c < vdim; c++)
 	{
 	  u.SetDataAndSize(g_loc.GetData() + c*dof, dof);
-
+	  
 	  t = u;
 	  int factorial = 1;
 	  for (int i = 1; i < nterms + 1; i++)
@@ -149,9 +152,9 @@ namespace mfem
 		}
 	      u.Add(1.0/double(factorial), t);
 	    }
-
-	  el_tr->SetIntPoint(&ip);
-	  el.CalcPhysShape(*el_tr, t);
+	  
+	  el_tr.SetIntPoint(&ip);
+	  el.CalcPhysShape(el_tr, t);
 	  shifted_vec(c) = t * u;
 	}
     }
@@ -864,51 +867,15 @@ namespace mfem
 	  elvect.SetSize(l2dofs_cnt*2);
 	  elvect = 0.0;
 	  Vector te_shape_el1(l2dofs_cnt), te_shape_el2(l2dofs_cnt), nor(dim);
+	  
 	  te_shape_el1 = 0.0;
 	  te_shape_el2 = 0.0;
 	  nor = 0.0;
 	  
-	  ParFiniteElementSpace * pfes = Vnpt_gf->ParFESpace();
 	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	  const int elementNo_el1 = Trans_el1.ElementNo;
-	  Vector loc_data_el1;
-	  Array<int> vdofs_el1;
-	  DofTransformation * doftrans_el1 = pfes->GetElementVDofs(elementNo_el1, vdofs_el1);
-	  Vnpt_gf->GetSubVector(vdofs_el1, loc_data_el1);
-	  if (doftrans_el1)
-	    {
-	      doftrans_el1->InvTransformPrimal(loc_data_el1);
-	    }
-	  
+	 
 	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
-	  const int elementNo_el2 = Trans_el2.ElementNo;
-	  Vector loc_data_el2;
-	  int nbr_el_no = elementNo_el2 - pfes->GetParMesh()->GetNE();
-	  if (nbr_el_no >= 0)
-	    {
-	      int height = pfes->GetVSize();
-	      Array<int> vdofs_el2;      
-	      pfes->GetFaceNbrElementVDofs(nbr_el_no, vdofs_el2);
-	      
-	      for (int j = 0; j < vdofs_el2.Size(); j++)
-		{
-		  if (vdofs_el2[j] >= 0)
-		    {
-		      vdofs_el2[j] += height;
-		    }
-		  else
-		    {
-		      vdofs_el2[j] -= height;
-		    }
-		}
-	      Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
-	    }
-	  else{
-	    Array<int> vdofs_el2;
-	    DofTransformation * doftrans_el2 = pfes->GetElementVDofs(elementNo_el2, vdofs_el2); 
-	    Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
-	  }
-
+	  
 	  for (int q = 0; q  < nqp_face; q++)
 	    {
 	      te_shape_el1 = 0.0;
@@ -921,22 +888,23 @@ namespace mfem
 	      const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
 	      const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
 	    
-	      double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
-	      double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
-	      double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
-	      double gamma_1 =  volumeFraction_el1/sum_volFrac;
-	      double gamma_2 =  volumeFraction_el2/sum_volFrac;
-	    
 	      CalcOrtho(Tr.Jacobian(), nor);
 	      double nor_norm = 0.0;
 	      for (int s = 0; s < dim; s++){
 		nor_norm += nor(s) * nor(s);
 	      }
 	      nor_norm = sqrt(nor_norm);
-	      
+
+	      double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
+	      double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
+	      double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
+	      double gamma_1 =  volumeFraction_el1/sum_volFrac;
+	      double gamma_2 =  volumeFraction_el2/sum_volFrac;
+
+	      // std::cout << " g amma " <<  gamma_1 << " gamma " << gamma_2 << std::endl;
 	      el.CalcShape(eip_el1, te_shape_el1);
 	      el2.CalcShape(eip_el2, te_shape_el2);
-	
+      
 	      double pressure_el1 = pface_gf.GetValue(Trans_el1,eip_el1);
 	      double pressure_el2 = pface_gf.GetValue(Trans_el2,eip_el2);
 	     
@@ -945,26 +913,9 @@ namespace mfem
 	      stress_el2 = 0.0;
 	      ComputeStress(pressure_el1,dim,stress_el1);
 	      ComputeStress(pressure_el2,dim,stress_el2);
-	
-	      /////////////      
-	      int h1dofs_cnt = 0.0;
-	      Vector velocity_shape_el1, gradUResD_el1;
-	      DenseMatrix nodalGrad_el1, gradUResDirD_el1, taylorExp_el1;
-	      const FiniteElement *FElem = pfes->GetFE(elementNo_el1);
-	      h1dofs_cnt = FElem->GetDof();
-	      velocity_shape_el1.SetSize(h1dofs_cnt);
-	      velocity_shape_el1 = 0.0;
-	      FElem->CalcShape(eip_el1, velocity_shape_el1);
-	      FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
-	      
-	      gradUResD_el1.SetSize(h1dofs_cnt);
-	      gradUResDirD_el1.SetSize(h1dofs_cnt);
-	      taylorExp_el1.SetSize(h1dofs_cnt);
-	      
-	      gradUResD_el1 = 0.0;
-	      gradUResDirD_el1 = 0.0;
-	      taylorExp_el1 = 0.0;
-	      
+
+	      /////////////
+
 	      /////
 	      Vector D_el1(dim);
 	      Vector tN_el1(dim);
@@ -972,97 +923,22 @@ namespace mfem
 	      tN_el1 = 0.0; 
 	      vD->Eval(D_el1, Trans_el1, eip_el1);
 	      vN->Eval(tN_el1, Trans_el1, eip_el1);
-	      /////
 
 	      double nTildaDotN = 0.0;
 	      for (int s = 0; s < dim; s++){
 		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
 	      }
 		
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int j = 0; j < dim; j++){
-		    gradUResDirD_el1(s,k) += nodalGrad_el1(k + j * h1dofs_cnt, s) * D_el1(j);
-		  }
-		}
-	      }
-		
-	      DenseMatrix tmp_el1(h1dofs_cnt);
-	      DenseMatrix dummy_tmp_el1(h1dofs_cnt);
-	      tmp_el1 = gradUResDirD_el1;
-	      taylorExp_el1 = gradUResDirD_el1;
-	      dummy_tmp_el1 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape_el1(s);  
-		}
-	      }
-		
-	      for ( int p = 1; p < nTerms; p++){
-		dummy_tmp_el1 = 0.0;
-		taylorExp_el1 = 0.0;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    for (int r = 0; r < h1dofs_cnt; r++){
-		      taylorExp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s) * (1.0/factorial(p+1));
-		      dummy_tmp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s);
-		    }
-		  }
-		}
-		tmp_el1 = dummy_tmp_el1;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape_el1(s);  
-		  }
-		}
-	      }
-		
-	      ////
-	      velocity_shape_el1 += gradUResD_el1;
-	      ////
-		
-	      Vector vShape_el1(dim);
-	      vShape_el1 = 0.0;
-	      for (int k = 0; k < dim; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  vShape_el1(k) += velocity_shape_el1(s) * loc_data_el1(s + h1dofs_cnt * k);
-		}
-	      }
-	  
+	      Vector gradv_d_el1(dim);
+	      gradv_d_el1 = 0.0;
+	      get_shifted_value(*Vnpt_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1);
+
 	      double vDotn_el1 = 0.0;
 	      for (int s = 0; s < dim; s++)
-		{
-		  vDotn_el1 += vShape_el1(s) * tN_el1(s);
-		}
-	
+	       {
+		 vDotn_el1 += gradv_d_el1(s) * tN_el1(s);
+	       }
 	      ////////////////	
-	      Vector velocity_shape_el2, gradUResD_el2;
-	      DenseMatrix nodalGrad_el2, gradUResDirD_el2, taylorExp_el2;
-	      if (nbr_el_no >= 0){
-		const FiniteElement *FElem = pfes->GetFaceNbrFE(nbr_el_no);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape_el2.SetSize(h1dofs_cnt);
-		velocity_shape_el2 = 0.0;
-		FElem->CalcShape(eip_el2, velocity_shape_el2);
-		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
-	      }
-	      else {
-		const FiniteElement *FElem = pfes->GetFE(elementNo_el2);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape_el2.SetSize(h1dofs_cnt);
-		velocity_shape_el2 = 0.0;
-		FElem->CalcShape(eip_el2, velocity_shape_el2);
-		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
-	      }
-		
-	      gradUResD_el2.SetSize(h1dofs_cnt);
-	      gradUResDirD_el2.SetSize(h1dofs_cnt);
-	      taylorExp_el2.SetSize(h1dofs_cnt);
-		
-	      gradUResD_el2 = 0.0;
-	      gradUResDirD_el2 = 0.0;
-	      taylorExp_el2 = 0.0;
-		
 	      /////
 	      Vector D_el2(dim);
 	      Vector tN_el2(dim);
@@ -1071,61 +947,18 @@ namespace mfem
 	      vD->Eval(D_el2, Trans_el2, eip_el2);
 	      vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
-		
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int j = 0; j < dim; j++){
-		    gradUResDirD_el2(s,k) += nodalGrad_el2(k + j * h1dofs_cnt, s) * D_el2(j);
-		  }
-		}
-	      }
-		
-	      DenseMatrix tmp_el2(h1dofs_cnt);
-	      DenseMatrix dummy_tmp_el2(h1dofs_cnt);
-	      tmp_el2 = gradUResDirD_el2;
-	      taylorExp_el2 = gradUResDirD_el2;
-	      dummy_tmp_el2 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape_el2(s);  
-		}
-	      }
-		
-	      for ( int p = 1; p < nTerms; p++){
-		dummy_tmp_el2 = 0.0;
-		taylorExp_el2 = 0.0;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    for (int r = 0; r < h1dofs_cnt; r++){
-		      taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
-		      dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
-		    }
-		  }
-		}
-		tmp_el2 = dummy_tmp_el2;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape_el2(s);  
-		  }
-		}
-	      }
-		
-	      ////
-	      velocity_shape_el2 += gradUResD_el2;
-	      //
-		
-	      Vector vShape_el2(dim);
-	      vShape_el2 = 0.0;
-	      for (int k = 0; k < dim; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  vShape_el2(k) += velocity_shape_el2(s) * loc_data_el2(s + h1dofs_cnt * k);
-		}
-	      }
+	      
+	      Vector gradv_d_el2(dim);
+	      gradv_d_el2 = 0.0;
+	      //	      std::cout << " first elem " << Trans_el1.ElementNo << " second elem " << Trans_el2.ElementNo << std::endl;
+	      get_shifted_value(*Vnpt_gf, Trans_el2.ElementNo, eip_el2, D_el1, nTerms, gradv_d_el2);
+   
 	      double vDotn_el2 = 0.0;
 	      for (int s = 0; s < dim; s++)
-		{
-		  vDotn_el2 += vShape_el2(s) * tN_el1(s);
-		}
+	       {
+		 vDotn_el2 += gradv_d_el2(s) * tN_el1(s);
+	       }
+			 		 
 	      ///////	
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{

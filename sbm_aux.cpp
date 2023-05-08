@@ -54,10 +54,17 @@ void Circle_Dist(const Vector &x, Vector &D){
   center(0) = 0.5;
   center(1) = 0.5;
   double r = pow(pow(x(0)-center(0),2.0)+pow(x(1)-center(1),2.0),0.5);
-  double distX = ((x(0)-center(0))/r)*(radius-r);
-  double distY = ((x(1)-center(1))/r)*(radius-r);
-  D(0) = distX;
-  D(1) = distY;
+  if (r != 0.0){
+    double distX = ((x(0)-center(0))/r)*(radius-r);
+    double distY = ((x(1)-center(1))/r)*(radius-r);
+    D(0) = distX;
+    D(1) = distY;
+  }
+  else {
+    D(0) = 0.0;
+    D(1) = 0.0;
+  }
+  
 }
 
 // Unit normal of circle of radius 0.2 - centered at 0.5, 0.5
@@ -68,16 +75,22 @@ void Circle_Normal(const Vector &x, Vector &tN){
   center(1) = 0.5;
   
   double r = pow(pow(x(0)-center(0),2.0)+pow(x(1)-center(1),2.0),0.5);
-  double distX = ((x(0)-center(0))/r)*(radius-r);
-  double distY = ((x(1)-center(1))/r)*(radius-r);
-  double normD = sqrt(distX * distX + distY * distY);
-  if (r < radius){
-    tN(0) = -distX / normD;
-    tN(1) = -distY / normD;
-  }
-  else if (r > radius){
-    tN(0) = distX / normD;
-    tN(1) = distY / normD;
+  if (r != 0.0){
+    double distX = ((x(0)-center(0))/r)*(radius-r);
+    double distY = ((x(1)-center(1))/r)*(radius-r);
+    double normD = sqrt(distX * distX + distY * distY);
+    if (r < radius){
+      tN(0) = -distX / normD;
+      tN(1) = -distY / normD;
+    }
+    else if (r > radius){
+      tN(0) = distX / normD;
+      tN(1) = distY / normD;
+    }
+    else{
+      tN(0) = (center(0) - x(0))/radius;
+      tN(1) = (center(1) - x(1))/radius;
+    }
   }
   else{
     tN(0) = (center(0) - x(0))/radius;
