@@ -81,17 +81,9 @@ namespace mfem
 	UnitVectorProjections_el2[1] = &tangent1GradU_el2;
 	UnitVectorProjections_el2[2] = &tangent2GradU_el2;	    	 	
       }
-	  
-      const IntegrationRule *ir = IntRule;
-      if (ir == NULL)
-	{
-	  // a simple choice for the integration order; is this OK?
-	  const int order = 5 * max(fe.GetOrder(), 1);
-	  //	  const int order = 25;
-	  ir = &IntRules.Get(Tr.GetGeometryType(), order);	  
-	}
-      
-      const int nqp_face = ir->GetNPoints();
+
+      const int nqp_face = IntRule->GetNPoints();
+
       ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
       ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
       DenseMatrix nodalGrad_el1;
@@ -129,7 +121,7 @@ namespace mfem
 	  UnitVectorProjectionsAssembled_el1_tmp = 0.0;
 	  UnitVectorProjectionsAssembled_el2_tmp = 0.0;
 	 
-	  const IntegrationPoint &ip_f = ir->IntPoint(q);
+	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
 	  // Set the integration point in the face and the neighboring elements
 	  Tr.SetAllIntPoints(&ip_f);
 	  const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();

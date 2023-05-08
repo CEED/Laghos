@@ -475,7 +475,9 @@ namespace mfem
 						const Vector &S_init,
 						const double dt) const
     {
-      
+      //  UpdateAlpha(*alphaCut, H1, *level_set_gf);
+      // alphaCut->ExchangeFaceNbrData();	
+           
       //Compute quadrature quantities
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
@@ -756,7 +758,7 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ) {
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE)/* ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ) {
 	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
 		Jpr_b[z].SetSize(dim, dim, nqp);
 		e.GetValues(z_id, ir, e_vals);
@@ -783,7 +785,7 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ){
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) /*||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ){
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)

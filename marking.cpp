@@ -31,16 +31,8 @@ namespace mfem
     const double eps = 1e-16;
     auto outside_of_domain = [&](double value)
     {
-      if (include_cut_cell)
-	{
-	  // Points on the zero LS are considered outside the domain.
-	  return (value - eps < 0.0);
-	}
-      else
-	{
-	  // Points on the zero LS are considered inside the domain.
-	  return (value + eps < 0.0);
-	}
+      // Points on the zero LS are considered outside the domain.
+      return (value - eps < 0.0);
     };
     ParFiniteElementSpace * ls_fes = ls_func.ParFESpace();
     Vector vals;
@@ -67,14 +59,14 @@ namespace mfem
 	    cutCount++;	
 	    pmesh.SetAttribute(i, SBElementType::CUT);
 	    mat_attr(i) = SBElementType::CUT;		
-	    if (include_cut_cell){
+	    //	    if (include_cut_cell){
 	      Array<int> dofs;
 	      pfes_sltn->GetElementVDofs(i, dofs);
 	      for (int k = 0; k < dofs.Size(); k++)
 		{
 		  ess_inactive[dofs[k]] = 0;
 		}
-	    }
+	      // }
 	  }
 	else // inside
 	  {
