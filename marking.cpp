@@ -60,12 +60,12 @@ namespace mfem
 	    pmesh.SetAttribute(i, SBElementType::CUT);
 	    mat_attr(i) = SBElementType::CUT;		
 	    //	    if (include_cut_cell){
-	      Array<int> dofs;
-	      pfes_sltn->GetElementVDofs(i, dofs);
-	      for (int k = 0; k < dofs.Size(); k++)
-		{
-		  ess_inactive[dofs[k]] = 0;
-		}
+	    Array<int> dofs;
+	    pfes_sltn->GetElementVDofs(i, dofs);
+	    for (int k = 0; k < dofs.Size(); k++)
+	      {
+		ess_inactive[dofs[k]] = 0;
+	      }
 	      // }
 	  }
 	else // inside

@@ -188,9 +188,9 @@ namespace mfem
 
 	  for (int nT = 1; nT <= nTerms; nT++){
 	    penaltyParameter /= (double)nT;
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * qdata.normalVelocityPenaltyScaling * penaltyParameter;	
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
 	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    weighted_h = pow(weighted_h,2*nT);	    
+	    weighted_h = pow(weighted_h,2*nT+1);	    
 
 	    if (nT == 1){
 	      for (int i = 0; i < h1dofs_cnt; i++)

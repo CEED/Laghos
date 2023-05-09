@@ -52,7 +52,7 @@ namespace mfem
 	}
       else
 	{
-	  //  pfes_e->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
+	  //	  pfes_e->GetParMesh()->GetFaceNbrElementTransformation(e_id - NE, &el_tr);
 	}
      
       DenseMatrix grad_phys;
@@ -1367,7 +1367,7 @@ namespace mfem
 	    }
 	    
 	    double penaltyVal = 0.0;
-	    penaltyVal =  4.0 * penaltyParameter * globalmax_rho ;
+	    penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
 
 	    fe.CalcShape(eip_el1, shape_el1);
 	    shift_shape(h1, h1, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, shape_el1);
@@ -1385,10 +1385,10 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
 	
 			  }
 		      }

@@ -418,13 +418,13 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -432,7 +432,7 @@ namespace mfem
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
 
-	ghost_nvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, ghostPenaltyCoefficient, numberGhostTerms);
+	ghost_nvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
 
@@ -475,8 +475,8 @@ namespace mfem
 						const Vector &S_init,
 						const double dt) const
     {
-      //  UpdateAlpha(*alphaCut, H1, *level_set_gf);
-      // alphaCut->ExchangeFaceNbrData();	
+      UpdateAlpha(*alphaCut, H1, *level_set_gf);
+      alphaCut->ExchangeFaceNbrData();	
            
       //Compute quadrature quantities
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
