@@ -418,13 +418,13 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -435,7 +435,6 @@ namespace mfem
 	ghost_nvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
-
       }
 
       Mv.Assemble();
@@ -470,14 +469,20 @@ namespace mfem
       beemb_qdata_is_current = false;
     }
 
+    void LagrangianHydroOperator::UpdateLevelSet(const Vector &S){
+      if (useEmbedded){
+	UpdateAlpha(*alphaCut, H1, *level_set_gf);
+	alphaCut->ExchangeFaceNbrData();	
+      }
+
+    }
+    
     void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 						Vector &dS_dt,
 						const Vector &S_init,
 						const double dt) const
     {
-      UpdateAlpha(*alphaCut, H1, *level_set_gf);
-      alphaCut->ExchangeFaceNbrData();	
-           
+
       //Compute quadrature quantities
       UpdateDensity(qdata.rho0DetJ0, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
@@ -758,7 +763,7 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE)/* ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ) {
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ) {
 	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
 		Jpr_b[z].SetSize(dim, dim, nqp);
 		e.GetValues(z_id, ir, e_vals);
@@ -785,7 +790,7 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) /*||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ){
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ){
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)
@@ -968,6 +973,8 @@ namespace mfem
     // -- 1.
     // S is S0.
     hydro_oper->UpdateMesh(S);
+    hydro_oper->UpdateLevelSet(S);
+   
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
