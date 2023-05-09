@@ -55,6 +55,24 @@ namespace mfem
 				    FaceElementTransformations &Tr,
 				    DenseMatrix &elmat);
   };
+    
+    class GhostScalarFullGradPenaltyIntegrator : public BilinearFormIntegrator
+  {
+  private:
+    const QuadratureDataGL &qdata;
+    ParMesh *pmesh;
+    const double &globalmax_rho;
+    double penaltyParameter; 
+    int nTerms;
+    double dupPenaltyParameter;
+  public:
+    GhostScalarFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
+    virtual void AssembleFaceMatrix(const FiniteElement &fe,
+				    const FiniteElement &fe2,
+				    FaceElementTransformations &Tr,
+				    DenseMatrix &elmat);
+  };
+
   }
 }
 

@@ -179,6 +179,7 @@ namespace mfem
       rho0DetJ0face_gf(rho0DetJ0face_gf),
       Jac0invface_gf(Jac0invface_gf),
       Mv(&H1), Mv_spmat_copy(),
+      Me_mat(&L2),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
       GLIntRules(0, Quadrature1D::GaussLobatto),
@@ -302,16 +303,22 @@ namespace mfem
       // Standard local assembly and inversion for energy mass matrices.
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
-      WeightedMassIntegrator mi(*alphaCut, rho0_gf, &ir);
+      WeightedMassIntegrator *mi = new WeightedMassIntegrator(*alphaCut, rho0_gf, &ir);
       for (int e = 0; e < NE; e++)
 	{
 	  DenseMatrixInverse inv(&Me(e));
 	  const FiniteElement &fe = *L2.GetFE(e);
 	  ElementTransformation &Tr = *L2.GetElementTransformation(e);
-	  mi.AssembleElementMatrix(fe, Tr, Me(e));
+	  mi->AssembleElementMatrix(fe, Tr, Me(e));
 	  inv.Factor();
 	  inv.GetInverseMatrix(Me_inv(e));
 	}
+      Me_mat.AddDomainIntegrator(mi, ess_elem);
+      ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms-1);
+      ghost_emi->SetIntRule(&b_ir);
+      Me_mat.AddInteriorFaceIntegrator(ghost_emi);
+      
+      
       // Standard assembly for the velocity mass matrix.
       WeightedVectorMassIntegrator *vmi = new WeightedVectorMassIntegrator(*alphaCut, rho0_gf, &ir);
       Mv.AddDomainIntegrator(vmi, ess_elem);
@@ -628,6 +635,7 @@ namespace mfem
 	    de.SetSubVector(l2dofs, loc_de);
 	  }
 	}
+
       delete e_source;
     }
 

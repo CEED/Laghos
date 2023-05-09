@@ -90,6 +90,8 @@ namespace mfem
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
       mutable ParBilinearForm Mv;
+      mutable ParBilinearForm Me_mat;
+    
       SparseMatrix Mv_spmat_copy;
       DenseTensor Me, Me_inv;
       // Integration rule for all assemblies.
@@ -127,6 +129,7 @@ namespace mfem
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
       GhostStressFullGradPenaltyIntegrator *ghost_nvmi;
+      GhostScalarFullGradPenaltyIntegrator *ghost_emi;
       
       Dist_Level_Set_Coefficient *wall_dist_coef;
       // in case we are using level set to get distance and normal vectors
