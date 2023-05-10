@@ -66,7 +66,12 @@ namespace mfem
 	      {
 		ess_inactive[dofs[k]] = 0;
 	      }
-	      // }
+	    Array<int> dofs_p;
+	    sfes_sltn->GetElementVDofs(i, dofs_p);
+	    for (int k = 0; k < dofs_p.Size(); k++)
+	      {
+		ess_inactive_p[dofs_p[k]] = 0;
+	      }
 	  }
 	else // inside
 	  {
@@ -78,6 +83,12 @@ namespace mfem
 	    for (int k = 0; k < dofs.Size(); k++)
 	      {
 		ess_inactive[dofs[k]] = 0;	       
+	      }
+	    Array<int> dofs_p;
+	    sfes_sltn->GetElementVDofs(i, dofs_p);
+	    for (int k = 0; k < dofs_p.Size(); k++)
+	      {
+		ess_inactive_p[dofs_p[k]] = 0;	       
 	      }
 	  }
       }
@@ -140,11 +151,18 @@ namespace mfem
     for (int i = 0; i < ess_inactive.Size() ; i++) { ess_inactive[i] += 1; }
     pfes_sltn->Synchronize(ess_inactive);
     for (int i = 0; i < ess_inactive.Size() ; i++) { ess_inactive[i] -= 1; }
+    for (int i = 0; i < ess_inactive_p.Size() ; i++) { ess_inactive_p[i] += 1; }
+    sfes_sltn->Synchronize(ess_inactive_p);
+    for (int i = 0; i < ess_inactive_p.Size() ; i++) { ess_inactive_p[i] -= 1; }
+    
     pmesh.SetAttributes();
   }
 
   Array<int>& ShiftedFaceMarker::GetEss_Vdofs(){
     return ess_inactive;
+  }
+  Array<int>& ShiftedFaceMarker::GetEss_Pdofs(){
+    return ess_inactive_p;
   }
 
 }

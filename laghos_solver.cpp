@@ -121,7 +121,7 @@ namespace mfem
 						     const bool useEmb, const int gS,
 						     int nT, bool fP) :
       TimeDependentOperator(size),
-      H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1),
+      H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1), L2c(L2.GetParMesh(), L2.FEColl(), 1), 
       alpha_fes(NULL), alpha_fec(NULL),
       pmesh(H1.GetParMesh()),
       H1Vsize(H1.GetVSize()),
@@ -134,7 +134,7 @@ namespace mfem
       h1dofs_cnt(H1.GetFE(0)->GetDof()),
       source_type(source), cfl(cfl),
       numberGhostTerms(numberGhostTerms),
-      ghostPenaltyCoefficient(ghostPenaltyCoefficient),			     
+      ghostPenaltyCoefficient(ghostPenaltyCoefficient),
       use_viscosity(visc),
       use_vorticity(vort),
       cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
@@ -151,6 +151,8 @@ namespace mfem
       shifted_e_bfi(NULL),
       shifted_nvmi(NULL),
       ghost_nvmi(NULL),
+      ghost_emi(NULL),
+      ghost_gemi(NULL),
       wall_dist_coef(NULL),
       distance_vec_space(NULL),
       distance(NULL),
@@ -208,6 +210,8 @@ namespace mfem
       ShiftedEnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
       B(H1c.GetTrueVSize()),
+      X_e(L2c.GetTrueVSize()),
+      B_e(L2c.GetTrueVSize()),
       one(L2Vsize),
       rhs(H1Vsize),
       b_rhs(H1Vsize),
@@ -267,9 +271,8 @@ namespace mfem
 	lsfes->ExchangeFaceNbrData();
 	// Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
 	// We need to define ess_tdofs and ess_vdofs, but they will be kept empty
-	Array<int> ess_vdofs;
 	level_set_gf = new ParGridFunction(lsfes);
-	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, *alpha_fes, 0);
+	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, L2, *alpha_fes, 0);
 	wall_dist_coef = new Dist_Level_Set_Coefficient(geometricShape);
 	
 	level_set_gf->ProjectCoefficient(*wall_dist_coef);
@@ -279,10 +282,17 @@ namespace mfem
 	// Setup the class to mark all elements based on whether they are located
 	// inside or outside the true domain, or intersected by the true boundary.
 	analyticalSurface->MarkElements(*level_set_gf);
-	
+
+	Array<int> ess_vdofs;
 	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
 	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
 	H1.MarkerToList(ess_vdofs, ess_tdofs);
+
+	Array<int> ess_pdofs;
+	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
+	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
+	L2.MarkerToList(ess_pdofs, ess_edofs);
+	
 	//	if (useAnalyticalShape){
 	dist_vec = new Dist_Vector_Coefficient(dim, geometricShape);
 	normal_vec = new Normal_Vector_Coefficient(dim, geometricShape);
@@ -304,7 +314,7 @@ namespace mfem
       // 'Me' is used in the computation of the internal energy
       // which is used twice: once at the start and once at the end of the run.
       WeightedMassIntegrator *mi = new WeightedMassIntegrator(*alphaCut, rho0_gf, &ir);
-      for (int e = 0; e < NE; e++)
+      /* for (int e = 0; e < NE; e++)
 	{
 	  DenseMatrixInverse inv(&Me(e));
 	  const FiniteElement &fe = *L2.GetFE(e);
@@ -312,12 +322,8 @@ namespace mfem
 	  mi->AssembleElementMatrix(fe, Tr, Me(e));
 	  inv.Factor();
 	  inv.GetInverseMatrix(Me_inv(e));
-	}
+	}*/
       Me_mat.AddDomainIntegrator(mi, ess_elem);
-      ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms-1);
-      ghost_emi->SetIntRule(&b_ir);
-      Me_mat.AddInteriorFaceIntegrator(ghost_emi);
-      
       
       // Standard assembly for the velocity mass matrix.
       WeightedVectorMassIntegrator *vmi = new WeightedVectorMassIntegrator(*alphaCut, rho0_gf, &ir);
@@ -391,7 +397,7 @@ namespace mfem
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
- 
+
       
       fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
@@ -442,8 +448,18 @@ namespace mfem
 	ghost_nvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
-      }
 
+	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 2.0, numberGhostTerms-1);
+	ghost_emi->SetIntRule(&b_ir);
+	Me_mat.AddInteriorFaceIntegrator(ghost_emi);
+	
+	ghost_gemi = new GhostGradScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 1.0, numberGhostTerms-1);
+	ghost_gemi->SetIntRule(&b_ir);
+	Me_mat.AddInteriorFaceIntegrator(ghost_gemi);    
+      
+      }
+      Me_mat.Assemble();
+      
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
     }
@@ -622,7 +638,7 @@ namespace mfem
       if (e_source) { e_rhs += *e_source; }
       Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
       
-      for (int e = 0; e < NE; e++)
+      /* for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);	 
 	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
@@ -634,8 +650,23 @@ namespace mfem
 	    loc_de = 0.0;
 	    de.SetSubVector(l2dofs, loc_de);
 	  }
-	}
+	}*/
 
+      HypreParMatrix A;
+      Me_mat.FormLinearSystem(ess_edofs, de, e_rhs, A, X_e, B_e);
+      CGSolver cg(L2.GetParMesh()->GetComm());
+      HypreSmoother prec;
+      prec.SetType(HypreSmoother::Jacobi, 1);
+      cg.SetPreconditioner(prec);
+      cg.SetOperator(A);
+      cg.SetRelTol(cg_rel_tol);
+      cg.SetAbsTol(0.0);
+      cg.SetMaxIter(cg_max_iter);
+      cg.SetPrintLevel(-1);
+      cg.Mult(B_e, X_e);
+      Me_mat.RecoverFEMSolution(X_e, e_rhs, de);
+ 
+      
       delete e_source;
     }
 

@@ -23,6 +23,7 @@ class ShiftedFaceMarker
 protected:
    ParMesh &pmesh;                    // Mesh whose elements have to be marked.
    ParFiniteElementSpace *pfes_sltn;  // FESpace associated with the solution.
+   ParFiniteElementSpace *sfes_sltn;  // FESpace associated with the pressure.
 
    // Indicates whether cut-cells will be included in assembly.
    const bool include_cut_cell;
@@ -31,6 +32,7 @@ protected:
 
    // Indicates inactive dofs 
    Array<int> ess_inactive;
+   Array<int> ess_inactive_p;
 
   // Piecewise constant material attributes.
   ParGridFunction mat_attr;
@@ -44,13 +46,16 @@ public:
    /// to discern between different level-sets.
   enum SBElementType {INSIDE = 1, OUTSIDE = 3, CUT = 2};
 
-  ShiftedFaceMarker(ParMesh &pm, ParFiniteElementSpace &pfes, ParFiniteElementSpace &mat_fes, bool include_cut_cell_)
-      : pmesh(pm), pfes_sltn(&pfes),
+  ShiftedFaceMarker(ParMesh &pm, ParFiniteElementSpace &pfes, ParFiniteElementSpace &sfes, ParFiniteElementSpace &mat_fes, bool include_cut_cell_)
+    : pmesh(pm), pfes_sltn(&pfes), sfes_sltn(&sfes), 
         include_cut_cell(include_cut_cell_), initial_marking_done(false),
         level_set_index(0), mat_attr(&mat_fes)
   {
     ess_inactive.SetSize(pfes_sltn->GetVSize());
     ess_inactive = -1;
+    ess_inactive_p.SetSize(sfes_sltn->GetVSize());
+    ess_inactive_p = -1;
+  
     mat_attr = 0.0;
   }
 
@@ -65,6 +70,8 @@ public:
   /// @a include_cut_cell = false) minus the dofs that are located on the
   /// surrogate boundary.
   Array<int>& GetEss_Vdofs();
+  
+  Array<int>& GetEss_Pdofs();
   
 };
 

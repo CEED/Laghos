@@ -49,6 +49,7 @@ namespace mfem
     protected:
       ParFiniteElementSpace &H1, &L2, &P_L2, &PFace_L2;
       mutable ParFiniteElementSpace H1c;
+      mutable ParFiniteElementSpace L2c;
       mfem::ParFiniteElementSpace* alpha_fes;
       mfem::L2_FECollection* alpha_fec;     
       ParMesh *pmesh;
@@ -59,6 +60,8 @@ namespace mfem
       // Reference to the current mesh configuration.
       mutable ParGridFunction x_gf;
       Array<int> ess_tdofs;
+      Array<int> ess_edofs;
+     
       const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
       const double cfl;
       const int numberGhostTerms;
@@ -112,7 +115,7 @@ namespace mfem
       mutable ParLinearForm EnergyBoundaryForce;
       mutable ParLinearForm ShiftedVelocityBoundaryForce;
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
-      mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs;
+      mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
       const double penaltyParameter;
       const double nitscheVersion;
       const bool useEmbedded;
@@ -130,6 +133,7 @@ namespace mfem
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
       GhostStressFullGradPenaltyIntegrator *ghost_nvmi;
       GhostScalarFullGradPenaltyIntegrator *ghost_emi;
+      GhostGradScalarFullGradPenaltyIntegrator *ghost_gemi;
       
       Dist_Level_Set_Coefficient *wall_dist_coef;
       // in case we are using level set to get distance and normal vectors

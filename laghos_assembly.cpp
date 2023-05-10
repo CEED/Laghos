@@ -921,8 +921,10 @@ namespace mfem
 	      Vector D_el1(dim);
 	      Vector tN_el1(dim);
 	      D_el1 = 0.0;
-	      tN_el1 = 0.0; 
+	      tN_el1 = 0.0;
+	      // if (Tr.Attribute == 77){
 	      vD->Eval(D_el1, Trans_el1, eip_el1);
+		// }
 	      vN->Eval(tN_el1, Trans_el1, eip_el1);
 
 	      double nTildaDotN = 0.0;
@@ -945,7 +947,9 @@ namespace mfem
 	      Vector tN_el2(dim);
 	      D_el2 = 0.0;
 	      tN_el2 = 0.0;
-	      vD->Eval(D_el2, Trans_el2, eip_el2);
+	      // if (Tr.Attribute == 77){
+		vD->Eval(D_el2, Trans_el2, eip_el2);
+		// }
 	      vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
 	      
@@ -1355,8 +1359,10 @@ namespace mfem
 	    Vector D_el1(dim);
 	    Vector tN_el1(dim);
 	    D_el1 = 0.0;
-	    tN_el1 = 0.0; 	    
-	    vD->Eval(D_el1, Trans_el1, eip_el1);
+	    tN_el1 = 0.0;
+	    // if (Tr.Attribute == 77){
+	      vD->Eval(D_el1, Trans_el1, eip_el1);
+	      // }
 	    vN->Eval(tN_el1, Trans_el1, eip_el1);
 	    /////
 	    
