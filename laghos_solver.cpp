@@ -423,7 +423,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, *alphaCut, 2.0 * penaltyParameter * C_I_V, order_v, rhoface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
       Mv.AddBdrFaceIntegrator(nvmi);
