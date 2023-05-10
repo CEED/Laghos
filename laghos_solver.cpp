@@ -437,7 +437,7 @@ namespace mfem
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -449,11 +449,11 @@ namespace mfem
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
 
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 2.0, numberGhostTerms-1);
+	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 5.0, numberGhostTerms-1);
 	ghost_emi->SetIntRule(&b_ir);
 	Me_mat.AddInteriorFaceIntegrator(ghost_emi);
 	
-	ghost_gemi = new GhostGradScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 1.0, numberGhostTerms-1);
+	ghost_gemi = new GhostGradScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 5.0, numberGhostTerms-1);
 	ghost_gemi->SetIntRule(&b_ir);
 	Me_mat.AddInteriorFaceIntegrator(ghost_gemi);    
       
