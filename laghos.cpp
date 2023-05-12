@@ -237,18 +237,22 @@ int main(int argc, char *argv[])
   // - H1 (Gauss-Lobatto, continuous) for position and velocity.
   // - L2 (Bernstein, discontinuous) for specific internal energy.
   // - L2 (Gauss-Legendre, discontinuous) for pressure.
-  L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
+  L2_FECollection L2FEC(order_e, dim, BasisType::GaussLobatto);
   H1_FECollection H1FEC(order_v, dim);
   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
   // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
   int quadRule = (order_q > 0) ? order_q : 3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1;
   L2_FECollection P_L2FEC((int)(quadRule*0.5), dim, BasisType::GaussLegendre);
+  //  L2_FECollection P_L2FEC(order_e, dim, BasisType::GaussLobatto);
+
   ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
 
   // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
   int quadRule_face =  H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW();
   L2_FECollection PFace_L2FEC((int)(3.0*quadRule_face), dim, BasisType::GaussLobatto);
+  // L2_FECollection PFace_L2FEC(order_e, dim, BasisType::GaussLobatto);
+
   ParFiniteElementSpace PFace_L2FESpace(pmesh, &PFace_L2FEC);
   ParFiniteElementSpace PFaceVector_L2FESpace(pmesh, &PFace_L2FEC, pmesh->Dimension()*pmesh->Dimension() );
 
