@@ -109,6 +109,7 @@ namespace mfem
 						     const int source,
 						     const double cfl,
 						     const int numberGhostTerms,
+						     const int numberEnergyGhostTerms,
 						     const int ghostPenaltyCoefficient,
 						     const bool visc,
 						     const bool vort,
@@ -134,6 +135,7 @@ namespace mfem
       h1dofs_cnt(H1.GetFE(0)->GetDof()),
       source_type(source), cfl(cfl),
       numberGhostTerms(numberGhostTerms),
+      numberEnergyGhostTerms(numberEnergyGhostTerms),
       ghostPenaltyCoefficient(ghostPenaltyCoefficient),
       use_viscosity(visc),
       use_vorticity(vort),
@@ -448,7 +450,7 @@ namespace mfem
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
 
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms-1);
+	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
 	ghost_emi->SetIntRule(&b_ir);
 	Me_mat.AddInteriorFaceIntegrator(ghost_emi);
       }

@@ -89,12 +89,13 @@ int main(int argc, char *argv[])
   bool gfprint = false;
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
-  double blast_position[] = {0.0, 0.0, 0.0};
+  double blast_position[] = {0.0, 0.5, 0.0};
   bool useEmbedded = false;
   int geometricShape = 0;
   int nTerms = 1; 
   bool fullPenalty = false;
   int numberGhostTerms = 1;
+  int numberEnergyGhostTerms = 1;
   double ghostPenaltyCoefficient = 1.0;
   
   OptionsParser args(argc, argv);
@@ -156,6 +157,9 @@ int main(int argc, char *argv[])
 		 "Use full or first order for SBM penalty.");
   args.AddOption(&numberGhostTerms, "-nGT", "--numberGhostTerms",
                  "Number of terms in the  ghost penalty operator.");
+  args.AddOption(&numberEnergyGhostTerms, "-nEGT", "--numberEnergyGhostTerms",
+		  "Number of terms in the  energy equation ghost penalty operator.");
+ 
   args.AddOption(&ghostPenaltyCoefficient, "-gPenCoef", "--ghost-penalty-coefficient", "Ghost penalty scaling.");
   
   args.Parse();
@@ -238,6 +242,7 @@ int main(int argc, char *argv[])
   // - L2 (Bernstein, discontinuous) for specific internal energy.
   // - L2 (Gauss-Legendre, discontinuous) for pressure.
   L2_FECollection L2FEC(order_e, dim, BasisType::GaussLobatto);
+  // L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
   H1_FECollection H1FEC(order_v, dim);
   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
@@ -402,7 +407,7 @@ int main(int argc, char *argv[])
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
-					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0face_gf, Jac0invface_gf, source, cfl, numberGhostTerms, ghostPenaltyCoefficient,
+					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0face_gf, Jac0invface_gf, source, cfl, numberGhostTerms, numberEnergyGhostTerms, ghostPenaltyCoefficient,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
 					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);

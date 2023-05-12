@@ -65,6 +65,7 @@ namespace mfem
       const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
       const double cfl;
       const int numberGhostTerms;
+      const int numberEnergyGhostTerms;
       const int ghostPenaltyCoefficient;		     
       const bool use_viscosity, use_vorticity;
       const double cg_rel_tol;
@@ -184,6 +185,7 @@ namespace mfem
 			      const int source,
 			      const double cfl,
 			      const int numberGhostTerms,
+			      const int numberEnergyGhostTerms,
 			      const int ghostPenaltyCoefficient,
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
