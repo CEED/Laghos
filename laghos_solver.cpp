@@ -152,7 +152,6 @@ namespace mfem
       shifted_nvmi(NULL),
       ghost_nvmi(NULL),
       ghost_emi(NULL),
-      ghost_gemi(NULL),
       wall_dist_coef(NULL),
       distance_vec_space(NULL),
       distance(NULL),
@@ -445,18 +444,13 @@ namespace mfem
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
 
-	ghost_nvmi = new GhostStressFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
+	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
 
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 5.0, numberGhostTerms-1);
+	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms-1);
 	ghost_emi->SetIntRule(&b_ir);
 	Me_mat.AddInteriorFaceIntegrator(ghost_emi);
-	
-	ghost_gemi = new GhostGradScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, 5.0, numberGhostTerms-1);
-	ghost_gemi->SetIntRule(&b_ir);
-	Me_mat.AddInteriorFaceIntegrator(ghost_gemi);    
-      
       }
       Me_mat.Assemble();
       

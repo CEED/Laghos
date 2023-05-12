@@ -131,9 +131,8 @@ namespace mfem
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
-      GhostStressFullGradPenaltyIntegrator *ghost_nvmi;
+      GhostVectorFullGradPenaltyIntegrator *ghost_nvmi;
       GhostScalarFullGradPenaltyIntegrator *ghost_emi;
-      GhostGradScalarFullGradPenaltyIntegrator *ghost_gemi;
       
       Dist_Level_Set_Coefficient *wall_dist_coef;
       // in case we are using level set to get distance and normal vectors

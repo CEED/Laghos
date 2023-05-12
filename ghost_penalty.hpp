@@ -39,7 +39,7 @@ namespace mfem
 
   void AddOneToBinaryArray(Array<int> & binary, int size, int dim);
   // Performs full assembly for the normal velocity mass matrix operator.
-  class GhostStressFullGradPenaltyIntegrator : public BilinearFormIntegrator
+  class GhostVectorFullGradPenaltyIntegrator : public BilinearFormIntegrator
   {
   private:
     const QuadratureDataGL &qdata;
@@ -49,7 +49,7 @@ namespace mfem
     int nTerms;
     double dupPenaltyParameter;
   public:
-    GhostStressFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
+    GhostVectorFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
     virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				    const FiniteElement &fe2,
 				    FaceElementTransformations &Tr,
@@ -73,7 +73,7 @@ namespace mfem
 				    DenseMatrix &elmat);
   };
     
-    class GhostGradScalarFullGradPenaltyIntegrator : public BilinearFormIntegrator
+    /*  class GhostGradScalarFullGradPenaltyIntegrator : public BilinearFormIntegrator
   {
   private:
     const QuadratureDataGL &qdata;
@@ -90,7 +90,7 @@ namespace mfem
 				    DenseMatrix &elmat);
   };
 
-    
+*/    
   }
 }
 
