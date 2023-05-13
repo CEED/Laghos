@@ -405,7 +405,7 @@ namespace mfem
 	  normalGradU_el2.Mult(shape_el2,base_el2);
 
 	  for (int nT = 0; nT <= nTerms; nT++){
-	    penaltyParameter /= (double)(nT+1);
+	    //	    penaltyParameter /= (double)(nT+1);
 	    double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
 	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
 	    weighted_h = pow(weighted_h,2*nT+1);	    

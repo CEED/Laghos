@@ -442,7 +442,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, h1, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * C_I_V, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf,  dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, h1, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf,  dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
 
