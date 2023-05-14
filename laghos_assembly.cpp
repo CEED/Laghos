@@ -184,13 +184,15 @@ namespace mfem
 	  el.CalcShape(ip, shape);
 
 	  double volumeFraction = alpha.GetValue(Trans, ip);
+	  double density = rho_gf.GetValue(Trans, ip);
+
 	  for (int i = 0; i < dof; i++)
 	    {
 	      for (int k = 0; k < dim; k++)
 		{
 		  for (int j = 0; j < dof; j++)
 		    {
-		      elmat(i + k * dof, j + k * dof) += shape(i) * shape(j) * ip.weight * volumeFraction * Trans.Weight();
+		      elmat(i + k * dof, j + k * dof) += shape(i) * shape(j) * ip.weight * volumeFraction * Trans.Weight() * density;
 		    }
 		}
 	    }
@@ -230,11 +232,13 @@ namespace mfem
 	  el.CalcShape(ip, shape);
 
 	  double volumeFraction = alpha.GetValue(Trans, ip);
+	  double density = rho_gf.GetValue(Trans, ip);
+
 	  for (int i = 0; i < dof; i++)
 	    {
 	      for (int j = 0; j < dof; j++)
 		{
-		  elmat(i, j) += shape(i) * shape(j) * ip.weight * volumeFraction * Trans.Weight();
+		  elmat(i, j) += shape(i) * shape(j) * ip.weight * volumeFraction * Trans.Weight() * density;
 		}
 	    }
 	}

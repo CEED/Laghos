@@ -62,10 +62,10 @@ namespace mfem
     {
     private:
       const ParGridFunction &alpha;
-      const ParGridFunction &rho0_gf;
+      const ParGridFunction &rho_gf;
       
 public:
-      WeightedVectorMassIntegrator(const ParGridFunction &alphaF, const ParGridFunction &rho0_gf, const IntegrationRule *ir) : BilinearFormIntegrator(ir), alpha(alphaF), rho0_gf(rho0_gf) {}
+      WeightedVectorMassIntegrator(const ParGridFunction &alphaF, const ParGridFunction &rho_gf, const IntegrationRule *ir) : BilinearFormIntegrator(ir), alpha(alphaF), rho_gf(rho_gf) {}
       virtual void AssembleElementMatrix(const FiniteElement &el,
 					 ElementTransformation &Trans,
 					 DenseMatrix &elmat);
@@ -80,10 +80,10 @@ public:
     {
     private:
       const ParGridFunction &alpha;
-      const ParGridFunction &rho0_gf;
+      const ParGridFunction &rho_gf;
       
 public:
-      WeightedMassIntegrator(const ParGridFunction &alphaF, const ParGridFunction &rho0_gf, const IntegrationRule *ir) : BilinearFormIntegrator(ir), alpha(alphaF), rho0_gf(rho0_gf) {}
+      WeightedMassIntegrator(const ParGridFunction &alphaF, const ParGridFunction &rho_gf, const IntegrationRule *ir) : BilinearFormIntegrator(ir), alpha(alphaF), rho_gf(rho_gf) {}
       virtual void AssembleElementMatrix(const FiniteElement &el,
 					 ElementTransformation &Trans,
 					 DenseMatrix &elmat);

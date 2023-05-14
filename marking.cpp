@@ -27,6 +27,31 @@ namespace mfem
 
     IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
+    for (int i = 0; i < pmesh.GetNE(); i++)
+      {
+	pmesh.SetAttribute(i, SBElementType::OUTSIDE);
+	mat_attr(i) = SBElementType::OUTSIDE;	
+      }
+    mat_attr.ExchangeFaceNbrData(); 
+    pmesh.ExchangeFaceNbrNodes();
+
+    for (int f = 0; f < pmesh.GetNumFaces(); f++)
+      {
+	auto *ft = pmesh.GetFaceElementTransformations(f, 3);
+	if (ft->Elem2No > 0) {
+	  pmesh.SetFaceAttribute(f, 0);
+	}
+      }
+    
+    for (int f = 0; f < pmesh.GetNSharedFaces(); f++)
+      {
+	auto *ftr = pmesh.GetSharedFaceTransformations(f, 3);
+	int faceno = pmesh.GetSharedFace(f);
+	pmesh.SetFaceAttribute(faceno, 0);
+      }
+    pmesh.ExchangeFaceNbrNodes();
+
+    
     // This tolerance is relevant for points that are exactly on the zero LS.
     const double eps = 1e-16;
     auto outside_of_domain = [&](double value)

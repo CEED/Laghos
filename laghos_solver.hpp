@@ -93,8 +93,8 @@ namespace mfem
       
       // Velocity mass matrix and local inverses of the energy mass matrices. These
       // are constant in time, due to the pointwise mass conservation property.
-      mutable ParBilinearForm Mv;
-      mutable ParBilinearForm Me_mat;
+      mutable ParBilinearForm *Mv;
+      mutable ParBilinearForm *Me_mat;
     
       SparseMatrix Mv_spmat_copy;
       DenseTensor Me, Me_inv;
@@ -128,6 +128,8 @@ namespace mfem
       VelocityBoundaryForceIntegrator *v_bfi;
       EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
+      WeightedMassIntegrator *mi;
+      WeightedVectorMassIntegrator *vmi;
       
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
@@ -186,7 +188,7 @@ namespace mfem
 			      const double cfl,
 			      const int numberGhostTerms,
 			      const int numberEnergyGhostTerms,
-			      const int ghostPenaltyCoefficient,
+			      const double ghostPenaltyCoefficient,
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter,

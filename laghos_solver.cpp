@@ -110,7 +110,7 @@ namespace mfem
 						     const double cfl,
 						     const int numberGhostTerms,
 						     const int numberEnergyGhostTerms,
-						     const int ghostPenaltyCoefficient,
+						     const double ghostPenaltyCoefficient,
 						     const bool visc,
 						     const bool vort,
 						     const double cgt,
@@ -154,6 +154,8 @@ namespace mfem
       shifted_nvmi(NULL),
       ghost_nvmi(NULL),
       ghost_emi(NULL),
+      mi(NULL),
+      vmi(NULL),
       wall_dist_coef(NULL),
       distance_vec_space(NULL),
       distance(NULL),
@@ -181,8 +183,8 @@ namespace mfem
       viscousface_gf(viscousface_gf),
       rho0DetJ0face_gf(rho0DetJ0face_gf),
       Jac0invface_gf(Jac0invface_gf),
-      Mv(&H1), Mv_spmat_copy(),
-      Me_mat(&L2),
+      Mv(new ParBilinearForm(&H1)), Mv_spmat_copy(),
+      Me_mat(new ParBilinearForm(&L2)),
       Me(l2dofs_cnt, l2dofs_cnt, NE),
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
       GLIntRules(0, Quadrature1D::GaussLobatto),
@@ -223,7 +225,6 @@ namespace mfem
       C_I_E(0.0),
       C_I_V(0.0)
     {
-      
       block_offsets[0] = 0;
       block_offsets[1] = block_offsets[0] + H1Vsize;
       block_offsets[2] = block_offsets[1] + H1Vsize;
@@ -310,26 +311,7 @@ namespace mfem
       if (useEmbedded && (max_elem_attr >= 2)){
 	ess_elem[ShiftedFaceMarker::SBElementType::OUTSIDE-1] = 0;
       }
-   
-      // Standard local assembly and inversion for energy mass matrices.
-      // 'Me' is used in the computation of the internal energy
-      // which is used twice: once at the start and once at the end of the run.
-      WeightedMassIntegrator *mi = new WeightedMassIntegrator(*alphaCut, rho0_gf, &ir);
-      /* for (int e = 0; e < NE; e++)
-	{
-	  DenseMatrixInverse inv(&Me(e));
-	  const FiniteElement &fe = *L2.GetFE(e);
-	  ElementTransformation &Tr = *L2.GetElementTransformation(e);
-	  mi->AssembleElementMatrix(fe, Tr, Me(e));
-	  inv.Factor();
-	  inv.GetInverseMatrix(Me_inv(e));
-	}*/
-      Me_mat.AddDomainIntegrator(mi, ess_elem);
       
-      // Standard assembly for the velocity mass matrix.
-      WeightedVectorMassIntegrator *vmi = new WeightedVectorMassIntegrator(*alphaCut, rho0_gf, &ir);
-      Mv.AddDomainIntegrator(vmi, ess_elem);
-
       // Values of rho0DetJ0 and Jac0inv at all quadrature points.
       // Initial local mesh size (assumes all mesh elements are the same).
       int Ne, ne = NE;
@@ -388,7 +370,14 @@ namespace mfem
       qdata.h0 /= (double) H1.GetOrder(0);
       gl_qdata.h0 = qdata.h0;
 
-
+      //Compute quadrature quantities
+      UpdateDensity(qdata.rho0DetJ0, rho_gf);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      rho_gf.ExchangeFaceNbrData();
+      p_gf.ExchangeFaceNbrData();
+      cs_gf.ExchangeFaceNbrData();
+      
      //Compute quadrature quantities
       UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
@@ -399,7 +388,16 @@ namespace mfem
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
 
+      // Standard local assembly and inversion for energy mass matrices.
+      // 'Me' is used in the computation of the internal energy
+      // which is used twice: once at the start and once at the end of the run.
+      mi = new WeightedMassIntegrator(*alphaCut, rho_gf, &ir);
+      Me_mat->AddDomainIntegrator(mi, ess_elem);
       
+      // Standard assembly for the velocity mass matrix.
+      vmi = new WeightedVectorMassIntegrator(*alphaCut, rho_gf, &ir);
+      Mv->AddDomainIntegrator(vmi, ess_elem);
+
       fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi, ess_elem);
@@ -427,7 +425,7 @@ namespace mfem
       nvmi = new NormalVelocityMassIntegrator(gl_qdata, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       
       nvmi->SetIntRule(&b_ir);
-      Mv.AddBdrFaceIntegrator(nvmi);
+      Mv->AddBdrFaceIntegrator(nvmi);
 
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf);
@@ -444,20 +442,21 @@ namespace mfem
 
 	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, h1, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf,  dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_nvmi->SetIntRule(&b_ir);
-	Mv.AddInteriorFaceIntegrator(shifted_nvmi);
-
+	Mv->AddInteriorFaceIntegrator(shifted_nvmi);
+	
 	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
-	Mv.AddInteriorFaceIntegrator(ghost_nvmi);
+	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
 
 	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
 	ghost_emi->SetIntRule(&b_ir);
-	Me_mat.AddInteriorFaceIntegrator(ghost_emi);
+	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
       }
-      Me_mat.Assemble();
+      Me_mat->Assemble();
+      Mv->Assemble();
       
-      Mv.Assemble();
-      Mv_spmat_copy = Mv.SpMat();
+      Mv_spmat_copy = Mv->SpMat();
+       
     }
 
     LagrangianHydroOperator::~LagrangianHydroOperator() {
@@ -489,9 +488,16 @@ namespace mfem
     }
 
     void LagrangianHydroOperator::UpdateLevelSet(const Vector &S){
-      if (useEmbedded){
+      if (useEmbedded){	
+	level_set_gf->ProjectCoefficient(*wall_dist_coef);
+	// Exchange information for ghost elements i.e. elements that share a face
+	// with element on the current processor, but belong to another processor.
+	level_set_gf->ExchangeFaceNbrData();
+	// Setup the class to mark all elements based on whether they are located
 	// inside or outside the true domain, or intersected by the true boundary.
-	/*	analyticalSurface->MarkElements(*level_set_gf);
+
+	// inside or outside the true domain, or intersected by the true boundary.
+	analyticalSurface->MarkElements(*level_set_gf);
 
 	Array<int> ess_vdofs;
 	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
@@ -502,9 +508,28 @@ namespace mfem
 	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
-*/
+
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();	
+	alphaCut->ExchangeFaceNbrData();
+
+	//Compute quadrature quantities
+	UpdateDensity(qdata.rho0DetJ0, rho_gf);
+	UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
+	UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+	rho_gf.ExchangeFaceNbrData();
+	p_gf.ExchangeFaceNbrData();
+	cs_gf.ExchangeFaceNbrData();
+	
+	//Compute quadrature quantities
+	UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
+	UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
+	UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+	UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, viscousface_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+	rhoface_gf.ExchangeFaceNbrData();
+	pface_gf.ExchangeFaceNbrData();
+	csface_gf.ExchangeFaceNbrData();
+	viscousface_gf.ExchangeFaceNbrData();
+		
       }
 
     }
@@ -515,26 +540,8 @@ namespace mfem
 						const double dt) const
     {
 
-      //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, rho_gf);
-      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
-      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
-      rho_gf.ExchangeFaceNbrData();
-      p_gf.ExchangeFaceNbrData();
-      cs_gf.ExchangeFaceNbrData();
- 
-      //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, viscousface_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
-      rhoface_gf.ExchangeFaceNbrData();
-      pface_gf.ExchangeFaceNbrData();
-      csface_gf.ExchangeFaceNbrData();
-      viscousface_gf.ExchangeFaceNbrData();
-
-      /// Mv.Update();
-      // Mv.Assemble();
+      //  Mv->Update();
+      //  Mv->Assemble();
       
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
@@ -566,7 +573,7 @@ namespace mfem
 	  rhs += rhs_accel;
 	}
       HypreParMatrix A;
-      Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
+      Mv->FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg(H1.GetParMesh()->GetComm());
       HypreSmoother prec;
       prec.SetType(HypreSmoother::Jacobi, 1);
@@ -577,32 +584,14 @@ namespace mfem
       cg.SetMaxIter(cg_max_iter);
       cg.SetPrintLevel(-1);
       cg.Mult(B, X);
-      Mv.RecoverFEMSolution(X, rhs, dv);
+      Mv->RecoverFEMSolution(X, rhs, dv);
     }
 
     void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 					      Vector &dS_dt) const
     {
-      //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, rho_gf);
-      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
-      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
-      rho_gf.ExchangeFaceNbrData();
-      p_gf.ExchangeFaceNbrData();
-      cs_gf.ExchangeFaceNbrData();
- 
-      //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-    
-      rhoface_gf.ExchangeFaceNbrData();
-      pface_gf.ExchangeFaceNbrData();
-      csface_gf.ExchangeFaceNbrData();
-      viscousface_gf.ExchangeFaceNbrData();
-
-      // Me_mat.Update();
-      //  Me_mat.Assemble();
+      //  Me_mat->Update();
+      //  Me_mat->Assemble();
       
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
@@ -668,7 +657,7 @@ namespace mfem
 	}*/
 
       HypreParMatrix A;
-      Me_mat.FormLinearSystem(ess_edofs, de, e_rhs, A, X_e, B_e);
+      Me_mat->FormLinearSystem(ess_edofs, de, e_rhs, A, X_e, B_e);
       CGSolver cg(L2.GetParMesh()->GetComm());
       HypreSmoother prec;
       prec.SetType(HypreSmoother::Jacobi, 1);
@@ -679,7 +668,7 @@ namespace mfem
       cg.SetMaxIter(cg_max_iter);
       cg.SetPrintLevel(-1);
       cg.Mult(B_e, X_e);
-      Me_mat.RecoverFEMSolution(X_e, e_rhs, de);
+      Me_mat->RecoverFEMSolution(X_e, e_rhs, de);
  
       
       delete e_source;
@@ -1040,7 +1029,7 @@ namespace mfem
     add(S0, 0.5 * dt, dS_dt, S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
-    hydro_oper->UpdateLevelSet(S);
+    hydro_oper->UpdateLevelSet(S);   
    
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
