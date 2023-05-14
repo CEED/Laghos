@@ -510,7 +510,8 @@ namespace mfem
 	L2.MarkerToList(ess_pdofs, ess_edofs);
 
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();
+	alphaCut->ExchangeFaceNbrData();		
+      }
 
 	//Compute quadrature quantities
 	UpdateDensity(qdata.rho0DetJ0, rho_gf);
@@ -529,8 +530,6 @@ namespace mfem
 	pface_gf.ExchangeFaceNbrData();
 	csface_gf.ExchangeFaceNbrData();
 	viscousface_gf.ExchangeFaceNbrData();
-		
-      }
 
     }
     
@@ -540,8 +539,9 @@ namespace mfem
 						const double dt) const
     {
 
-      //  Mv->Update();
+      // Mv->Update();
       //  Mv->Assemble();
+      // Mv->Finalize();
       
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
@@ -590,8 +590,9 @@ namespace mfem
     void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 					      Vector &dS_dt) const
     {
-      //  Me_mat->Update();
+      // Me_mat->Update();
       //  Me_mat->Assemble();
+      //  Me_mat->Finalize();
       
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
