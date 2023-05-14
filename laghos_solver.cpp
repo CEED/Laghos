@@ -490,6 +490,19 @@ namespace mfem
 
     void LagrangianHydroOperator::UpdateLevelSet(const Vector &S){
       if (useEmbedded){
+	// inside or outside the true domain, or intersected by the true boundary.
+	/*	analyticalSurface->MarkElements(*level_set_gf);
+
+	Array<int> ess_vdofs;
+	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
+	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
+	H1.MarkerToList(ess_vdofs, ess_tdofs);
+
+	Array<int> ess_pdofs;
+	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
+	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
+	L2.MarkerToList(ess_pdofs, ess_edofs);
+*/
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
 	alphaCut->ExchangeFaceNbrData();	
       }
@@ -519,7 +532,10 @@ namespace mfem
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
- 
+
+      /// Mv.Update();
+      // Mv.Assemble();
+      
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
       // The monolithic BlockVector stores the unknown fields as follows:
@@ -584,7 +600,10 @@ namespace mfem
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
- 
+
+      // Me_mat.Update();
+      //  Me_mat.Assemble();
+      
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;
@@ -1021,6 +1040,8 @@ namespace mfem
     add(S0, 0.5 * dt, dS_dt, S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
+    hydro_oper->UpdateLevelSet(S);
+   
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
