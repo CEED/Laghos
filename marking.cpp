@@ -171,7 +171,7 @@ namespace mfem
     pmesh.ExchangeFaceNbrNodes();
 
     initial_marking_done = true;
-    std::cout << " myid " << myid << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
+    //    std::cout << " myid " << myid << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
     // Synchronize
     for (int i = 0; i < ess_inactive.Size() ; i++) { ess_inactive[i] += 1; }
     pfes_sltn->Synchronize(ess_inactive);
