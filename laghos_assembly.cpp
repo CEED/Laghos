@@ -788,6 +788,7 @@ namespace mfem
 									Vector &elvect)      
     {
       if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+      //  if ( Tr.Attribute == 77 ){
 	const int dim = el.GetDim();      
 	const int nqp_face = IntRule->GetNPoints();
 	
@@ -864,6 +865,7 @@ namespace mfem
     {
       if (Vnpt_gf != NULL){ 
 	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	//	if ( Tr.Attribute == 77 ){
 	  const int dim = el.GetDim();
 	  const int nqp_face = IntRule->GetNPoints();
 
@@ -1307,6 +1309,7 @@ namespace mfem
 								 DenseMatrix &elmat)
     {
       if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+      //  if ( Tr.Attribute == 77 ){
 	const int dim = fe.GetDim();
 	DenseMatrix identity(dim);
 	identity = 0.0;

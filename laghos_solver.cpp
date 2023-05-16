@@ -531,6 +531,15 @@ namespace mfem
 	csface_gf.ExchangeFaceNbrData();
 	viscousface_gf.ExchangeFaceNbrData();
 
+	Mv->Update();
+	Mv->BilinearForm::operator=(0.0);
+	Mv->Assemble();
+	Mv_spmat_copy = Mv->SpMat();
+
+	Me_mat->Update();
+	Me_mat->BilinearForm::operator=(0.0);
+	Me_mat->Assemble();
+	
     }
     
     void LagrangianHydroOperator::SolveVelocity(const Vector &S,
@@ -538,11 +547,7 @@ namespace mfem
 						const Vector &S_init,
 						const double dt) const
     {
-
-      // Mv->Update();
-      //  Mv->Assemble();
-      // Mv->Finalize();
-      
+     
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
       // The monolithic BlockVector stores the unknown fields as follows:
@@ -589,11 +594,7 @@ namespace mfem
 
     void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 					      Vector &dS_dt) const
-    {
-      // Me_mat->Update();
-      //  Me_mat->Assemble();
-      //  Me_mat->Finalize();
-      
+    {      
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;
@@ -944,7 +945,7 @@ namespace mfem
     {   
       VelocityBoundaryForce = 0.0;
       VelocityBoundaryForce.Assemble();
-      if (analyticalSurface != NULL){
+      if (useEmbedded){
 	// reset mesh, needed to update the normal velocity penalty term.
 	ShiftedVelocityBoundaryForce = 0.0;
 	ShiftedVelocityBoundaryForce.Assemble();
