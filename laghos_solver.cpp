@@ -285,11 +285,13 @@ namespace mfem
 	// inside or outside the true domain, or intersected by the true boundary.
 	analyticalSurface->MarkElements(*level_set_gf);
 
+	ess_tdofs.DeleteAll();
 	Array<int> ess_vdofs;
 	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
 	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
 	H1.MarkerToList(ess_vdofs, ess_tdofs);
 
+	ess_edofs.DeleteAll();
 	Array<int> ess_pdofs;
 	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
@@ -487,7 +489,7 @@ namespace mfem
       beemb_qdata_is_current = false;
     }
 
-    void LagrangianHydroOperator::UpdateLevelSet(const Vector &S){
+    void LagrangianHydroOperator::UpdateLevelSet(const Vector &S, const Vector &S_init){
       if (useEmbedded){	
 	level_set_gf->ProjectCoefficient(*wall_dist_coef);
 	// Exchange information for ghost elements i.e. elements that share a face
@@ -499,18 +501,21 @@ namespace mfem
 	// inside or outside the true domain, or intersected by the true boundary.
 	analyticalSurface->MarkElements(*level_set_gf);
 
+	ess_tdofs.DeleteAll();
+	
 	Array<int> ess_vdofs;
 	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
 	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
 	H1.MarkerToList(ess_vdofs, ess_tdofs);
 
+	ess_edofs.DeleteAll();
 	Array<int> ess_pdofs;
 	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
 
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();		
+	alphaCut->ExchangeFaceNbrData();
       }
 
 	//Compute quadrature quantities
@@ -531,6 +536,7 @@ namespace mfem
 	csface_gf.ExchangeFaceNbrData();
 	viscousface_gf.ExchangeFaceNbrData();
 
+	/*	UpdateMesh(S_init);
 	Mv->Update();
 	Mv->BilinearForm::operator=(0.0);
 	Mv->Assemble();
@@ -539,7 +545,7 @@ namespace mfem
 	Me_mat->Update();
 	Me_mat->BilinearForm::operator=(0.0);
 	Me_mat->Assemble();
-	
+	UpdateMesh(S);*/
     }
     
     void LagrangianHydroOperator::SolveVelocity(const Vector &S,
@@ -1018,7 +1024,7 @@ namespace mfem
     // -- 1.
     // S is S0.
     hydro_oper->UpdateMesh(S);
-    hydro_oper->UpdateLevelSet(S);
+    hydro_oper->UpdateLevelSet(S,S_init);
    
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
@@ -1031,7 +1037,7 @@ namespace mfem
     add(S0, 0.5 * dt, dS_dt, S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
-    hydro_oper->UpdateLevelSet(S);   
+    hydro_oper->UpdateLevelSet(S, S_init);   
    
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;

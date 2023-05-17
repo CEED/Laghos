@@ -26,7 +26,10 @@ namespace mfem
     int cutCount = 0;
 
     IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
-
+    ess_inactive_p = -1;
+    ess_inactive = -1;
+    mat_attr = 0.0;
+ 
     for (int i = 0; i < pmesh.GetNE(); i++)
       {
 	pmesh.SetAttribute(i, SBElementType::OUTSIDE);
@@ -136,9 +139,12 @@ namespace mfem
             pmesh.SetFaceAttribute(f, 77);
           }
           // outer surrogate boundaries
-	  if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
+	 else if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
             pmesh.SetFaceAttribute(f, 11);
           }
+	 else if ( elem1_inside && elem2_inside ) {
+            pmesh.SetFaceAttribute(f, 22);
+	 }
         }
       }
 
@@ -163,8 +169,11 @@ namespace mfem
           pmesh.SetFaceAttribute(faceno, 77);
         }
         // outer surrogate boundaries
-        if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
+	else if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
           pmesh.SetFaceAttribute(faceno, 11);
+        }
+	else if ( elem1_inside && elem2_inside ) {
+          pmesh.SetFaceAttribute(faceno, 22);
         }
       }
 
