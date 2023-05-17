@@ -536,17 +536,15 @@ namespace mfem
 	csface_gf.ExchangeFaceNbrData();
 	viscousface_gf.ExchangeFaceNbrData();
 
-	/*	UpdateMesh(S_init);
-	Mv->Update();
+	/*	Mv->Update();
 	Mv->BilinearForm::operator=(0.0);
 	Mv->Assemble();
 	Mv_spmat_copy = Mv->SpMat();
 
 	Me_mat->Update();
 	Me_mat->BilinearForm::operator=(0.0);
-	Me_mat->Assemble();
-	UpdateMesh(S);*/
-    }
+	Me_mat->Assemble();*/
+ }
     
     void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 						Vector &dS_dt,
