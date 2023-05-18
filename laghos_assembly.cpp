@@ -787,7 +787,7 @@ namespace mfem
 									FaceElementTransformations &Tr,
 									Vector &elvect)      
     {
-      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ||  (Tr.Attribute == 66)){
       //  if ( Tr.Attribute == 77 ){
 	const int dim = el.GetDim();      
 	const int nqp_face = IntRule->GetNPoints();
@@ -864,7 +864,7 @@ namespace mfem
 								      Vector &elvect)
     {
       if (Vnpt_gf != NULL){ 
-	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ||  (Tr.Attribute == 66) ){
 	//	if ( Tr.Attribute == 77 ){
 	  const int dim = el.GetDim();
 	  const int nqp_face = IntRule->GetNPoints();
@@ -1308,7 +1308,7 @@ namespace mfem
 								 FaceElementTransformations &Tr,
 								 DenseMatrix &elmat)
     {
-      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) || (Tr.Attribute == 66) ){
       //  if ( Tr.Attribute == 77 ){
 	const int dim = fe.GetDim();
 	DenseMatrix identity(dim);
@@ -1327,7 +1327,7 @@ namespace mfem
 	ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
 
 	int h1dofs_offset = fe2.GetDof()*dim;
-
+	//	std::cout << " in " << std::endl;
 	for (int q = 0; q < nqp_face; q++)
 	  {
 	    nor = 0.0;
@@ -1373,7 +1373,13 @@ namespace mfem
 	    vN->Eval(tN_el1, Trans_el1, eip_el1);
 	    /////
 	    
-	    
+	    /* if (Tr.Attribute == 66){
+	      std::cout << " elem " << Trans_el1.ElementNo << " elem " << Trans_el2.ElementNo << " volFracdiff " << std::abs(volumeFraction_el1 - volumeFraction_el2) << " gamma " << gamma_1 << " gamma " << gamma_2 << " qp " << q << std::endl;
+	      Vector x;
+	      Trans_el1.Transform(eip_el1, x);
+	      std::cout << " x " << x(0) << " y " << x(1) << std::endl;
+	      D_el1.Print();
+	    }*/
 	    double nTildaDotN = 0.0;
 	    for (int s = 0; s < dim; s++){
 	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;

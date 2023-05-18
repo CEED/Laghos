@@ -47,7 +47,7 @@ namespace mfem
 								FaceElementTransformations &Tr,
 								DenseMatrix &elmat)
   {
-    if (Tr.Attribute == 77){
+    if ( (Tr.Attribute == 77) ||  (Tr.Attribute == 66)){
       const int dim = fe.GetDim();
       const int h1dofs_cnt = fe.GetDof();
       elmat.SetSize(2*h1dofs_cnt*dim);
@@ -265,7 +265,7 @@ namespace mfem
 								FaceElementTransformations &Tr,
 								DenseMatrix &elmat)
   {
-    if (Tr.Attribute == 77){
+    if ( (Tr.Attribute == 77) ||  (Tr.Attribute == 66)){
       const int dim = fe.GetDim();
       const int h1dofs_cnt = fe.GetDof();
       elmat.SetSize(2*h1dofs_cnt*dim);

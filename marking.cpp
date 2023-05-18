@@ -135,16 +135,19 @@ namespace mfem
 	  bool elem2_cut = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::CUT);
 	  bool elem2_outside = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::OUTSIDE);
 	  // ghost faces
-	  if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ||  (elem1_cut && elem2_cut) ) {
+	  if (elem1_cut && elem2_cut ) {
             pmesh.SetFaceAttribute(f, 77);
           }
+	  else if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ) {
+            pmesh.SetFaceAttribute(f, 66);
+          }
           // outer surrogate boundaries
-	 else if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
+	  else if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
             pmesh.SetFaceAttribute(f, 11);
           }
-	 else if ( elem1_inside && elem2_inside ) {
+	  else if ( elem1_inside && elem2_inside ) {
             pmesh.SetFaceAttribute(f, 22);
-	 }
+	  }
         }
       }
 
@@ -165,8 +168,11 @@ namespace mfem
 	bool elem2_cut = (attr2 == SBElementType::CUT);
 	bool elem2_outside = (attr2 == SBElementType::OUTSIDE);
 	// ghost faces
-	if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ||  (elem1_cut && elem2_cut) ) {
+	if (elem1_cut && elem2_cut ) {
           pmesh.SetFaceAttribute(faceno, 77);
+        }
+	else if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ) {
+          pmesh.SetFaceAttribute(faceno, 66);
         }
         // outer surrogate boundaries
 	else if ( (elem1_cut && elem2_outside) ||  (elem1_outside && elem2_cut) ) {
