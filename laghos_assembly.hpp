@@ -210,9 +210,10 @@ public:
       const ParGridFunction &rhoface_gf;
       const ParGridFunction &Jac0invface_gf;
       const ParGridFunction &rho0DetJ0face_gf;
+      const ParGridFunction &v_gf;
       
     public:
-      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : qdata(qdata), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
+      NormalVelocityMassIntegrator(const QuadratureDataGL &qdata, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : qdata(qdata), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,
@@ -292,9 +293,10 @@ public:
       const ParGridFunction &viscousface_gf;
       const ParFiniteElementSpace &h1;
       const ParGridFunction &v_gf;
+      const ParGridFunction &Jac0invface_gf;
       
     public:
-      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, const ParFiniteElementSpace &h1, QuadratureDataGL &qdata, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), h1(h1), qdata(qdata), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
+      ShiftedNormalVelocityMassIntegrator(const ParMesh *pmesh, const ParFiniteElementSpace &h1, QuadratureDataGL &qdata, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : pmesh(pmesh), h1(h1), qdata(qdata), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,

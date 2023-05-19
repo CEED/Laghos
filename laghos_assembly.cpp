@@ -752,6 +752,18 @@ namespace mfem
 	  // std::cout << " orig " << origNormalProd << std::endl;
 	  // std::cout << " val_pr " << 1.0/origNormalProd_tn << " val_pi " << 1.0/origNormalProd << " vol " << Tr.Elem1->Weight() << std::endl; 
 	  //  std::cout << " tN(0) " << tN(0) << " tN(1) " << tN(1) << std::endl;
+
+	    DenseMatrix v_grad_q1(dim);
+	    v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	    // As in the volumetric viscosity.
+            v_grad_q1.Symmetrize();
+            double h_1, mu_1;
+
+            LengthScaleAndCompression(v_grad_q1, Trans_el1, qdata.Jac0inv(0),
+                                      qdata.h0, h_1, mu_1);
+            double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
+
+	  
 	  double penaltyVal = 0.0;
 	  double aMax = (globalmax_rho/globalmax_viscous_coef) * globalmax_cs * 4.0;
 	  // std::cout << " aM " << aMax << std::endl;
@@ -760,7 +772,12 @@ namespace mfem
 	  //  penaltyVal = penaltyParameter * globalmax_rho *  (Tr.Elem1->Weight() / nor_norm) * (1.0 + aMax + 1.0/aMax) * std::pow(1.0/origNormalProd,2.0*order_v);
 	  //   std::cout << " amxa " << aMax << " nCn " << 1.0/origNormalProd << " pen " << penaltyVal << std::endl;
 	  //  penaltyVal =  4.0 * std::pow(penaltyParameter * (1.0 * 1.0/aMax + aMax),proj) /* * std::pow(penaltyParameter,proj)*/ * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
-	  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  // OLD //
+	  // penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  //////
+	  // NEW //
+	  penaltyVal = 4.0 * penaltyParameter * density * origNormalProd /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
+	  //////
 	
 	  //	  std::cout << " penV " << penaltyVal << std::endl;
 	  // penaltyVal = 4 * globalmax_rho * std::pow(penaltyParameter, 1.0*(1+aMax+1.0/aMax))/* * origNormalProd*/;
@@ -1402,11 +1419,69 @@ namespace mfem
                                       qdata.h0, h_2, mu_2);
 	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 	    double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
-	
-	    //	    std::cout << " h " << h_1 << std::endl;
+
+
+	    Vector Jac0inv_vec(dim*dim);
+	    Jac0inv_vec = 0.0;
+	    Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec);
+	    
+	    DenseMatrix Jac0inv(dim);
+	    if (dim == 2){
+	      Jac0inv(0,0) = Jac0inv_vec(0);
+	      Jac0inv(0,1) = Jac0inv_vec(1);
+	      Jac0inv(1,0) = Jac0inv_vec(2);
+	      Jac0inv(1,1) = Jac0inv_vec(3);
+	  }
+	    else {
+	      Jac0inv(0,0) = Jac0inv_vec(0);
+	      Jac0inv(0,1) = Jac0inv_vec(1);
+	      Jac0inv(0,2) = Jac0inv_vec(2);
+	      Jac0inv(1,0) = Jac0inv_vec(3);
+	      Jac0inv(1,1) = Jac0inv_vec(4);
+	      Jac0inv(1,2) = Jac0inv_vec(5);
+	      Jac0inv(2,0) = Jac0inv_vec(6);
+	      Jac0inv(2,1) = Jac0inv_vec(7);
+	      Jac0inv(2,2) = Jac0inv_vec(8);
+	    }
+	    
+	    const DenseMatrix &Jpr = Trans_el1.Jacobian();
+	    // std::cout << " Dt " << Jpr.Det() << std::endl;
+	    DenseMatrix Jpi(dim);
+	    Jpi = 0.0;
+	    mfem::Mult(Jpr, Jac0inv, Jpi);
+	    Vector  tN(dim);
+	    tN = 0.0;
+	    
+	    Jpi.MultTranspose(tn,tN);
+	    double origNormalProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      origNormalProd += tN(s) * tN(s);
+	    }
+	    origNormalProd = std::pow(origNormalProd,0.5);
+	    tN *= 1.0/origNormalProd;
+	    Vector transip;
+
+
+	    
+	    // std::cout << " h " << h_1 << " h " << h_2 << std::endl;
 	    double penaltyVal = 0.0;
 	    // penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (gamma_1 * qdata.h0/h_1 + gamma_2 * qdata.h0/h_2);
-	    penaltyVal = 4.0 * penaltyParameter * (gamma_1 * h_1 * density_el1 + gamma_2 * h_2 * density_el2);
+	    if (Tr.Attribute == 11){
+	      //  penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1 + gamma_2 * h_2 * density_el2) ;
+	      //  penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 * qdata.h0/h_1 + gamma_2 * density_el2 * qdata.h0/h_2) ;
+	      // penaltyVal = penaltyParameter * (gamma_1 * h_1  + gamma_2 * h_2) * globalmax_rho ;
+	      //penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 + gamma_2 * density_el2)/* * origNormalProd */;
+	      penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (gamma_1 * h_1 + gamma_2 * h_2) * origNormalProd;
+	   
+	    }
+	    else{
+	      //  penaltyVal = penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
+	      //  penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) * ( (qdata.h0/h_1) *  (qdata.h0/h_2) / (qdata.h0/h_1 + qdata.h0/h_2));
+	      //    penaltyVal = penaltyParameter * (h_1 * h_2  / ( h_1  + h_2  ) ) * globalmax_rho;
+	      //   penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) /* * origNormalProd*/;
+	      penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (h_1 * h_2  / ( h_1  + h_2  ) ) * globalmax_rho * origNormalProd;
+	   
+	    }
 
 	    fe.CalcShape(eip_el1, shape_el1);
 	    shift_shape(h1, h1, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, shape_el1);
@@ -1424,10 +1499,10 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight /* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight /* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight /* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight/* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
 	
 			  }
 		      }
