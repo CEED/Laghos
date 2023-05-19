@@ -22,6 +22,8 @@ namespace mfem
 
   namespace hydrodynamics
   {
+
+    
     double factorial(int nTerms){
       double factorial = 1.0;	
       for (int s = 1; s <= nTerms; s++){
@@ -300,12 +302,13 @@ namespace mfem
 	  DenseMatrix stress(dim), stressJiT(dim);
 	  stressJiT = 0.0;
 	  stress = 0.0;
-	  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	  double volumeFraction = alpha.GetValue(Tr, ip);
+	  
+	  const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
 	  ComputeStress(pressure,dim,stress);
 	  ComputeViscousStress(Tr, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	  MultABt(stress, Jinv, stressJiT);
 	  stressJiT *= ip.weight * Jpr.Det();
-	  double volumeFraction = alpha.GetValue(Tr, ip);
 	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
@@ -358,7 +361,9 @@ namespace mfem
 	    DenseMatrix stress(dim), stressJiT(dim);
 	    stressJiT = 0.0;
 	    stress = 0.0;
-	    const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	    double volumeFraction = alpha.GetValue(Tr, ip);
+	
+	    const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
 	    ComputeStress(pressure,dim,stress);
 	    ComputeViscousStress(Tr, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	    stress *= ip.weight * Jpr.Det();
@@ -374,7 +379,6 @@ namespace mfem
 		gradVContractedStress += stress(s,k) * vGradShape(s,k);
 	      }
 	    }
-	    double volumeFraction = alpha.GetValue(Tr, ip);
 	
 	    for (int i = 0; i < l2dofs_cnt; i++)
 	      {
@@ -1384,9 +1388,25 @@ namespace mfem
 	    for (int s = 0; s < dim; s++){
 	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
 	    }
-	    
+	    DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	    v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	    v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	    // As in the volumetric viscosity.
+            v_grad_q1.Symmetrize();
+            v_grad_q2.Symmetrize();
+	    double h_1, h_2, mu_1, mu_2;
+
+            LengthScaleAndCompression(v_grad_q1, Trans_el1, qdata.Jac0inv(0),
+                                      qdata.h0, h_1, mu_1);
+            LengthScaleAndCompression(v_grad_q2, Trans_el2, qdata.Jac0inv(0),
+                                      qdata.h0, h_2, mu_2);
+	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	    double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+	
+	    //	    std::cout << " h " << h_1 << std::endl;
 	    double penaltyVal = 0.0;
-	    penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
+	    // penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (gamma_1 * qdata.h0/h_1 + gamma_2 * qdata.h0/h_2);
+	    penaltyVal = 4.0 * penaltyParameter * (gamma_1 * h_1 * density_el1 + gamma_2 * h_2 * density_el2);
 
 	    fe.CalcShape(eip_el1, shape_el1);
 	    shift_shape(h1, h1, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, shape_el1);
@@ -1404,10 +1424,10 @@ namespace mfem
 		      {
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight /* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight /* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight /* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight/* * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2)*/;
 	
 			  }
 		      }

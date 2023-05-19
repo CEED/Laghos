@@ -22,7 +22,34 @@ namespace mfem
 {
   namespace hydrodynamics
   {
-    void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf)
+        void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
+				   ElementTransformation &T,
+				   const DenseMatrix &Jac0inv, double h0,
+				   double &h, double &mu)
+    {
+      const int dim = sgrad_v.Height();
+      
+      double eig_val_data[3], eig_vec_data[9];
+      if (dim == 1)
+	{
+	  eig_val_data[0] = sgrad_v(0, 0);
+	  eig_vec_data[0] = 1.;
+	}
+      else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
+      
+      DenseMatrix Jpi(dim);
+      // Computes the initial->physical transformation Jacobian.
+      Mult(T.Jacobian(), Jac0inv, Jpi);
+      Vector compr_dir(eig_vec_data, dim), ph_dir(dim);
+      Jpi.Mult(compr_dir, ph_dir);
+      
+      // Change of the initial mesh size in the compression direction.
+      h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
+      // Measure of maximal compression.
+      mu = eig_val_data[0];
+    }
+
+    void UpdateDensity(const Vector &rho0DetJ0, const ParGridFunction &alpha, ParGridFunction &rho_gf)
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -41,7 +68,8 @@ namespace mfem
 	      {
 		const IntegrationPoint &ip = ir.IntPoint(q);
 		Tr.SetIntPoint(&ip);
-		const double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
+		double volumeFraction = alpha.GetValue(Tr, ip);
+		const double rho = rho0DetJ0(e * nqp + q) / (Tr.Weight() * volumeFraction);
 		rho_gf(e * nqp + q) = rho;
 	      }
 	  }
@@ -103,7 +131,7 @@ namespace mfem
 	}
     }
     
-    void UpdateDensityGL(const Vector &rho0DetJ0, ParGridFunction &rho_gf)
+    void UpdateDensityGL(const Vector &rho0DetJ0, const ParGridFunction &alpha, ParGridFunction &rho_gf)
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -122,7 +150,8 @@ namespace mfem
 	      {
 		const IntegrationPoint &ip = ir.IntPoint(q);
 		Tr.SetIntPoint(&ip);
-		const double rho = rho0DetJ0(e * nqp + q) / Tr.Weight();
+		double volumeFraction = alpha.GetValue(Tr, ip);
+		const double rho = rho0DetJ0(e * nqp + q) / (Tr.Weight() * volumeFraction);
 		rho_gf(e * nqp + q) = rho;
 	      }
 	  }
