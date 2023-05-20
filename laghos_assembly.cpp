@@ -300,12 +300,13 @@ namespace mfem
 	  DenseMatrix stress(dim), stressJiT(dim);
 	  stressJiT = 0.0;
 	  stress = 0.0;
-	  const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	  double volumeFraction = alpha.GetValue(Tr, ip);
+
+	  const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
 	  ComputeStress(pressure,dim,stress);
 	  ComputeViscousStress(Tr, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	  MultABt(stress, Jinv, stressJiT);
 	  stressJiT *= ip.weight * Jpr.Det();
-	  double volumeFraction = alpha.GetValue(Tr, ip);
 	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
@@ -358,7 +359,9 @@ namespace mfem
 	    DenseMatrix stress(dim), stressJiT(dim);
 	    stressJiT = 0.0;
 	    stress = 0.0;
-	    const double rho = qdata.rho0DetJ0(eq) / Tr.Weight();
+	    double volumeFraction = alpha.GetValue(Tr, ip);
+	
+	    const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
 	    ComputeStress(pressure,dim,stress);
 	    ComputeViscousStress(Tr, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	    stress *= ip.weight * Jpr.Det();
@@ -374,7 +377,6 @@ namespace mfem
 		gradVContractedStress += stress(s,k) * vGradShape(s,k);
 	      }
 	    }
-	    double volumeFraction = alpha.GetValue(Tr, ip);
 	
 	    for (int i = 0; i < l2dofs_cnt; i++)
 	      {

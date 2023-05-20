@@ -86,14 +86,18 @@ namespace mfem
 
       QuadratureDataGL(int dim, int NE, int quads_per_faceel) :  rho0DetJ0(NE * quads_per_faceel), normalVelocityPenaltyScaling(0.0), Jac0inv(dim, dim, NE * quads_per_faceel) { }
     };
-   
-    void UpdateDensity(const Vector &rho0DetJ0, ParGridFunction &rho_gf);
+    void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
+				   ElementTransformation &T,
+				   const DenseMatrix &Jac0inv, double h0,
+				   double &h, double &mu);
+    
+    void UpdateDensity(const Vector &rho0DetJ0, const ParGridFunction &alpha, ParGridFunction &rho_gf);
   
     void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf);
 
     void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf);
 
-    void UpdateDensityGL(const Vector &rho0DetJ0, ParGridFunction &rho_gf);
+    void UpdateDensityGL(const Vector &rho0DetJ0, const ParGridFunction &alpha, ParGridFunction &rho_gf);
   
     void UpdatePressureGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf);
 

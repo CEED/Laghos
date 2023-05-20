@@ -231,6 +231,7 @@ namespace mfem
       block_offsets[3] = block_offsets[2] + L2Vsize;
       one = 1.0;
 
+      rho_gf = rho0_gf;
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
@@ -331,7 +332,8 @@ namespace mfem
 	      Tr.SetIntPoint(&ip);
 	      DenseMatrixInverse Jinv(Tr.Jacobian());
 	      Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
+	      double volumeFraction = alphaCut->GetValue(Tr, ip);
+	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q) * volumeFraction;
 	      qdata.rho0DetJ0(e*NQ + q) = rho0DetJ0;
 	    }
 	}
@@ -348,8 +350,9 @@ namespace mfem
 	      DenseMatrixInverse Jinv(Tr.Jacobian());
 	      Jinv.GetInverseMatrix(gl_qdata.Jac0inv(e * gl_nqp + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
-	      gl_qdata.rho0DetJ0(e * gl_nqp + q) = rho0DetJ0;
-	      rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0;
+	      double volumeFraction = alphaCut->GetValue(Tr, ip);
+	      gl_qdata.rho0DetJ0(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
+	      rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
 	    }
 	}
       rho0DetJ0face_gf.ExchangeFaceNbrData();
@@ -371,7 +374,7 @@ namespace mfem
       gl_qdata.h0 = qdata.h0;
 
       //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, rho_gf);
+      UpdateDensity(qdata.rho0DetJ0, *alphaCut, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       rho_gf.ExchangeFaceNbrData();
@@ -379,7 +382,7 @@ namespace mfem
       cs_gf.ExchangeFaceNbrData();
       
      //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
+      UpdateDensityGL(gl_qdata.rho0DetJ0, *alphaCut, rhoface_gf);
       UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
       UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, viscousface_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
@@ -497,40 +500,51 @@ namespace mfem
 	// inside or outside the true domain, or intersected by the true boundary.
 
 	// inside or outside the true domain, or intersected by the true boundary.
-	analyticalSurface->MarkElements(*level_set_gf);
+	/*	analyticalSurface->MarkElements(*level_set_gf);
 
+	ess_tdofs.DeleteAll();
 	Array<int> ess_vdofs;
 	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
 	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
 	H1.MarkerToList(ess_vdofs, ess_tdofs);
 
+	ess_edofs.DeleteAll();
 	Array<int> ess_pdofs;
 	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
-
+*/
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
 	alphaCut->ExchangeFaceNbrData();		
       }
-
-	//Compute quadrature quantities
-	UpdateDensity(qdata.rho0DetJ0, rho_gf);
-	UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
-	UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
-	rho_gf.ExchangeFaceNbrData();
-	p_gf.ExchangeFaceNbrData();
-	cs_gf.ExchangeFaceNbrData();
+      
+      //Compute quadrature quantities
+      UpdateDensity(qdata.rho0DetJ0, *alphaCut, rho_gf);
+      UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
+      rho_gf.ExchangeFaceNbrData();
+      p_gf.ExchangeFaceNbrData();
+      cs_gf.ExchangeFaceNbrData();
 	
-	//Compute quadrature quantities
-	UpdateDensityGL(gl_qdata.rho0DetJ0, rhoface_gf);
-	UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
-	UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
-	UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, viscousface_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
-	rhoface_gf.ExchangeFaceNbrData();
-	pface_gf.ExchangeFaceNbrData();
-	csface_gf.ExchangeFaceNbrData();
-	viscousface_gf.ExchangeFaceNbrData();
+      //Compute quadrature quantities
+      UpdateDensityGL(gl_qdata.rho0DetJ0, *alphaCut, rhoface_gf);
+      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdatePenaltyParameterGL(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, viscousface_gf, dist_vec, gl_qdata, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      rhoface_gf.ExchangeFaceNbrData();
+      pface_gf.ExchangeFaceNbrData();
+      csface_gf.ExchangeFaceNbrData();
+      viscousface_gf.ExchangeFaceNbrData();
 
+      /* Mv->Update();
+      Mv->BilinearForm::operator=(0.0);
+      Mv->Assemble();
+      Mv_spmat_copy = Mv->SpMat();
+      
+      Me_mat->Update();
+      Me_mat->BilinearForm::operator=(0.0);
+      Me_mat->Assemble();*/
+ 
     }
     
     void LagrangianHydroOperator::SolveVelocity(const Vector &S,
@@ -815,13 +829,15 @@ namespace mfem
 		{
 		  const IntegrationPoint &ip = ir.IntPoint(q);
 		  T->SetIntPoint(&ip);
+		  double volumeFraction = alphaCut->GetValue(*T, ip);
+	
 		  Jpr_b[z](q) = T->Jacobian();
 		  const double detJ = Jpr_b[z](q).Det();
 		  min_detJ = fmin(min_detJ, detJ);
 		  const int idx = z * nqp + q;
 		  // Assuming piecewise constant gamma that moves with the mesh.
 		  gamma_b[idx] = gamma_gf(z_id);		
-		  rho_b[idx] = qdata.rho0DetJ0(z_id*nqp + q) / detJ;
+		  rho_b[idx] = qdata.rho0DetJ0(z_id*nqp + q) / (detJ * volumeFraction);
 		  e_b[idx] = fmax(0.0, e_vals(q));
 		}
 	      }
