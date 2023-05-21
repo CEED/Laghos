@@ -186,10 +186,28 @@ namespace mfem
 	  normalGradU_el1.Mult(shape_el1,base_el1);
 	  normalGradU_el2.Mult(shape_el2,base_el2);
 
+	  DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	  v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	  v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	  // As in the volumetric viscosity.
+	  v_grad_q1.Symmetrize();
+	  v_grad_q2.Symmetrize();
+	  double h_1, h_2, mu_1, mu_2;
+	  
+	  LengthScaleAndCompression(v_grad_q1, Trans_el1, qdata.Jac0inv(0),
+				    qdata.h0, h_1, mu_1);
+	  LengthScaleAndCompression(v_grad_q2, Trans_el2, qdata.Jac0inv(0),
+				    qdata.h0, h_2, mu_2);
+	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+
 	  for (int nT = 1; nT <= nTerms; nT++){
 	    penaltyParameter /= (double)nT;
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
-	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	    // double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
+	    //  double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * density_el2 / (density_el1 + density_el2)) * penaltyParameter;	
+	    double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+
 	    weighted_h = pow(weighted_h,2*nT+1);	    
 
 	    if (nT == 1){
@@ -404,10 +422,28 @@ namespace mfem
 	  normalGradU_el1.Mult(shape_el1,base_el1);
 	  normalGradU_el2.Mult(shape_el2,base_el2);
 
+	  DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	  v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	  v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	  // As in the volumetric viscosity.
+	  v_grad_q1.Symmetrize();
+	  v_grad_q2.Symmetrize();
+	  double h_1, h_2, mu_1, mu_2;
+	  
+	  LengthScaleAndCompression(v_grad_q1, Trans_el1, qdata.Jac0inv(0),
+				    qdata.h0, h_1, mu_1);
+	  LengthScaleAndCompression(v_grad_q2, Trans_el2, qdata.Jac0inv(0),
+				    qdata.h0, h_2, mu_2);
+	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+
 	  for (int nT = 0; nT <= nTerms; nT++){
-	    //	    penaltyParameter /= (double)(nT+1);
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
-	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	    penaltyParameter /= (double)(nT+1);
+	    // double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
+	    //  double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * density_el2 / (density_el1 + density_el2)) * penaltyParameter;	
+	    double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+
 	    weighted_h = pow(weighted_h,2*nT+1);	    
 
 	    if (nT == 0){

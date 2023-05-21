@@ -425,8 +425,8 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
-      
+      nvmi = new NormalVelocityMassIntegrator(gl_qdata, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+
       nvmi->SetIntRule(&b_ir);
       Mv->AddBdrFaceIntegrator(nvmi);
 
@@ -443,15 +443,17 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, h1, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf,  dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, h1, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
+
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv->AddInteriorFaceIntegrator(shifted_nvmi);
 	
-	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
+	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
 
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
+	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
+
 	ghost_emi->SetIntRule(&b_ir);
 	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
       }
@@ -536,14 +538,14 @@ namespace mfem
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
 
-      /* Mv->Update();
+      Mv->Update();
       Mv->BilinearForm::operator=(0.0);
       Mv->Assemble();
       Mv_spmat_copy = Mv->SpMat();
       
       Me_mat->Update();
       Me_mat->BilinearForm::operator=(0.0);
-      Me_mat->Assemble();*/
+      Me_mat->Assemble();
  
     }
     
