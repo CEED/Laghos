@@ -105,6 +105,7 @@ namespace mfem
 						     ParGridFunction &csface_gf,
 						     ParGridFunction &viscousface_gf,
 						     ParGridFunction &rho0DetJ0face_gf,
+						     ParGridFunction &Jac0inv_gf,
 						     ParGridFunction &Jac0invface_gf,
 						     const int source,
 						     const double cfl,
@@ -182,6 +183,7 @@ namespace mfem
       csface_gf(csface_gf),
       viscousface_gf(viscousface_gf),
       rho0DetJ0face_gf(rho0DetJ0face_gf),
+      Jac0inv_gf(Jac0inv_gf),
       Jac0invface_gf(Jac0invface_gf),
       Mv(new ParBilinearForm(&H1)), Mv_spmat_copy(),
       Me_mat(new ParBilinearForm(&L2)),
@@ -401,13 +403,13 @@ namespace mfem
       vmi = new WeightedVectorMassIntegrator(*alphaCut, rho_gf, &ir);
       Mv->AddDomainIntegrator(vmi, ess_elem);
 
-      fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
+      fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, Jac0inv_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       Force.Assemble();
 
-      efi = new EnergyForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, use_viscosity, use_vorticity);
+      efi = new EnergyForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, Jac0inv_gf, use_viscosity, use_vorticity);
       efi->SetIntRule(&ir);
       EnergyForce.AddDomainIntegrator(efi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.

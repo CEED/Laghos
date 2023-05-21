@@ -260,6 +260,7 @@ int main(int argc, char *argv[])
 
   ParFiniteElementSpace PFace_L2FESpace(pmesh, &PFace_L2FEC);
   ParFiniteElementSpace PFaceVector_L2FESpace(pmesh, &PFace_L2FEC, pmesh->Dimension()*pmesh->Dimension() );
+  ParFiniteElementSpace PVector_L2FESpace(pmesh, &P_L2FEC, pmesh->Dimension()*pmesh->Dimension() );
 
   // Define the explicit ODE solver used for time integration.
   ODESolver *ode_solver = NULL;
@@ -334,9 +335,12 @@ int main(int argc, char *argv[])
   ParGridFunction p_gf(&P_L2FESpace);
   ParGridFunction cs_gf(&P_L2FESpace);
   ParGridFunction rho_gf(&P_L2FESpace);
+  ParGridFunction Jac0inv_gf(&PVector_L2FESpace);
+  
   p_gf = 0.0;
   cs_gf = 0.0;
   rho_gf = 0.0;
+  Jac0inv_gf = 0.0;
   
   // Grid Functions for face terms
   ParGridFunction pface_gf(&PFace_L2FESpace);
@@ -366,6 +370,8 @@ int main(int argc, char *argv[])
   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
   rho0_gf.ProjectGridFunction(l2_rho0_gf);
   Jac0invface_gf.ProjectCoefficient(Jac0inv_coeff);
+  Jac0inv_gf.ProjectCoefficient(Jac0inv_coeff);
+
   if (problem == 1)
     {
       // For the Sedov test, we use a delta function at the origin.
@@ -407,7 +413,7 @@ int main(int argc, char *argv[])
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
-					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0face_gf, Jac0invface_gf, source, cfl, numberGhostTerms, numberEnergyGhostTerms, ghostPenaltyCoefficient,
+					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, numberGhostTerms, numberEnergyGhostTerms, ghostPenaltyCoefficient,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
 					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);

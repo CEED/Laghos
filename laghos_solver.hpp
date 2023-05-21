@@ -78,6 +78,8 @@ namespace mfem
       ParGridFunction &e_gf;
       ParGridFunction &cs_gf;
       ParGridFunction &rho_gf;
+      ParGridFunction &Jac0inv_gf;
+
       // Grid Functions for face terms
       ParGridFunction &pface_gf;
       ParGridFunction &csface_gf;
@@ -183,7 +185,8 @@ namespace mfem
 			      ParGridFunction &csface_gf,
 			      ParGridFunction &viscousface_gf,
 			      ParGridFunction &rho0DetJ0face_gf,
-			      ParGridFunction &Jac0invface_gf,
+			      ParGridFunction &Jac0inv_gf,
+			      ParGridFunction &Jac0invface_gf,  
 			      const int source,
 			      const double cfl,
 			      const int numberGhostTerms,

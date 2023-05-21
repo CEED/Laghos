@@ -114,7 +114,7 @@ namespace mfem
       
     void ComputeStress(const double p, const int dim, DenseMatrix &stress);
   
-    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
+    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const DenseMatrix &Jac0inv, const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
     void ComputeViscousStressGL(ElementTransformation &T, const ParGridFunction &v, const QuadratureDataGL &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
   
     double smooth_step_01(double x, double eps);

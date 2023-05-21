@@ -104,11 +104,13 @@ public:
       const ParGridFunction &e_gf;
       const ParGridFunction &p_gf;
       const ParGridFunction &cs_gf;
+      const ParGridFunction &Jac0inv_gf;
+    
       const bool use_viscosity;
       const bool use_vorticity;
       
     public:
-      ForceIntegrator(QuadratureData &qdata, const ParGridFunction &alphaF, const ParGridFunction &v_gf, const ParGridFunction &e_gf, const ParGridFunction &p_gf, const ParGridFunction &cs_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), alpha(alphaF), v_gf(v_gf), e_gf(e_gf), p_gf(p_gf), cs_gf(cs_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity)  { }
+      ForceIntegrator(QuadratureData &qdata, const ParGridFunction &alphaF, const ParGridFunction &v_gf, const ParGridFunction &e_gf, const ParGridFunction &p_gf, const ParGridFunction &cs_gf, const ParGridFunction &Jac0inv_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), alpha(alphaF), v_gf(v_gf), e_gf(e_gf), p_gf(p_gf), cs_gf(cs_gf), Jac0inv_gf(Jac0inv_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity)  { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  ElementTransformation &Tr,
 					  Vector &elvect);
@@ -124,12 +126,13 @@ public:
       const ParGridFunction &e_gf;
       const ParGridFunction &p_gf;
       const ParGridFunction &cs_gf;
+      const ParGridFunction &Jac0inv_gf;
       const bool use_viscosity;
       const bool use_vorticity;
       const ParGridFunction *Vnpt_gf;
       
     public:
-      EnergyForceIntegrator(QuadratureData &qdata, const ParGridFunction &alphaF, const ParGridFunction &v_gf, const ParGridFunction &e_gf, const ParGridFunction &p_gf, const ParGridFunction &cs_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), alpha(alphaF), v_gf(v_gf), e_gf(e_gf), p_gf(p_gf), cs_gf(cs_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL)  { }
+      EnergyForceIntegrator(QuadratureData &qdata, const ParGridFunction &alphaF, const ParGridFunction &v_gf, const ParGridFunction &e_gf, const ParGridFunction &p_gf, const ParGridFunction &cs_gf, const ParGridFunction &Jac0inv_gf, const bool use_viscosity, const bool use_vorticity) : qdata(qdata), alpha(alphaF), v_gf(v_gf), e_gf(e_gf), p_gf(p_gf), cs_gf(cs_gf), Jac0inv_gf(Jac0inv_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL)  { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  ElementTransformation &Tr,
 					  Vector &elvect);

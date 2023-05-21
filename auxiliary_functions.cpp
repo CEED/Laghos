@@ -340,7 +340,7 @@ namespace mfem
       for (int d = 0; d < dim; d++) { stress(d, d) = -p;}
     }
 
-    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress)
+    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const DenseMatrix &Jac0inv,  const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress)
     {
       if (use_viscosity)
 	{
@@ -375,7 +375,7 @@ namespace mfem
 	  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
 	  Vector compr_dir(eig_vec_data, dim);
 	  // Computes the initial->physical transformation Jacobian.
-	  mfem::Mult(Jpr, qdata.Jac0inv(qdata_quad_index), Jpi);
+	  mfem::Mult(Jpr, Jac0inv, Jpi);
 	  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
 	  // Change of the initial mesh size in the compression direction.
 	  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
