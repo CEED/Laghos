@@ -216,10 +216,10 @@ namespace mfem
 	    penaltyParameter /= (double)nT;
 	    // double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
 	    //  double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * density_el2 / (density_el1 + density_el2)) * penaltyParameter;	
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
 	    double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
-	    weighted_h = pow(weighted_h,2*nT+1);	    
+	    weighted_h = pow(weighted_h,2*nT);	    
 
 	    if (nT == 1){
 	      for (int i = 0; i < h1dofs_cnt; i++)
@@ -289,7 +289,7 @@ namespace mfem
   }
 
 
-  void GhostScalarFullGradPenaltyIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
+ void GhostScalarFullGradPenaltyIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 								const FiniteElement &fe2,
 								FaceElementTransformations &Tr,
 								DenseMatrix &elmat)
@@ -460,12 +460,12 @@ namespace mfem
 
 	  for (int nT = 0; nT <= nTerms; nT++){
 	    penaltyParameter /= (double)(nT+1);
-	    // double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
-	    //  double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * density_el2 / (density_el1 + density_el2)) * penaltyParameter;	
+	    //  double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
+	    // double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
 	    double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
-	    weighted_h = pow(weighted_h,2*nT+1);	    
+	    weighted_h = pow(weighted_h,2*nT);	    
 
 	    if (nT == 0){
 	      for (int i = 0; i < h1dofs_cnt; i++)
@@ -542,7 +542,7 @@ namespace mfem
     }
   }
 
-    /*   
+    /*  
 void GhostScalarFullGradPenaltyIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 							      const FiniteElement &fe2,
 							      FaceElementTransformations &Tr,
@@ -585,10 +585,37 @@ void GhostScalarFullGradPenaltyIntegrator::AssembleFaceMatrix(const FiniteElemen
 	  fe.CalcShape(eip_el1, shape_el1);
 	  // element 2
 	  fe2.CalcShape(eip_el2, shape_el2);
+	  Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
+	  Jac0inv_vec_el1 = 0.0;
+	  Jac0inv_vec_el2 = 0.0;
+	  Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+	  Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
 	  
-	  double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
-	  double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	  weighted_h = pow(weighted_h,1);	    
+	  DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	  
+	  DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	  v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	  v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	  // As in the volumetric viscosity.
+	  v_grad_q1.Symmetrize();
+	  v_grad_q2.Symmetrize();
+	  double h_1, h_2, mu_1, mu_2;
+	  
+	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
+				    h0, h_1, mu_1);
+	  LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
+				    h0, h_2, mu_2);
+	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+
+	  double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * density_el2 / (density_el1 + density_el2)) * penaltyParameter;	
+	  double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+	  
+	  //  double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
+	  //  double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	  //  weighted_h = pow(weighted_h,1);	    
 
 	    for (int i = 0; i < h1dofs_cnt; i++)
 	      {
@@ -610,8 +637,8 @@ void GhostScalarFullGradPenaltyIntegrator::AssembleFaceMatrix(const FiniteElemen
       elmat.SetSize(2*h1dofs_cnt);
       elmat = 0.0;
       }
-  }
-    
+  }*/
+/* 
 void GhostGradScalarFullGradPenaltyIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 							      const FiniteElement &fe2,
 							      FaceElementTransformations &Tr,
