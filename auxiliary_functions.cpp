@@ -49,7 +49,7 @@ namespace mfem
       mu = eig_val_data[0];
     }
 
-    void UpdateDensity(const Vector &rho0DetJ0, const ParGridFunction &alpha, ParGridFunction &rho_gf)
+    void UpdateDensity(const ParGridFunction &rho0DetJ0_gf, const ParGridFunction &alpha, ParGridFunction &rho_gf)
     {
       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -69,7 +69,8 @@ namespace mfem
 		const IntegrationPoint &ip = ir.IntPoint(q);
 		Tr.SetIntPoint(&ip);
 		double volumeFraction = alpha.GetValue(Tr, ip);
-		const double rho = rho0DetJ0(e * nqp + q) / (Tr.Weight() * volumeFraction);
+		double rho0DetJ0 = rho0DetJ0_gf.GetValue(Tr, ip);
+		const double rho = rho0DetJ0 / (Tr.Weight() * volumeFraction);
 		rho_gf(e * nqp + q) = rho;
 	      }
 	  }
@@ -126,33 +127,6 @@ namespace mfem
 		double gamma_val = gamma_gf.GetValue(Tr, ip);
 		double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
 		cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
-	      }
-	  }
-	}
-    }
-    
-    void UpdateDensityGL(const Vector &rho0DetJ0, const ParGridFunction &alpha, ParGridFunction &rho_gf)
-    {
-      ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
-      const int NE = p_fespace->GetParMesh()->GetNE();
-      const ParMesh * pmesh = p_fespace->GetParMesh(); 
-      rho_gf = 0.0;
-      // Compute L2 pressure at the quadrature points, element by element.
-      for (int e = 0; e < NE; e++)
-	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    // The points (and their numbering) coincide with the nodes of p.
-	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	    const int nqp = ir.GetNPoints();
-	    
-	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	    for (int q = 0; q < nqp; q++)
-	      {
-		const IntegrationPoint &ip = ir.IntPoint(q);
-		Tr.SetIntPoint(&ip);
-		double volumeFraction = alpha.GetValue(Tr, ip);
-		const double rho = rho0DetJ0(e * nqp + q) / (Tr.Weight() * volumeFraction);
-		rho_gf(e * nqp + q) = rho;
 	      }
 	  }
 	}

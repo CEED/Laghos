@@ -104,6 +104,7 @@ namespace mfem
 						     ParGridFunction &cs_gf,
 						     ParGridFunction &csface_gf,
 						     ParGridFunction &viscousface_gf,
+						     ParGridFunction &rho0DetJ0_gf,
 						     ParGridFunction &rho0DetJ0face_gf,
 						     ParGridFunction &Jac0inv_gf,
 						     ParGridFunction &Jac0invface_gf,
@@ -182,6 +183,7 @@ namespace mfem
       pface_gf(pface_gf),
       csface_gf(csface_gf),
       viscousface_gf(viscousface_gf),
+      rho0DetJ0_gf(rho0DetJ0_gf),
       rho0DetJ0face_gf(rho0DetJ0face_gf),
       Jac0inv_gf(Jac0inv_gf),
       Jac0invface_gf(Jac0invface_gf),
@@ -237,6 +239,7 @@ namespace mfem
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
+      rho0DetJ0_gf.ExchangeFaceNbrData();
       Jac0inv_gf.ExchangeFaceNbrData();
       
       rhoface_gf.ExchangeFaceNbrData();
@@ -335,7 +338,7 @@ namespace mfem
 	      Tr.SetIntPoint(&ip);
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
 	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q) * volumeFraction;
-	      qdata.rho0DetJ0(e*NQ + q) = rho0DetJ0;
+	      rho0DetJ0_gf(e * NQ + q) = rho0DetJ0;
 	    }
 	}
       for (int e = 0; e < NE; e++)
@@ -350,11 +353,11 @@ namespace mfem
 	      Tr.SetIntPoint(&ip);
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
-	      gl_qdata.rho0DetJ0(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
 	      rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
 	    }
 	}
       rho0DetJ0face_gf.ExchangeFaceNbrData();
+      rho0DetJ0_gf.ExchangeFaceNbrData();
       
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
       
@@ -373,7 +376,7 @@ namespace mfem
       gl_qdata.h0 = qdata.h0;
 
       //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, *alphaCut, rho_gf);
+      UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       rho_gf.ExchangeFaceNbrData();
@@ -381,7 +384,7 @@ namespace mfem
       cs_gf.ExchangeFaceNbrData();
       
      //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, *alphaCut, rhoface_gf);
+      UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf,  dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
@@ -400,13 +403,13 @@ namespace mfem
       vmi = new WeightedVectorMassIntegrator(*alphaCut, rho_gf, &ir);
       Mv->AddDomainIntegrator(vmi, ess_elem);
 
-      fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, Jac0inv_gf, use_viscosity, use_vorticity);
+      fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       Force.Assemble();
 
-      efi = new EnergyForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, Jac0inv_gf, use_viscosity, use_vorticity);
+      efi = new EnergyForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
       efi->SetIntRule(&ir);
       EnergyForce.AddDomainIntegrator(efi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
@@ -520,7 +523,7 @@ namespace mfem
       }
       
       //Compute quadrature quantities
-      UpdateDensity(qdata.rho0DetJ0, *alphaCut, rho_gf);
+      UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
       rho_gf.ExchangeFaceNbrData();
@@ -528,7 +531,7 @@ namespace mfem
       cs_gf.ExchangeFaceNbrData();
 	
       //Compute quadrature quantities
-      UpdateDensityGL(gl_qdata.rho0DetJ0, *alphaCut, rhoface_gf);
+      UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
@@ -722,7 +725,7 @@ namespace mfem
       Array<int> dofs(l2dofs_cnt);
       DenseMatrixInverse inv(&Mrho);
       MassIntegrator mi(&ir);
-      DensityIntegrator di(qdata);
+      DensityIntegrator di(qdata, rho0DetJ0_gf);
       di.SetIntRule(&ir);
       for (int e = 0; e < NE; e++)
 	{
@@ -836,9 +839,11 @@ namespace mfem
 		  const double detJ = Jpr_b[z](q).Det();
 		  min_detJ = fmin(min_detJ, detJ);
 		  const int idx = z * nqp + q;
+		  double rho0DetJ0 = rho0DetJ0_gf.GetValue(*T, ip);
+
 		  // Assuming piecewise constant gamma that moves with the mesh.
 		  gamma_b[idx] = gamma_gf(z_id);		
-		  rho_b[idx] = qdata.rho0DetJ0(z_id*nqp + q) / (detJ * volumeFraction);
+		  rho_b[idx] = rho0DetJ0 / (detJ * volumeFraction);
 		  e_b[idx] = fmax(0.0, e_vals(q));
 		}
 	      }

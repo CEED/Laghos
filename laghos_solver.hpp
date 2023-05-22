@@ -78,6 +78,7 @@ namespace mfem
       ParGridFunction &e_gf;
       ParGridFunction &cs_gf;
       ParGridFunction &rho_gf;
+      ParGridFunction &rho0DetJ0_gf;
       ParGridFunction &Jac0inv_gf;
 
       // Grid Functions for face terms
@@ -184,6 +185,7 @@ namespace mfem
 			      ParGridFunction &cs_gf,
 			      ParGridFunction &csface_gf,
 			      ParGridFunction &viscousface_gf,
+			      ParGridFunction &rho0DetJ0_gf,
 			      ParGridFunction &rho0DetJ0face_gf,
 			      ParGridFunction &Jac0inv_gf,
 			      ParGridFunction &Jac0invface_gf,  

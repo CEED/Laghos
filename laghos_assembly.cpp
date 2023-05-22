@@ -267,8 +267,10 @@ namespace mfem
 	  const IntegrationPoint &ip = IntRule->IntPoint(q);
 	  fe.CalcShape(ip, shape);
 	  Tr.SetIntPoint (&ip);
+	  double rho0DetJ0 = rho0DetJ0_gf.GetValue(Tr, ip);
+
 	  // Note that rhoDetJ = rho0DetJ0.
-	  shape *= qdata.rho0DetJ0(Tr.ElementNo*nqp + q) * ip.weight;
+	  shape *= rho0DetJ0 * ip.weight;
 	  elvect += shape;
 	}
     }
@@ -301,31 +303,14 @@ namespace mfem
 	  stressJiT = 0.0;
 	  stress = 0.0;
 	  double volumeFraction = alpha.GetValue(Tr, ip);
+
 	  Vector Jac0inv_vec(dim*dim);
 	  Jac0inv_vec = 0.0;
 	  Jac0inv_gf.GetVectorValue(Tr.ElementNo,ip,Jac0inv_vec);
+	  DenseMatrix Jac0inv(dim);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
 	  
-	    DenseMatrix Jac0inv(dim);
-	    if (dim == 2){
-	      Jac0inv(0,0) = Jac0inv_vec(0);
-	      Jac0inv(0,1) = Jac0inv_vec(1);
-	      Jac0inv(1,0) = Jac0inv_vec(2);
-	      Jac0inv(1,1) = Jac0inv_vec(3);
-	    }
-	    else {
-	      Jac0inv(0,0) = Jac0inv_vec(0);
-	      Jac0inv(0,1) = Jac0inv_vec(1);
-	      Jac0inv(0,2) = Jac0inv_vec(2);
-	      Jac0inv(1,0) = Jac0inv_vec(3);
-	      Jac0inv(1,1) = Jac0inv_vec(4);
-	      Jac0inv(1,2) = Jac0inv_vec(5);
-	      Jac0inv(2,0) = Jac0inv_vec(6);
-	      Jac0inv(2,1) = Jac0inv_vec(7);
-	      Jac0inv(2,2) = Jac0inv_vec(8);
-	    }
-	    
-	  
-	  const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
+	  const double rho = rho_gf.GetValue(Tr,ip);
 	  ComputeStress(pressure,dim,stress);
 	  ComputeViscousStress(Tr, v_gf, Jac0inv, qdata.h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	  MultABt(stress, Jinv, stressJiT);
@@ -387,27 +372,10 @@ namespace mfem
 	    Vector Jac0inv_vec(dim*dim);
 	    Jac0inv_vec = 0.0;
 	    Jac0inv_gf.GetVectorValue(Tr.ElementNo,ip,Jac0inv_vec);
-	    
 	    DenseMatrix Jac0inv(dim);
-	    if (dim == 2){
-	      Jac0inv(0,0) = Jac0inv_vec(0);
-	      Jac0inv(0,1) = Jac0inv_vec(1);
-	      Jac0inv(1,0) = Jac0inv_vec(2);
-	      Jac0inv(1,1) = Jac0inv_vec(3);
-	    }
-	    else {
-	      Jac0inv(0,0) = Jac0inv_vec(0);
-	      Jac0inv(0,1) = Jac0inv_vec(1);
-	      Jac0inv(0,2) = Jac0inv_vec(2);
-	      Jac0inv(1,0) = Jac0inv_vec(3);
-	      Jac0inv(1,1) = Jac0inv_vec(4);
-	      Jac0inv(1,2) = Jac0inv_vec(5);
-	      Jac0inv(2,0) = Jac0inv_vec(6);
-	      Jac0inv(2,1) = Jac0inv_vec(7);
-	      Jac0inv(2,2) = Jac0inv_vec(8);
-	    }
-	    
-	    const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
+	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
+	    const double rho = rho_gf.GetValue(Tr,ip);
+
 	    ComputeStress(pressure,dim,stress);
 	    ComputeViscousStress(Tr, v_gf, Jac0inv, qdata.h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	    stress *= ip.weight * Jpr.Det();
