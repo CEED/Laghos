@@ -450,12 +450,12 @@ namespace mfem
 	
 	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
-	//	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
+	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
 
 	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
 
 	ghost_emi->SetIntRule(&b_ir);
-	//	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
+	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
       }
       Me_mat->Assemble();
       Mv->Assemble();

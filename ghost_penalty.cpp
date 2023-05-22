@@ -297,7 +297,7 @@ namespace mfem
     if (Tr.Attribute == 77){
       const int dim = fe.GetDim();
       const int h1dofs_cnt = fe.GetDof();
-      elmat.SetSize(2*h1dofs_cnt*dim);
+      elmat.SetSize(2*h1dofs_cnt);
       elmat = 0.0;
       Vector nor(dim), tN(dim), tang1(dim), tang1_Unit(dim), tang2(dim), tang2_Unit(dim);
       Vector shape_el1(h1dofs_cnt), shape_el2(h1dofs_cnt); 
@@ -537,7 +537,7 @@ namespace mfem
     else{
       const int dim = fe.GetDim();
       const int h1dofs_cnt = fe.GetDof();
-      elmat.SetSize(2*h1dofs_cnt*dim);
+      elmat.SetSize(2*h1dofs_cnt);
       elmat = 0.0;
     }
   }
