@@ -385,8 +385,8 @@ namespace mfem
       
      //Compute quadrature quantities
       UpdateDensityGL(gl_qdata.rho0DetJ0, *alphaCut, rhoface_gf);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf,  dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
@@ -532,8 +532,8 @@ namespace mfem
 	
       //Compute quadrature quantities
       UpdateDensityGL(gl_qdata.rho0DetJ0, *alphaCut, rhoface_gf);
-      UpdatePressureGL(gamma_gf, e_gf, rhoface_gf, pface_gf);
-      UpdateSoundSpeedGL(gamma_gf, e_gf, csface_gf);
+      UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
+      UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
