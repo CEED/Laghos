@@ -1114,7 +1114,6 @@ namespace mfem
 	      Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
 	      Jac0inv_vec_el1 = 0.0;
 	      Jac0inv_vec_el2 = 0.0;
-	      IntegrationPoint sip; sip.Init(0);
 
 	      Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
 	      Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
