@@ -538,6 +538,7 @@ namespace mfem
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
 
+      v_gf.ExchangeFaceNbrData();
       Mv->Update();
       Mv->BilinearForm::operator=(0.0);
       Mv->Assemble();
