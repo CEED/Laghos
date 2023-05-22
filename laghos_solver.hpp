@@ -108,7 +108,6 @@ namespace mfem
       // These values are recomputed at each time step.
       const int Q1D;
       mutable QuadratureData qdata;
-      mutable QuadratureDataGL gl_qdata; 
       mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled, bvemb_forcemat_is_assembled, bvemb_qdata_is_current, beemb_forcemat_is_assembled, beemb_qdata_is_current;
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
       // assembled in each time step and then it is used to compute the final

@@ -371,9 +371,17 @@ int main(int argc, char *argv[])
   ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
   rho0_gf.ProjectGridFunction(l2_rho0_gf);
+  rho0_gf.ExchangeFaceNbrData();
+  
+  rho_gf = rho0_gf;
+  rho_gf.ExchangeFaceNbrData();
+  
   Jac0invface_gf.ProjectCoefficient(Jac0inv_coeff);
   Jac0inv_gf.ProjectCoefficient(Jac0inv_coeff);
-
+  
+  Jac0inv_gf.ExchangeFaceNbrData();
+  Jac0invface_gf.ExchangeFaceNbrData();
+  
   if (problem == 1)
     {
       // For the Sedov test, we use a delta function at the origin.

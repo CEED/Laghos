@@ -31,17 +31,6 @@ namespace mfem
     // Container for all data needed at quadrature points.
     struct QuadratureData
     {
-      // Reference to physical Jacobian for the initial mesh.
-      // These are computed only at time zero and stored here.
-      DenseTensor Jac0inv;
-
-      // Quadrature data used for full/partial assembly of the mass matrices.
-      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation. This variable is not scaled with the weights at the integration points.
-      Vector rho0DetJ0;
-
       // Initial length scale. This represents a notion of local mesh size.
       // We assume that all initial zones have similar size.
       double h0;
@@ -50,42 +39,11 @@ namespace mfem
       // recomputed at every time step to achieve adaptive time stepping.
       double dt_est;
   
-      QuadratureData(int dim, int NE, int quads_per_el)
-	: Jac0inv(dim, dim, NE * quads_per_el),
-	  rho0DetJ0(NE * quads_per_el){ /*std::cout << " NE " << NE << " size " << p_gf.Size() << " quad point " << p_gf.ParFESpace()->GetFE(0)->GetNodes().GetNPoints() << " quad pe el " << quads_per_el << std::endl;*/}
+      QuadratureData()
+      { }
     };
 
-
-     // Container for all data needed at quadrature points.
-    struct QuadratureDataGL
-    {
-      
-      // Scaling of the penalty term evaluated at the face quadrature points:
-      // tau * (c_s * (rho + mu / h) + rho * vorticity * h)
-      // tau: user-defined non-dimensional constant 
-      // c_s: max. sound speed over all boundary faces/edges
-      // rho: max. density over all boundary faces/edges
-      // mu: max. artificial viscosity over all boundary faces/edges
-      // vorticity: max. vorticity over all boundary faces/edges
-      double normalVelocityPenaltyScaling;
-
-      // Quadrature data used for full/partial assembly of the mass matrices.
-      // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
-      // quadrature point. Note the at any other time, we can compute
-      // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
-      // conservation. This variable is not scaled with the weights at the integration points.
-      Vector rho0DetJ0;
-
-      // Reference to physical Jacobian for the initial mesh.
-      // These are computed only at time zero and stored here.
-      DenseTensor Jac0inv;
-      
-      // Initial length scale. This represents a notion of local mesh size.
-      // We assume that all initial zones have similar size.
-      double h0;
-
-      QuadratureDataGL(int dim, int NE, int quads_per_faceel) :  rho0DetJ0(NE * quads_per_faceel), normalVelocityPenaltyScaling(0.0), Jac0inv(dim, dim, NE * quads_per_faceel) { }
-    };
+  
     void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
 				   ElementTransformation &T,
 				   const DenseMatrix &Jac0inv, double h0,

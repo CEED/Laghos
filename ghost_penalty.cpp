@@ -206,9 +206,9 @@ namespace mfem
 	  double h_1, h_2, mu_1, mu_2;
 	  
 	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
-				    qdata.h0, h_1, mu_1);
+				    h0, h_1, mu_1);
 	  LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
-				    qdata.h0, h_2, mu_2);
+				    h0, h_2, mu_2);
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 
@@ -452,9 +452,9 @@ namespace mfem
 	  double h_1, h_2, mu_1, mu_2;
 	  
 	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
-				    qdata.h0, h_1, mu_1);
+				    h0, h_1, mu_1);
 	  LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
-				    qdata.h0, h_2, mu_2);
+				    h0, h_2, mu_2);
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 

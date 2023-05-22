@@ -312,7 +312,7 @@ namespace mfem
 	  
 	  const double rho = rho_gf.GetValue(Tr,ip);
 	  ComputeStress(pressure,dim,stress);
-	  ComputeViscousStress(Tr, v_gf, Jac0inv, qdata.h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	  ComputeViscousStress(Tr, v_gf, Jac0inv, h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	  MultABt(stress, Jinv, stressJiT);
 	  stressJiT *= ip.weight * Jpr.Det();
 	  
@@ -377,7 +377,7 @@ namespace mfem
 	    const double rho = rho_gf.GetValue(Tr,ip);
 
 	    ComputeStress(pressure,dim,stress);
-	    ComputeViscousStress(Tr, v_gf, Jac0inv, qdata.h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	    ComputeViscousStress(Tr, v_gf, Jac0inv, h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	    stress *= ip.weight * Jpr.Det();
 	    //
 	    TrV.SetIntPoint(&ip);
@@ -442,29 +442,13 @@ namespace mfem
 	  el.CalcShape(eip, te_shape);
 	  double pressure = pface_gf.GetValue(Trans_el1,eip);
 	  double sound_speed = csface_gf.GetValue(Trans_el1,eip);
+
 	  Vector Jac0inv_vec(dim*dim);
 	  Jac0inv_vec = 0.0;
-	  Jac0invface_gf.GetVectorValue(elementNo,eip,Jac0inv_vec);
-
+	  Jac0invface_gf.GetVectorValue(Tr.ElementNo,eip,Jac0inv_vec);
 	  DenseMatrix Jac0inv(dim);
-	  if (dim == 2){
-	    Jac0inv(0,0) = Jac0inv_vec(0);
-	    Jac0inv(0,1) = Jac0inv_vec(1);
-	    Jac0inv(1,0) = Jac0inv_vec(2);
-	    Jac0inv(1,1) = Jac0inv_vec(3);
-	  }
-	  else {
-	    Jac0inv(0,0) = Jac0inv_vec(0);
-	    Jac0inv(0,1) = Jac0inv_vec(1);
-	    Jac0inv(0,2) = Jac0inv_vec(2);
-	    Jac0inv(1,0) = Jac0inv_vec(3);
-	    Jac0inv(1,1) = Jac0inv_vec(4);
-	    Jac0inv(1,2) = Jac0inv_vec(5);
-	    Jac0inv(2,0) = Jac0inv_vec(6);
-	    Jac0inv(2,1) = Jac0inv_vec(7);
-	    Jac0inv(2,2) = Jac0inv_vec(8);
-	  }
-
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
+	  
 	  double nor_norm = 0.0;
 	  for (int s = 0; s < dim; s++){
 	    nor_norm += nor(s) * nor(s);
@@ -568,26 +552,10 @@ namespace mfem
 
 	    Vector Jac0inv_vec(dim*dim);
 	    Jac0inv_vec = 0.0;
-	    Jac0invface_gf.GetVectorValue(elementNo,eip,Jac0inv_vec);
-
+	    Jac0invface_gf.GetVectorValue(Tr.ElementNo,eip,Jac0inv_vec);
 	    DenseMatrix Jac0inv(dim);
-	    if (dim == 2){
-	      Jac0inv(0,0) = Jac0inv_vec(0);
-	      Jac0inv(0,1) = Jac0inv_vec(1);
-	      Jac0inv(1,0) = Jac0inv_vec(2);
-	      Jac0inv(1,1) = Jac0inv_vec(3);
-	    }
-	    else {
-	      Jac0inv(0,0) = Jac0inv_vec(0);
-	      Jac0inv(0,1) = Jac0inv_vec(1);
-	      Jac0inv(0,2) = Jac0inv_vec(2);
-	      Jac0inv(1,0) = Jac0inv_vec(3);
-	      Jac0inv(1,1) = Jac0inv_vec(4);
-	      Jac0inv(1,2) = Jac0inv_vec(5);
-	      Jac0inv(2,0) = Jac0inv_vec(6);
-	      Jac0inv(2,1) = Jac0inv_vec(7);
-	      Jac0inv(2,2) = Jac0inv_vec(8);
-	    }
+	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
+	    
 
 	    double nor_norm = 0.0;
 	    for (int s = 0; s < dim; s++){
@@ -763,7 +731,7 @@ namespace mfem
 	  double h_1, mu_1;
 	  
 	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv,
-				    qdata.h0, h_1, mu_1);
+				    h0, h_1, mu_1);
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
 
 	   // OLD //
@@ -1010,313 +978,7 @@ namespace mfem
 	elvect.SetSize(2*l2dofs_cnt);
 	elvect = 0.0;
       }
-      }     
-
-    /*
-    void ShiftedEnergyBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
-								      const FiniteElement &el2,
-								      FaceElementTransformations &Tr,
-								      Vector &elvect)
-    {
-      if (Vnpt_gf != NULL){ 
-	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
-	  const int dim = el.GetDim();
-	  const int nqp_face = IntRule->GetNPoints();
-
-	  const int l2dofs_cnt = el.GetDof();
-	  int l2dofs_offset = el2.GetDof();
-	  elvect.SetSize(l2dofs_cnt*2);
-	  elvect = 0.0;
-	  Vector te_shape_el1(l2dofs_cnt), te_shape_el2(l2dofs_cnt), nor(dim);
-	  te_shape_el1 = 0.0;
-	  te_shape_el2 = 0.0;
-	  nor = 0.0;
-	  
-	  ParFiniteElementSpace * pfes = Vnpt_gf->ParFESpace();
-	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	  const int elementNo_el1 = Trans_el1.ElementNo;
-	  Vector loc_data_el1;
-	  Array<int> vdofs_el1;
-	  DofTransformation * doftrans_el1 = pfes->GetElementVDofs(elementNo_el1, vdofs_el1);
-	  Vnpt_gf->GetSubVector(vdofs_el1, loc_data_el1);
-	  if (doftrans_el1)
-	    {
-	      doftrans_el1->InvTransformPrimal(loc_data_el1);
-	    }
-	  
-	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
-	  const int elementNo_el2 = Trans_el2.ElementNo;
-	  Vector loc_data_el2;
-	  int nbr_el_no = elementNo_el2 - pfes->GetParMesh()->GetNE();
-	  if (nbr_el_no >= 0)
-	    {
-	      int height = pfes->GetVSize();
-	      Array<int> vdofs_el2;      
-	      pfes->GetFaceNbrElementVDofs(nbr_el_no, vdofs_el2);
-	      
-	      for (int j = 0; j < vdofs_el2.Size(); j++)
-		{
-		  if (vdofs_el2[j] >= 0)
-		    {
-		      vdofs_el2[j] += height;
-		    }
-		  else
-		    {
-		      vdofs_el2[j] -= height;
-		    }
-		}
-	      Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
-	    }
-	  else{
-	    Array<int> vdofs_el2;
-	    DofTransformation * doftrans_el2 = pfes->GetElementVDofs(elementNo_el2, vdofs_el2); 
-	    Vnpt_gf->GetSubVector(vdofs_el2, loc_data_el2);
-	  }
-
-	  for (int q = 0; q  < nqp_face; q++)
-	    {
-	      te_shape_el1 = 0.0;
-	      te_shape_el2 = 0.0;
-	      nor = 0.0;
-	      
-	      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
-	      // Set the integration point in the face and the neighboring elements
-	      Tr.SetAllIntPoints(&ip_f);
-	      const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
-	      const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
-	    
-	      double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
-	      double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
-	      double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
-	      double gamma_1 =  volumeFraction_el1/sum_volFrac;
-	      double gamma_2 =  volumeFraction_el2/sum_volFrac;
-	    
-	      CalcOrtho(Tr.Jacobian(), nor);
-	      double nor_norm = 0.0;
-	      for (int s = 0; s < dim; s++){
-		nor_norm += nor(s) * nor(s);
-	      }
-	      nor_norm = sqrt(nor_norm);
-	      
-	      el.CalcShape(eip_el1, te_shape_el1);
-	      el2.CalcShape(eip_el2, te_shape_el2);
-	
-	      double pressure_el1 = pface_gf.GetValue(Trans_el1,eip_el1);
-	      double pressure_el2 = pface_gf.GetValue(Trans_el2,eip_el2);
-	     
-	      DenseMatrix stress_el1(dim), stress_el2(dim);
-	      stress_el1 = 0.0;
-	      stress_el2 = 0.0;
-	      ComputeStress(pressure_el1,dim,stress_el1);
-	      ComputeStress(pressure_el2,dim,stress_el2);
-	
-	      /////////////      
-	      int h1dofs_cnt = 0.0;
-	      Vector velocity_shape_el1, gradUResD_el1;
-	      DenseMatrix nodalGrad_el1, gradUResDirD_el1, taylorExp_el1;
-	      const FiniteElement *FElem = pfes->GetFE(elementNo_el1);
-	      h1dofs_cnt = FElem->GetDof();
-	      velocity_shape_el1.SetSize(h1dofs_cnt);
-	      velocity_shape_el1 = 0.0;
-	      FElem->CalcShape(eip_el1, velocity_shape_el1);
-	      FElem->ProjectGrad(*FElem,Trans_el1,nodalGrad_el1);
-	      
-	      gradUResD_el1.SetSize(h1dofs_cnt);
-	      gradUResDirD_el1.SetSize(h1dofs_cnt);
-	      taylorExp_el1.SetSize(h1dofs_cnt);
-	      
-	      gradUResD_el1 = 0.0;
-	      gradUResDirD_el1 = 0.0;
-	      taylorExp_el1 = 0.0;
-	      
-	      /////
-	      Vector D_el1(dim);
-	      Vector tN_el1(dim);
-	      D_el1 = 0.0;
-	      tN_el1 = 0.0; 
-	      vD->Eval(D_el1, Trans_el1, eip_el1);
-	      vN->Eval(tN_el1, Trans_el1, eip_el1);
-	      /////
-
-	      double nTildaDotN = 0.0;
-	      for (int s = 0; s < dim; s++){
-		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
-	      }
-		
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int j = 0; j < dim; j++){
-		    gradUResDirD_el1(s,k) += nodalGrad_el1(k + j * h1dofs_cnt, s) * D_el1(j);
-		  }
-		}
-	      }
-		
-	      DenseMatrix tmp_el1(h1dofs_cnt);
-	      DenseMatrix dummy_tmp_el1(h1dofs_cnt);
-	      tmp_el1 = gradUResDirD_el1;
-	      taylorExp_el1 = gradUResDirD_el1;
-	      dummy_tmp_el1 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape_el1(s);  
-		}
-	      }
-		
-	      for ( int p = 1; p < nTerms; p++){
-		dummy_tmp_el1 = 0.0;
-		taylorExp_el1 = 0.0;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    for (int r = 0; r < h1dofs_cnt; r++){
-		      taylorExp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s) * (1.0/factorial(p+1));
-		      dummy_tmp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s);
-		    }
-		  }
-		}
-		tmp_el1 = dummy_tmp_el1;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    gradUResD_el1(k) += taylorExp_el1(k,s) * velocity_shape_el1(s);  
-		  }
-		}
-	      }
-		
-	      ////
-	      velocity_shape_el1 += gradUResD_el1;
-	      ////
-		
-	      Vector vShape_el1(dim);
-	      vShape_el1 = 0.0;
-	      for (int k = 0; k < dim; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  vShape_el1(k) += velocity_shape_el1(s) * loc_data_el1(s + h1dofs_cnt * k);
-		}
-	      }
-	  
-	      double vDotn_el1 = 0.0;
-	      for (int s = 0; s < dim; s++)
-		{
-		  vDotn_el1 += vShape_el1(s) * tN_el1(s);
-		}
-	
-	      ////////////////	
-	      Vector velocity_shape_el2, gradUResD_el2;
-	      DenseMatrix nodalGrad_el2, gradUResDirD_el2, taylorExp_el2;
-	      if (nbr_el_no >= 0){
-		const FiniteElement *FElem = pfes->GetFaceNbrFE(nbr_el_no);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape_el2.SetSize(h1dofs_cnt);
-		velocity_shape_el2 = 0.0;
-		FElem->CalcShape(eip_el2, velocity_shape_el2);
-		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
-	      }
-	      else {
-		const FiniteElement *FElem = pfes->GetFE(elementNo_el2);
-		h1dofs_cnt = FElem->GetDof();
-		velocity_shape_el2.SetSize(h1dofs_cnt);
-		velocity_shape_el2 = 0.0;
-		FElem->CalcShape(eip_el2, velocity_shape_el2);
-		FElem->ProjectGrad(*FElem,Trans_el2,nodalGrad_el2);
-	      }
-		
-	      gradUResD_el2.SetSize(h1dofs_cnt);
-	      gradUResDirD_el2.SetSize(h1dofs_cnt);
-	      taylorExp_el2.SetSize(h1dofs_cnt);
-		
-	      gradUResD_el2 = 0.0;
-	      gradUResDirD_el2 = 0.0;
-	      taylorExp_el2 = 0.0;
-		
-	      /////
-	      Vector D_el2(dim);
-	      Vector tN_el2(dim);
-	      D_el2 = 0.0;
-	      tN_el2 = 0.0;
-	      vD->Eval(D_el2, Trans_el2, eip_el2);
-	      vN->Eval(tN_el2, Trans_el2, eip_el2);
-	      /////
-		
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int j = 0; j < dim; j++){
-		    gradUResDirD_el2(s,k) += nodalGrad_el2(k + j * h1dofs_cnt, s) * D_el2(j);
-		  }
-		}
-	      }
-		
-	      DenseMatrix tmp_el2(h1dofs_cnt);
-	      DenseMatrix dummy_tmp_el2(h1dofs_cnt);
-	      tmp_el2 = gradUResDirD_el2;
-	      taylorExp_el2 = gradUResDirD_el2;
-	      dummy_tmp_el2 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape_el2(s);  
-		}
-	      }
-		
-	      for ( int p = 1; p < nTerms; p++){
-		dummy_tmp_el2 = 0.0;
-		taylorExp_el2 = 0.0;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    for (int r = 0; r < h1dofs_cnt; r++){
-		      taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
-		      dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
-		    }
-		  }
-		}
-		tmp_el2 = dummy_tmp_el2;
-		for (int k = 0; k < h1dofs_cnt; k++){
-		  for (int s = 0; s < h1dofs_cnt; s++){
-		    gradUResD_el2(k) += taylorExp_el2(k,s) * velocity_shape_el2(s);  
-		  }
-		}
-	      }
-		
-	      ////
-	      velocity_shape_el2 += gradUResD_el2;
-	      //
-		
-	      Vector vShape_el2(dim);
-	      vShape_el2 = 0.0;
-	      for (int k = 0; k < dim; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  vShape_el2(k) += velocity_shape_el2(s) * loc_data_el2(s + h1dofs_cnt * k);
-		}
-	      }
-	      double vDotn_el2 = 0.0;
-	      for (int s = 0; s < dim; s++)
-		{
-		  vDotn_el2 += vShape_el2(s) * tN_el1(s);
-		}
-	      ///////	
-	      for (int i = 0; i < l2dofs_cnt; i++)
-		{
-		  for (int vd = 0; vd < dim; vd++)
-		    {
-		      for (int md = 0; md < dim; md++)
-			{
-			  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) / nor_norm - volumeFraction_el2 * nor(vd) / nor_norm ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * ip_f.weight * tN_el1(md);
-			  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) / nor_norm - volumeFraction_el2 * nor(vd) / nor_norm ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * ip_f.weight * tN_el1(md);
-			}
-		    }
-		}
-	    }	  
-	}
-	else{
-	  const int l2dofs_cnt = el.GetDof();
-	  elvect.SetSize(2*l2dofs_cnt);
-	  elvect = 0.0;
-	}
-      }
-      else{
-	const int l2dofs_cnt = el.GetDof();
-	elvect.SetSize(2*l2dofs_cnt);
-	elvect = 0.0;
-      }
-    }      */
-
+    }     
 
     void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 								 const FiniteElement &fe2,
@@ -1393,44 +1055,90 @@ namespace mfem
 	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
 	    }
 
-	    Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
-	    Jac0inv_vec_el1 = 0.0;
-	    Jac0inv_vec_el2 = 0.0;
-	    Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
-	    Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
-	 
-	    DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
-	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
-	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
-	    
-	    DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
-	    v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
-	    v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
-	    
-	    // As in the volumetric viscosity.
-            v_grad_q1.Symmetrize();
-            v_grad_q2.Symmetrize();
-	    double h_1, h_2, mu_1, mu_2;
-	    
-            LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
-                                      qdata.h0, h_1, mu_1);
-            LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
-                                      qdata.h0, h_2, mu_2);
-	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
-	    double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 
-	   
 	    double penaltyVal = 0.0;
 	    //	    penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
+	    
 	    if (Tr.Attribute == 11){
-	      penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1 + gamma_2 * h_2 * density_el2) ;
-	      //  penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 * qdata.h0/h_1 + gamma_2 * density_el2 * qdata.h0/h_2) ;
+	      if (gamma_1 > 0.9){
+		Vector Jac0inv_vec_el1(dim*dim);
+		Jac0inv_vec_el1 = 0.0;
+		Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+		
+		DenseMatrix Jac0inv_el1(dim);
+		ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	
+		DenseMatrix v_grad_q1(dim);
+		v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+		
+		// As in the volumetric viscosity.
+		v_grad_q1.Symmetrize();
+		double h_1, mu_1;
+		
+		LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
+					hinit, h_1, mu_1);
+		double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+		//	std::cout << " de1ns " << density_el1 << " h " << h_1 << std::endl;	      
+	
+		penaltyVal = penaltyParameter * h_1 * density_el1 ;
+	      }
+	      else {
+		Vector Jac0inv_vec_el2(dim*dim);
+		Jac0inv_vec_el2 = 0.0;
+		Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
+		
+		DenseMatrix Jac0inv_el2(dim);
+		ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	      
+		DenseMatrix v_grad_q2(dim);
+		v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+		
+		// As in the volumetric viscosity.
+		v_grad_q2.Symmetrize();
+		double h_2, mu_2;
+		
+		LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
+					  hinit, h_2, mu_2);
+		double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+		//		std::cout << " de2ns " << density_el2 << " h " << h_2 << std::endl;	      
+		penaltyVal = penaltyParameter * h_2 * density_el2 ;
+		   //  penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 * qdata.h0/h_1 + gamma_2 * density_el2 * qdata.h0/h_2) ;
 	      // penaltyVal = penaltyParameter * (gamma_1 * h_1  + gamma_2 * h_2) * globalmax_rho ;
 	      //penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 + gamma_2 * density_el2)/* * origNormalProd */;
 	      //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (gamma_1 * h_1 + gamma_2 * h_2) * origNormalProd;
 	   
+	      }
 	    }
+	    
 	    else{
+	      Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
+	      Jac0inv_vec_el1 = 0.0;
+	      Jac0inv_vec_el2 = 0.0;
+	      IntegrationPoint sip; sip.Init(0);
+
+	      Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+	      Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
+	      
+	      DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
+	      ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	      ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	      
+	      DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	      v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	      v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	      
+	      // As in the volumetric viscosity.
+	      v_grad_q1.Symmetrize();
+	      v_grad_q2.Symmetrize();
+	      double h_1, h_2, mu_1, mu_2;
+	      
+	      LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
+					hinit, h_1, mu_1);
+	      LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
+					hinit, h_2, mu_2);
+	      double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	      double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+	      // std::cout << " d1e " << density_el1 << " d2e " << density_el2 << " h " << h_1 << " h " << h_2 << std::endl;
 	      penaltyVal = penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
 	      //  penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) * ( (qdata.h0/h_1) *  (qdata.h0/h_2) / (qdata.h0/h_1 + qdata.h0/h_2));
 	      //    penaltyVal = penaltyParameter * (h_1 * h_2  / ( h_1  + h_2  ) ) * globalmax_rho;
@@ -1473,241 +1181,6 @@ namespace mfem
 	elmat = 0.0;    
       }
     }
-    
-    /* void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
-								 const FiniteElement &fe2,
-								 FaceElementTransformations &Tr,
-								 DenseMatrix &elmat)
-    {
-      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
-	const int dim = fe.GetDim();
-	DenseMatrix identity(dim);
-	identity = 0.0;
-	for (int s = 0; s < dim; s++){
-	  identity(s,s) = 1.0;
-	}
-	const int nqp_face = IntRule->GetNPoints();
-	const int h1dofs_cnt = fe.GetDof();
-	elmat.SetSize(2*h1dofs_cnt*dim);
-	elmat = 0.0;
-	
-	Vector shape_el1(h1dofs_cnt), shape_test_el1(h1dofs_cnt), nor(dim), gradUResD_el1(h1dofs_cnt), test_gradUResD_el1(h1dofs_cnt);
-	Vector shape_el2(h1dofs_cnt), shape_test_el2(h1dofs_cnt), gradUResD_el2(h1dofs_cnt), test_gradUResD_el2(h1dofs_cnt);
-	ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
-	DenseMatrix nodalGrad_el1, gradUResDirD_el1(h1dofs_cnt), taylorExp_el1(h1dofs_cnt);
-	fe.ProjectGrad(fe,Trans_el1,nodalGrad_el1);
-	DenseMatrix nodalGrad_el2, gradUResDirD_el2(h1dofs_cnt), taylorExp_el2(h1dofs_cnt);
-	fe2.ProjectGrad(fe2, Trans_el2, nodalGrad_el2);
-
-	int h1dofs_offset = fe2.GetDof()*dim;
-
-	for (int q = 0; q < nqp_face; q++)
-	  {
-	    nor = 0.0;
-	    
-	    shape_el1 = 0.0;
-	    shape_test_el1 = 0.0;
-	    shape_el2 = 0.0;
-	    shape_test_el2 = 0.0;
-
-	    gradUResDirD_el1 = 0.0;
-	    gradUResD_el1 = 0.0;
-	    taylorExp_el1 = 0.0;
-	    test_gradUResD_el1 = 0.0;
-
-	    gradUResDirD_el2 = 0.0;
-	    gradUResD_el2 = 0.0;
-	    taylorExp_el2 = 0.0;
-	    test_gradUResD_el2 = 0.0;
-
-	    const IntegrationPoint &ip_f = IntRule->IntPoint(q);
-	    // Set the integration point in the face and the neighboring elements
-	    Tr.SetAllIntPoints(&ip_f);
-	    const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
-	    const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
-	    
-	    CalcOrtho(Tr.Jacobian(), nor);
-
-	    double nor_norm = 0.0;
-	    for (int s = 0; s < dim; s++){
-	      nor_norm += nor(s) * nor(s);
-	    }
-	    nor_norm = sqrt(nor_norm);
-
-	    Vector tn(dim);
-	    tn = 0.0;
-	    tn = nor;
-	    tn /= nor_norm;
-	    
-	    double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
-	    double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
-	    double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
-	    double gamma_1 =  volumeFraction_el1/sum_volFrac;
-	    double gamma_2 =  volumeFraction_el2/sum_volFrac;
-	    
-	    /////
-	    Vector D_el1(dim);
-	    Vector tN_el1(dim);
-	    D_el1 = 0.0;
-	    tN_el1 = 0.0; 	    
-	    vD->Eval(D_el1, Trans_el1, eip_el1);
-	    vN->Eval(tN_el1, Trans_el1, eip_el1);
-	    /////
-	    
-	    fe.CalcShape(eip_el1, shape_el1);
-	    fe.CalcShape(eip_el1, shape_test_el1);
-	    
-	    double nTildaDotN = 0.0;
-	    for (int s = 0; s < dim; s++){
-	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
-	    }
-	    
-	    double penaltyVal = 0.0;
-	    penaltyVal =  4.0 * penaltyParameter * globalmax_rho ;
-
-	    ////////
-	    for (int k = 0; k < h1dofs_cnt; k++){
-	      for (int s = 0; s < h1dofs_cnt; s++){
-		for (int j = 0; j < dim; j++){
-		  gradUResDirD_el1(s,k) += nodalGrad_el1(k + j * h1dofs_cnt, s) * D_el1(j);
-		}
-	      }
-	    }
-
-	    DenseMatrix tmp_el1(h1dofs_cnt);
-	    DenseMatrix dummy_tmp_el1(h1dofs_cnt);
-	    tmp_el1 = gradUResDirD_el1;
-	    taylorExp_el1 = gradUResDirD_el1;
-	    dummy_tmp_el1 = 0.0;
-	    for (int k = 0; k < h1dofs_cnt; k++){
-	      for (int s = 0; s < h1dofs_cnt; s++){
-		gradUResD_el1(k) += taylorExp_el1(k,s) * shape_el1(s);  
-	      }
-	    }
-	    Vector test_gradUResD_el1(h1dofs_cnt);
-	    test_gradUResD_el1 = gradUResD_el1;
-	    
-	    for ( int p = 1; p < nTerms; p++){
-	      dummy_tmp_el1 = 0.0;
-	      taylorExp_el1 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int r = 0; r < h1dofs_cnt; r++){
-		    taylorExp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s) * (1.0/factorial(p+1));
-		    dummy_tmp_el1(k,s) += tmp_el1(k,r) * gradUResDirD_el1(r,s);
-		  }
-		}
-	      }
-	      tmp_el1 = dummy_tmp_el1;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el1(k) += taylorExp_el1(k,s) * shape_el1(s);  
-		}
-	      }
-	    }
-	    
-	    ////
-	    shape_el1 += gradUResD_el1;
-	    //
-	    
-	    if (fullPenalty){
-	      shape_test_el1 += gradUResD_el1;
-	    }
-	    else{
-	      shape_test_el1 += test_gradUResD_el1;
-	    }
-	    //////////
-	    
-	    /////
-	    Vector D_el2(dim);
-	    Vector tN_el2(dim);
-	    D_el2 = 0.0;
-	    tN_el2 = 0.0;  
-	    vD->Eval(D_el2, Trans_el2, eip_el2);
-	    vN->Eval(tN_el2, Trans_el2, eip_el2);
-	    /////
-
-	    fe2.CalcShape(eip_el2, shape_el2);
-	    fe2.CalcShape(eip_el2, shape_test_el2);
-	    
-	    for (int k = 0; k < h1dofs_cnt; k++){
-	      for (int s = 0; s < h1dofs_cnt; s++){
-		for (int j = 0; j < dim; j++){
-		  gradUResDirD_el2(s,k) += nodalGrad_el2(k + j * h1dofs_cnt, s) * D_el2(j);
-		}
-	      }
-	    }
-	    
-	    DenseMatrix tmp_el2(h1dofs_cnt);
-	    DenseMatrix dummy_tmp_el2(h1dofs_cnt);
-	    tmp_el2 = gradUResDirD_el2;
-	    taylorExp_el2 = gradUResDirD_el2;
-	    dummy_tmp_el2 = 0.0;
-	    for (int k = 0; k < h1dofs_cnt; k++){
-	      for (int s = 0; s < h1dofs_cnt; s++){
-		gradUResD_el2(k) += taylorExp_el2(k,s) * shape_el2(s);  
-	      }
-	    }
-	    Vector test_gradUResD_el2(h1dofs_cnt);
-	    test_gradUResD_el2 = gradUResD_el2;
-	    
-	    for ( int p = 1; p < nTerms; p++){
-	      dummy_tmp_el2 = 0.0;
-	      taylorExp_el2 = 0.0;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  for (int r = 0; r < h1dofs_cnt; r++){
-		    taylorExp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s) * (1.0/factorial(p+1));
-		    dummy_tmp_el2(k,s) += tmp_el2(k,r) * gradUResDirD_el2(r,s);
-		  }
-		}
-	      }
-	      tmp_el2 = dummy_tmp_el2;
-	      for (int k = 0; k < h1dofs_cnt; k++){
-		for (int s = 0; s < h1dofs_cnt; s++){
-		  gradUResD_el2(k) += taylorExp_el2(k,s) * shape_el2(s);  
-		}
-	      }
-	    }
-	    
-	    ////
-	    shape_el2 += gradUResD_el2;
-	    //
-	    
-	    if (fullPenalty){
-	      shape_test_el2 += gradUResD_el2;
-	    }
-	    else{
-	      shape_test_el2 += test_gradUResD_el2;
-	    }
-	    
-	    for (int i = 0; i < h1dofs_cnt; i++)
-	      {
-		for (int vd = 0; vd < dim; vd++) // Velocity components.
-		  {
-		    for (int j = 0; j < h1dofs_cnt; j++)
-		      {
-			for (int md = 0; md < dim; md++) // Velocity components.
-			  {	      
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN;
-	
-			  }
-		      }
-		  }
-	      }	    
-	  }
-      }
-      else{
-	const int dim = fe.GetDim();
-	const int h1dofs_cnt = fe.GetDof();
-	elmat.SetSize(2*h1dofs_cnt*dim);
-	elmat = 0.0;    
-      }
-    }*/
     
   } // namespace hydrodynamics
   

@@ -42,7 +42,7 @@ namespace mfem
   class GhostVectorFullGradPenaltyIntegrator : public BilinearFormIntegrator
   {
   private:
-    const QuadratureDataGL &qdata;
+    const double h0;
     ParMesh *pmesh;
     const double &globalmax_rho;
     double penaltyParameter; 
@@ -53,7 +53,7 @@ namespace mfem
     const ParGridFunction &Jac0invface_gf;
       
   public:
-    GhostVectorFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
+    GhostVectorFullGradPenaltyIntegrator(const double h0, ParMesh *pmesh, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : h0(h0), pmesh(pmesh), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
     virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				    const FiniteElement &fe2,
 				    FaceElementTransformations &Tr,
@@ -63,7 +63,7 @@ namespace mfem
     class GhostScalarFullGradPenaltyIntegrator : public BilinearFormIntegrator
   {
   private:
-    const QuadratureDataGL &qdata;
+    const double h0;
     ParMesh *pmesh;
     const double &globalmax_rho;
     double penaltyParameter; 
@@ -74,7 +74,7 @@ namespace mfem
     const ParGridFunction &Jac0invface_gf;
              
   public:
-    GhostScalarFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
+    GhostScalarFullGradPenaltyIntegrator(const double h0, ParMesh *pmesh, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : h0(h0), pmesh(pmesh), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
     virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				    const FiniteElement &fe2,
 				    FaceElementTransformations &Tr,

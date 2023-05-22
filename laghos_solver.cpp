@@ -196,8 +196,7 @@ namespace mfem
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
       b_ir(GLIntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), 4.0*(H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW()) )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
-      qdata(dim, NE, P_L2.GetFE(0)->GetNodes().GetNPoints()),
-      gl_qdata(dim, NE, PFace_L2.GetFE(0)->GetNodes().GetNPoints()),
+      qdata(),
       qdata_is_current(false),
       forcemat_is_assembled(false),
       energyforcemat_is_assembled(false),
@@ -235,7 +234,7 @@ namespace mfem
       block_offsets[3] = block_offsets[2] + L2Vsize;
       one = 1.0;
 
-      rho_gf = rho0_gf;
+      
       rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
@@ -325,22 +324,23 @@ namespace mfem
       double Volume, vol = 0.0;
 
       const int NQ = ir.GetNPoints();
-      Vector rho_vals(NQ);
       
       for (int e = 0; e < NE; e++)
-	{	 
-	  rho0_gf.GetValues(e, ir, rho_vals);
-	  ElementTransformation &Tr = *H1.GetElementTransformation(e);
-	  for (int q = 0; q < NQ; q++)
+	{	 	  
+	  const IntegrationRule &ir_p = P_L2.GetFE(e)->GetNodes();
+	  const int gl_nqp = ir_p.GetNPoints(); 
+	  ElementTransformation &Tr = *P_L2.GetElementTransformation(e);
+	  for (int q = 0; q < gl_nqp; q++)
 	    {
-	      const int nqp = ir.GetNPoints();	  
 	      const IntegrationPoint &ip = ir.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
-	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q) * volumeFraction;
-	      rho0DetJ0_gf(e * NQ + q) = rho0DetJ0;
+	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip) * volumeFraction;
+	      rho0DetJ0_gf(e * gl_nqp + q) = rho0DetJ0;
 	    }
 	}
+      rho0DetJ0_gf.ExchangeFaceNbrData();
+      
       for (int e = 0; e < NE; e++)
 	{
 	  // The points (and their numbering) coincide with the nodes of p.
@@ -357,7 +357,6 @@ namespace mfem
 	    }
 	}
       rho0DetJ0face_gf.ExchangeFaceNbrData();
-      rho0DetJ0_gf.ExchangeFaceNbrData();
       
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
       
@@ -373,7 +372,6 @@ namespace mfem
 	default: MFEM_ABORT("Unknown zone type!");
 	}
       qdata.h0 /= (double) H1.GetOrder(0);
-      gl_qdata.h0 = qdata.h0;
 
       //Compute quadrature quantities
       UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
@@ -403,61 +401,61 @@ namespace mfem
       vmi = new WeightedVectorMassIntegrator(*alphaCut, rho_gf, &ir);
       Mv->AddDomainIntegrator(vmi, ess_elem);
 
-      fi = new ForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
+      fi = new ForceIntegrator(qdata.h0, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       Force.Assemble();
 
-      efi = new EnergyForceIntegrator(qdata, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
+      efi = new EnergyForceIntegrator(qdata.h0, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
       efi->SetIntRule(&ir);
       EnergyForce.AddDomainIntegrator(efi, ess_elem);
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
 
-      v_bfi = new VelocityBoundaryForceIntegrator(gl_qdata, *alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
+      v_bfi = new VelocityBoundaryForceIntegrator(*alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
       VelocityBoundaryForce.Assemble();
       
-      e_bfi = new EnergyBoundaryForceIntegrator(gl_qdata, *alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
+      e_bfi = new EnergyBoundaryForceIntegrator(*alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       e_bfi->SetIntRule(&b_ir);
       EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(gl_qdata, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
 
       nvmi->SetIntRule(&b_ir);
       Mv->AddBdrFaceIntegrator(nvmi);
 
       if (useEmbedded){
-	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf);
+	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
 	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
-	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, gl_qdata, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
+	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
 	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(pmesh, h1, gl_qdata, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
 
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv->AddInteriorFaceIntegrator(shifted_nvmi);
 	
-	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
+	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
-	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
+	//	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
 
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
+	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
 
 	ghost_emi->SetIntRule(&b_ir);
-	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
+	//	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
       }
       Me_mat->Assemble();
       Mv->Assemble();
@@ -725,7 +723,7 @@ namespace mfem
       Array<int> dofs(l2dofs_cnt);
       DenseMatrixInverse inv(&Mrho);
       MassIntegrator mi(&ir);
-      DensityIntegrator di(qdata, rho0DetJ0_gf);
+      DensityIntegrator di(rho0DetJ0_gf);
       di.SetIntRule(&ir);
       for (int e = 0; e < NE; e++)
 	{
