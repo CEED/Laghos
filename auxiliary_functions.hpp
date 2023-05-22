@@ -112,7 +112,9 @@ namespace mfem
     void ComputeStress(const double p, const int dim, DenseMatrix &stress);
   
     void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const DenseMatrix &Jac0inv, const double h0,  const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
-  
+    
+    void ConvertVectorToDenseMatrix(const int dim, const Vector & vec, DenseMatrix &mat);
+
     double smooth_step_01(double x, double eps);
     
     class Jac0InvVectorFunctionCoefficient : public VectorCoefficient

@@ -50,9 +50,10 @@ namespace mfem
     double dupPenaltyParameter;
     const ParGridFunction &v_gf;
     const ParGridFunction &rhoface_gf;
-
+    const ParGridFunction &Jac0invface_gf;
+      
   public:
-    GhostVectorFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), v_gf(v_gf), rhoface_gf(rhoface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
+    GhostVectorFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
     virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				    const FiniteElement &fe2,
 				    FaceElementTransformations &Tr,
@@ -70,9 +71,10 @@ namespace mfem
     double dupPenaltyParameter;
     const ParGridFunction &v_gf;
     const ParGridFunction &rhoface_gf;
-       
+    const ParGridFunction &Jac0invface_gf;
+             
   public:
-    GhostScalarFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), v_gf(v_gf), rhoface_gf(rhoface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
+    GhostScalarFullGradPenaltyIntegrator(ParMesh *pmesh, QuadratureDataGL &qdata, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : pmesh(pmesh), qdata(qdata), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
     virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				    const FiniteElement &fe2,
 				    FaceElementTransformations &Tr,

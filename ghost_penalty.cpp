@@ -186,6 +186,17 @@ namespace mfem
 	  normalGradU_el1.Mult(shape_el1,base_el1);
 	  normalGradU_el2.Mult(shape_el2,base_el2);
 
+	  Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
+	  Jac0inv_vec_el1 = 0.0;
+	  Jac0inv_vec_el2 = 0.0;
+	  Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+	  Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
+	  
+	  DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	    
+	  
 	  DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
 	  v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
 	  v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
@@ -194,9 +205,9 @@ namespace mfem
 	  v_grad_q2.Symmetrize();
 	  double h_1, h_2, mu_1, mu_2;
 	  
-	  LengthScaleAndCompression(v_grad_q1, Trans_el1, qdata.Jac0inv(0),
+	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
 				    qdata.h0, h_1, mu_1);
-	  LengthScaleAndCompression(v_grad_q2, Trans_el2, qdata.Jac0inv(0),
+	  LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
 				    qdata.h0, h_2, mu_2);
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
@@ -422,6 +433,16 @@ namespace mfem
 	  normalGradU_el1.Mult(shape_el1,base_el1);
 	  normalGradU_el2.Mult(shape_el2,base_el2);
 
+	  Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
+	  Jac0inv_vec_el1 = 0.0;
+	  Jac0inv_vec_el2 = 0.0;
+	  Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+	  Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
+	  
+	  DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	  
 	  DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
 	  v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
 	  v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
@@ -430,9 +451,9 @@ namespace mfem
 	  v_grad_q2.Symmetrize();
 	  double h_1, h_2, mu_1, mu_2;
 	  
-	  LengthScaleAndCompression(v_grad_q1, Trans_el1, qdata.Jac0inv(0),
+	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
 				    qdata.h0, h_1, mu_1);
-	  LengthScaleAndCompression(v_grad_q2, Trans_el2, qdata.Jac0inv(0),
+	  LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
 				    qdata.h0, h_2, mu_2);
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);

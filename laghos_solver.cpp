@@ -333,8 +333,6 @@ namespace mfem
 	      const int nqp = ir.GetNPoints();	  
 	      const IntegrationPoint &ip = ir.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
-	      DenseMatrixInverse Jinv(Tr.Jacobian());
-	      Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
 	      const double rho0DetJ0 = Tr.Weight() * rho_vals(q) * volumeFraction;
 	      qdata.rho0DetJ0(e*NQ + q) = rho0DetJ0;
@@ -350,8 +348,6 @@ namespace mfem
 	    {
 	      const IntegrationPoint &ip = ir_p.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
-	      DenseMatrixInverse Jinv(Tr.Jacobian());
-	      Jinv.GetInverseMatrix(gl_qdata.Jac0inv(e * gl_nqp + q));
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
 	      gl_qdata.rho0DetJ0(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
@@ -451,11 +447,11 @@ namespace mfem
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv->AddInteriorFaceIntegrator(shifted_nvmi);
 	
-	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
+	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
 	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
 
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
+	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(pmesh, gl_qdata, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
 
 	ghost_emi->SetIntRule(&b_ir);
 	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
@@ -895,7 +891,13 @@ namespace mfem
 		      else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
 		      Vector compr_dir(eig_vec_data, dim);
 		      // Computes the initial->physical transformation Jacobian.
-		      mfem::Mult(Jpr, qdata.Jac0inv(z_id*nqp + q), Jpi);
+		      Vector Jac0inv_vec(dim*dim);
+		      Jac0inv_vec = 0.0;
+		      Jac0inv_gf.GetVectorValue(T->ElementNo,ip,Jac0inv_vec);
+		      DenseMatrix Jac0inv(dim);
+		      ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
+	  
+		      mfem::Mult(Jpr, Jac0inv, Jpi);
 		      Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
 		      // Change of the initial mesh size in the compression direction.
 		      const double h = qdata.h0 * ph_dir.Norml2() /

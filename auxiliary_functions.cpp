@@ -22,7 +22,7 @@ namespace mfem
 {
   namespace hydrodynamics
   {
-        void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
+    void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
 				   ElementTransformation &T,
 				   const DenseMatrix &Jac0inv, double h0,
 				   double &h, double &mu)
@@ -200,26 +200,8 @@ namespace mfem
 		Vector Jac0inv_vec(dim*dim);
 		Jac0inv_vec = 0.0;
 		Jac0invface_gf.GetVectorValue(Tr.ElementNo,ip,Jac0inv_vec);
-		
 		DenseMatrix Jac0inv(dim);
-		if (dim == 2){
-		  Jac0inv(0,0) = Jac0inv_vec(0);
-		  Jac0inv(0,1) = Jac0inv_vec(1);
-		  Jac0inv(1,0) = Jac0inv_vec(2);
-		  Jac0inv(1,1) = Jac0inv_vec(3);
-		}
-		else {
-		  Jac0inv(0,0) = Jac0inv_vec(0);
-		  Jac0inv(0,1) = Jac0inv_vec(1);
-		  Jac0inv(0,2) = Jac0inv_vec(2);
-		  Jac0inv(1,0) = Jac0inv_vec(3);
-		  Jac0inv(1,1) = Jac0inv_vec(4);
-		  Jac0inv(1,2) = Jac0inv_vec(5);
-		  Jac0inv(2,0) = Jac0inv_vec(6);
-		  Jac0inv(2,1) = Jac0inv_vec(7);
-		  Jac0inv(2,2) = Jac0inv_vec(8);
-		}
-
+		ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
 		
 		//		for (int j = 0; j < dim; j++){
 		//	  normD += D_el1(j) * D_el1(j);
@@ -370,6 +352,29 @@ namespace mfem
       if (y > 1.0) { return 1.0; }
       return (3.0 - 2.0 * y) * y * y;
     }
+
+    void ConvertVectorToDenseMatrix(const int dim, const Vector & vec, DenseMatrix &mat){
+
+      mat = 0.0;
+      if (dim == 2){
+	mat(0,0) = vec(0);
+	mat(0,1) = vec(1);
+	mat(1,0) = vec(2);
+	mat(1,1) = vec(3);
+      }
+      else {
+	mat(0,0) = vec(0);
+	mat(0,1) = vec(1);
+	mat(0,2) = vec(2);
+	mat(1,0) = vec(3);
+	mat(1,1) = vec(4);
+	mat(1,2) = vec(5);
+	mat(2,0) = vec(6);
+	mat(2,1) = vec(7);
+	mat(2,2) = vec(8);
+      }	  
+    }
+
   } // namespace hydrodynamics
   
 }
