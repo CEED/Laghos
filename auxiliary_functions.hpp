@@ -103,7 +103,7 @@ namespace mfem
 
     void UpdateSoundSpeedGL(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf);
     
-    void UpdatePenaltyParameterGL(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, ParGridFunction &viscous_gf, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter);
+    void UpdatePenaltyParameter(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, const ParGridFunction &Jac0invface_gf, ParGridFunction &viscous_gf, VectorCoefficient * dist_vec,  const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter);
       
     void ComputeMaterialProperty(const double gamma,
 				   const double rho, const double e,
@@ -114,8 +114,7 @@ namespace mfem
       
     void ComputeStress(const double p, const int dim, DenseMatrix &stress);
   
-    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const DenseMatrix &Jac0inv, const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
-    void ComputeViscousStressGL(ElementTransformation &T, const ParGridFunction &v, const QuadratureDataGL &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
+    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const DenseMatrix &Jac0inv, const double h0,  const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress);
   
     double smooth_step_01(double x, double eps);
     

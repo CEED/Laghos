@@ -214,7 +214,7 @@ namespace mfem
 	}
     }
 
-    void UpdatePenaltyParameterGL(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, ParGridFunction &viscous_gf, VectorCoefficient * dist_vec, const QuadratureDataGL &qdata, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
+    void UpdatePenaltyParameter(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, const ParGridFunction &Jac0invface_gf, ParGridFunction &viscous_gf,  VectorCoefficient * dist_vec, const double h0, const bool use_viscosity, const bool use_vorticity, const bool useEmbedded, const double penaltyParameter)
     {
       ParFiniteElementSpace *p_fespace = cs_gf.ParFESpace();
       const int NE = p_fespace->GetParMesh()->GetNE();
@@ -252,6 +252,31 @@ namespace mfem
 		if (useEmbedded){
 		  dist_vec->Eval(D_el1, Tr, ip);
 		}
+
+		Vector Jac0inv_vec(dim*dim);
+		Jac0inv_vec = 0.0;
+		Jac0invface_gf.GetVectorValue(Tr.ElementNo,ip,Jac0inv_vec);
+		
+		DenseMatrix Jac0inv(dim);
+		if (dim == 2){
+		  Jac0inv(0,0) = Jac0inv_vec(0);
+		  Jac0inv(0,1) = Jac0inv_vec(1);
+		  Jac0inv(1,0) = Jac0inv_vec(2);
+		  Jac0inv(1,1) = Jac0inv_vec(3);
+		}
+		else {
+		  Jac0inv(0,0) = Jac0inv_vec(0);
+		  Jac0inv(0,1) = Jac0inv_vec(1);
+		  Jac0inv(0,2) = Jac0inv_vec(2);
+		  Jac0inv(1,0) = Jac0inv_vec(3);
+		  Jac0inv(1,1) = Jac0inv_vec(4);
+		  Jac0inv(1,2) = Jac0inv_vec(5);
+		  Jac0inv(2,0) = Jac0inv_vec(6);
+		  Jac0inv(2,1) = Jac0inv_vec(7);
+		  Jac0inv(2,2) = Jac0inv_vec(8);
+		}
+
+		
 		//		for (int j = 0; j < dim; j++){
 		//	  normD += D_el1(j) * D_el1(j);
 		//}
@@ -283,7 +308,7 @@ namespace mfem
 		    }
 		  else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
 		  Vector compr_dir(eig_vec_data, dim);
-		  mfem::Mult(Tr.Jacobian(), qdata.Jac0inv(e*nqp + q), Jpi);
+		  mfem::Mult(Tr.Jacobian(), Jac0inv, Jpi);
 		  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
 		  // Change of the initial mesh size in the compression direction.
 		  const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
@@ -340,7 +365,7 @@ namespace mfem
       for (int d = 0; d < dim; d++) { stress(d, d) = -p;}
     }
 
-    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const DenseMatrix &Jac0inv,  const QuadratureData &qdata, const int qdata_quad_index, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress)
+    void ComputeViscousStress(ElementTransformation &T, const ParGridFunction &v, const DenseMatrix &Jac0inv,  const double h0, const bool use_viscosity, const bool use_vorticity, const double rho, const double sound_speed, const int dim, DenseMatrix &stress)
     {
       if (use_viscosity)
 	{
@@ -378,7 +403,7 @@ namespace mfem
 	  mfem::Mult(Jpr, Jac0inv, Jpi);
 	  Vector ph_dir(dim); Jpi.Mult(compr_dir, ph_dir);
 	  // Change of the initial mesh size in the compression direction.
-	  const double h = qdata.h0 * ph_dir.Norml2() / compr_dir.Norml2();
+	  const double h = h0 * ph_dir.Norml2() / compr_dir.Norml2();
 	  // Measure of maximal compression.
 	  const double mu = eig_val_data[0];
 	  visc_coeff = 2.0 * rho * h * h * fabs(mu);

@@ -327,7 +327,7 @@ namespace mfem
 	  
 	  const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
 	  ComputeStress(pressure,dim,stress);
-	  ComputeViscousStress(Tr, v_gf, Jac0inv, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	  ComputeViscousStress(Tr, v_gf, Jac0inv, qdata.h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	  MultABt(stress, Jinv, stressJiT);
 	  stressJiT *= ip.weight * Jpr.Det();
 	  
@@ -409,7 +409,7 @@ namespace mfem
 	    
 	    const double rho = qdata.rho0DetJ0(eq) / (Tr.Weight() * volumeFraction);
 	    ComputeStress(pressure,dim,stress);
-	    ComputeViscousStress(Tr, v_gf, Jac0inv, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	    ComputeViscousStress(Tr, v_gf, Jac0inv, qdata.h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	    stress *= ip.weight * Jpr.Det();
 	    //
 	    TrV.SetIntPoint(&ip);
