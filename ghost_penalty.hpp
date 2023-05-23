@@ -72,13 +72,18 @@ namespace mfem
     const ParGridFunction &v_gf;
     const ParGridFunction &rhoface_gf;
     const ParGridFunction &Jac0invface_gf;
-             
+    const ParGridFunction *Vnpt_gf;
+                   
   public:
-    GhostScalarFullGradPenaltyIntegrator(const double h0, ParMesh *pmesh, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : h0(h0), pmesh(pmesh), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter) { }
+    GhostScalarFullGradPenaltyIntegrator(const double h0, ParMesh *pmesh, const ParGridFunction &v_gf, const ParGridFunction &rhoface_gf, const ParGridFunction &Jac0invface_gf, const double &globalmax_rho, double penParameter, int nTerms) : h0(h0), pmesh(pmesh), v_gf(v_gf), rhoface_gf(rhoface_gf), Jac0invface_gf(Jac0invface_gf), globalmax_rho(globalmax_rho), penaltyParameter(penParameter), nTerms(nTerms), dupPenaltyParameter(penParameter), Vnpt_gf(NULL) { }
     virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				    const FiniteElement &fe2,
 				    FaceElementTransformations &Tr,
 				    DenseMatrix &elmat);
+    virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+      Vnpt_gf = velocity_NPT;
+    }
+
   };
     
     /*  class GhostGradScalarFullGradPenaltyIntegrator : public BilinearFormIntegrator

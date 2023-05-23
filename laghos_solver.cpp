@@ -433,13 +433,13 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -516,8 +516,8 @@ namespace mfem
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
 */
-	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();		
+	//	UpdateAlpha(*alphaCut, H1, *level_set_gf);
+	//	alphaCut->ExchangeFaceNbrData();		
       }
       
       //Compute quadrature quantities
@@ -539,7 +539,7 @@ namespace mfem
       viscousface_gf.ExchangeFaceNbrData();
 
       v_gf.ExchangeFaceNbrData();
-      Mv->Update();
+      /*  Mv->Update();
       Mv->BilinearForm::operator=(0.0);
       Array<BilinearFormIntegrator*> * temp = Mv->GetDBFI();
       temp->DeleteAll();
@@ -574,7 +574,7 @@ namespace mfem
       tempMeIP2->DeleteAll();
       UpdateMesh(S);
       Me_mat->AddDomainIntegrator(mi, ess_elem);
-      Me_mat->Assemble();
+      Me_mat->Assemble();*/
  
     }
     
@@ -585,6 +585,7 @@ namespace mfem
     {
 
       // Mv->Update();
+      //  Mv->BilinearForm::operator=(0.0);
       //  Mv->Assemble();
       // Mv->Finalize();
       
@@ -636,7 +637,7 @@ namespace mfem
 					      Vector &dS_dt) const
     {
       // Me_mat->Update();
-      //  Me_mat->Assemble();
+      // Me_mat->Assemble();
       //  Me_mat->Finalize();
       
       // Updated Velocity, needed for the energy solve
@@ -644,6 +645,10 @@ namespace mfem
       ParGridFunction v_updated;
       v_updated.MakeRef(&H1, *sptr, 0);
       v_updated.ExchangeFaceNbrData();
+
+      ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
+      Me_mat->Update();
+      Me_mat->Assemble();
       
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyForceMatrix();

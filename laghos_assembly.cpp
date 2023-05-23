@@ -736,7 +736,7 @@ namespace mfem
 	  //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  //////
 	  // NEW //
-	  penaltyVal = 4.0 * penaltyParameter * density_el1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
+	  penaltyVal = 4.0 * penaltyParameter * density_el1 * h_1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
 	  //////
 
 	  
@@ -1139,6 +1139,7 @@ namespace mfem
 	      // std::cout << " d1e " << density_el1 << " d2e " << density_el2 << " h " << h_1 << " h " << h_2 << std::endl;
 	      // USING
 	      //  penaltyVal = penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
+	      // std::cout << " de " << density_el1 << " de " << density_el2 << " h " << h_1 << " h " << h_2 << " gamma " << gamma_1 << " gamma " << gamma_2 << std::endl;
 	      penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1  + gamma_2 * h_2 * density_el2 );
 	      
 	      //  penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) * ( (qdata.h0/h_1) *  (qdata.h0/h_2) / (qdata.h0/h_1 + qdata.h0/h_2));

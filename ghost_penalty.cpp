@@ -203,6 +203,7 @@ namespace mfem
 	  // As in the volumetric viscosity.
 	  v_grad_q1.Symmetrize();
 	  v_grad_q2.Symmetrize();
+	
 	  double h_1, h_2, mu_1, mu_2;
 	  
 	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
@@ -213,11 +214,11 @@ namespace mfem
 	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 
 	  for (int nT = 1; nT <= nTerms; nT++){
-	    // penaltyParameter /= (double)nT;
-	    double standardFactor =  nor_norm * ip_f.weight * 2 /* * globalmax_rho*/ * penaltyParameter;	
+	    penaltyParameter /= (double)nT;
+	    double standardFactor =  nor_norm * ip_f.weight * 2  * globalmax_rho * penaltyParameter;	
 	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    //  double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
-	    // double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+	    //  double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * density_el2 / (density_el1 + density_el2)) * penaltyParameter;	
+	    //  double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
 	    weighted_h = pow(weighted_h,2*nT+1);	    
 
@@ -444,11 +445,18 @@ namespace mfem
 	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
 	  
 	  DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
-	  v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
-	  v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	  if (Vnpt_gf == NULL){
+	    v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	    v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	  }
+	  else {
+	    Vnpt_gf->GetVectorGradient(Trans_el1, v_grad_q1);
+	    Vnpt_gf->GetVectorGradient(Trans_el2, v_grad_q2);
+	  }
 	  // As in the volumetric viscosity.
 	  v_grad_q1.Symmetrize();
 	  v_grad_q2.Symmetrize();
+	
 	  double h_1, h_2, mu_1, mu_2;
 	  
 	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
@@ -460,10 +468,10 @@ namespace mfem
 
 	  for (int nT = 0; nT <= nTerms; nT++){
 	    // penaltyParameter /= (double)(nT+1);
-	    double standardFactor =  nor_norm * ip_f.weight * 2 /* * globalmax_rho*/ *  penaltyParameter;	
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho *  penaltyParameter;	
 	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    // double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
-	    // double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+	    //	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * density_el2 / (density_el1 + density_el2 )) * penaltyParameter;	
+	    //  double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
 	    weighted_h = pow(weighted_h,2*nT+1);	    
 
