@@ -213,13 +213,13 @@ namespace mfem
 	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 
 	  for (int nT = 1; nT <= nTerms; nT++){
-	    penaltyParameter /= (double)nT;
-	    // double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
-	    //  double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
-	    double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+	    // penaltyParameter /= (double)nT;
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * /*globalmax_rho * */penaltyParameter;	
+	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	    //	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
+	    // double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
-	    weighted_h = pow(weighted_h,2*nT);	    
+	    weighted_h = pow(weighted_h,2*nT+1);	    
 
 	    if (nT == 1){
 	      for (int i = 0; i < h1dofs_cnt; i++)
@@ -459,13 +459,13 @@ namespace mfem
 	  double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 
 	  for (int nT = 0; nT <= nTerms; nT++){
-	    penaltyParameter /= (double)(nT+1);
-	    //  double standardFactor =  nor_norm * ip_f.weight * 2 * globalmax_rho * penaltyParameter;	
-	    // double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
-	    double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+	    // penaltyParameter /= (double)(nT+1);
+	    double standardFactor =  nor_norm * ip_f.weight * 2 * /*globalmax_rho * */ penaltyParameter;	
+	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
+	    //  double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
+	    //  double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
-	    weighted_h = pow(weighted_h,2*nT);	    
+	    weighted_h = pow(weighted_h,2*nT+1);	    
 
 	    if (nT == 0){
 	      for (int i = 0; i < h1dofs_cnt; i++)

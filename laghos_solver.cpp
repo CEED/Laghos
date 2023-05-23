@@ -492,12 +492,12 @@ namespace mfem
       beemb_qdata_is_current = false;
     }
 
-    void LagrangianHydroOperator::UpdateLevelSet(const Vector &S){
+    void LagrangianHydroOperator::UpdateLevelSet(const Vector &S, const Vector &S_init){
       if (useEmbedded){	
-	level_set_gf->ProjectCoefficient(*wall_dist_coef);
+	//	level_set_gf->ProjectCoefficient(*wall_dist_coef);
 	// Exchange information for ghost elements i.e. elements that share a face
 	// with element on the current processor, but belong to another processor.
-	level_set_gf->ExchangeFaceNbrData();
+	//	level_set_gf->ExchangeFaceNbrData();
 	// Setup the class to mark all elements based on whether they are located
 	// inside or outside the true domain, or intersected by the true boundary.
 
@@ -516,8 +516,8 @@ namespace mfem
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
 */
-	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();		
+	//	UpdateAlpha(*alphaCut, H1, *level_set_gf);
+	//	alphaCut->ExchangeFaceNbrData();		
       }
       
       //Compute quadrature quantities
@@ -541,11 +541,39 @@ namespace mfem
       v_gf.ExchangeFaceNbrData();
       Mv->Update();
       Mv->BilinearForm::operator=(0.0);
+      Array<BilinearFormIntegrator*> * temp = Mv->GetDBFI();
+      temp->DeleteAll();
+      Array<BilinearFormIntegrator*> * tempI = Mv->GetFBFI();
+      tempI->DeleteAll();
+      Array<BilinearFormIntegrator*> * tempB = Mv->GetBFBFI();
+      tempB->DeleteAll();
+      UpdateMesh(S_init);
+      Mv->AddInteriorFaceIntegrator(ghost_nvmi);
       Mv->Assemble();
+      Array<BilinearFormIntegrator*> * tempIP2 = Mv->GetFBFI();
+      tempIP2->DeleteAll();
+      UpdateMesh(S);
+      Mv->AddDomainIntegrator(vmi, ess_elem);
+      Mv->AddBdrFaceIntegrator(nvmi);
+      Mv->AddInteriorFaceIntegrator(shifted_nvmi);
+      Mv->Assemble();
+
       Mv_spmat_copy = Mv->SpMat();
-      
+
       Me_mat->Update();
       Me_mat->BilinearForm::operator=(0.0);
+      Array<BilinearFormIntegrator*> * tempMe = Me_mat->GetDBFI();
+      tempMe->DeleteAll();
+      Array<BilinearFormIntegrator*> * tempMeI = Me_mat->GetFBFI();
+      tempMeI->DeleteAll();
+
+      UpdateMesh(S_init);
+      Me_mat->AddInteriorFaceIntegrator(ghost_emi);
+      Me_mat->Assemble();
+      Array<BilinearFormIntegrator*> * tempMeIP2 = Me_mat->GetFBFI();
+      tempMeIP2->DeleteAll();
+      UpdateMesh(S);
+      Me_mat->AddDomainIntegrator(mi, ess_elem);
       Me_mat->Assemble();
  
     }
@@ -1044,7 +1072,7 @@ namespace mfem
     // -- 1.
     // S is S0.
     hydro_oper->UpdateMesh(S);
-    hydro_oper->UpdateLevelSet(S);
+    hydro_oper->UpdateLevelSet(S, S_init);
    
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
@@ -1057,7 +1085,7 @@ namespace mfem
     add(S0, 0.5 * dt, dS_dt, S);
     hydro_oper->ResetQuadratureData();
     hydro_oper->UpdateMesh(S);
-    hydro_oper->UpdateLevelSet(S);   
+    hydro_oper->UpdateLevelSet(S, S_init);   
    
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;

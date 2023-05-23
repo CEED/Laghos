@@ -203,7 +203,7 @@ namespace mfem
       virtual void Mult(const Vector &S, Vector &dS_dt, const Vector &S_init) const;
 
       void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init, const double dt) const;
-      void UpdateLevelSet(const Vector &S);
+      void UpdateLevelSet(const Vector &S, const Vector &S_init);
     
       void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
       void UpdateMesh(const Vector &S) const;
