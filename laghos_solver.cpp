@@ -494,10 +494,10 @@ namespace mfem
 
     void LagrangianHydroOperator::UpdateLevelSet(const Vector &S, const Vector &S_init){
       if (useEmbedded){	
-	//	level_set_gf->ProjectCoefficient(*wall_dist_coef);
+	level_set_gf->ProjectCoefficient(*wall_dist_coef);
 	// Exchange information for ghost elements i.e. elements that share a face
 	// with element on the current processor, but belong to another processor.
-	//	level_set_gf->ExchangeFaceNbrData();
+	level_set_gf->ExchangeFaceNbrData();
 	// Setup the class to mark all elements based on whether they are located
 	// inside or outside the true domain, or intersected by the true boundary.
 
@@ -516,8 +516,8 @@ namespace mfem
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
 */
-	//	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	//	alphaCut->ExchangeFaceNbrData();		
+	UpdateAlpha(*alphaCut, H1, *level_set_gf);
+	alphaCut->ExchangeFaceNbrData();		
       }
       
       //Compute quadrature quantities

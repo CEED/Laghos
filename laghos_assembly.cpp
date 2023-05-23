@@ -668,8 +668,6 @@ namespace mfem
 	  //  Vector x;
 	  //  Trans_el1.Transform(eip, x);
 	  // std::cout << " x(0) " << x(0) << " x(1) " << x(1) << std::endl;
-	  double density = rhoface_gf.GetValue(Trans_el1,eip);
-	  // double density = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
 	  
 	  Vector Jac0inv_vec(dim*dim);
 	  Jac0inv_vec = 0.0;
@@ -738,7 +736,7 @@ namespace mfem
 	  // penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  //////
 	  // NEW //
-	  penaltyVal = 4.0 * penaltyParameter * density * origNormalProd /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
+	  penaltyVal = 4.0 * penaltyParameter * density_el1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
 	  //////
 
 	  
