@@ -733,7 +733,7 @@ namespace mfem
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
 
 	   // OLD //
-	  // penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  //////
 	  // NEW //
 	  penaltyVal = 4.0 * penaltyParameter * density_el1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
@@ -1055,7 +1055,7 @@ namespace mfem
 
 
 	    double penaltyVal = 0.0;
-	    //	    penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
+	    // penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
 	    
 	    if (Tr.Attribute == 11){
 	      if (gamma_1 > 0.9){
@@ -1077,7 +1077,7 @@ namespace mfem
 					hinit, h_1, mu_1);
 		double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 		//	std::cout << " de1ns " << density_el1 << " h " << h_1 << std::endl;	      
-	
+		// USING
 		penaltyVal = penaltyParameter * h_1 * density_el1 ;
 	      }
 	      else {
@@ -1098,7 +1098,8 @@ namespace mfem
 		LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
 					  hinit, h_2, mu_2);
 		double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
-		//		std::cout << " de2ns " << density_el2 << " h " << h_2 << std::endl;	      
+		//		std::cout << " de2ns " << density_el2 << " h " << h_2 << std::endl;
+		// USING
 		penaltyVal = penaltyParameter * h_2 * density_el2 ;
 		   //  penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 * qdata.h0/h_1 + gamma_2 * density_el2 * qdata.h0/h_2) ;
 	      // penaltyVal = penaltyParameter * (gamma_1 * h_1  + gamma_2 * h_2) * globalmax_rho ;
@@ -1136,7 +1137,10 @@ namespace mfem
 	      double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 	      double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 	      // std::cout << " d1e " << density_el1 << " d2e " << density_el2 << " h " << h_1 << " h " << h_2 << std::endl;
-	      penaltyVal = penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
+	      // USING
+	      //  penaltyVal = penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
+	      penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1  + gamma_2 * h_2 * density_el2 );
+	      
 	      //  penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) * ( (qdata.h0/h_1) *  (qdata.h0/h_2) / (qdata.h0/h_1 + qdata.h0/h_2));
 	      //    penaltyVal = penaltyParameter * (h_1 * h_2  / ( h_1  + h_2  ) ) * globalmax_rho;
 	      //   penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) /* * origNormalProd*/;

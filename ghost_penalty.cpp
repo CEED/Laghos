@@ -214,9 +214,9 @@ namespace mfem
 
 	  for (int nT = 1; nT <= nTerms; nT++){
 	    // penaltyParameter /= (double)nT;
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * /*globalmax_rho * */penaltyParameter;	
+	    double standardFactor =  nor_norm * ip_f.weight * 2 /* * globalmax_rho*/ * penaltyParameter;	
 	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    //	    double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
+	    //  double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
 	    // double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
 	    weighted_h = pow(weighted_h,2*nT+1);	    
@@ -460,10 +460,10 @@ namespace mfem
 
 	  for (int nT = 0; nT <= nTerms; nT++){
 	    // penaltyParameter /= (double)(nT+1);
-	    double standardFactor =  nor_norm * ip_f.weight * 2 * /*globalmax_rho * */ penaltyParameter;	
+	    double standardFactor =  nor_norm * ip_f.weight * 2 /* * globalmax_rho*/ *  penaltyParameter;	
 	    double weighted_h = ((Tr.Elem1->Weight()/nor_norm) * (Tr.Elem2->Weight() / nor_norm) )/ ( (Tr.Elem1->Weight()/nor_norm) + (Tr.Elem2->Weight() / nor_norm));
-	    //  double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
-	    //  double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
+	    // double standardFactor =  nor_norm * ip_f.weight * 2 * (density_el1 * h_1 * density_el2 * h_2 / (density_el1 * h_1 + density_el2 * h_2)) * penaltyParameter;	
+	    // double weighted_h = (h_1 * h_2 )/ (h_1 + h_2);
 
 	    weighted_h = pow(weighted_h,2*nT+1);	    
 
