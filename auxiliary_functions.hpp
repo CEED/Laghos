@@ -43,7 +43,8 @@ namespace mfem
       { }
     };
 
-  
+    double factorial(int nTerms);
+     
     void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
 				   ElementTransformation &T,
 				   const DenseMatrix &Jac0inv, double h0,

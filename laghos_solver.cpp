@@ -646,9 +646,9 @@ namespace mfem
       v_updated.MakeRef(&H1, *sptr, 0);
       v_updated.ExchangeFaceNbrData();
 
-      ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
-      Me_mat->Update();
-      Me_mat->Assemble();
+      // ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
+      //  Me_mat->Update();
+      //  Me_mat->Assemble();
       
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyForceMatrix();

@@ -22,6 +22,14 @@ namespace mfem
 {
   namespace hydrodynamics
   {
+    double factorial(int nTerms){
+      double factorial = 1.0;	
+      for (int s = 1; s <= nTerms; s++){
+	factorial = factorial*s;
+      }
+      return factorial;
+    }
+
     void LengthScaleAndCompression(const DenseMatrix &sgrad_v,
 				   ElementTransformation &T,
 				   const DenseMatrix &Jac0inv, double h0,

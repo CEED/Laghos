@@ -31,7 +31,6 @@ namespace mfem
 
   namespace hydrodynamics
   {
-    double factorial(int nTerms);
     void shift_shape(const ParFiniteElementSpace &pfes_e_const,
 		     const ParFiniteElementSpace &pfes_p,
 		     int e_id,

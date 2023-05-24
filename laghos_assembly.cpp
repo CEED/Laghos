@@ -22,13 +22,6 @@ namespace mfem
 
   namespace hydrodynamics
   {
-    double factorial(int nTerms){
-      double factorial = 1.0;	
-      for (int s = 1; s <= nTerms; s++){
-	factorial = factorial*s;
-      }
-      return factorial;
-    }
 
     void shift_shape(const ParFiniteElementSpace &pfes_e_const,
 		     const ParFiniteElementSpace &pfes_p,
@@ -736,9 +729,10 @@ namespace mfem
 	  //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  //////
 	  // NEW //
-	  penaltyVal = 4.0 * penaltyParameter * density_el1 * h_1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
+	  // penaltyVal = 4.0 * penaltyParameter * density_el1 * h_1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
 	  //////
-
+	  penaltyVal = penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  ///
 	  
 	
 	  //	  std::cout << " penV " << penaltyVal << std::endl;
@@ -1055,7 +1049,7 @@ namespace mfem
 
 
 	    double penaltyVal = 0.0;
-	    // penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
+	    penaltyVal = penaltyParameter * globalmax_rho ;
 	    
 	    if (Tr.Attribute == 11){
 	      if (gamma_1 > 0.9){
@@ -1078,7 +1072,8 @@ namespace mfem
 		double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 		//	std::cout << " de1ns " << density_el1 << " h " << h_1 << std::endl;	      
 		// USING
-		penaltyVal = penaltyParameter * h_1 * density_el1 ;
+		//	penaltyVal = penaltyParameter * h_1 * density_el1 ;
+		//	penaltyVal = penaltyParameter * h_1 * globalmax_rho ;
 	      }
 	      else {
 		Vector Jac0inv_vec_el2(dim*dim);
@@ -1100,12 +1095,13 @@ namespace mfem
 		double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 		//		std::cout << " de2ns " << density_el2 << " h " << h_2 << std::endl;
 		// USING
-		penaltyVal = penaltyParameter * h_2 * density_el2 ;
+		//	penaltyVal = penaltyParameter * h_2 * density_el2 ;
 		   //  penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 * qdata.h0/h_1 + gamma_2 * density_el2 * qdata.h0/h_2) ;
 	      // penaltyVal = penaltyParameter * (gamma_1 * h_1  + gamma_2 * h_2) * globalmax_rho ;
 	      //penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 + gamma_2 * density_el2)/* * origNormalProd */;
 	      //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (gamma_1 * h_1 + gamma_2 * h_2) * origNormalProd;
-	   
+		//	penaltyVal = penaltyParameter * h_2 * globalmax_rho ;
+	        
 	      }
 	    }
 	    
@@ -1140,7 +1136,8 @@ namespace mfem
 	      // USING
 	      //  penaltyVal = penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
 	      // std::cout << " de " << density_el1 << " de " << density_el2 << " h " << h_1 << " h " << h_2 << " gamma " << gamma_1 << " gamma " << gamma_2 << std::endl;
-	      penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1  + gamma_2 * h_2 * density_el2 );
+	      //penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1  + gamma_2 * h_2 * density_el2 );
+	      //   penaltyVal = penaltyParameter * globalmax_rho * (gamma_1 * h_1  + gamma_2 * h_2 );
 	      
 	      //  penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) * ( (qdata.h0/h_1) *  (qdata.h0/h_2) / (qdata.h0/h_1 + qdata.h0/h_2));
 	      //    penaltyVal = penaltyParameter * (h_1 * h_2  / ( h_1  + h_2  ) ) * globalmax_rho;
