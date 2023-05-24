@@ -731,7 +731,7 @@ namespace mfem
 	  // NEW //
 	  // penaltyVal = 4.0 * penaltyParameter * density_el1 * h_1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
 	  //////
-	  penaltyVal = penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  ///
 	  
 	
@@ -1049,7 +1049,7 @@ namespace mfem
 
 
 	    double penaltyVal = 0.0;
-	    penaltyVal = penaltyParameter * globalmax_rho ;
+	    penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
 	    
 	    if (Tr.Attribute == 11){
 	      if (gamma_1 > 0.9){
