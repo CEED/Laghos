@@ -584,9 +584,9 @@ namespace mfem
 						const double dt) const
     {
 
-      // Mv->Update();
-      //  Mv->BilinearForm::operator=(0.0);
-      //  Mv->Assemble();
+      //  Mv->Update();
+      // Mv->BilinearForm::operator=(0.0);
+      // Mv->Assemble();
       // Mv->Finalize();
       
       AssembleForceMatrix();
@@ -648,7 +648,8 @@ namespace mfem
 
       // ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
       //  Me_mat->Update();
-      //  Me_mat->Assemble();
+      // Me_mat->BilinearForm::operator=(0.0);
+      // Me_mat->Assemble();
       
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyForceMatrix();
