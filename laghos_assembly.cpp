@@ -818,10 +818,6 @@ namespace mfem
 		  {
 		    for (int md = 0; md < dim; md++) // Velocity components.
 		      {		
-			//			elvect(i + vd * h1dofs_cnt) += (stress_el1(vd,md) * gamma_1 + stress_el2(vd,md) * gamma_2 ) * volumeFraction_el1 * te_shape_el1(i) * ip_f.weight * nor(md);
-			//	elvect(i + vd * h1dofs_cnt + h1dofs_cnt * dim) -= (stress_el1(vd,md) * gamma_1 + stress_el2(vd,md) * gamma_2 ) * volumeFraction_el2 * te_shape_el2(i) * ip_f.weight * nor(md);
-			//			elvect(i + vd * h1dofs_cnt) += ( volumeFraction_el1 * stress_el1(vd,md) * nor(md) - volumeFraction_el2 * stress_el2(vd,md) * nor(md)) * te_shape_el1(i) * ip_f.weight * gamma_1;
-			//	elvect(i + vd * h1dofs_cnt + h1dofs_cnt * dim) +=  ( volumeFraction_el1 * stress_el1(vd,md) * nor(md) - volumeFraction_el2 * stress_el2(vd,md) * nor(md)) * te_shape_el2(i) * ip_f.weight * gamma_2;
 			elvect(i + vd * h1dofs_cnt) += (stress_el1(vd,md) * gamma_1 + stress_el2(vd,md) * gamma_2 ) * (volumeFraction_el1 * nor(md) - volumeFraction_el2 * nor(md) ) * gamma_1 * te_shape_el1(i) * ip_f.weight;
 			elvect(i + vd * h1dofs_cnt + h1dofs_cnt * dim) += (stress_el1(vd,md) * gamma_1 + stress_el2(vd,md) * gamma_2 ) * (volumeFraction_el1 * nor(md) - volumeFraction_el2 * nor(md) ) * gamma_2 * te_shape_el2(i) * ip_f.weight;
 		      }
@@ -920,7 +916,11 @@ namespace mfem
 	      Vector gradv_d_el1(dim);
 	      gradv_d_el1 = 0.0;
 	      get_shifted_value(*Vnpt_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1);
-
+	      Vector v_vals_el1(dim);
+	      v_vals_el1 = 0.0;
+	      Vnpt_gf->GetVectorValue(Trans_el1, eip_el1, v_vals_el1);
+	      // gradv_d_el1 += v_vals_el1;
+	
 	      double vDotn_el1 = 0.0;
 	      for (int s = 0; s < dim; s++)
 	       {
@@ -941,8 +941,12 @@ namespace mfem
 	      Vector gradv_d_el2(dim);
 	      gradv_d_el2 = 0.0;
 	      //	      std::cout << " first elem " << Trans_el1.ElementNo << " second elem " << Trans_el2.ElementNo << std::endl;
-	      get_shifted_value(*Vnpt_gf, Trans_el2.ElementNo, eip_el2, D_el1, nTerms, gradv_d_el2);
-   
+	      get_shifted_value(*Vnpt_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2);
+	      Vector v_vals_el2(dim);
+	      v_vals_el2 = 0.0;
+	      Vnpt_gf->GetVectorValue(Trans_el2, eip_el2, v_vals_el2);
+	      // gradv_d_el2 += v_vals_el2;
+	      
 	      double vDotn_el2 = 0.0;
 	      for (int s = 0; s < dim; s++)
 	       {
@@ -958,16 +962,16 @@ namespace mfem
 			{
 			  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
 			  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
-			  // elvect(i) -= (volumeFraction_el1 * stress_el1(vd,md) * nor(md) - volumeFraction_el2 * stress_el2(vd,md) * nor(md)) * gamma_1 * te_shape_el1(i) * vDotn_el1 * ip_f.weight * tN_el1(vd);
-			  // elvect(i+l2dofs_cnt) -= (volumeFraction_el1 * stress_el1(vd,md) * nor(md) - volumeFraction_el2 * stress_el2(vd,md) * nor(md)) * gamma_2 * te_shape_el2(i) * vDotn_el2 * ip_f.weight * tN_el2(vd);
-			  //	  elvect(i) -= volumeFraction_el1 * stress_el1(vd,md) * nor(md) * te_shape_el1(i) *  (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(vd);
-			  // elvect(i+l2dofs_cnt) += volumeFraction_el2 * stress_el2(vd,md) * nor(md) * te_shape_el2(i) *  (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(vd);
-			  //  elvect(i) -= volumeFraction_el1 * te_shape_el1(i) *  (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * ip_f.weight * tN_el1(vd) * vDotn_el1 * nor(md);
-			  // elvect(i+l2dofs_cnt) += volumeFraction_el2 * te_shape_el2(i) *  (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * ip_f.weight * tN_el1(vd) * vDotn_el2 * nor(md);
-			
+
+	      /*  for (int i = 0; i < l2dofs_cnt; i++)
+		{
+		  elvect(i) -= gamma_1 * pressure_el1 * te_shape_el1(i) * (volumeFraction_el1 - volumeFraction_el2 ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * std::abs(nTildaDotN) * nor_norm;
+		  elvect(i+l2dofs_cnt) -= gamma_2 * pressure_el2 * te_shape_el2(i) * (volumeFraction_el1 - volumeFraction_el2 ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * std::abs(nTildaDotN) * nor_norm;
+		}*/
+			  
 			}
-		    }
-		}
+	      	    }
+	      	}
 	    }	  
 	}
 	else{
@@ -981,7 +985,7 @@ namespace mfem
 	elvect.SetSize(2*l2dofs_cnt);
 	elvect = 0.0;
       }
-    }     
+    } 
 
     void ShiftedNormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 								 const FiniteElement &fe2,
@@ -1052,7 +1056,17 @@ namespace mfem
 	    vN->Eval(tN_el1, Trans_el1, eip_el1);
 	    /////
 	    
-	    
+	    /////
+	      Vector D_el2(dim);
+	      Vector tN_el2(dim);
+	      D_el2 = 0.0;
+	      tN_el2 = 0.0;
+	      // if (Tr.Attribute == 77){
+	      vD->Eval(D_el2, Trans_el2, eip_el2);
+		// }
+	      vN->Eval(tN_el2, Trans_el2, eip_el2);
+	      /////
+	      
 	    double nTildaDotN = 0.0;
 	    for (int s = 0; s < dim; s++){
 	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
@@ -1163,7 +1177,7 @@ namespace mfem
 	    //////////
 	    
 	    fe2.CalcShape(eip_el2, shape_el2);	    
-	    shift_shape(h1, h1, Trans_el2.ElementNo, eip_el2, D_el1, nTerms, shape_el2);
+	    shift_shape(h1, h1, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, shape_el2);
 	    
 	    for (int i = 0; i < h1dofs_cnt; i++)
 	      {
