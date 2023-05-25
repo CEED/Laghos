@@ -729,7 +729,7 @@ namespace mfem
 	  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  //////
 	  // NEW //
-	  //	  penaltyVal = 4.0 * penaltyParameter * density_el1 * h_1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
+	  // penaltyVal = 4.0  * penaltyParameter * density_el1 * h_1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
 	  //////
 	  // penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  ///
@@ -1097,7 +1097,7 @@ namespace mfem
 		double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
 		//	std::cout << " de1ns " << density_el1 << " h " << h_1 << std::endl;	      
 		// USING
-		//	penaltyVal = penaltyParameter * h_1 * density_el1 ;
+		//	penaltyVal = 4.0 * penaltyParameter * h_1 * density_el1 ;
 		//	penaltyVal = penaltyParameter * h_1 * globalmax_rho ;
 	      }
 	      else {
@@ -1120,7 +1120,7 @@ namespace mfem
 		double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 		//		std::cout << " de2ns " << density_el2 << " h " << h_2 << std::endl;
 		// USING
-		//	penaltyVal = penaltyParameter * h_2 * density_el2 ;
+		//	penaltyVal = 4.0 * penaltyParameter * h_2 * density_el2 ;
 		   //  penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 * qdata.h0/h_1 + gamma_2 * density_el2 * qdata.h0/h_2) ;
 	      // penaltyVal = penaltyParameter * (gamma_1 * h_1  + gamma_2 * h_2) * globalmax_rho ;
 	      //penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 + gamma_2 * density_el2)/* * origNormalProd */;
@@ -1159,7 +1159,7 @@ namespace mfem
 	      double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
 	      // std::cout << " d1e " << density_el1 << " d2e " << density_el2 << " h " << h_1 << " h " << h_2 << std::endl;
 	      // USING
-	      //  penaltyVal = penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
+	      // penaltyVal = 4.0 * penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
 	      // std::cout << " de " << density_el1 << " de " << density_el2 << " h " << h_1 << " h " << h_2 << " gamma " << gamma_1 << " gamma " << gamma_2 << std::endl;
 	      // penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1  + gamma_2 * h_2 * density_el2 );
 	      //   penaltyVal = penaltyParameter * globalmax_rho * (gamma_1 * h_1  + gamma_2 * h_2 );
@@ -1188,9 +1188,9 @@ namespace mfem
 			for (int md = 0; md < dim; md++) // Velocity components.
 			  {	      
 			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_1 * gamma_1 * shape_el1(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el1(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_1 * gamma_2 * shape_el1(i) * shape_el2(j) * nor_norm * tN_el1(vd) * tN_el2(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt) += gamma_2 * gamma_1 * shape_el2(i) * shape_el1(j) * nor_norm * tN_el2(vd) * tN_el1(md) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+			    elmat(i + vd * h1dofs_cnt + dim * h1dofs_cnt, j + md * h1dofs_cnt + dim * h1dofs_cnt) += gamma_2 * gamma_2 * shape_el2(i) * shape_el2(j) * nor_norm * tN_el2(vd) * tN_el2(md) * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
 	
 			  }
 		      }
