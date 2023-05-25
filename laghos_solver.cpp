@@ -433,7 +433,7 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
@@ -858,7 +858,7 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ) {
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) /*||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ) {
 	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
 		Jpr_b[z].SetSize(dim, dim, nqp);
 		e.GetValues(z_id, ir, e_vals);
@@ -889,7 +889,7 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ){
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE)/* ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ){
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)
