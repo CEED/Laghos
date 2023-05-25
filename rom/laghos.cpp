@@ -343,6 +343,8 @@ int main(int argc, char *argv[])
                    "Sampling type for the hyperreduction.");
     args.AddOption(&romOptions.EQP, "-eqp", "--eqp", "-no-eqp", "--no-eqp",
                    "Enable EQP.");
+    args.AddOption(&romOptions.maxNNLSnnz, "-maxnnls", "--max-nnls",
+                   "Maximum nnz for NNLS");
     args.Parse();
     if (!args.Good())
     {

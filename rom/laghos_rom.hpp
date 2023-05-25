@@ -255,6 +255,8 @@ struct ROM_Options
     bool VTos = false;
 
     bool EQP = false;
+
+    int maxNNLSnnz = 0;
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
