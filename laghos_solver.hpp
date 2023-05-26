@@ -108,14 +108,16 @@ namespace mfem
       // These values are recomputed at each time step.
       const int Q1D;
       mutable QuadratureData qdata;
-      mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, be_forcemat_is_assembled, bvemb_forcemat_is_assembled, bvemb_qdata_is_current, beemb_forcemat_is_assembled, beemb_qdata_is_current;
+      mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, bvdiffusion_forcemat_is_assembled, be_forcemat_is_assembled, bediffusion_forcemat_is_assembled, bvemb_forcemat_is_assembled, bvemb_qdata_is_current, beemb_forcemat_is_assembled, beemb_qdata_is_current;
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
       // assembled in each time step and then it is used to compute the final
       // right-hand sides for momentum and specific internal energy.
       mutable ParLinearForm Force;
       mutable ParLinearForm EnergyForce;
       mutable ParLinearForm VelocityBoundaryForce;
+      mutable ParLinearForm DiffusionVelocityBoundaryForce;
       mutable ParLinearForm EnergyBoundaryForce;
+      mutable ParLinearForm DiffusionEnergyBoundaryForce;
       mutable ParLinearForm ShiftedVelocityBoundaryForce;
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
@@ -130,6 +132,8 @@ namespace mfem
       VelocityBoundaryForceIntegrator *v_bfi;
       EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
+      DiffusionNormalVelocityIntegrator *d_nvmi;
+      DiffusionEnergyNormalVelocityIntegrator *de_nvmi;
       WeightedMassIntegrator *mi;
       WeightedVectorMassIntegrator *vmi;
       
@@ -161,7 +165,9 @@ namespace mfem
       void AssembleForceMatrix() const;
       void AssembleEnergyForceMatrix() const;
       void AssembleVelocityBoundaryForceMatrix() const;
+      void AssembleDiffusionVelocityBoundaryForceMatrix() const;
       void AssembleEnergyBoundaryForceMatrix() const;
+      void AssembleDiffusionEnergyBoundaryForceMatrix() const;
       void AssembleShiftedEnergyBoundaryForceMatrix() const;
 
     public:

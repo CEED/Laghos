@@ -151,6 +151,8 @@ namespace mfem
       v_bfi(NULL),
       e_bfi(NULL),
       nvmi(NULL),
+      d_nvmi(NULL),
+      de_nvmi(NULL),
       shifted_v_bfi(NULL),
       shifted_e_bfi(NULL),
       shifted_nvmi(NULL),
@@ -205,13 +207,17 @@ namespace mfem
       beemb_qdata_is_current(false),
       be_qdata_is_current(false),
       bv_forcemat_is_assembled(false),
+      bvdiffusion_forcemat_is_assembled(false),
       bvemb_forcemat_is_assembled(false),
       be_forcemat_is_assembled(false),
+      bediffusion_forcemat_is_assembled(false),
       beemb_forcemat_is_assembled(false),
       Force(&H1),
       EnergyForce(&L2),
       VelocityBoundaryForce(&H1),
+      DiffusionVelocityBoundaryForce(&H1),
       EnergyBoundaryForce(&L2),
+      DiffusionEnergyBoundaryForce(&L2),
       ShiftedVelocityBoundaryForce(&H1),
       ShiftedEnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
@@ -430,6 +436,14 @@ namespace mfem
       nvmi->SetIntRule(&b_ir);
       Mv->AddBdrFaceIntegrator(nvmi);
 
+      d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      d_nvmi->SetIntRule(&b_ir);
+      DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
+
+      de_nvmi = new DiffusionEnergyNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      de_nvmi->SetIntRule(&b_ir);
+      DiffusionEnergyBoundaryForce.AddBdrFaceIntegrator(de_nvmi);
+       
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
@@ -591,6 +605,8 @@ namespace mfem
       
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
+      AssembleDiffusionVelocityBoundaryForceMatrix();
+     
       // The monolithic BlockVector stores the unknown fields as follows:
       // (Position, Velocity, Specific Internal Energy).
       ParGridFunction dv;
@@ -608,6 +624,8 @@ namespace mfem
       rhs = 0.0;
       rhs += Force;
       rhs += VelocityBoundaryForce;
+      rhs += DiffusionVelocityBoundaryForce;
+     
       if (useEmbedded){
 	rhs += ShiftedVelocityBoundaryForce;
       }
@@ -657,6 +675,9 @@ namespace mfem
       e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyBoundaryForceMatrix();
 
+      de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
+      AssembleDiffusionEnergyBoundaryForceMatrix();
+      
       if (useEmbedded){
 	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
 	AssembleShiftedEnergyBoundaryForceMatrix();
@@ -685,7 +706,8 @@ namespace mfem
       e_rhs = 0.0;
       e_rhs += EnergyForce;
       e_rhs += EnergyBoundaryForce;
-    
+      e_rhs += DiffusionEnergyBoundaryForce;
+     
       if (useEmbedded){
 	e_rhs += ShiftedEnergyBoundaryForce; 
       }
@@ -1015,11 +1037,26 @@ namespace mfem
       bv_forcemat_is_assembled = true;
     }
 
+    void LagrangianHydroOperator::AssembleDiffusionVelocityBoundaryForceMatrix() const
+    {   
+      DiffusionVelocityBoundaryForce = 0.0;
+      DiffusionVelocityBoundaryForce.Assemble();
+
+      bvdiffusion_forcemat_is_assembled = true;
+    }
+
     void LagrangianHydroOperator::AssembleEnergyBoundaryForceMatrix() const
     {
       EnergyBoundaryForce = 0.0;
       EnergyBoundaryForce.Assemble();
       be_forcemat_is_assembled = true;
+    }
+
+    void LagrangianHydroOperator::AssembleDiffusionEnergyBoundaryForceMatrix() const
+    {
+      DiffusionEnergyBoundaryForce = 0.0;
+      DiffusionEnergyBoundaryForce.Assemble();
+      bediffusion_forcemat_is_assembled = true;
     }
 
     void LagrangianHydroOperator::AssembleShiftedEnergyBoundaryForceMatrix() const

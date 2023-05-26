@@ -759,6 +759,177 @@ namespace mfem
 	}
     }
 
+    
+    void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+								   FaceElementTransformations &Tr,
+								   Vector &elvect)
+    {
+      const int nqp_face = IntRule->GetNPoints();
+      const int dim = el.GetDim();
+      const int h1dofs_cnt = el.GetDof();
+      elvect.SetSize(h1dofs_cnt*dim);
+      elvect = 0.0;
+      Vector shape(h1dofs_cnt);
+      shape = 0.0;
+      for (int q = 0; q  < nqp_face; q++)
+	{
+	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+	  // Set the integration point in the face and the neighboring elements
+	  Tr.SetAllIntPoints(&ip_f);
+	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  
+	  Trans_el1.SetIntPoint(&eip);
+	  const int elementNo = Trans_el1.ElementNo;
+	 
+	  Vector nor;
+	  nor.SetSize(dim);
+	  nor = 0.0;
+	  CalcOrtho(Tr.Jacobian(), nor);
+	  
+	  Vector Jac0inv_vec(dim*dim);
+	  Jac0inv_vec = 0.0;
+	  Jac0invface_gf.GetVectorValue(elementNo,eip,Jac0inv_vec);
+	  DenseMatrix Jac0inv(dim);
+	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
+	  
+	  double nor_norm = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    nor_norm += nor(s) * nor(s);
+	  }
+	  nor_norm = sqrt(nor_norm);
+	  
+	  double penaltyVal = 0.0;
+
+	  DenseMatrix v_grad_q1(dim);
+	  v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	  // As in the volumetric viscosity.
+	  v_grad_q1.Symmetrize();
+	  double h_1, mu_1;
+	  
+	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv,
+				    h0, h_1, mu_1);
+	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
+
+	  Vector vShape;
+	  v_gf.GetVectorValue(elementNo, eip, vShape);
+	  double vDotn = 0.0;
+	  for (int s = 0; s < dim; s++)
+	    {
+	      vDotn += vShape(s) * nor(s)/nor_norm;
+	    }
+
+	  double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
+	  
+	  // NEW //
+	  penaltyVal = penaltyParameter * density_el1 * cs_el1;
+	  ///
+	  el.CalcShape(eip, shape);
+	  for (int i = 0; i < h1dofs_cnt; i++)
+	    {
+	      for (int vd = 0; vd < dim; vd++) // Velocity components.
+		{
+		  elvect(i + vd * h1dofs_cnt) -= shape(i) * vDotn * nor(vd) * penaltyVal * ip_f.weight;
+		  //	  std::cout << " val " << vDotn << std::endl;
+		}
+	    }
+	}
+    }
+    
+    void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(
+								   const FiniteElement &el, ElementTransformation &Tr, Vector &elvect)
+    {
+      mfem_error("DGDirichletLFIntegrator::AssembleRHSElementVect");
+    }
+
+    
+    void DiffusionEnergyNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+									 FaceElementTransformations &Tr,
+									 Vector &elvect)
+    {
+      if (Vnpt_gf != NULL){
+	const int nqp_face = IntRule->GetNPoints();
+	const int dim = el.GetDim();
+	const int l2dofs_cnt = el.GetDof();
+	elvect.SetSize(l2dofs_cnt);
+	elvect = 0.0;
+	Vector shape(l2dofs_cnt);
+	shape = 0.0;
+	for (int q = 0; q  < nqp_face; q++)
+	  {
+	    const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    Tr.SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	    ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  
+	    Trans_el1.SetIntPoint(&eip);
+	    const int elementNo = Trans_el1.ElementNo;
+	 
+	    Vector nor;
+	    nor.SetSize(dim);
+	    nor = 0.0;
+	    CalcOrtho(Tr.Jacobian(), nor);
+	  
+	    Vector Jac0inv_vec(dim*dim);
+	    Jac0inv_vec = 0.0;
+	    Jac0invface_gf.GetVectorValue(elementNo,eip,Jac0inv_vec);
+	    DenseMatrix Jac0inv(dim);
+	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
+	  
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
+	  
+	    double penaltyVal = 0.0;
+
+	    DenseMatrix v_grad_q1(dim);
+	    v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	    // As in the volumetric viscosity.
+	    v_grad_q1.Symmetrize();
+	    double h_1, mu_1;
+	  
+	    LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv,
+				      h0, h_1, mu_1);
+	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
+
+	    Vector vShape;
+	    v_gf.GetVectorValue(elementNo, eip, vShape);
+	    double vDotn = 0.0;
+	    for (int s = 0; s < dim; s++)
+	      {
+		vDotn += vShape(s) * nor(s)/nor_norm;
+	      }
+	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
+	  
+	    // NEW //
+	    penaltyVal = penaltyParameter * density_el1 * cs_el1;
+	    ///
+	    el.CalcShape(eip, shape);
+	    for (int i = 0; i < l2dofs_cnt; i++)
+	      {
+		elvect(i) += shape(i) * vDotn * vDotn * penaltyVal * ip_f.weight * nor_norm;
+		//		std::cout << " energ val " << elvect(i) << std::endl;
+	      }
+	  }
+      }
+      else{
+	const int l2dofs_cnt = el.GetDof();
+	elvect.SetSize(l2dofs_cnt);
+	elvect = 0.0;
+      }
+    }
+    
+    void DiffusionEnergyNormalVelocityIntegrator::AssembleRHSElementVect(
+								   const FiniteElement &el, ElementTransformation &Tr, Vector &elvect)
+    {
+      mfem_error("DGDirichletLFIntegrator::AssembleRHSElementVect");
+    }
+
+
+    
     void ShiftedVelocityBoundaryForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
 									const FiniteElement &el2,
 									FaceElementTransformations &Tr,

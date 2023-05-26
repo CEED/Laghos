@@ -220,6 +220,65 @@ public:
 				      DenseMatrix &elmat);
     };
 
+    // Performs full assembly for the normal velocity mass matrix operator.
+    class DiffusionNormalVelocityIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const double h0 ;
+      const ParGridFunction &alpha;
+      double penaltyParameter;
+      const int order_v;
+      const double &globalmax_rho;
+      const double &globalmax_cs;
+      const double &globalmax_viscous_coef;
+      const ParGridFunction &rhoface_gf;
+      const ParGridFunction &csface_gf;
+      const ParGridFunction &Jac0invface_gf;
+      const ParGridFunction &rho0DetJ0face_gf;
+      const ParGridFunction &v_gf;
+            
+    public:
+      DiffusionNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf,  const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect);
+    };
+
+      // Performs full assembly for the normal velocity mass matrix operator.
+    class DiffusionEnergyNormalVelocityIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const double h0 ;
+      const ParGridFunction &alpha;
+      double penaltyParameter;
+      const int order_v;
+      const double &globalmax_rho;
+      const double &globalmax_cs;
+      const double &globalmax_viscous_coef;
+      const ParGridFunction &rhoface_gf;
+      const ParGridFunction &csface_gf;
+      const ParGridFunction &Jac0invface_gf;
+      const ParGridFunction &rho0DetJ0face_gf;
+      const ParGridFunction &v_gf;
+      const ParGridFunction *Vnpt_gf;
+            
+    public:
+      DiffusionEnergyNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), Vnpt_gf(NULL) {  }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect);
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+	Vnpt_gf = velocity_NPT;
+      }
+ 
+    };
+    
     
     // Performs full assembly for the boundary force operator on the momentum equation.
     // < sigma_{ij} n_{j} , \psi_{i} > 
