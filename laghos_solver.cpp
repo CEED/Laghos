@@ -544,8 +544,8 @@ namespace mfem
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
 */
-	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();		
+	//	UpdateAlpha(*alphaCut, H1, *level_set_gf);
+	//	alphaCut->ExchangeFaceNbrData();		
       }
       
       //Compute quadrature quantities
@@ -612,9 +612,9 @@ namespace mfem
 						const double dt) const
     {
 
-      Mv->Update();
-      Mv->BilinearForm::operator=(0.0);
-      Mv->Assemble();
+      // Mv->Update();
+      //  Mv->BilinearForm::operator=(0.0);
+      //  Mv->Assemble();
       // Mv->Finalize();
       
       AssembleForceMatrix();
@@ -679,10 +679,6 @@ namespace mfem
       v_updated.MakeRef(&H1, *sptr, 0);
       v_updated.ExchangeFaceNbrData();
 
-      ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
-      Me_mat->Update();
-      Me_mat->BilinearForm::operator=(0.0);
-      Me_mat->Assemble();
       
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyForceMatrix();
@@ -694,10 +690,14 @@ namespace mfem
       AssembleDiffusionEnergyBoundaryForceMatrix();
       
       if (useEmbedded){
+	ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
 	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
 	shifted_de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
 	AssembleShiftedEnergyBoundaryForceMatrix();
       }
+      // Me_mat->Update();
+      // Me_mat->BilinearForm::operator=(0.0);
+      // Me_mat->Assemble();
       
       // The monolithic BlockVector stores the unknown fields as follows:
       // (Position, Velocity, Specific Internal Energy).
