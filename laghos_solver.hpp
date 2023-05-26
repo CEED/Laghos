@@ -119,6 +119,9 @@ namespace mfem
       mutable ParLinearForm EnergyBoundaryForce;
       mutable ParLinearForm DiffusionEnergyBoundaryForce;
       mutable ParLinearForm ShiftedVelocityBoundaryForce;
+      mutable ParLinearForm ShiftedDiffusionVelocityBoundaryForce;
+      mutable ParLinearForm ShiftedDiffusionEnergyBoundaryForce;
+     
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
       const double penaltyParameter;
@@ -140,6 +143,9 @@ namespace mfem
       ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
       ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
       ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
+      ShiftedDiffusionNormalVelocityIntegrator *shifted_d_nvmi;
+      ShiftedDiffusionEnergyNormalVelocityIntegrator *shifted_de_nvmi;
+     
       GhostVectorFullGradPenaltyIntegrator *ghost_nvmi;
       GhostScalarFullGradPenaltyIntegrator *ghost_emi;
       

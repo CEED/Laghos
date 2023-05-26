@@ -360,6 +360,81 @@ public:
 				      DenseMatrix &elmat);
       
     };
+
+    // Performs full assembly for the normal velocity mass matrix operator.
+    class ShiftedDiffusionNormalVelocityIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const ParMesh *pmesh;
+      const double hinit;
+      const int order_v;
+      const ParGridFunction &alpha_gf;
+      VectorCoefficient *vD;
+      VectorCoefficient *vN;
+      int nTerms;
+      bool fullPenalty;
+      double penaltyParameter;
+      const double &globalmax_rho;
+      const double &globalmax_cs;
+      const double &globalmax_viscous_coef;
+      const ParGridFunction &csface_gf;
+      const ParGridFunction &rhoface_gf;
+      const ParGridFunction &viscousface_gf;
+      const ParFiniteElementSpace &h1;
+      const ParGridFunction &v_gf;
+      const ParGridFunction &Jac0invface_gf;
+      
+    public:
+      ShiftedDiffusionNormalVelocityIntegrator(const double hinit, const ParMesh *pmesh, const ParFiniteElementSpace &h1, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : hinit(hinit), pmesh(pmesh), h1(h1), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP) { }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  const FiniteElement &el2,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect) {}
+    };
+
+    // Performs full assembly for the normal velocity mass matrix operator.
+    class ShiftedDiffusionEnergyNormalVelocityIntegrator : public LinearFormIntegrator
+    {
+    private:
+      const ParMesh *pmesh;
+      const double hinit;
+      const int order_v;
+      const ParGridFunction &alpha_gf;
+      VectorCoefficient *vD;
+      VectorCoefficient *vN;
+      int nTerms;
+      bool fullPenalty;
+      double penaltyParameter;
+      const double &globalmax_rho;
+      const double &globalmax_cs;
+      const double &globalmax_viscous_coef;
+      const ParGridFunction &csface_gf;
+      const ParGridFunction &rhoface_gf;
+      const ParGridFunction &viscousface_gf;
+      const ParFiniteElementSpace &h1;
+      const ParGridFunction &v_gf;
+      const ParGridFunction &Jac0invface_gf;
+      const ParGridFunction *Vnpt_gf;
+      
+    public:
+      ShiftedDiffusionEnergyNormalVelocityIntegrator(const double hinit, const ParMesh *pmesh, const ParFiniteElementSpace &h1, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : hinit(hinit), pmesh(pmesh), h1(h1), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP), Vnpt_gf(NULL) { }
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  const FiniteElement &el2,
+					  FaceElementTransformations &Tr,
+					  Vector &elvect);
+      virtual void AssembleRHSElementVect(const FiniteElement &el,
+					  ElementTransformation &Tr,
+					  Vector &elvect) {}
+    
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+	Vnpt_gf = velocity_NPT;
+      }
+ 
+    };
+
     
   } // namespace hydrodynamics
   

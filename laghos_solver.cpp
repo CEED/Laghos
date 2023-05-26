@@ -156,6 +156,8 @@ namespace mfem
       shifted_v_bfi(NULL),
       shifted_e_bfi(NULL),
       shifted_nvmi(NULL),
+      shifted_d_nvmi(NULL),
+      shifted_de_nvmi(NULL),
       ghost_nvmi(NULL),
       ghost_emi(NULL),
       mi(NULL),
@@ -220,6 +222,8 @@ namespace mfem
       DiffusionEnergyBoundaryForce(&L2),
       ShiftedVelocityBoundaryForce(&H1),
       ShiftedEnergyBoundaryForce(&L2),
+      ShiftedDiffusionVelocityBoundaryForce(&H1),
+      ShiftedDiffusionEnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
       B(H1c.GetTrueVSize()),
       X_e(L2c.GetTrueVSize()),
@@ -447,13 +451,13 @@ namespace mfem
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
-	//	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
+	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
 	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
-	//	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
+	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
 	ShiftedEnergyBoundaryForce.Assemble();
 
@@ -461,6 +465,16 @@ namespace mfem
 
 	shifted_nvmi->SetIntRule(&b_ir);
 	Mv->AddInteriorFaceIntegrator(shifted_nvmi);
+
+	shifted_d_nvmi = new ShiftedDiffusionNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_d_nvmi->SetIntRule(&b_ir);
+	ShiftedDiffusionVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_d_nvmi);
+	ShiftedDiffusionVelocityBoundaryForce.Assemble();
+	
+	shifted_de_nvmi = new ShiftedDiffusionEnergyNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_de_nvmi->SetIntRule(&b_ir);
+	ShiftedDiffusionEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_de_nvmi);
+	ShiftedDiffusionEnergyBoundaryForce.Assemble();
 	
 	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
 	ghost_nvmi->SetIntRule(&b_ir);
@@ -598,9 +612,9 @@ namespace mfem
 						const double dt) const
     {
 
-      // Mv->Update();
-      //  Mv->BilinearForm::operator=(0.0);
-      //  Mv->Assemble();
+      Mv->Update();
+      Mv->BilinearForm::operator=(0.0);
+      Mv->Assemble();
       // Mv->Finalize();
       
       AssembleForceMatrix();
@@ -628,6 +642,7 @@ namespace mfem
      
       if (useEmbedded){
 	rhs += ShiftedVelocityBoundaryForce;
+	rhs += ShiftedDiffusionVelocityBoundaryForce;
       }
       
       if (source_type == 2)
@@ -664,10 +679,10 @@ namespace mfem
       v_updated.MakeRef(&H1, *sptr, 0);
       v_updated.ExchangeFaceNbrData();
 
-      // ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
-      // Me_mat->Update();
-      //  Me_mat->BilinearForm::operator=(0.0);
-      // Me_mat->Assemble();
+      ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
+      Me_mat->Update();
+      Me_mat->BilinearForm::operator=(0.0);
+      Me_mat->Assemble();
       
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyForceMatrix();
@@ -680,6 +695,7 @@ namespace mfem
       
       if (useEmbedded){
 	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
+	shifted_de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
 	AssembleShiftedEnergyBoundaryForceMatrix();
       }
       
@@ -709,7 +725,8 @@ namespace mfem
       e_rhs += DiffusionEnergyBoundaryForce;
      
       if (useEmbedded){
-	e_rhs += ShiftedEnergyBoundaryForce; 
+	e_rhs += ShiftedEnergyBoundaryForce;
+	e_rhs += ShiftedDiffusionEnergyBoundaryForce; 
       }
       Array<int> l2dofs;
    
@@ -1027,10 +1044,13 @@ namespace mfem
     {   
       VelocityBoundaryForce = 0.0;
       VelocityBoundaryForce.Assemble();
-      if (analyticalSurface != NULL){
+      if (useEmbedded){
 	// reset mesh, needed to update the normal velocity penalty term.
 	ShiftedVelocityBoundaryForce = 0.0;
 	ShiftedVelocityBoundaryForce.Assemble();
+	ShiftedDiffusionVelocityBoundaryForce = 0.0;
+	ShiftedDiffusionVelocityBoundaryForce.Assemble();
+   
 	bvemb_forcemat_is_assembled = true;
       }
 
@@ -1063,6 +1083,9 @@ namespace mfem
     {
       ShiftedEnergyBoundaryForce = 0.0;
       ShiftedEnergyBoundaryForce.Assemble();
+      ShiftedDiffusionEnergyBoundaryForce = 0.0;
+      ShiftedDiffusionEnergyBoundaryForce.Assemble();
+   
       beemb_forcemat_is_assembled = true;
     }
 

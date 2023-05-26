@@ -1247,101 +1247,34 @@ namespace mfem
 	    double penaltyVal = 0.0;
 	    penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
 	    
-	    if (Tr.Attribute == 11){
-	      if (gamma_1 > 0.9){
-		Vector Jac0inv_vec_el1(dim*dim);
-		Jac0inv_vec_el1 = 0.0;
-		Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
-		
-		DenseMatrix Jac0inv_el1(dim);
-		ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
-	
-		DenseMatrix v_grad_q1(dim);
-		v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
-		
-		// As in the volumetric viscosity.
-		v_grad_q1.Symmetrize();
-		double h_1, mu_1;
-		
-		LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
-					hinit, h_1, mu_1);
-		double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
-		//	std::cout << " de1ns " << density_el1 << " h " << h_1 << std::endl;	      
-		// USING
-		//	penaltyVal = 4.0 * penaltyParameter * h_1 * density_el1 ;
-		//	penaltyVal = penaltyParameter * h_1 * globalmax_rho ;
-	      }
-	      else {
-		Vector Jac0inv_vec_el2(dim*dim);
-		Jac0inv_vec_el2 = 0.0;
-		Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
-		
-		DenseMatrix Jac0inv_el2(dim);
-		ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
-	      
-		DenseMatrix v_grad_q2(dim);
-		v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
-		
-		// As in the volumetric viscosity.
-		v_grad_q2.Symmetrize();
-		double h_2, mu_2;
-		
-		LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
-					  hinit, h_2, mu_2);
-		double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
-		//		std::cout << " de2ns " << density_el2 << " h " << h_2 << std::endl;
-		// USING
-		//	penaltyVal = 4.0 * penaltyParameter * h_2 * density_el2 ;
-		   //  penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 * qdata.h0/h_1 + gamma_2 * density_el2 * qdata.h0/h_2) ;
-	      // penaltyVal = penaltyParameter * (gamma_1 * h_1  + gamma_2 * h_2) * globalmax_rho ;
-	      //penaltyVal = 4.0 * penaltyParameter * (gamma_1 * density_el1 + gamma_2 * density_el2)/* * origNormalProd */;
-	      //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (gamma_1 * h_1 + gamma_2 * h_2) * origNormalProd;
-		//	penaltyVal = penaltyParameter * h_2 * globalmax_rho ;
-	        
-	      }
-	    }
+	    Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
+	    Jac0inv_vec_el1 = 0.0;
+	    Jac0inv_vec_el2 = 0.0;
 	    
-	    else{
-	      Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
-	      Jac0inv_vec_el1 = 0.0;
-	      Jac0inv_vec_el2 = 0.0;
-
-	      Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
-	      Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
-	      
-	      DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
-	      ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
-	      ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
-	      
-	      DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
-	      v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
-	      v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
-	      
-	      // As in the volumetric viscosity.
-	      v_grad_q1.Symmetrize();
-	      v_grad_q2.Symmetrize();
-	      double h_1, h_2, mu_1, mu_2;
-	      
-	      LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
-					hinit, h_1, mu_1);
-	      LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
-					hinit, h_2, mu_2);
-	      double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
-	      double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
-	      // std::cout << " d1e " << density_el1 << " d2e " << density_el2 << " h " << h_1 << " h " << h_2 << std::endl;
-	      // USING
-	      // penaltyVal = 4.0 * penaltyParameter * (h_1 * density_el1 * h_2 * density_el2 / ( h_1 * density_el1 + h_2 * density_el2 ) );
-	      // std::cout << " de " << density_el1 << " de " << density_el2 << " h " << h_1 << " h " << h_2 << " gamma " << gamma_1 << " gamma " << gamma_2 << std::endl;
-	      // penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1  + gamma_2 * h_2 * density_el2 );
-	      //   penaltyVal = penaltyParameter * globalmax_rho * (gamma_1 * h_1  + gamma_2 * h_2 );
-	      
-	      //  penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) * ( (qdata.h0/h_1) *  (qdata.h0/h_2) / (qdata.h0/h_1 + qdata.h0/h_2));
-	      //    penaltyVal = penaltyParameter * (h_1 * h_2  / ( h_1  + h_2  ) ) * globalmax_rho;
-	      //   penaltyVal = 4.0 * penaltyParameter * (density_el1 * density_el2 / ( density_el1 + density_el2 ) ) /* * origNormalProd*/;
-	      //	      penaltyVal = 4.0 * penaltyParameter * globalmax_rho * (h_1 * h_2  / ( h_1  + h_2  ) ) * globalmax_rho * origNormalProd;
-	   
-	    }
-
+	    Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+	    Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
+	    
+	    DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
+	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	    
+	    DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	    v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	    v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	    
+	    // As in the volumetric viscosity.
+	    v_grad_q1.Symmetrize();
+	    v_grad_q2.Symmetrize();
+	    double h_1, h_2, mu_1, mu_2;
+	    
+	    LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
+				      hinit, h_1, mu_1);
+	    LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
+				      hinit, h_2, mu_2);
+	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	    double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+	    // penaltyVal = penaltyParameter * (gamma_1 * h_1 * density_el1  + gamma_2 * h_2 * density_el2 );
+	    
 	    fe.CalcShape(eip_el1, shape_el1);
 	    shift_shape(h1, h1, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, shape_el1);
 	    
@@ -1376,7 +1309,334 @@ namespace mfem
 	elmat = 0.0;    
       }
     }
+
+    void ShiftedDiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+								      const FiniteElement &el2,
+								      FaceElementTransformations &Tr,
+								      Vector &elvect)
+    {
+      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	const int dim = el.GetDim();
+	DenseMatrix identity(dim);
+	identity = 0.0;
+	for (int s = 0; s < dim; s++){
+	  identity(s,s) = 1.0;
+	}
+	const int nqp_face = IntRule->GetNPoints();
+	const int h1dofs_cnt = el.GetDof();
+	elvect.SetSize(2*h1dofs_cnt*dim);
+	elvect = 0.0;
+	
+	Vector shape_el1(h1dofs_cnt), shape_test_el1(h1dofs_cnt), nor(dim);
+	Vector shape_el2(h1dofs_cnt), shape_test_el2(h1dofs_cnt);
+	ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+
+	int h1dofs_offset = el2.GetDof()*dim;
+
+	for (int q = 0; q < nqp_face; q++)
+	  {
+	    nor = 0.0;
+	    
+	    shape_el1 = 0.0;
+	    shape_test_el1 = 0.0;
+	    shape_el2 = 0.0;
+	    shape_test_el2 = 0.0;
+
+	    const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+	    // Set the integration point in the face and the neighboring elements
+	    Tr.SetAllIntPoints(&ip_f);
+	    const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
+	    const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
+	    
+	    CalcOrtho(Tr.Jacobian(), nor);
+
+	    double nor_norm = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nor_norm += nor(s) * nor(s);
+	    }
+	    nor_norm = sqrt(nor_norm);
+
+	    Vector tn(dim);
+	    tn = 0.0;
+	    tn = nor;
+	    tn /= nor_norm;
+	    
+	    double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
+	    double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
+	    double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
+	    double gamma_1 =  volumeFraction_el1/sum_volFrac;
+	    double gamma_2 =  volumeFraction_el2/sum_volFrac;
+	    
+	    /////
+	    Vector D_el1(dim);
+	    Vector tN_el1(dim);
+	    D_el1 = 0.0;
+	    tN_el1 = 0.0;
+	    // if (Tr.Attribute == 77){
+	    vD->Eval(D_el1, Trans_el1, eip_el1);
+	    // }
+	    vN->Eval(tN_el1, Trans_el1, eip_el1);
+	    /////
+	    
+	    /////
+	    Vector D_el2(dim);
+	    Vector tN_el2(dim);
+	    D_el2 = 0.0;
+	    tN_el2 = 0.0;
+	    // if (Tr.Attribute == 77){
+	    vD->Eval(D_el2, Trans_el2, eip_el2);
+	    // }
+	    vN->Eval(tN_el2, Trans_el2, eip_el2);
+	    /////
+	      
+	    double nTildaDotN = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
+	    }
+
+	    /////////////////////
+	    double penaltyVal = 0.0;
+	    // penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
+	    
+	    Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
+	    Jac0inv_vec_el1 = 0.0;
+	    Jac0inv_vec_el2 = 0.0;
+	    
+	    Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+	    Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
+	    
+	    DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
+	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	    
+	    DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	    v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	    v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	    
+	    // As in the volumetric viscosity.
+	    v_grad_q1.Symmetrize();
+	    v_grad_q2.Symmetrize();
+	    double h_1, h_2, mu_1, mu_2;
+	    
+	    LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
+				      hinit, h_1, mu_1);
+	    LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
+				      hinit, h_2, mu_2);
+	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	    double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip_el1);
+	    double cs_el2 = csface_gf.GetValue(Trans_el2,eip_el2);
+	    
+	    penaltyVal = penaltyParameter * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+	    /////////////////////////////
+	    Vector gradv_d_el1(dim);
+	    gradv_d_el1 = 0.0;
+	    get_shifted_value(v_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1);
+
+	    Vector gradv_d_el2(dim);
+	    gradv_d_el2 = 0.0;
+	    get_shifted_value(v_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2);
+	    
+	    el.CalcShape(eip_el1, shape_el1);
+	    shift_shape(h1, h1, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, shape_el1);
+	    
+	    double vDotn_el1 = 0.0;
+	    for (int s = 0; s < dim; s++)
+	      {
+		vDotn_el1 += gradv_d_el1(s) * tN_el1(s);
+	      }
+	    
+	    el2.CalcShape(eip_el2, shape_el2);	    
+	    shift_shape(h1, h1, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, shape_el2);
+
+	    double vDotn_el2 = 0.0;
+	    for (int s = 0; s < dim; s++)
+	      {
+		vDotn_el2 += gradv_d_el2(s) * tN_el2(s);
+	      }
+	    
+	
+	    for (int i = 0; i < h1dofs_cnt; i++)
+	      {
+		for (int vd = 0; vd < dim; vd++) // Velocity components.
+		  {
+		    elvect(i + vd * h1dofs_cnt) -= gamma_1 * shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * tN_el1(vd) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		    elvect(i + vd * h1dofs_cnt + dim * h1dofs_cnt) -= gamma_2 * shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * tN_el2(vd) * penaltyVal * ip_f.weight  * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  }
+	      }
+	  }
+      }
+      else{
+	const int dim = el.GetDim();
+	const int h1dofs_cnt = el.GetDof();
+	elvect.SetSize(2*h1dofs_cnt*dim);
+	elvect = 0.0;    
+      }
+    }
     
+    void ShiftedDiffusionEnergyNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+									    const FiniteElement &el2,
+									    FaceElementTransformations &Tr,
+									    Vector &elvect)
+    {
+      if (Vnpt_gf != NULL){ 
+	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	  const int dim = el.GetDim();
+	  DenseMatrix identity(dim);
+	  identity = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    identity(s,s) = 1.0;
+	  }
+	  const int nqp_face = IntRule->GetNPoints();
+	  const int l2dofs_cnt = el.GetDof();
+	  elvect.SetSize(2*l2dofs_cnt);
+	  elvect = 0.0;
+	
+	  Vector shape_el1(l2dofs_cnt), shape_test_el1(l2dofs_cnt), nor(dim);
+	  Vector shape_el2(l2dofs_cnt), shape_test_el2(l2dofs_cnt);
+	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
+
+	  for (int q = 0; q < nqp_face; q++)
+	    {
+	      nor = 0.0;
+	    
+	      shape_el1 = 0.0;
+	      shape_test_el1 = 0.0;
+	      shape_el2 = 0.0;
+	      shape_test_el2 = 0.0;
+
+	      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+	      // Set the integration point in the face and the neighboring elements
+	      Tr.SetAllIntPoints(&ip_f);
+	      const IntegrationPoint &eip_el1 = Tr.GetElement1IntPoint();
+	      const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();
+	    
+	      CalcOrtho(Tr.Jacobian(), nor);
+
+	      double nor_norm = 0.0;
+	      for (int s = 0; s < dim; s++){
+		nor_norm += nor(s) * nor(s);
+	      }
+	      nor_norm = sqrt(nor_norm);
+
+	      Vector tn(dim);
+	      tn = 0.0;
+	      tn = nor;
+	      tn /= nor_norm;
+	    
+	      double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
+	      double volumeFraction_el2 = alpha_gf.GetValue(Trans_el2, eip_el2);
+	      double sum_volFrac = volumeFraction_el1 + volumeFraction_el2;
+	      double gamma_1 =  volumeFraction_el1/sum_volFrac;
+	      double gamma_2 =  volumeFraction_el2/sum_volFrac;
+	    
+	      /////
+	      Vector D_el1(dim);
+	      Vector tN_el1(dim);
+	      D_el1 = 0.0;
+	      tN_el1 = 0.0;
+	      // if (Tr.Attribute == 77){
+	      vD->Eval(D_el1, Trans_el1, eip_el1);
+	      // }
+	      vN->Eval(tN_el1, Trans_el1, eip_el1);
+	      /////
+	    
+	      /////
+	      Vector D_el2(dim);
+	      Vector tN_el2(dim);
+	      D_el2 = 0.0;
+	      tN_el2 = 0.0;
+	      // if (Tr.Attribute == 77){
+	      vD->Eval(D_el2, Trans_el2, eip_el2);
+	      // }
+	      vN->Eval(tN_el2, Trans_el2, eip_el2);
+	      /////
+	      
+	      double nTildaDotN = 0.0;
+	      for (int s = 0; s < dim; s++){
+		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
+	      }
+
+	      /////////////////////
+	      double penaltyVal = 0.0;
+	      // penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
+	    
+	      Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
+	      Jac0inv_vec_el1 = 0.0;
+	      Jac0inv_vec_el2 = 0.0;
+	    
+	      Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip_el1,Jac0inv_vec_el1);
+	      Jac0invface_gf.GetVectorValue(Trans_el2.ElementNo,eip_el2,Jac0inv_vec_el2);
+	    
+	      DenseMatrix Jac0inv_el1(dim), Jac0inv_el2(dim);
+	      ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el1, Jac0inv_el1);
+	      ConvertVectorToDenseMatrix(dim, Jac0inv_vec_el2, Jac0inv_el2);
+	    
+	      DenseMatrix v_grad_q1(dim), v_grad_q2(dim);
+	      v_gf.GetVectorGradient(Trans_el1, v_grad_q1);
+	      v_gf.GetVectorGradient(Trans_el2, v_grad_q2);
+	    
+	      // As in the volumetric viscosity.
+	      v_grad_q1.Symmetrize();
+	      v_grad_q2.Symmetrize();
+	      double h_1, h_2, mu_1, mu_2;
+	    
+	      LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv_el1,
+					hinit, h_1, mu_1);
+	      LengthScaleAndCompression(v_grad_q2, Trans_el2, Jac0inv_el2,
+					hinit, h_2, mu_2);
+	      double density_el1 = rhoface_gf.GetValue(Trans_el1,eip_el1);
+	      double density_el2 = rhoface_gf.GetValue(Trans_el2,eip_el2);
+	      double cs_el1 = csface_gf.GetValue(Trans_el1,eip_el1);
+	      double cs_el2 = csface_gf.GetValue(Trans_el2,eip_el2);
+	    
+	      penaltyVal = penaltyParameter * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+	      /////////////////////////////
+	      Vector gradv_d_el1(dim);
+	      gradv_d_el1 = 0.0;
+	      get_shifted_value(*Vnpt_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1);
+
+	      Vector gradv_d_el2(dim);
+	      gradv_d_el2 = 0.0;
+	      get_shifted_value(*Vnpt_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2);
+	    
+	      double vDotn_el1 = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  vDotn_el1 += gradv_d_el1(s) * tN_el1(s);
+		}
+	    
+	      double vDotn_el2 = 0.0;
+	      for (int s = 0; s < dim; s++)
+		{
+		  vDotn_el2 += gradv_d_el2(s) * tN_el2(s);
+		}
+	    
+	      el.CalcShape(eip_el1, shape_el1);
+	      el2.CalcShape(eip_el2, shape_el2);
+	    
+	      for (int i = 0; i < l2dofs_cnt; i++)
+		{
+		  elvect(i) += shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  elvect(i + l2dofs_cnt) += shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		}
+	    }
+	}
+	else{
+	  const int dim = el.GetDim();
+	  const int l2dofs_cnt = el.GetDof();
+	  elvect.SetSize(2*l2dofs_cnt);
+	  elvect = 0.0;    
+	}
+      }
+      else{
+	const int l2dofs_cnt = el.GetDof();
+	elvect.SetSize(2*l2dofs_cnt);
+	elvect = 0.0;
+      }
+    }
   } // namespace hydrodynamics
   
 } // namespace mfem
