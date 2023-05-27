@@ -438,7 +438,7 @@ namespace mfem
 
 	  Vector Jac0inv_vec(dim*dim);
 	  Jac0inv_vec = 0.0;
-	  Jac0invface_gf.GetVectorValue(Tr.ElementNo,eip,Jac0inv_vec);
+	  Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip,Jac0inv_vec);
 	  DenseMatrix Jac0inv(dim);
 	  ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
 	  
@@ -545,7 +545,7 @@ namespace mfem
 
 	    Vector Jac0inv_vec(dim*dim);
 	    Jac0inv_vec = 0.0;
-	    Jac0invface_gf.GetVectorValue(Tr.ElementNo,eip,Jac0inv_vec);
+	    Jac0invface_gf.GetVectorValue(Trans_el1.ElementNo,eip,Jac0inv_vec);
 	    DenseMatrix Jac0inv(dim);
 	    ConvertVectorToDenseMatrix(dim, Jac0inv_vec, Jac0inv);
 	    
