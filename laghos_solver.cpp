@@ -318,6 +318,12 @@ namespace mfem
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
 	alphaCut->ExchangeFaceNbrData();	
       }
+      else {
+	for (int i = 0; i < pmesh->GetNE(); i++)
+	  {
+	    pmesh->SetAttribute(i, ShiftedFaceMarker::SBElementType::INSIDE);
+	  }
+      }
 
     
       const int max_elem_attr = pmesh->attributes.Max();
@@ -443,11 +449,13 @@ namespace mfem
       d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       d_nvmi->SetIntRule(&b_ir);
       DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
-
+      DiffusionVelocityBoundaryForce.Assemble();
+  
       de_nvmi = new DiffusionEnergyNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V + C_I_E), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
       de_nvmi->SetIntRule(&b_ir);
       DiffusionEnergyBoundaryForce.AddBdrFaceIntegrator(de_nvmi);
-       
+      DiffusionEnergyBoundaryForce.Assemble();
+      
       if (useEmbedded){
 	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf);
 	shifted_v_bfi->SetIntRule(&b_ir);
@@ -818,7 +826,7 @@ namespace mfem
 	}
     }
 
-    double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
+    /*    double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
     {
       double glob_ie = 0.0;
 
@@ -830,7 +838,7 @@ namespace mfem
 	{
 	  L2.GetElementDofs(e, l2dofs);
 	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    gf.GetSubVector(l2dofs, loc_e);
+	    gf.GetSubVector(l2dofs, loc_e); 
 	    loc_ie += Me(e).InnerProduct(loc_e, one);
 	  }
 	}
@@ -838,7 +846,53 @@ namespace mfem
       MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
 
       return glob_ie;
+      }*/
+    double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
+    {
+      double glob_ie = 0.0;
+
+      double loc_ie = 0.0;	    
+      Array<int> l2dofs;
+      Vector loc_e(l2dofs_cnt);
+      Vector shape(l2dofs_cnt);
+      shape = 0.0;
+
+      for (int e = 0; e < NE; e++)
+	{
+	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
+	    L2.GetElementDofs(e, l2dofs);
+	    gf.GetSubVector(l2dofs, loc_e);
+	    ElementTransformation &Trans = *L2.GetElementTransformation(e);
+	    const FiniteElement &el = *L2.GetFE(e);
+
+	    for (int q = 0; q < ir.GetNPoints(); q++)
+	      {
+		const IntegrationPoint &ip = ir.IntPoint(q);
+		// Set the integration point in the face and the neighboring elements
+		Trans.SetIntPoint(&ip);
+		el.CalcShape(ip, shape);
+		
+		double volumeFraction = alphaCut->GetValue(Trans, ip);
+		double density = rho_gf.GetValue(Trans, ip);
+		double one = 0.0;
+		double local_ie = gf.GetValue(Trans,ip);
+		double internalE = 0.0;
+		for (int i = 0; i < l2dofs_cnt; i++){
+		  one += shape(i);
+		  internalE += shape(i) * loc_e(i); 
+		}
+		
+		loc_ie += one * density * ip.weight * volumeFraction * Trans.Weight() * internalE;
+	      }
+	  }
+	}
+      
+      MPI_Comm comm = H1.GetParMesh()->GetComm();
+      MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
+
+      return glob_ie;
     }
+
 
     double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
     {
