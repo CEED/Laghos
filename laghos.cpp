@@ -78,9 +78,9 @@ int main(int argc, char *argv[])
   double cfl = 0.5;
   double penaltyParameter = 1.0;
   double nitscheVersion = -1.0;
-  double cg_tol = 1e-15;
+  double cg_tol = 1e-8;
   double ftz_tol = 0.0;
-  int cg_max_iter = 30000;
+  int cg_max_iter = 300;
   int max_tsteps = -1;
   bool impose_visc = false;
   bool visualization = false;
@@ -255,7 +255,7 @@ int main(int argc, char *argv[])
 
   // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
   int quadRule_face =  H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW();
-  L2_FECollection PFace_L2FEC((int)(3.0*quadRule_face), dim, BasisType::GaussLobatto);
+  L2_FECollection PFace_L2FEC((int)(0.5*quadRule), dim, BasisType::GaussLobatto);
   // L2_FECollection PFace_L2FEC(order_e, dim, BasisType::GaussLobatto);
 
   ParFiniteElementSpace PFace_L2FESpace(pmesh, &PFace_L2FEC);
