@@ -73,6 +73,7 @@ enum HyperreductionSamplingType
     gnat,       // Default, GNAT
     qdeim,      // QDEIM
     sopt,       // S-OPT
+    eqp,       // EQP
 };
 
 static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
@@ -81,7 +82,8 @@ static HyperreductionSamplingType getHyperreductionSamplingType(const char* samp
     {
         {"gnat", gnat},
         {"qdeim", qdeim},
-        {"sopt", sopt}
+        {"sopt", sopt},
+        {"eqp", eqp}
     };
     auto iter = SamplingTypeMap.find(sampling_type);
     MFEM_VERIFY(iter != std::end(SamplingTypeMap), "Invalid input for hyperreduction sampling type");
@@ -253,8 +255,6 @@ struct ROM_Options
     SpaceTimeMethod spaceTimeMethod = no_space_time;
 
     bool VTos = false;
-
-    bool EQP = false;
 
     int maxNNLSnnz = 0;
 };

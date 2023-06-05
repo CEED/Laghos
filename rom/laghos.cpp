@@ -341,8 +341,6 @@ int main(int argc, char *argv[])
                    "Enable or disable merging of X-X0 and V bases.");
     args.AddOption(&hyperreductionSamplingType, "-hrsamptype", "--hrsamplingtype",
                    "Sampling type for the hyperreduction.");
-    args.AddOption(&romOptions.EQP, "-eqp", "--eqp", "-no-eqp", "--no-eqp",
-                   "Enable EQP.");
     args.AddOption(&romOptions.maxNNLSnnz, "-maxnnls", "--max-nnls",
                    "Maximum nnz for NNLS");
     args.Parse();
@@ -996,14 +994,14 @@ int main(int argc, char *argv[])
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
     {
-        const bool noMassSolve = rom_online && romOptions.EQP;
+        const bool noMassSolve = rom_online && (romOptions.hyperreductionSamplingType == eqp);
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
                                            ess_tdofs, *rho, source, cfl,
                                            mat_gf_coeff, visc, vort, p_assembly,
                                            cg_tol, cg_max_iter, ftz_tol,
                                            H1FEC.GetBasisType(), noMassSolve,
                                            noMassSolve,
-                                           rom_online && romOptions.EQP);
+                                           rom_online && (romOptions.hyperreductionSamplingType == eqp));
     }
 
     socketstream* vis_rho = NULL;

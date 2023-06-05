@@ -700,7 +700,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         MFEM_VERIFY(finalNumSamples == generator_Fe->getTemporalBasis()->numRows() + VTos, "bug");
     }
 
-    if (input.EQP)
+    if (input.hyperreductionSamplingType == eqp)
     {
         const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
         const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
@@ -819,7 +819,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), basisIdentifier(input.basisIdentifier),
       hyperreductionSamplingType(input.hyperreductionSamplingType), spaceTimeMethod(input.spaceTimeMethod),
-      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos), eqp(input.EQP)
+      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos), eqp(input.hyperreductionSamplingType == eqp)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -2256,8 +2256,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
-      spaceTimeMethod(input.spaceTimeMethod), eqp(input.EQP), H1spaceFOM(input.H1FESpace),
-      L2spaceFOM(input.L2FESpace)
+      spaceTimeMethod(input.spaceTimeMethod), eqp(input.hyperreductionSamplingType == eqp), 
+      H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace)
 {
     MFEM_VERIFY(!(hyperreduce && eqp), "");
 
