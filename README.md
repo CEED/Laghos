@@ -274,7 +274,7 @@ To make sure the results are correct, we tabulate reference final iterations
 |  5. | 2849 | 0.000199 | 5.6554090508e+01 | 1.90e-05
 |  6. |  849 | 0.001537 | 5.6696098028e+01 | 5.91e-04
 |  7. |  776 | 0.000045 | 4.0979204623e+02 | 3.71e-08
-|  8. | 2567 | 0.000094 | 1.1793031042e+02 | 2.94e-02
+|  8. | 2583 | 0.000114 | 1.1796670418e+02 | 2.93e-02
 
 
 An implementation is considered valid if the final energy values are all within
