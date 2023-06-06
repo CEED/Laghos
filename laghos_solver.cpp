@@ -148,6 +148,7 @@ namespace mfem
       ess_elem(pmesh->attributes.Max()),
       fi(NULL),
       efi(NULL),
+      sfi(NULL),
       v_bfi(NULL),
       e_bfi(NULL),
       nvmi(NULL),
@@ -203,6 +204,7 @@ namespace mfem
       qdata(),
       qdata_is_current(false),
       forcemat_is_assembled(false),
+      sourcevec_is_assembled(false),
       energyforcemat_is_assembled(false),
       bv_qdata_is_current(false),
       bvemb_qdata_is_current(false),
@@ -216,6 +218,7 @@ namespace mfem
       beemb_forcemat_is_assembled(false),
       Force(&H1),
       EnergyForce(&L2),
+      SourceForce(&H1),
       VelocityBoundaryForce(&H1),
       DiffusionVelocityBoundaryForce(&H1),
       EnergyBoundaryForce(&L2),
@@ -429,6 +432,13 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyForce.Assemble();
 
+      sfi = new SourceForceIntegrator(rho_gf);
+      sfi->SetIntRule(&ir);
+      SourceForce.AddDomainIntegrator(sfi, ess_elem);
+      // Make a dummy assembly to figure out the sparsity.
+      SourceForce.Assemble();
+
+      
       v_bfi = new VelocityBoundaryForceIntegrator(*alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       v_bfi->SetIntRule(&b_ir);
       VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
@@ -634,31 +644,21 @@ namespace mfem
       ParGridFunction dv;
       dv.MakeRef(&H1, dS_dt, H1Vsize);
       dv = 0.0;
-      ParGridFunction accel_src_gf;
-      if (source_type == 2)
-	{
-	  accel_src_gf.SetSpace(&H1);
-	  RTCoefficient accel_coeff(dim);
-	  accel_src_gf.ProjectCoefficient(accel_coeff);
-	  accel_src_gf.Read();
-	}
 
+      AssembleSourceVector();
+      
+    
       rhs = 0.0;
       rhs += Force;
       rhs += VelocityBoundaryForce;
       rhs += DiffusionVelocityBoundaryForce;
-     
+      rhs += SourceForce;
+      
       if (useEmbedded){
 	rhs += ShiftedVelocityBoundaryForce;
 	rhs += ShiftedDiffusionVelocityBoundaryForce;
       }
       
-      if (source_type == 2)
-	{
-	  Vector rhs_accel(rhs.Size());
-	  Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
-	  rhs += rhs_accel;
-	}
       HypreParMatrix A;
       Mv->FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
       CGSolver cg(H1.GetParMesh()->GetComm());
@@ -911,7 +911,8 @@ namespace mfem
       qdata_is_current = true;
       forcemat_is_assembled = false;
       energyforcemat_is_assembled = false;
-
+      sourcevec_is_assembled = false;
+      
       // This code is only for the 1D/FA mode
       const int nqp = ir.GetNPoints();
       ParGridFunction x, v, e;
@@ -1085,6 +1086,26 @@ namespace mfem
       Force = 0.0;
       Force.Assemble();
       forcemat_is_assembled = true;
+    }
+
+    void LagrangianHydroOperator::AssembleSourceVector() const
+    {
+      SourceForce = 0.0;
+      ParGridFunction accel_src_gf(&H1);
+      ParGridFunction accel_gf(&H1);
+      if (source_type == 2)
+	{
+	  RTCoefficient accel_coeff(dim);
+	  accel_gf.ProjectCoefficient(accel_coeff);
+	  accel_src_gf.ProjectGridFunction(accel_gf);
+  
+	  accel_src_gf.ExchangeFaceNbrData();
+
+	  // accel_src_gf.Read();
+	  sfi->SetAccelerationGridFunction(&accel_src_gf);
+	  SourceForce.Assemble();
+	}
+      sourcevec_is_assembled = true;
     }
 
     void LagrangianHydroOperator::AssembleEnergyForceMatrix() const

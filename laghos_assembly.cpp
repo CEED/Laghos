@@ -268,6 +268,35 @@ namespace mfem
 	}
     }
 
+    void SourceForceIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
+						   ElementTransformation &Tr,
+						   Vector &elvect)
+    {
+      const int dim = fe.GetDim();
+      elvect.SetSize(fe.GetDof()*dim);
+      elvect = 0.0;
+      
+      if (accel_src_gf != NULL){
+	const int nqp = IntRule->GetNPoints();
+	Vector shape(fe.GetDof());
+	int dofs = fe.GetDof();
+	for (int q = 0; q < nqp; q++)
+	  {	    
+	    const IntegrationPoint &ip = IntRule->IntPoint(q);
+	    fe.CalcShape(ip, shape);
+	    Tr.SetIntPoint (&ip);
+	    double rho = rho_gf.GetValue(Tr, ip);
+	    Vector accel_vec;
+	    accel_src_gf->GetVectorValue(Tr.ElementNo, ip, accel_vec);
+	    for (int i = 0; i < dofs; i++){
+	      for (int vd = 0; vd < dim; vd++){
+		elvect(i + vd * dofs) += shape(i) * rho * ip.weight * accel_vec(vd) * Tr.Weight();
+	      }
+	    }
+	  }
+      }
+    }
+
     void ForceIntegrator::AssembleRHSElementVect(const FiniteElement &el,
 						 ElementTransformation &Tr,
 						 Vector &elvect)

@@ -57,6 +57,24 @@ namespace mfem
 					  Vector &elvect);
     };
 
+    class SourceForceIntegrator : public LinearFormIntegrator
+    {
+      using LinearFormIntegrator::AssembleRHSElementVect;
+    private:
+      const ParGridFunction &rho_gf;
+      const ParGridFunction *accel_src_gf;
+      
+    public:
+      SourceForceIntegrator(const ParGridFunction &rho_gf) : rho_gf(rho_gf), accel_src_gf(NULL) { }
+      virtual void AssembleRHSElementVect(const FiniteElement &fe,
+					  ElementTransformation &Tr,
+					  Vector &elvect);
+      virtual void SetAccelerationGridFunction(const ParGridFunction * accel_gf){
+	accel_src_gf = accel_gf;
+      }
+  
+    };
+
     class WeightedVectorMassIntegrator : public BilinearFormIntegrator
     {
     private:
