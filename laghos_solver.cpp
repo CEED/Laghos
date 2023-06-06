@@ -1092,13 +1092,10 @@ namespace mfem
     {
       SourceForce = 0.0;
       ParGridFunction accel_src_gf(&H1);
-      ParGridFunction accel_gf(&H1);
       if (source_type == 2)
 	{
 	  RTCoefficient accel_coeff(dim);
-	  accel_gf.ProjectCoefficient(accel_coeff);
-	  accel_src_gf.ProjectGridFunction(accel_gf);
-  
+	  accel_src_gf.ProjectCoefficient(accel_coeff);
 	  accel_src_gf.ExchangeFaceNbrData();
 
 	  // accel_src_gf.Read();
