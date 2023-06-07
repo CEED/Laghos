@@ -78,9 +78,9 @@ int main(int argc, char *argv[])
   double cfl = 0.5;
   double penaltyParameter = 1.0;
   double nitscheVersion = -1.0;
-  double cg_tol = 1e-8;
+  double cg_tol = 1e-15;
   double ftz_tol = 0.0;
-  int cg_max_iter = 300;
+  int cg_max_iter = 30000;
   int max_tsteps = -1;
   bool impose_visc = false;
   bool visualization = false;

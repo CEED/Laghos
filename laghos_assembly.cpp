@@ -758,7 +758,7 @@ namespace mfem
 	  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  //////
 	  // NEW //
-	  // penaltyVal = 4.0  * penaltyParameter * density_el1 * h_1 /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
+	  // penaltyVal = 4.0 * penaltyParameter * density_el1 /* * h_1*/ /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
 	  //////
 	  // penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  ///
@@ -827,6 +827,32 @@ namespace mfem
 	    nor_norm += nor(s) * nor(s);
 	  }
 	  nor_norm = sqrt(nor_norm);
+
+	  const DenseMatrix &Jpr = Trans_el1.Jacobian();
+	  // std::cout << " Dt " << Jpr.Det() << std::endl;
+	  DenseMatrix Jpi(dim);
+	  Jpi = 0.0;
+	  mfem::Mult(Jpr, Jac0inv, Jpi);
+	  Vector tn(dim), tN(dim);
+	  tn = 0.0;
+	  tN = 0.0;
+	  tn = nor;
+	  tn /= nor_norm;
+	  double proj = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    proj += std::abs(tn(s));
+	  }
+	  Jpi.MultTranspose(tn,tN);
+	  double origNormalProd = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    origNormalProd += tN(s) * tN(s);
+	  }
+	  origNormalProd = std::pow(origNormalProd,0.5);
+	  tN *= 1.0/origNormalProd;
+	  double innerProd = 0.0;
+	  for (int s = 0; s < dim; s++){
+	    innerProd += tn(s) * tN(s);
+	  }
 	  
 	  double penaltyVal = 0.0;
 
@@ -851,7 +877,8 @@ namespace mfem
 	  double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	  // NEW //
-	  penaltyVal = penaltyParameter * density_el1 * cs_el1;
+	  penaltyVal = penaltyParameter * density_el1 * cs_el1 /* / innerProd*/;
+	  // penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	  ///
 	  el.CalcShape(eip, shape);
 	  for (int i = 0; i < h1dofs_cnt; i++)
@@ -911,7 +938,33 @@ namespace mfem
 	      nor_norm += nor(s) * nor(s);
 	    }
 	    nor_norm = sqrt(nor_norm);
-	  
+	    
+	    const DenseMatrix &Jpr = Trans_el1.Jacobian();
+	    // std::cout << " Dt " << Jpr.Det() << std::endl;
+	    DenseMatrix Jpi(dim);
+	    Jpi = 0.0;
+	    mfem::Mult(Jpr, Jac0inv, Jpi);
+	    Vector tn(dim), tN(dim);
+	    tn = 0.0;
+	    tN = 0.0;
+	    tn = nor;
+	    tn /= nor_norm;
+	    double proj = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      proj += std::abs(tn(s));
+	    }
+	    Jpi.MultTranspose(tn,tN);
+	    double origNormalProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      origNormalProd += tN(s) * tN(s);
+	    }
+	    origNormalProd = std::pow(origNormalProd,0.5);
+	    tN *= 1.0/origNormalProd;
+	    double innerProd = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      innerProd += tn(s) * tN(s);
+	    }
+	    
 	    double penaltyVal = 0.0;
 
 	    DenseMatrix v_grad_q1(dim);
@@ -934,7 +987,8 @@ namespace mfem
 	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	    // NEW //
-	    penaltyVal = penaltyParameter * density_el1 * cs_el1;
+	    penaltyVal = penaltyParameter * density_el1 * cs_el1 /* / innerProd*/;
+	    //  penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	    ///
 	    el.CalcShape(eip, shape);
 	    for (int i = 0; i < l2dofs_cnt; i++)
