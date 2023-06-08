@@ -1333,8 +1333,8 @@ namespace mfem
 
 
 	    double penaltyVal = 0.0;
-	    penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
-	    
+	    //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
+	    penaltyVal = std::pow(penaltyParameter, 1.0/hinit) * globalmax_rho * 1.0;
 	    Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
 	    Jac0inv_vec_el1 = 0.0;
 	    Jac0inv_vec_el2 = 0.0;
@@ -1516,7 +1516,9 @@ namespace mfem
 	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip_el1);
 	    double cs_el2 = csface_gf.GetValue(Trans_el2,eip_el2);
 	    
-	    penaltyVal = penaltyParameter * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+	    //	    penaltyVal = penaltyParameter * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+	    penaltyVal = std::pow(penaltyParameter,1.0/hinit) * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+
 	    /////////////////////////////
 	    Vector gradv_d_el1(dim);
 	    gradv_d_el1 = 0.0;
@@ -1680,7 +1682,9 @@ namespace mfem
 	      double cs_el1 = csface_gf.GetValue(Trans_el1,eip_el1);
 	      double cs_el2 = csface_gf.GetValue(Trans_el2,eip_el2);
 	    
-	      penaltyVal = penaltyParameter * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+	      //	      penaltyVal = penaltyParameter * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+	      penaltyVal = std::pow(penaltyParameter,1.0/hinit) * (gamma_1 * h_1 * cs_el1  + gamma_2 * h_2 * cs_el2 );
+
 	      /////////////////////////////
 	      Vector gradv_d_el1(dim);
 	      gradv_d_el1 = 0.0;
