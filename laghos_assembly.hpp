@@ -165,6 +165,7 @@ public:
     class VelocityBoundaryForceIntegrator : public LinearFormIntegrator
     {
     private:
+      const double h0;
       const ParGridFunction &alpha;
       const ParGridFunction &pface_gf;
       const ParGridFunction &v_gf;
@@ -175,7 +176,7 @@ public:
       const bool use_vorticity;
       
     public:
-      VelocityBoundaryForceIntegrator(const ParGridFunction &alphaF, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf, const ParGridFunction &Jac0invface_gf, const bool use_viscosity, const bool use_vorticity) : alpha(alphaF), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity) { }
+      VelocityBoundaryForceIntegrator(const double h0, const ParGridFunction &alphaF, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf, const ParGridFunction &Jac0invface_gf, const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
@@ -189,6 +190,7 @@ public:
     class EnergyBoundaryForceIntegrator : public LinearFormIntegrator
     {
     private:
+      const double h0;
       const ParGridFunction &alpha;
       const ParGridFunction &pface_gf;
       const ParGridFunction &v_gf;
@@ -201,7 +203,7 @@ public:
       const bool use_vorticity;
       
     public:
-      EnergyBoundaryForceIntegrator(const ParGridFunction &alphaF, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf,  const ParGridFunction &Jac0invface_gf , const bool use_viscosity, const bool use_vorticity) :  alpha(alphaF), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) { }
+      EnergyBoundaryForceIntegrator(const double h0, const ParGridFunction &alphaF, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf,  const ParGridFunction &Jac0invface_gf , const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
@@ -229,9 +231,10 @@ public:
       const ParGridFunction &Jac0invface_gf;
       const ParGridFunction &rho0DetJ0face_gf;
       const ParGridFunction &v_gf;
+      const ParGridFunction &csface_gf;
             
     public:
-      NormalVelocityMassIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
+      NormalVelocityMassIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), csface_gf(csface_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
       virtual void AssembleFaceMatrix(const FiniteElement &fe,
 				      const FiniteElement &fe2,
 				      FaceElementTransformations &Tr,

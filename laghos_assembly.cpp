@@ -505,7 +505,7 @@ namespace mfem
 	  const double rho = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
 	    
 	  ComputeStress(pressure,dim,stress);
-	  //  ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	  // ComputeViscousStress(Trans_el1, v_gf, Jac0inv, h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	
 	  // evaluation of the normal stress at the face quadrature points
 	  Vector weightedNormalStress(dim);
@@ -613,7 +613,7 @@ namespace mfem
 	    const double rho = rho0DetJ0face_gf.GetValue(Trans_el1,eip);
 	    
 	    ComputeStress(pressure,dim,stress);
-	    //  ComputeViscousStressGL(Trans_el1, v_gf, qdata, eq, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
+	    // ComputeViscousStress(Trans_el1, v_gf, Jac0inv, h0, use_viscosity, use_vorticity, rho, sound_speed, dim, stress);
 	
 	    // evaluation of the normal stress at the face quadrature points
 	    Vector weightedNormalStress(dim);
@@ -753,9 +753,11 @@ namespace mfem
 	  LengthScaleAndCompression(v_grad_q1, Trans_el1, Jac0inv,
 				    h0, h_1, mu_1);
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
+	  double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 
+	  // std::cout << " globa max " << globalmax_cs << " visc " << globalmax_viscous_coef << std::endl;
 	   // OLD //
-	  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  penaltyVal = 4.0 * penaltyParameter * globalmax_rho /* * (1.0 + globalmax_viscous_coef * h0 / globalmax_cs + (globalmax_cs / (globalmax_viscous_coef * h0)))*/ /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  //////
 	  // NEW //
 	  // penaltyVal = 4.0 * penaltyParameter * density_el1 /* * h_1*/ /* * origNormalProd*/ /* * (qdata.h0 * qdata.h0 / h_1)*/ ;
@@ -877,7 +879,7 @@ namespace mfem
 	  double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	  // NEW //
-	  penaltyVal = penaltyParameter * density_el1 * cs_el1 /* / innerProd*/;
+	  penaltyVal = penaltyParameter * density_el1 * (cs_el1 ) /* / innerProd*/;
 	  // penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	  ///
 	  el.CalcShape(eip, shape);
@@ -987,7 +989,7 @@ namespace mfem
 	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	    // NEW //
-	    penaltyVal = penaltyParameter * density_el1 * cs_el1 /* / innerProd*/;
+	    penaltyVal = penaltyParameter * density_el1 * (cs_el1 )/* / innerProd*/;
 	    //  penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	    ///
 	    el.CalcShape(eip, shape);
