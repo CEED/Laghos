@@ -265,8 +265,8 @@ namespace mfem
 	{
 	case Geometry::TRIANGLE:
 	case Geometry::TETRAHEDRON:{
-	  C_I_E = (order_e)*(order_e+1)/dim+1.0;
-	  C_I_V = (order_v)*(order_v+1)/dim;
+	  C_I_E = (order_e+1)*(order_e+dim)/dim+1.0;
+	  C_I_V = (order_v+1)*(order_v+dim)/dim;
 	  break;
 	}
 	case Geometry::SQUARE:
