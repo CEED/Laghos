@@ -889,7 +889,7 @@ namespace mfem
 	  double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	  // NEW //
-	  penaltyVal =  std::pow(penaltyParameter,1.0) * density_el1 * (cs_el1 + h_1 * mu_1) * (std::pow(1.0,dim)/Trans_el1.Weight()) /* * (cs_el1 )*/ /* / innerProd*/;
+	  penaltyVal =  std::pow(penaltyParameter,1.0) * density_el1 * (cs_el1 /*+ h_1 * mu_1*/)/* * (std::pow(1.0,dim)/Trans_el1.Weight())*/ /* * (cs_el1 )*/ /* / innerProd*/;
 	  // penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	  ///
 	  el.CalcShape(eip, shape);
@@ -1000,7 +1000,7 @@ namespace mfem
 	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	    // NEW //
-	    penaltyVal = std::pow(penaltyParameter,1.0) * density_el1 * ( cs_el1 + h_1 * mu_1) * (std::pow(1.0,dim)/Trans_el1.Weight()) /* * (16.0 * nor_norm / Trans_el1.Weight())*/ /* * (cs_el1 )*//* / innerProd*/;
+	    penaltyVal = std::pow(penaltyParameter,1.0) * density_el1 * ( cs_el1 /*+ h_1 * mu_1*/)/* * (std::pow(1.0,dim)/Trans_el1.Weight())*/ /* * (16.0 * nor_norm / Trans_el1.Weight())*/ /* * (cs_el1 )*//* / innerProd*/;
 	    //  penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	    ///
 	    el.CalcShape(eip, shape);
