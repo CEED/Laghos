@@ -754,10 +754,16 @@ namespace mfem
 				    h0, h_1, mu_1);
 	  double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
 	  double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
-
+	  /*	  if (fabs(mu_1) > 0.0){
+	    penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * (globalmax_cs * 1.0/fabs(globalmax_viscous_coef) + h_1) ;
+	  }
+	  else{
+	    penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * h0 ;
+	  }
+*/
 	  // std::cout << " globa max " << globalmax_cs << " visc " << globalmax_viscous_coef << std::endl;
 	   // OLD //
-	  penaltyVal = std::pow(penaltyParameter, 1.0/h0) * globalmax_rho * 1.0 /* * (1.0 + globalmax_viscous_coef * h0 / globalmax_cs + (globalmax_cs / (globalmax_viscous_coef * h0)))*/ /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
+	  penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * (std::pow(1.0,dim)/Trans_el1.Weight()) /* * (1.0 + globalmax_viscous_coef * h0 / globalmax_cs + (globalmax_cs / (globalmax_viscous_coef * h0)))*/ /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
 	  // penaltyVal = 4.0 * std::pow(penaltyParameter,1.0) * globalmax_rho;
 	  //////
 	  // NEW //
@@ -803,6 +809,8 @@ namespace mfem
       elvect = 0.0;
       Vector shape(h1dofs_cnt);
       shape = 0.0;
+      // std::cout << " visc " << globalmax_viscous_coef << std::endl;
+     
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
@@ -881,7 +889,7 @@ namespace mfem
 	  double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	  // NEW //
-	  penaltyVal = std::pow(penaltyParameter,1.0/h0) * density_el1 * (cs_el1 ) /* / innerProd*/;
+	  penaltyVal =  std::pow(penaltyParameter,1.0) * density_el1 * (cs_el1 + h_1 * mu_1) * (std::pow(1.0,dim)/Trans_el1.Weight()) /* * (cs_el1 )*/ /* / innerProd*/;
 	  // penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	  ///
 	  el.CalcShape(eip, shape);
@@ -992,7 +1000,7 @@ namespace mfem
 	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	    // NEW //
-	    penaltyVal = std::pow(penaltyParameter,1.0/h0) * density_el1 * (cs_el1 )/* / innerProd*/;
+	    penaltyVal = std::pow(penaltyParameter,1.0) * density_el1 * ( cs_el1 + h_1 * mu_1) * (std::pow(1.0,dim)/Trans_el1.Weight()) /* * (16.0 * nor_norm / Trans_el1.Weight())*/ /* * (cs_el1 )*//* / innerProd*/;
 	    //  penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	    ///
 	    el.CalcShape(eip, shape);
