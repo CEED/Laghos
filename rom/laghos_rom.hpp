@@ -1195,7 +1195,7 @@ public:
 
     void UpdateSampleMeshNodes(Vector const& romSol);
     double GetTimeStepEstimateSP() const {
-        if (!hyperreduce) return 0.0;
+        if (!use_sample_mesh) return 0.0;
 
         if (rank == 0)
         {
@@ -1254,6 +1254,7 @@ private:
     mutable Vector fx, fy;
 
     const bool hyperreduce, eqp;
+    bool use_sample_mesh = false; // whether to use sample mesh in hyperreduction; otherwise use reduced quadrature
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;

@@ -2259,10 +2259,11 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
       spaceTimeMethod(input.spaceTimeMethod), eqp(input.hyperreductionSamplingType == eqp), 
       H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace)
 {
-    MFEM_VERIFY(!(hyperreduce && eqp), "");
+    use_sample_mesh = hyperreduce && (!eqp);
 
-    if (hyperreduce && rank == 0)
+    if (use_sample_mesh && rank == 0)
     {
+        // Set up the sample mesh
         const int spsize = basis->SolutionSizeSP();
 
         fx.SetSize(spsize);
@@ -2348,7 +2349,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
             Sr.SetSize(STbasis->GetTotalNumSamples());
         }
     }
-    else if (!hyperreduce)
+    else if (!use_sample_mesh)
     {
         MFEM_VERIFY(input.FOMoper->Height() == input.FOMoper->Width(), "");
         fx.SetSize(input.FOMoper->Height());
@@ -2698,7 +2699,7 @@ void ROM_Operator::ComputeReducedMv()
 {
     const int nv = basis->GetDimV();
 
-    if (hyperreduce && rank == 0)
+    if (use_sample_mesh && rank == 0)
     {
         invMvROM.SetSize(nv);
         const int size_H1_sp = basis->SolutionSizeH1SP();
@@ -2708,7 +2709,7 @@ void ROM_Operator::ComputeReducedMv()
         Vector Mvj(nv);
         for (int j=0; j<nv; ++j)
         {
-            basis->GetBasisVectorV(hyperreduce, j, vj_sp);
+            basis->GetBasisVectorV(true, j, vj_sp);
             operSP->MultMv(vj_sp, Mvj_sp);
             basis->RestrictFromSampleMesh_V(Mvj_sp, Mvj);
 
@@ -2731,7 +2732,7 @@ void ROM_Operator::ComputeReducedMv()
         Vector Mvj(size_H1);
         for (int j=0; j<nv; ++j)
         {
-            basis->GetBasisVectorV(hyperreduce, j, vj);
+            basis->GetBasisVectorV(false, j, vj);
             gf.SetFromTrueDofs(vj);
             operFOM->MultMvInv(gf, Mvj);
 
@@ -2749,7 +2750,7 @@ void ROM_Operator::ComputeReducedMe()
 {
     const int ne = basis->GetDimE();
 
-    if (hyperreduce && rank == 0)
+    if (use_sample_mesh && rank == 0)
     {
         invMeROM.SetSize(ne);
         const int size_L2_sp = basis->SolutionSizeL2SP();
@@ -2759,7 +2760,7 @@ void ROM_Operator::ComputeReducedMe()
         Vector Mej(ne);
         for (int j=0; j<ne; ++j)
         {
-            basis->GetBasisVectorE(hyperreduce, j, ej_sp);
+            basis->GetBasisVectorE(true, j, ej_sp);
             operSP->MultMe(ej_sp, Mej_sp);
             basis->RestrictFromSampleMesh_E(Mej_sp, Mej);
 
@@ -2779,7 +2780,7 @@ void ROM_Operator::ComputeReducedMe()
         Vector Mej(size_L2);
         for (int j=0; j<ne; ++j)
         {
-            basis->GetBasisVectorE(hyperreduce, j, ej);
+            basis->GetBasisVectorE(false, j, ej);
             operFOM->MultMeInv(ej, Mej);
 
             for (int i=0; i<size_L2; ++i)
@@ -2794,7 +2795,7 @@ void ROM_Operator::ComputeReducedMe()
 
 void ROM_Operator::UpdateSampleMeshNodes(Vector const& romSol)
 {
-    if (!hyperreduce || rank != 0)
+    if (!use_sample_mesh || rank != 0)
         return;
 
     // Lift romSol to the sample mesh space to get X.
@@ -2815,7 +2816,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 
     if (eqp) operFOM->SetRomOperator(this);
 
-    if (hyperreduce)
+    if (use_sample_mesh)
     {
         if (rank == 0)
         {
@@ -2841,7 +2842,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip)
 {
     ip = 0.0;
-    if (hyperreduce)
+    if (use_sample_mesh)
     {
         Vector xj_sp(dim);
         Vector xi_sp(dim);
@@ -2849,14 +2850,14 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
 
         if (var == 1) // velocity
         {
-            basis->GetBasisVectorV(hyperreduce, id1, xj_sp);
-            basis->GetBasisVectorV(hyperreduce, id2, xi_sp);
+            basis->GetBasisVectorV(true, id1, xj_sp);
+            basis->GetBasisVectorV(true, id2, xi_sp);
             operSP->MultMv(xj_sp, Mxj_sp);
         }
         else if (var == 2) // energy
         {
-            basis->GetBasisVectorE(hyperreduce, id1, xj_sp);
-            basis->GetBasisVectorE(hyperreduce, id2, xi_sp);
+            basis->GetBasisVectorE(true, id1, xj_sp);
+            basis->GetBasisVectorE(true, id2, xi_sp);
             operSP->MultMe(xj_sp, Mxj_sp);
         }
         else
@@ -2867,7 +2868,7 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
             ip += Mxj_sp[k]*xi_sp[k];
         }
     }
-    else if (!hyperreduce)
+    else if (!use_sample_mesh)
     {
         MFEM_ABORT("TODO");
     }
@@ -2875,7 +2876,7 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
 
 void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 {
-    if (hyperreduce && rank == 0)
+    if (use_sample_mesh && rank == 0)
     {
         // Induced Gram Schmidt normalization is equivalent to
         // factorizing the basis into X = QR,
@@ -2948,7 +2949,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
             }
         }
     }
-    else if (!hyperreduce)
+    else if (!use_sample_mesh)
     {
         MFEM_ABORT("TODO");
     }
@@ -2956,7 +2957,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 
 void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data)
 {
-    if (hyperreduce && rank == 0)
+    if (use_sample_mesh && rank == 0)
     {
         // Get back the original matrix X from matrix Q by undoing all the operations
         // in the induced Gram Schmidt normalization process.
@@ -3018,7 +3019,7 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_da
         else
             (*R).Clear();
     }
-    else if (!hyperreduce)
+    else if (!use_sample_mesh)
     {
         MFEM_ABORT("TODO");
     }
@@ -3688,7 +3689,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
         }
     }
 
-    MFEM_VERIFY(hyperreduce, "");
+    MFEM_VERIFY(use_sample_mesh, "");
 
     Sr = 0.0;
 
@@ -4355,18 +4356,18 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 {
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
-    hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
+    hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
 
-    if (!hyperreduce || rank == 0)
+    if (!use_sample_mesh || rank == 0)
     {
-        if (hyperreduce)
+        if (use_sample_mesh)
             basis->LiftToSampleMesh(S, fx);
         else
             basis->LiftROMtoFOM(S, fx);
 
         if (eqp) operFOM->SetRomOperator(this);
 
-        const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
+        const int Vsize = use_sample_mesh ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
         const int Esize = basis->SolutionSizeL2SP();
         Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
 
@@ -4388,12 +4389,12 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S is S0.
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
 
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
         // -- 2.
@@ -4402,11 +4403,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
         // -- 3.
@@ -4416,13 +4417,13 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
         MFEM_VERIFY(!useReducedM, "TODO");
 
-        if (hyperreduce)
+        if (use_sample_mesh)
             basis->RestrictFromSampleMesh(fx, S, false);
         else
             basis->ProjectFOMtoROM(fx, S);
     }
 
-    if (hyperreduce)
+    if (use_sample_mesh)
     {
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
