@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
   bool gfprint = false;
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
-  double blast_position[] = {0.0, 0.0, 0.0};
+  double blast_position[] = {-0.5, -0.5, -0.5};
   bool useEmbedded = false;
   int geometricShape = 0;
   int nTerms = 1; 
@@ -261,6 +261,11 @@ int main(int argc, char *argv[])
   ParFiniteElementSpace PFace_L2FESpace(pmesh, &PFace_L2FEC);
   ParFiniteElementSpace PFaceVector_L2FESpace(pmesh, &PFace_L2FEC, pmesh->Dimension()*pmesh->Dimension() );
   ParFiniteElementSpace PVector_L2FESpace(pmesh, &P_L2FEC, pmesh->Dimension()*pmesh->Dimension() );
+
+  if (!(mesh->NURBSext))
+   {
+      pmesh->SetNodalFESpace(&H1FESpace);
+   }
 
   // Define the explicit ODE solver used for time integration.
   ODESolver *ode_solver = NULL;
