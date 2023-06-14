@@ -128,7 +128,7 @@ Other computational motives in Laghos include the following:
 Laghos has the following external dependencies:
 
 - *hypre*, used for parallel linear algebra, we recommend version 2.11.2<br>
-   https://computation.llnl.gov/casc/hypre/software.html
+   https://github.com/hypre-space/hypre/releases/tag/v2.11.2
 
 -  METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](http://glaros.dtc.umn.edu/gkhome/fetch/sw/metis/OLD/metis-4.0.3.tar.gz) <br>
    http://glaros.dtc.umn.edu/gkhome/metis/metis/download
@@ -140,16 +140,17 @@ To build the miniapp, first download *hypre* and METIS from the links above
 and put everything on the same level as the `Laghos` directory:
 ```sh
 ~> ls
-Laghos/  hypre-2.11.2.tar.gz  metis-4.0.3.tar.gz
+Laghos/  v2.11.2.tar.gz  metis-4.0.3.tar.gz
 ```
 
 Build *hypre*:
 ```sh
-~> tar -zxvf hypre-2.11.2.tar.gz
+~> tar -zxvf v2.11.2.tar.gz
 ~> cd hypre-2.11.2/src/
 ~/hypre-2.11.2/src> ./configure --disable-fortran
 ~/hypre-2.11.2/src> make -j
 ~/hypre-2.11.2/src> cd ../..
+~> ln -s hypre-2.11.2 hypre
 ```
 For large runs (problem size above 2 billion unknowns), add the
 `--enable-bigint` option to the above `configure` line.

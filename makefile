@@ -248,13 +248,13 @@ tests:
 
 # Setup: download & install third party libraries: HYPRE, METIS & MFEM
 
-HYPRE_URL = https://computation.llnl.gov/projects/hypre-scalable-linear-solvers-multigrid-methods
+HYPRE_URL = https://github.com/hypre-space/hypre/archive/refs/tags
 HYPRE_VER = 2.11.2
 HYPRE_DIR = hypre
 hypre:
 	@(if [[ ! -e ../$(HYPRE_DIR) ]]; then cd ..; \
-		wget -nc $(HYPRE_URL)/download/hypre-$(HYPRE_VER).tar.gz &&\
-		tar xzvf hypre-$(HYPRE_VER).tar.gz &&\
+		wget -nc $(HYPRE_URL)/v$(HYPRE_VER).tar.gz &&\
+		tar xzvf v$(HYPRE_VER).tar.gz &&\
 		ln -s hypre-$(HYPRE_VER) $(HYPRE_DIR) &&\
 		cd $(HYPRE_DIR)/src &&\
 		./configure --disable-fortran --without-fei CC=mpicc CXX=mpic++ &&\
