@@ -819,7 +819,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       mergeXV(input.mergeXV), useXV(input.useXV), useVX(input.useVX), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
       energyFraction_X(input.energyFraction_X), basisIdentifier(input.basisIdentifier),
       hyperreductionSamplingType(input.hyperreductionSamplingType), spaceTimeMethod(input.spaceTimeMethod),
-      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos), eqp(input.hyperreductionSamplingType == eqp)
+      spaceTime(input.spaceTimeMethod != no_space_time), VTos(input.VTos)
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
@@ -1846,7 +1846,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (eqp) return;
+    if (hyperreductionSamplingType == eqp) return; 
 
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
@@ -2256,10 +2256,10 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
-      spaceTimeMethod(input.spaceTimeMethod), eqp(input.hyperreductionSamplingType == eqp), 
+      spaceTimeMethod(input.spaceTimeMethod), hyperreductionSamplingType(input.hyperreductionSamplingType), 
       H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace)
 {
-    use_sample_mesh = hyperreduce && (!eqp);
+    use_sample_mesh = hyperreduce && (hyperreductionSamplingType != eqp);
 
     if (use_sample_mesh && rank == 0)
     {
@@ -2362,7 +2362,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         ComputeReducedMe();
     }
 
-    if (eqp)
+    if (hyperreduce && hyperreductionSamplingType == eqp)
     {
         // TODO: are reduced mass matrices needed for EQP, or just W matrices?
 
@@ -2719,7 +2719,7 @@ void ROM_Operator::ComputeReducedMv()
 
         invMvROM.Invert();
     }
-    else if (eqp)
+    else if (hyperreduce && hyperreductionSamplingType == eqp)
     {
         const int size_H1 = basis->SolutionSizeH1FOM();
         const int tsize_H1 = H1spaceFOM->GetTrueVSize();
@@ -2770,7 +2770,7 @@ void ROM_Operator::ComputeReducedMe()
 
         invMeROM.Invert();
     }
-    else if (eqp)
+    else if (hyperreduce && hyperreductionSamplingType == eqp)
     {
         const int size_L2 = basis->SolutionSizeL2FOM();
 
@@ -2814,7 +2814,10 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     MFEM_VERIFY(x.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(x.Size() == y.Size(), "");
 
-    if (eqp) operFOM->SetRomOperator(this);
+    if (hyperreduce && hyperreductionSamplingType == eqp)
+    {
+        operFOM->SetRomOperator(this);
+    }
 
     if (use_sample_mesh)
     {
@@ -4365,7 +4368,10 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         else
             basis->LiftROMtoFOM(S, fx);
 
-        if (eqp) operFOM->SetRomOperator(this);
+        if (hyperreduce && hyperreductionSamplingType == eqp)
+        {
+            operFOM->SetRomOperator(this);
+        }
 
         const int Vsize = use_sample_mesh ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
         const int Esize = basis->SolutionSizeL2SP();

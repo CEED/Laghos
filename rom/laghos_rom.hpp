@@ -73,7 +73,7 @@ enum HyperreductionSamplingType
     gnat,       // Default, GNAT
     qdeim,      // QDEIM
     sopt,       // S-OPT
-    eqp,       // EQP
+    eqp         // EQP
 };
 
 static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
@@ -1104,8 +1104,6 @@ private:
     std::vector<int> timeSamples;  // merged V and E time samples
 
     Vector st0;
-
-    bool eqp = false;
 };
 
 class STROM_Basis
@@ -1253,8 +1251,9 @@ private:
 
     mutable Vector fx, fy;
 
-    const bool hyperreduce, eqp;
-    bool use_sample_mesh = false; // whether to use sample mesh in hyperreduction; otherwise use reduced quadrature
+    const bool hyperreduce;
+    HyperreductionSamplingType hyperreductionSamplingType = gnat;
+    bool use_sample_mesh = false; // whether to use sample mesh; True when GNAT, QDEIM, S-OPT; False when FOM, EQP
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;

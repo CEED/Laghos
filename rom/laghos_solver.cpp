@@ -94,7 +94,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
         int h1_basis_type,
         bool noMvSolve_,
         bool noMeSolve_,
-        bool eqp_)
+        bool use_eqp_)
     : TimeDependentOperator(size),
       H1FESpace(h1_fes), L2FESpace(l2_fes),
       ess_tdofs(essential_tdofs),
@@ -106,7 +106,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       use_viscosity(visc), use_vorticity(vort),
       p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
-      noMvSolve(noMvSolve_), noMeSolve(noMeSolve_), eqp(eqp_),
+      noMvSolve(noMvSolve_), noMeSolve(noMeSolve_), use_eqp(use_eqp_),
       material_pcf(material_),
       Mv(&h1_fes), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -275,7 +275,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
     {
         timer.sw_force.Start();
 
-        if (eqp)
+        if (use_eqp)
         {
             rom_op->ForceIntegratorEQP_FOM(rhs);
         }
@@ -406,7 +406,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
     if (p_assembly)
     {
         timer.sw_force.Start();
-        if (eqp)
+        if (use_eqp)
         {
             rom_op->ForceIntegratorEQP_E_FOM(v, e_rhs);
         }
