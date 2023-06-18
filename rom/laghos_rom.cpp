@@ -2257,10 +2257,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
       spaceTimeMethod(input.spaceTimeMethod), hyperreductionSamplingType(input.hyperreductionSamplingType), 
-      H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace)
+      use_sample_mesh(input.use_sample_mesh), H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace)
 {
-    use_sample_mesh = hyperreduce && (hyperreductionSamplingType != eqp);
-
     if (use_sample_mesh && rank == 0)
     {
         // Set up the sample mesh

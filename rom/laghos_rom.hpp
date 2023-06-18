@@ -241,6 +241,7 @@ struct ROM_Options
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
+    bool use_sample_mesh = false; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
     bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     offsetStyle offsetType = useInitialState; // type of offset in time windows
@@ -1253,7 +1254,7 @@ private:
 
     const bool hyperreduce;
     HyperreductionSamplingType hyperreductionSamplingType = gnat;
-    bool use_sample_mesh = false; // whether to use sample mesh; True when GNAT, QDEIM, S-OPT; False when FOM, EQP
+    bool use_sample_mesh = false; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;
