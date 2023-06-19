@@ -962,6 +962,7 @@ public:
 private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
+    const bool use_sample_mesh; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
     const bool offsetInit;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS

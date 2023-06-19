@@ -364,7 +364,6 @@ int main(int argc, char *argv[])
 
     std::string hyperreduce_outputPath = (problem == 7) ? testing_parameter_outputPath : outputPath;
 
-    romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType < 3);
     romOptions.basename = &outputPath;
     romOptions.testing_parameter_basename = &testing_parameter_outputPath;
     romOptions.hyperreduce_basename = &hyperreduce_outputPath;
@@ -395,6 +394,7 @@ int main(int argc, char *argv[])
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
+    romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp);
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
 
@@ -1249,13 +1249,11 @@ int main(int argc, char *argv[])
             }
         }
 
-    cout << "1252" << endl;
         if (!romOptions.use_sample_mesh)
         {
             basis[0]->Init(romOptions, *S);
         }
 
-    cout << "1258" << endl;
         if (romOptions.hyperreduce_prep)
         {
             if (myid == 0)
@@ -1316,7 +1314,8 @@ int main(int argc, char *argv[])
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
-            if (!romOptions.hyperreduce_prep)
+            //if (!romOptions.hyperreduce_prep)
+            if (romOptions.use_sample_mesh)
             {
                 std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
                 ReadPDweight(pd_weight, pd_weight_outputPath);

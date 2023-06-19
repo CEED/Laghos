@@ -812,7 +812,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
-      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
+      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep), use_sample_mesh(input.use_sample_mesh),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
@@ -830,7 +830,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     MPI_Comm_rank(comm, &rank);
     Array<int> nH1(nprocs);
 
-    if (spaceTime || !hyperreduce)
+    if (spaceTime || !use_sample_mesh)
     {
         tH1size = input.H1FESpace->GetTrueVSize();
         tL2size = input.L2FESpace->GetTrueVSize();
@@ -904,7 +904,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
-    if (hyperreduce)
+    if (use_sample_mesh)
     {
         if (rank == 0)
         {
@@ -1042,7 +1042,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTimer.RealTime() << " sec\n";
     }
 
-    if (spaceTime && hyperreduce)
+    if (spaceTime && hyperreduce) // spaceTime && use_sample_mesh?
     {
         // TODO: include in preprocessHyperreductionTimer?
         SetSpaceTimeInitialGuess(input);
