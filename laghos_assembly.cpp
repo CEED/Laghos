@@ -632,12 +632,18 @@ namespace mfem
 	    
 	    Vector vShape;
 	    Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
+	    Vector vShape_N;
+	    Vn_gf->GetVectorValue(elementNo, eip, vShape_N);
+	    Vector vShape_NP1;
+	    Vnp1_gf->GetVectorValue(elementNo, eip, vShape_NP1);
+	   
 	    double vDotn = 0.0;
 	    for (int s = 0; s < dim; s++)
 	      {
 		//	vDotn += vShape(s) * tN(s);
-		vDotn += vShape(s) * tn(s);
-	      }
+		//	vDotn += vShape(s) * tn(s);
+		vDotn += ( c_N * vShape_N(s) + c_NP1 * vShape_NP1(s) ) * tn(s);
+	  }
 	    for (int i = 0; i < l2dofs_cnt; i++)
 	      {
 		elvect(i) -= normalStressProjNormal * te_shape(i) * ip_f.weight * vDotn;
@@ -990,12 +996,18 @@ namespace mfem
 	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
 
 	    Vector vShape;
-	    v_gf.GetVectorValue(elementNo, eip, vShape);
+	    Vnpt_gf->GetVectorValue(elementNo, eip, vShape);
+	    Vector vShape_N;
+	    Vn_gf->GetVectorValue(elementNo, eip, vShape_N);
+	    Vector vShape_NP1;
+	    Vnp1_gf->GetVectorValue(elementNo, eip, vShape_NP1);
+	
 	    double vDotn = 0.0;
 	    for (int s = 0; s < dim; s++)
 	      {
-		vDotn += vShape(s) * nor(s)/nor_norm;
+		//	vDotn += vShape(s) * nor(s)/nor_norm;
 		//	vDotn += vShape(s) * tN(s);
+		vDotn += ( c_N * vShape_N(s) + c_NP1 * vShape_NP1(s) ) * nor(s)/nor_norm;
 	      }
 	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  

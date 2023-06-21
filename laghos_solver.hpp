@@ -222,7 +222,7 @@ namespace mfem
       void SolveVelocity(const Vector &S, Vector &dS_dt, const Vector &S_init, const double dt) const;
       void UpdateLevelSet(const Vector &S, const Vector &S_init);
     
-      void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
+      void SolveEnergy(const Vector &S, const Vector &v,  const Vector &v0, const double & c0,  const Vector &v_np1, const double & c_NP1, Vector &dS_dt) const;
       void UpdateMesh(const Vector &S) const;
 
       // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
@@ -291,6 +291,7 @@ namespace mfem
   {
   protected:
     Vector V;
+    Vector V_NP1;
     // S_init is needed to store the initial solution state (x, v, e)
     BlockVector dS_dt, S0, S_init;
     int counter;

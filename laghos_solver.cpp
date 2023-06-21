@@ -529,7 +529,7 @@ namespace mfem
       dx.MakeRef(&H1, dS_dt, 0);
       dx = v;
       SolveVelocity(S, dS_dt, S_init,0);
-      SolveEnergy(S, v, dS_dt);
+      SolveEnergy(S, v, v, 0, v, 1, dS_dt);
       qdata_is_current = false;
       bv_qdata_is_current = false;
       be_qdata_is_current = false;
@@ -673,8 +673,7 @@ namespace mfem
       Mv->RecoverFEMSolution(X, rhs, dv);
     }
 
-    void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
-					      Vector &dS_dt) const
+    void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,  const Vector &v0, const double & c0,  const Vector &v_np1, const double & c_NP1, Vector &dS_dt) const
     {
       // Me_mat->Update();
       // Me_mat->Assemble();
@@ -686,14 +685,25 @@ namespace mfem
       v_updated.MakeRef(&H1, *sptr, 0);
       v_updated.ExchangeFaceNbrData();
 
-      
+      Vector* sptr_n = const_cast<Vector*>(&v0);
+      ParGridFunction v_N;
+      v_N.MakeRef(&H1, *sptr_n, 0);
+      v_N.ExchangeFaceNbrData();
+
+      Vector* sptr_np1 = const_cast<Vector*>(&v_np1);
+      ParGridFunction v_NP1;
+      v_NP1.MakeRef(&H1, *sptr_np1, 0);
+      v_NP1.ExchangeFaceNbrData();
+
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleEnergyForceMatrix();
       
-      e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
+      e_bfi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
+      e_bfi->SetCoefficients(c0, c_NP1);
       AssembleEnergyBoundaryForceMatrix();
 
-      de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
+      de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
+      de_nvmi->SetCoefficients(c0, c_NP1);
       AssembleDiffusionEnergyBoundaryForceMatrix();
       
       if (useEmbedded){
@@ -1174,6 +1184,7 @@ namespace mfem
     HydroODESolver::Init(tdop);
     const Array<int> &block_offsets = hydro_oper->GetBlockOffsets();
     V.SetSize(block_offsets[1], mem_type);
+    V_NP1.SetSize(block_offsets[1], mem_type);
     dS_dt.Update(block_offsets, mem_type);
     dS_dt = 0.0;
     S0.Update(block_offsets, mem_type);
@@ -1214,7 +1225,8 @@ namespace mfem
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
-    hydro_oper->SolveEnergy(S, V, dS_dt);
+    V_NP1 = V; 
+    hydro_oper->SolveEnergy(S, V, v0, 0, V_NP1, 1, dS_dt);
     dx_dt = V;
 
     // -- 2.
@@ -1227,7 +1239,8 @@ namespace mfem
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
-    hydro_oper->SolveEnergy(S, V, dS_dt);
+    add(v0, dt, dv_dt, V_NP1);
+    hydro_oper->SolveEnergy(S, V, v0, 0.5, V_NP1, 0.5, dS_dt);
     dx_dt = V;
 
     // -- 3.

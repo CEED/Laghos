@@ -201,17 +201,27 @@ public:
      	
       const bool use_viscosity;
       const bool use_vorticity;
-      
+      double c_N; 
+      double c_NP1; 
+      const ParGridFunction *Vn_gf;
+      const ParGridFunction *Vnp1_gf;
+        
     public:
-      EnergyBoundaryForceIntegrator(const double h0, const ParGridFunction &alphaF, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf,  const ParGridFunction &Jac0invface_gf , const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) { }
+      EnergyBoundaryForceIntegrator(const double h0, const ParGridFunction &alphaF, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf,  const ParGridFunction &Jac0invface_gf , const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  ElementTransformation &Tr,
 					  Vector &elvect);
-      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT, const ParGridFunction * velocity_N, const ParGridFunction * velocity_NP1){
 	Vnpt_gf = velocity_NPT;
+	Vn_gf = velocity_N;
+    	Vnp1_gf = velocity_NP1;
+      }
+      virtual void SetCoefficients(double c_N_, double c_NP1_){
+	c_N = c_N_;
+	c_NP1 = c_NP1_;
       }
  
     };
@@ -285,17 +295,27 @@ public:
       const ParGridFunction &rho0DetJ0face_gf;
       const ParGridFunction &v_gf;
       const ParGridFunction *Vnpt_gf;
+      double c_N; 
+      double c_NP1; 
+      const ParGridFunction *Vn_gf;
+      const ParGridFunction *Vnp1_gf;
             
     public:
-      DiffusionEnergyNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), Vnpt_gf(NULL) {  }
+      DiffusionEnergyNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0) {  }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  ElementTransformation &Tr,
 					  Vector &elvect);
-      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT, const ParGridFunction * velocity_N, const ParGridFunction * velocity_NP1){
 	Vnpt_gf = velocity_NPT;
+	Vn_gf = velocity_N;
+    	Vnp1_gf = velocity_NP1;
+      }
+      virtual void SetCoefficients(double c_N_, double c_NP1_){
+	c_N = c_N_;
+	c_NP1 = c_NP1_;
       }
  
     };
