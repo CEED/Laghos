@@ -176,6 +176,10 @@ namespace mfem
       normal_vec(NULL),
       distance_gf(NULL),
       normal_gf(NULL),
+      distance_n_gf(NULL),
+      normal_n_gf(NULL),
+      distance_np1_gf(NULL),
+      normal_np1_gf(NULL),
       rho0_gf(rho0_gf),
       rho_gf(rho_gf),
       rhoface_gf(rhoface_gf),
@@ -292,6 +296,16 @@ namespace mfem
       normal_gf = new ParGridFunction(&h1);
       *distance_gf = 0.0;
       *normal_gf = 0.0;
+
+      distance_n_gf = new ParGridFunction(&h1);
+      normal_n_gf = new ParGridFunction(&h1);
+      *distance_n_gf = 0.0;
+      *normal_n_gf = 0.0;
+
+      distance_np1_gf = new ParGridFunction(&h1);
+      normal_np1_gf = new ParGridFunction(&h1);
+      *distance_np1_gf = 0.0;
+      *normal_np1_gf = 0.0;
       
       if (useEmbedded){
 	mfem::FiniteElementCollection* lsvec = new H1_FECollection(H1.GetOrder(0)+2,dim);
@@ -328,6 +342,16 @@ namespace mfem
 	normal_gf->ProjectCoefficient(*normal_vec);
 	distance_gf->ExchangeFaceNbrData();
 	normal_gf->ExchangeFaceNbrData();
+
+	distance_n_gf->ProjectCoefficient(*dist_vec);
+	normal_n_gf->ProjectCoefficient(*normal_vec);
+	distance_n_gf->ExchangeFaceNbrData();
+	normal_n_gf->ExchangeFaceNbrData();
+
+	distance_np1_gf->ProjectCoefficient(*dist_vec);
+	normal_np1_gf->ProjectCoefficient(*normal_vec);
+	distance_np1_gf->ExchangeFaceNbrData();
+	normal_np1_gf->ExchangeFaceNbrData();
 	
 	//	}
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
@@ -536,12 +560,15 @@ namespace mfem
       ParGridFunction v;
       const int VsizeH1 = H1.GetVSize();
       v.MakeRef(&H1, *sptr, VsizeH1);
+      ParGridFunction x;
+      x.MakeRef(&H1, *sptr, 0);
+     
       // Set dx_dt = v (explicit).
       ParGridFunction dx;
       dx.MakeRef(&H1, dS_dt, 0);
       dx = v;
       SolveVelocity(S, dS_dt, S_init,0);
-      SolveEnergy(S, v, v, 0, v, 1, dS_dt);
+      SolveEnergy(S, v, v, x, 0, v, x, 1, dS_dt);
       qdata_is_current = false;
       bv_qdata_is_current = false;
       be_qdata_is_current = false;
@@ -685,7 +712,7 @@ namespace mfem
       Mv->RecoverFEMSolution(X, rhs, dv);
     }
 
-    void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,  const Vector &v0, const double & c0,  const Vector &v_np1, const double & c_NP1, Vector &dS_dt) const
+    void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,  const Vector &v0, const Vector &x0, const double & c0,  const Vector &v_np1, const Vector &x_np1, const double & c_NP1, Vector &dS_dt) const
     {
       // Me_mat->Update();
       // Me_mat->Assemble();
@@ -717,9 +744,28 @@ namespace mfem
       de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
       de_nvmi->SetCoefficients(c0, c_NP1);
       AssembleDiffusionEnergyBoundaryForceMatrix();
-      
+		
       if (useEmbedded){
 	//	ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
+	distance_gf->ProjectCoefficient(*dist_vec);
+	normal_gf->ProjectCoefficient(*normal_vec);
+	distance_gf->ExchangeFaceNbrData();
+	normal_gf->ExchangeFaceNbrData();
+
+	UpdateMesh(x0);
+	distance_n_gf->ProjectCoefficient(*dist_vec);
+	normal_n_gf->ProjectCoefficient(*normal_vec);
+	distance_n_gf->ExchangeFaceNbrData();
+	normal_n_gf->ExchangeFaceNbrData();
+
+	UpdateMesh(x_np1);
+	distance_np1_gf->ProjectCoefficient(*dist_vec);
+	normal_np1_gf->ProjectCoefficient(*normal_vec);
+	distance_np1_gf->ExchangeFaceNbrData();
+	normal_np1_gf->ExchangeFaceNbrData();
+	
+	UpdateMesh(S);
+
 	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
 	shifted_de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
 	shifted_e_bfi->SetCoefficients(c0, c_NP1);
@@ -1199,6 +1245,7 @@ namespace mfem
     const Array<int> &block_offsets = hydro_oper->GetBlockOffsets();
     V.SetSize(block_offsets[1], mem_type);
     V_NP1.SetSize(block_offsets[1], mem_type);
+    X_NP1.SetSize(block_offsets[1], mem_type);
     dS_dt.Update(block_offsets, mem_type);
     dS_dt = 0.0;
     S0.Update(block_offsets, mem_type);
@@ -1221,6 +1268,7 @@ namespace mfem
     // The monolithic BlockVector stores the unknown fields as follows:
     // (Position, Velocity, Specific Internal Energy).
     S0.Vector::operator=(S);
+    Vector &x0 = S0.GetBlock(0);
     Vector &v0 = S0.GetBlock(1);
     Vector &dx_dt = dS_dt.GetBlock(0);
     Vector &dv_dt = dS_dt.GetBlock(1);
@@ -1239,8 +1287,9 @@ namespace mfem
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
-    V_NP1 = V; 
-    hydro_oper->SolveEnergy(S, V, v0, 0, V_NP1, 1, dS_dt);
+    V_NP1 = V;
+    add(x0, 0.5 * dt, V_NP1, X_NP1);
+    hydro_oper->SolveEnergy(S, V, v0, x0, 0, V_NP1, X_NP1, 1, dS_dt);
     dx_dt = V;
 
     // -- 2.
@@ -1254,7 +1303,9 @@ namespace mfem
     // V = v0 + 0.5 * dt * dv_dt;
     add(v0, 0.5 * dt, dv_dt, V);
     add(v0, dt, dv_dt, V_NP1);
-    hydro_oper->SolveEnergy(S, V, v0, 0.5, V_NP1, 0.5, dS_dt);
+    add(x0, dt, V_NP1, X_NP1);
+    
+    hydro_oper->SolveEnergy(S, V, v0, x0, 0.5, V_NP1, X_NP1, 0.5, dS_dt);
     dx_dt = V;
 
     // -- 3.
