@@ -162,6 +162,9 @@ namespace mfem
       ParGridFunction *ls_func;
       ParGridFunction *level_set_gf;
       ParGridFunction *alphaCut;
+      ParGridFunction *distance_gf;
+      ParGridFunction *normal_gf;
+   
       //  
       ShiftedFaceMarker *analyticalSurface;
       VectorCoefficient *dist_vec;

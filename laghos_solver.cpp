@@ -174,6 +174,8 @@ namespace mfem
       analyticalSurface(NULL),
       dist_vec(NULL),
       normal_vec(NULL),
+      distance_gf(NULL),
+      normal_gf(NULL),
       rho0_gf(rho0_gf),
       rho_gf(rho_gf),
       rhoface_gf(rhoface_gf),
@@ -285,7 +287,12 @@ namespace mfem
       alphaCut = new ParGridFunction(alpha_fes);
       alphaCut->ExchangeFaceNbrData();
       *alphaCut = 1;
-    
+
+      distance_gf = new ParGridFunction(&h1);
+      normal_gf = new ParGridFunction(&h1);
+      *distance_gf = 0.0;
+      *normal_gf = 0.0;
+      
       if (useEmbedded){
 	mfem::FiniteElementCollection* lsvec = new H1_FECollection(H1.GetOrder(0)+2,dim);
 	mfem::ParFiniteElementSpace* lsfes = new mfem::ParFiniteElementSpace(pmesh,lsvec);
@@ -317,6 +324,11 @@ namespace mfem
 	//	if (useAnalyticalShape){
 	dist_vec = new Dist_Vector_Coefficient(dim, geometricShape);
 	normal_vec = new Normal_Vector_Coefficient(dim, geometricShape);
+	distance_gf->ProjectCoefficient(*dist_vec);
+	normal_gf->ProjectCoefficient(*normal_vec);
+	distance_gf->ExchangeFaceNbrData();
+	normal_gf->ExchangeFaceNbrData();
+	
 	//	}
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
 	alphaCut->ExchangeFaceNbrData();	
@@ -472,7 +484,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
-	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
+	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, *distance_gf, *normal_gf, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
 	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
@@ -488,7 +500,7 @@ namespace mfem
 	ShiftedDiffusionVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_d_nvmi);
 	ShiftedDiffusionVelocityBoundaryForce.Assemble();
 	
-	shifted_de_nvmi = new ShiftedDiffusionEnergyNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
+	shifted_de_nvmi = new ShiftedDiffusionEnergyNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, *distance_gf, *normal_gf, nTerms, fullPenalty);
 	shifted_de_nvmi->SetIntRule(&b_ir);
 	ShiftedDiffusionEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_de_nvmi);
 	ShiftedDiffusionEnergyBoundaryForce.Assemble();

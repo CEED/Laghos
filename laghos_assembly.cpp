@@ -1183,10 +1183,12 @@ namespace mfem
 	      D_el1 = 0.0;
 	      tN_el1 = 0.0;
 	      // if (Tr.Attribute == 77){
-	      vD->Eval(D_el1, Trans_el1, eip_el1);
+	      // vD->Eval(D_el1, Trans_el1, eip_el1);
 		// }
-	      vN->Eval(tN_el1, Trans_el1, eip_el1);
-
+	      //  vN->Eval(tN_el1, Trans_el1, eip_el1);
+	      distance_gf.GetVectorValue(Trans_el1, eip_el1, D_el1);
+	      normal_gf.GetVectorValue(Trans_el1, eip_el1, tN_el1);
+	      
 	      double nTildaDotN = 0.0;
 	      for (int s = 0; s < dim; s++){
 		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
@@ -1227,10 +1229,12 @@ namespace mfem
 	      D_el2 = 0.0;
 	      tN_el2 = 0.0;
 	      // if (Tr.Attribute == 77){
-		vD->Eval(D_el2, Trans_el2, eip_el2);
+	      //vD->Eval(D_el2, Trans_el2, eip_el2);
 		// }
-	      vN->Eval(tN_el2, Trans_el2, eip_el2);
+	      // vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
+	      distance_gf.GetVectorValue(Trans_el2, eip_el2, D_el2);
+	      normal_gf.GetVectorValue(Trans_el2, eip_el2, tN_el2);
 	      
 	      Vector gradv_d_el2(dim);
 	      gradv_d_el2 = 0.0;
@@ -1680,21 +1684,25 @@ namespace mfem
 	      D_el1 = 0.0;
 	      tN_el1 = 0.0;
 	      // if (Tr.Attribute == 77){
-	      vD->Eval(D_el1, Trans_el1, eip_el1);
+	      // vD->Eval(D_el1, Trans_el1, eip_el1);
 	      // }
-	      vN->Eval(tN_el1, Trans_el1, eip_el1);
+	      // vN->Eval(tN_el1, Trans_el1, eip_el1);
 	      /////
-	    
+	      distance_gf.GetVectorValue(Trans_el1, eip_el1, D_el1);
+	      normal_gf.GetVectorValue(Trans_el1, eip_el1, tN_el1);
+	      
 	      /////
 	      Vector D_el2(dim);
 	      Vector tN_el2(dim);
 	      D_el2 = 0.0;
 	      tN_el2 = 0.0;
 	      // if (Tr.Attribute == 77){
-	      vD->Eval(D_el2, Trans_el2, eip_el2);
+	      // vD->Eval(D_el2, Trans_el2, eip_el2);
 	      // }
-	      vN->Eval(tN_el2, Trans_el2, eip_el2);
+	      // vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
+	      distance_gf.GetVectorValue(Trans_el2, eip_el2, D_el2);
+	      normal_gf.GetVectorValue(Trans_el2, eip_el2, tN_el2);
 	      
 	      double nTildaDotN = 0.0;
 	      for (int s = 0; s < dim; s++){
