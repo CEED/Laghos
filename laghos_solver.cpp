@@ -707,7 +707,7 @@ namespace mfem
       AssembleDiffusionEnergyBoundaryForceMatrix();
       
       if (useEmbedded){
-	ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
+	//	ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
 	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
 	shifted_de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
 	shifted_e_bfi->SetCoefficients(c0, c_NP1);

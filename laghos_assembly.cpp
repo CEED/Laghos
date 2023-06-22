@@ -1742,21 +1742,35 @@ namespace mfem
 	      Vector gradv_d_el1(dim);
 	      gradv_d_el1 = 0.0;
 	      get_shifted_value(*Vnpt_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1);
+	      Vector gradv_d_el1_n(dim);
+	      gradv_d_el1_n = 0.0;
+	      get_shifted_value(*Vn_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1_n);
+	      Vector gradv_d_el1_np1(dim);
+	      gradv_d_el1_np1 = 0.0;
+	      get_shifted_value(*Vnp1_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1_np1);
 
 	      Vector gradv_d_el2(dim);
 	      gradv_d_el2 = 0.0;
 	      get_shifted_value(*Vnpt_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2);
+	      Vector gradv_d_el2_n(dim);
+	      gradv_d_el2_n = 0.0;
+	      get_shifted_value(*Vn_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2_n);
+	      Vector gradv_d_el2_np1(dim);
+	      gradv_d_el2_np1 = 0.0;
+	      get_shifted_value(*Vnp1_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2_np1);
 	    
 	      double vDotn_el1 = 0.0;
 	      for (int s = 0; s < dim; s++)
 		{
-		  vDotn_el1 += gradv_d_el1(s) * tN_el1(s);
+		  //		  vDotn_el1 += gradv_d_el1(s) * tN_el1(s);
+		  vDotn_el1 += (c_N * gradv_d_el1_n(s) + c_NP1 * gradv_d_el1_np1(s) ) * tN_el1(s);
 		}
 	    
 	      double vDotn_el2 = 0.0;
 	      for (int s = 0; s < dim; s++)
 		{
-		  vDotn_el2 += gradv_d_el2(s) * tN_el2(s);
+		  // vDotn_el2 += gradv_d_el2(s) * tN_el2(s);
+		  vDotn_el2 += (c_N * gradv_d_el2_n(s) + c_NP1 * gradv_d_el2_np1(s) ) * tN_el1(s);
 		}
 	    
 	      el.CalcShape(eip_el1, shape_el1);
