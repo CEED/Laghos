@@ -355,8 +355,14 @@ public:
       VectorCoefficient *vN;
       int nTerms;
 
+      double c_N; 
+      double c_NP1; 
+      
+      const ParGridFunction *Vn_gf;
+      const ParGridFunction *Vnp1_gf;
+        
     public:
-      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, const ParGridFunction &alpha_gf, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms) :  pmesh(pmesh), alpha_gf(alpha_gf), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), vD(dist_vec), vN(normal_vec), nTerms(nTerms)  { }
+      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, const ParGridFunction &alpha_gf, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms) :  pmesh(pmesh), alpha_gf(alpha_gf), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0), vD(dist_vec), vN(normal_vec), nTerms(nTerms)  { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
@@ -364,10 +370,16 @@ public:
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  ElementTransformation &Tr,
 					  Vector &elvect) {}
-      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT, const ParGridFunction * velocity_N, const ParGridFunction * velocity_NP1){
 	Vnpt_gf = velocity_NPT;
+	Vn_gf = velocity_N;
+    	Vnp1_gf = velocity_NP1;
+     }
+       virtual void SetCoefficients(double c_N_, double c_NP1_){
+	c_N = c_N_;
+	c_NP1 = c_NP1_;
       }
- 
+
     };
 
     // Performs full assembly for the normal velocity mass matrix operator.
@@ -459,9 +471,15 @@ public:
       const ParGridFunction &v_gf;
       const ParGridFunction &Jac0invface_gf;
       const ParGridFunction *Vnpt_gf;
+
+      double c_N; 
+      double c_NP1; 
       
+      const ParGridFunction *Vn_gf;
+      const ParGridFunction *Vnp1_gf;
+    
     public:
-      ShiftedDiffusionEnergyNormalVelocityIntegrator(const double hinit, const ParMesh *pmesh, const ParFiniteElementSpace &h1, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : hinit(hinit), pmesh(pmesh), h1(h1), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP), Vnpt_gf(NULL) { }
+      ShiftedDiffusionEnergyNormalVelocityIntegrator(const double hinit, const ParMesh *pmesh, const ParFiniteElementSpace &h1, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : hinit(hinit), pmesh(pmesh), h1(h1), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), vD(dist_vec), vN(normal_vec), nTerms(nTerms), fullPenalty(fP), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
@@ -469,11 +487,16 @@ public:
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  ElementTransformation &Tr,
 					  Vector &elvect) {}
-    
-      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
+      virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT, const ParGridFunction * velocity_N, const ParGridFunction * velocity_NP1){
 	Vnpt_gf = velocity_NPT;
+	Vn_gf = velocity_N;
+    	Vnp1_gf = velocity_NP1;
       }
- 
+      virtual void SetCoefficients(double c_N_, double c_NP1_){
+	c_N = c_N_;
+	c_NP1 = c_NP1_;
+      }
+      
     };
 
     

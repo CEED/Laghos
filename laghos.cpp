@@ -78,9 +78,9 @@ int main(int argc, char *argv[])
   double cfl = 0.5;
   double penaltyParameter = 1.0;
   double nitscheVersion = -1.0;
-  double cg_tol = 1e-8;
+  double cg_tol = 1e-15;
   double ftz_tol = 0.0;
-  int cg_max_iter = 300;
+  int cg_max_iter = 30000;
   int max_tsteps = -1;
   bool impose_visc = false;
   bool visualization = false;
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
   bool gfprint = false;
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
-  double blast_position[] = {-0.5, -0.5, -0.5};
+  double blast_position[] = {0.0, 0.0, 0.0};
   bool useEmbedded = false;
   int geometricShape = 0;
   int nTerms = 1; 
