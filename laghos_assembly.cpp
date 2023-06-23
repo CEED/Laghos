@@ -1186,8 +1186,14 @@ namespace mfem
 	      // vD->Eval(D_el1, Trans_el1, eip_el1);
 		// }
 	      //  vN->Eval(tN_el1, Trans_el1, eip_el1);
-	      distance_gf.GetVectorValue(Trans_el1, eip_el1, D_el1);
-	      normal_gf.GetVectorValue(Trans_el1, eip_el1, tN_el1);
+	      distance_gf->GetVectorValue(Trans_el1, eip_el1, D_el1);
+	      normal_gf->GetVectorValue(Trans_el1, eip_el1, tN_el1);
+
+	      Vector D_n_el1(dim), D_np1_el1(dim);
+	      D_n_el1 = 0.0;
+	      D_np1_el1 = 0.0;
+	      distance_n_gf->GetVectorValue(Trans_el1, eip_el1, D_n_el1);
+	      distance_np1_gf->GetVectorValue(Trans_el1, eip_el1, D_np1_el1);
 	      
 	      double nTildaDotN = 0.0;
 	      for (int s = 0; s < dim; s++){
@@ -1203,14 +1209,14 @@ namespace mfem
 
 	      Vector gradv_d_el1_n(dim);
 	      gradv_d_el1_n = 0.0;
-	      get_shifted_value(*Vn_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1_n);
+	      get_shifted_value(*Vn_gf, Trans_el1.ElementNo, eip_el1, D_n_el1, nTerms, gradv_d_el1_n);
 	      Vector v_vals_el1_n(dim);
 	      v_vals_el1_n = 0.0;
 	      Vn_gf->GetVectorValue(Trans_el1, eip_el1, v_vals_el1_n);
 
 	      Vector gradv_d_el1_np1(dim);
 	      gradv_d_el1_np1 = 0.0;
-	      get_shifted_value(*Vnp1_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1_np1);
+	      get_shifted_value(*Vnp1_gf, Trans_el1.ElementNo, eip_el1, D_np1_el1, nTerms, gradv_d_el1_np1);
 	      Vector v_vals_el1_np1(dim);
 	      v_vals_el1_np1 = 0.0;
 	      Vnp1_gf->GetVectorValue(Trans_el1, eip_el1, v_vals_el1_np1);
@@ -1233,8 +1239,14 @@ namespace mfem
 		// }
 	      // vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
-	      distance_gf.GetVectorValue(Trans_el2, eip_el2, D_el2);
-	      normal_gf.GetVectorValue(Trans_el2, eip_el2, tN_el2);
+	      distance_gf->GetVectorValue(Trans_el2, eip_el2, D_el2);
+	      normal_gf->GetVectorValue(Trans_el2, eip_el2, tN_el2);
+
+	      Vector D_n_el2(dim), D_np1_el2(dim);
+	      D_n_el2 = 0.0;
+	      D_np1_el2 = 0.0;
+	      distance_n_gf->GetVectorValue(Trans_el2, eip_el2, D_n_el2);
+	      distance_np1_gf->GetVectorValue(Trans_el2, eip_el2, D_np1_el2);
 	      
 	      Vector gradv_d_el2(dim);
 	      gradv_d_el2 = 0.0;
@@ -1246,14 +1258,14 @@ namespace mfem
 
 	      Vector gradv_d_el2_n(dim);
 	      gradv_d_el2_n = 0.0;
-	      get_shifted_value(*Vn_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2_n);
+	      get_shifted_value(*Vn_gf, Trans_el2.ElementNo, eip_el2, D_n_el2, nTerms, gradv_d_el2_n);
 	      Vector v_vals_el2_n(dim);
 	      v_vals_el2_n = 0.0;
 	      Vn_gf->GetVectorValue(Trans_el2, eip_el2, v_vals_el2_n);
 
 	      Vector gradv_d_el2_np1(dim);
 	      gradv_d_el2_np1 = 0.0;
-	      get_shifted_value(*Vnp1_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2_np1);
+	      get_shifted_value(*Vnp1_gf, Trans_el2.ElementNo, eip_el2, D_np1_el2, nTerms, gradv_d_el2_np1);
 	      Vector v_vals_el2_np1(dim);
 	      v_vals_el2_np1 = 0.0;
 	      Vnp1_gf->GetVectorValue(Trans_el2, eip_el2, v_vals_el2_np1);
@@ -1688,8 +1700,14 @@ namespace mfem
 	      // }
 	      // vN->Eval(tN_el1, Trans_el1, eip_el1);
 	      /////
-	      distance_gf.GetVectorValue(Trans_el1, eip_el1, D_el1);
-	      normal_gf.GetVectorValue(Trans_el1, eip_el1, tN_el1);
+	      distance_gf->GetVectorValue(Trans_el1, eip_el1, D_el1);
+	      normal_gf->GetVectorValue(Trans_el1, eip_el1, tN_el1);
+
+	      Vector D_n_el1(dim), D_np1_el1(dim);
+	      D_n_el1 = 0.0;
+	      D_np1_el1 = 0.0;
+	      distance_n_gf->GetVectorValue(Trans_el1, eip_el1, D_n_el1);
+	      distance_np1_gf->GetVectorValue(Trans_el1, eip_el1, D_np1_el1);
 	      
 	      /////
 	      Vector D_el2(dim);
@@ -1701,8 +1719,14 @@ namespace mfem
 	      // }
 	      // vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
-	      distance_gf.GetVectorValue(Trans_el2, eip_el2, D_el2);
-	      normal_gf.GetVectorValue(Trans_el2, eip_el2, tN_el2);
+	      distance_gf->GetVectorValue(Trans_el2, eip_el2, D_el2);
+	      normal_gf->GetVectorValue(Trans_el2, eip_el2, tN_el2);
+
+	      Vector D_n_el2(dim), D_np1_el2(dim);
+	      D_n_el2 = 0.0;
+	      D_np1_el2 = 0.0;
+	      distance_n_gf->GetVectorValue(Trans_el2, eip_el2, D_n_el2);
+	      distance_np1_gf->GetVectorValue(Trans_el2, eip_el2, D_np1_el2);
 	      
 	      double nTildaDotN = 0.0;
 	      for (int s = 0; s < dim; s++){
@@ -1752,20 +1776,20 @@ namespace mfem
 	      get_shifted_value(*Vnpt_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1);
 	      Vector gradv_d_el1_n(dim);
 	      gradv_d_el1_n = 0.0;
-	      get_shifted_value(*Vn_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1_n);
+	      get_shifted_value(*Vn_gf, Trans_el1.ElementNo, eip_el1, D_n_el1, nTerms, gradv_d_el1_n);
 	      Vector gradv_d_el1_np1(dim);
 	      gradv_d_el1_np1 = 0.0;
-	      get_shifted_value(*Vnp1_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1_np1);
+	      get_shifted_value(*Vnp1_gf, Trans_el1.ElementNo, eip_el1, D_np1_el1, nTerms, gradv_d_el1_np1);
 
 	      Vector gradv_d_el2(dim);
 	      gradv_d_el2 = 0.0;
 	      get_shifted_value(*Vnpt_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2);
 	      Vector gradv_d_el2_n(dim);
 	      gradv_d_el2_n = 0.0;
-	      get_shifted_value(*Vn_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2_n);
+	      get_shifted_value(*Vn_gf, Trans_el2.ElementNo, eip_el2, D_n_el2, nTerms, gradv_d_el2_n);
 	      Vector gradv_d_el2_np1(dim);
 	      gradv_d_el2_np1 = 0.0;
-	      get_shifted_value(*Vnp1_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2_np1);
+	      get_shifted_value(*Vnp1_gf, Trans_el2.ElementNo, eip_el2, D_np1_el2, nTerms, gradv_d_el2_np1);
 	    
 	      double vDotn_el1 = 0.0;
 	      for (int s = 0; s < dim; s++)

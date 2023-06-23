@@ -351,8 +351,14 @@ public:
       const ParGridFunction &pface_gf;
       const ParGridFunction &v_gf;
       const ParGridFunction *Vnpt_gf;
-      const ParGridFunction &distance_gf;
-      const ParGridFunction &normal_gf;
+
+      const ParGridFunction *distance_gf;
+      const ParGridFunction *normal_gf;
+
+      const ParGridFunction *distance_n_gf;
+      const ParGridFunction *normal_n_gf;
+      const ParGridFunction *distance_np1_gf;
+      const ParGridFunction *normal_np1_gf;
      
       VectorCoefficient *vD;
       VectorCoefficient *vN;
@@ -365,7 +371,7 @@ public:
       const ParGridFunction *Vnp1_gf;
         
     public:
-      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, const ParGridFunction &alpha_gf, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, const ParGridFunction &distance_gf, const ParGridFunction &normal_gf, int nTerms) :  pmesh(pmesh), alpha_gf(alpha_gf), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0), vD(dist_vec), vN(normal_vec), distance_gf(distance_gf), normal_gf(normal_gf), nTerms(nTerms)  { }
+      ShiftedEnergyBoundaryForceIntegrator(const ParMesh *pmesh, const ParGridFunction &alpha_gf, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec,  int nTerms) :  pmesh(pmesh), alpha_gf(alpha_gf), pface_gf(pface_gf), v_gf(v_gf), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0), vD(dist_vec), vN(normal_vec), distance_gf(NULL), normal_gf(NULL), distance_n_gf(NULL), normal_n_gf(NULL), distance_np1_gf(NULL), normal_np1_gf(NULL), nTerms(nTerms)  { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
@@ -378,6 +384,17 @@ public:
 	Vn_gf = velocity_N;
     	Vnp1_gf = velocity_NP1;
      }
+      virtual void SetDistanceGridFunctionAtNewState(const ParGridFunction * distance_NPT, const ParGridFunction * distance_N, const ParGridFunction * distance_NP1){
+	distance_gf = distance_NPT;
+	distance_n_gf = distance_N;
+    	distance_np1_gf = distance_NP1;
+      }
+      virtual void SetNormalGridFunctionAtNewState(const ParGridFunction * normal_NPT, const ParGridFunction * normal_N, const ParGridFunction * normal_NP1){
+	normal_gf = normal_NPT;
+	normal_n_gf = normal_N;
+    	normal_np1_gf = normal_NP1;
+     }
+    
        virtual void SetCoefficients(double c_N_, double c_NP1_){
 	c_N = c_N_;
 	c_NP1 = c_NP1_;
@@ -480,11 +497,16 @@ public:
       
       const ParGridFunction *Vn_gf;
       const ParGridFunction *Vnp1_gf;
-      const ParGridFunction &distance_gf;
-      const ParGridFunction &normal_gf;
+
+      const ParGridFunction *distance_gf;
+      const ParGridFunction *normal_gf;
+      const ParGridFunction *distance_n_gf;
+      const ParGridFunction *normal_n_gf;
+      const ParGridFunction *distance_np1_gf;
+      const ParGridFunction *normal_np1_gf;
      
     public:
-      ShiftedDiffusionEnergyNormalVelocityIntegrator(const double hinit, const ParMesh *pmesh, const ParFiniteElementSpace &h1, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, const ParGridFunction &distance_gf, const ParGridFunction &normal_gf, int nTerms, bool fP = 0) : hinit(hinit), pmesh(pmesh), h1(h1), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), vD(dist_vec), vN(normal_vec), distance_gf(distance_gf), normal_gf(normal_gf), nTerms(nTerms), fullPenalty(fP), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0) { }
+      ShiftedDiffusionEnergyNormalVelocityIntegrator(const double hinit, const ParMesh *pmesh, const ParFiniteElementSpace &h1, const ParGridFunction &alpha_gf, double penaltyParameter, const int order_v, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const ParGridFunction &rhoface_gf, const ParGridFunction &viscousface_gf, const ParGridFunction &csface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, VectorCoefficient *dist_vec, VectorCoefficient *normal_vec, int nTerms, bool fP = 0) : hinit(hinit), pmesh(pmesh), h1(h1), alpha_gf(alpha_gf), penaltyParameter(penaltyParameter), order_v(order_v), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), rhoface_gf(rhoface_gf), viscousface_gf(viscousface_gf), csface_gf(csface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), vD(dist_vec), vN(normal_vec), distance_gf(NULL), normal_gf(NULL), distance_n_gf(NULL), normal_n_gf(NULL), distance_np1_gf(NULL), normal_np1_gf(NULL), nTerms(nTerms), fullPenalty(fP), Vnpt_gf(NULL), Vn_gf(NULL), Vnp1_gf(NULL), c_N(0), c_NP1(0) { }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  const FiniteElement &el2,
 					  FaceElementTransformations &Tr,
@@ -497,6 +519,16 @@ public:
 	Vn_gf = velocity_N;
     	Vnp1_gf = velocity_NP1;
       }
+      virtual void SetDistanceGridFunctionAtNewState(const ParGridFunction * distance_NPT, const ParGridFunction * distance_N, const ParGridFunction * distance_NP1){
+	distance_gf = distance_NPT;
+	distance_n_gf = distance_N;
+    	distance_np1_gf = distance_NP1;
+      }
+      virtual void SetNormalGridFunctionAtNewState(const ParGridFunction * normal_NPT, const ParGridFunction * normal_N, const ParGridFunction * normal_NP1){
+	normal_gf = normal_NPT;
+	normal_n_gf = normal_N;
+    	normal_np1_gf = normal_NP1;
+     }
       virtual void SetCoefficients(double c_N_, double c_NP1_){
 	c_N = c_N_;
 	c_NP1 = c_NP1_;

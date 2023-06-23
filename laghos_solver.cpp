@@ -508,7 +508,7 @@ namespace mfem
 	// Make a dummy assembly to figure out the sparsity.
       	ShiftedVelocityBoundaryForce.Assemble();    
 
-	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, *distance_gf, *normal_gf, nTerms);
+	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
 	shifted_e_bfi->SetIntRule(&b_ir);
 	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
 	// Make a dummy assembly to figure out the sparsity.
@@ -524,7 +524,7 @@ namespace mfem
 	ShiftedDiffusionVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_d_nvmi);
 	ShiftedDiffusionVelocityBoundaryForce.Assemble();
 	
-	shifted_de_nvmi = new ShiftedDiffusionEnergyNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, *distance_gf, *normal_gf, nTerms, fullPenalty);
+	shifted_de_nvmi = new ShiftedDiffusionEnergyNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
 	shifted_de_nvmi->SetIntRule(&b_ir);
 	ShiftedDiffusionEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_de_nvmi);
 	ShiftedDiffusionEnergyBoundaryForce.Assemble();
@@ -767,7 +767,13 @@ namespace mfem
 	UpdateMesh(S);
 
 	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
+	shifted_e_bfi->SetDistanceGridFunctionAtNewState(distance_gf, distance_n_gf, distance_np1_gf);
+	shifted_e_bfi->SetNormalGridFunctionAtNewState(normal_gf, normal_n_gf, normal_np1_gf);
+
 	shifted_de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated, &v_N, &v_NP1);
+	shifted_de_nvmi->SetDistanceGridFunctionAtNewState(distance_gf, distance_n_gf, distance_np1_gf);
+	shifted_de_nvmi->SetNormalGridFunctionAtNewState(normal_gf, normal_n_gf, normal_np1_gf);
+
 	shifted_e_bfi->SetCoefficients(c0, c_NP1);
 	shifted_de_nvmi->SetCoefficients(c0, c_NP1);
 	AssembleShiftedEnergyBoundaryForceMatrix();
@@ -1021,7 +1027,7 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ) {
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE)/* ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ) {
 	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
 		Jpr_b[z].SetSize(dim, dim, nqp);
 		e.GetValues(z_id, ir, e_vals);
@@ -1052,7 +1058,7 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ){
+	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE)/* ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT)*/ ){
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)
