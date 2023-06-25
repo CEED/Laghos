@@ -1180,10 +1180,12 @@ namespace mfem
 	      D_el1 = 0.0;
 	      tN_el1 = 0.0;
 	      // if (Tr.Attribute == 77){
-	      vD->Eval(D_el1, Trans_el1, eip_el1);
+	      // vD->Eval(D_el1, Trans_el1, eip_el1);
 		// }
-	      vN->Eval(tN_el1, Trans_el1, eip_el1);
-
+	      // vN->Eval(tN_el1, Trans_el1, eip_el1);
+	      tN_el1 = nor;
+	      tN_el1 /= nor_norm;
+	      
 	      double nTildaDotN = 0.0;
 	      for (int s = 0; s < dim; s++){
 		nTildaDotN += nor(s) * tN_el1(s) / nor_norm;
@@ -1209,10 +1211,12 @@ namespace mfem
 	      D_el2 = 0.0;
 	      tN_el2 = 0.0;
 	      // if (Tr.Attribute == 77){
-		vD->Eval(D_el2, Trans_el2, eip_el2);
+	      // vD->Eval(D_el2, Trans_el2, eip_el2);
 		// }
-	      vN->Eval(tN_el2, Trans_el2, eip_el2);
+	      // vN->Eval(tN_el2, Trans_el2, eip_el2);
 	      /////
+	      tN_el2 = nor;
+	      tN_el2 /= nor_norm;
 	      
 	      Vector gradv_d_el2(dim);
 	      gradv_d_el2 = 0.0;
@@ -1236,8 +1240,10 @@ namespace mfem
 		    {
 		      for (int md = 0; md < dim; md++)
 			{
-			  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
-			  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
+			  //			  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
+			  //  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
+			  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(md) - volumeFraction_el2 * nor(md) ) * (gamma_1 * gradv_d_el1(vd) + gamma_2 * gradv_d_el2(vd)) * ip_f.weight;
+			  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(md) - volumeFraction_el2 * nor(md) ) * (gamma_1 * gradv_d_el1(vd) + gamma_2 * gradv_d_el2(vd)) * ip_f.weight;
 
 	      /*  for (int i = 0; i < l2dofs_cnt; i++)
 		{
