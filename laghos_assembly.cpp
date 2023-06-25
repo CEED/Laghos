@@ -989,6 +989,14 @@ namespace mfem
 				      h0, h_1, mu_1);
 	    double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
 
+	    Vector vShape_npt;
+	    Vnpt_gf->GetVectorValue(elementNo, eip, vShape_npt);
+	    double vDotn_npt = 0.0;
+	    for (int s = 0; s < dim; s++)
+	      {
+		vDotn_npt += vShape_npt(s) * nor(s)/nor_norm;
+		//	vDotn += vShape(s) * tN(s);
+	      }
 	    Vector vShape;
 	    v_gf.GetVectorValue(elementNo, eip, vShape);
 	    double vDotn = 0.0;
@@ -997,6 +1005,7 @@ namespace mfem
 		vDotn += vShape(s) * nor(s)/nor_norm;
 		//	vDotn += vShape(s) * tN(s);
 	      }
+	    
 	    double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 	  
 	    // NEW //
@@ -1006,7 +1015,7 @@ namespace mfem
 	    el.CalcShape(eip, shape);
 	    for (int i = 0; i < l2dofs_cnt; i++)
 	      {
-		elvect(i) += shape(i) * vDotn * vDotn * penaltyVal * ip_f.weight * nor_norm;
+		elvect(i) += shape(i) * vDotn * vDotn_npt * penaltyVal * ip_f.weight * nor_norm;
 		//		std::cout << " energ val " << elvect(i) << std::endl;
 	      }
 	  }
@@ -1702,29 +1711,39 @@ namespace mfem
 	      gradv_d_el1 = 0.0;
 	      get_shifted_value(*Vnpt_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1);
 
+	      Vector gradv_d_el1_n(dim);
+	      gradv_d_el1_n = 0.0;
+	      get_shifted_value(v_gf, Trans_el1.ElementNo, eip_el1, D_el1, nTerms, gradv_d_el1_n);
+
 	      Vector gradv_d_el2(dim);
 	      gradv_d_el2 = 0.0;
 	      get_shifted_value(*Vnpt_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2);
+
+	      Vector gradv_d_el2_n(dim);
+	      gradv_d_el2_n = 0.0;
+	      get_shifted_value(v_gf, Trans_el2.ElementNo, eip_el2, D_el2, nTerms, gradv_d_el2_n);
 	    
 	      double vDotn_el1 = 0.0;
+	      double vDotn_el2 = 0.0;
+	      double vDotn_el1_n = 0.0;
+	      double vDotn_el2_n = 0.0;
+	      
 	      for (int s = 0; s < dim; s++)
 		{
 		  vDotn_el1 += gradv_d_el1(s) * tN_el1(s);
-		}
-	    
-	      double vDotn_el2 = 0.0;
-	      for (int s = 0; s < dim; s++)
-		{
 		  vDotn_el2 += gradv_d_el2(s) * tN_el2(s);
+		  vDotn_el1_n += gradv_d_el1_n(s) * tN_el1(s);
+		  vDotn_el2_n += gradv_d_el2_n(s) * tN_el2(s);
+	
 		}
-	    
+	   
 	      el.CalcShape(eip_el1, shape_el1);
 	      el2.CalcShape(eip_el2, shape_el2);
 	    
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  elvect(i) += shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-		  elvect(i + l2dofs_cnt) += shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  elvect(i) += shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  elvect(i + l2dofs_cnt) += shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
 		}
 	    }
 	}
