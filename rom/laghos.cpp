@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
     romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp);
-    MFEM_VERIFY(!(romOptions.SNS) || romOptions.use_sample_mesh, "Using SNS without sample mesh is prohibited");
+    MFEM_VERIFY(!(romOptions.SNS) || (romOptions.hyperreductionSamplingType != eqp), "Using SNS with EQP is prohibited");
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
