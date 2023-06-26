@@ -60,7 +60,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     const bool sampleX = generator_X->isNextSample(t);
 
     Vector dSdt;
-    if (!sns)
+    if (!sns && rhsBasis)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
@@ -136,7 +136,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             }
         }
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             MFEM_VERIFY(gfH1.Size() == H1size, "");
             for (int i=0; i<H1size; ++i)
@@ -172,7 +172,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
 
             addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
-
         }
         else
         {
@@ -185,7 +184,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             tSnapE.push_back(t);
         }
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             MFEM_VERIFY(gfL2.Size() == L2size, "");
             for (int i=0; i<L2size; ++i)
@@ -620,7 +619,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV) generator_X->writeSnapshot();
         if (!useVX) generator_V->writeSnapshot();
         generator_E->writeSnapshot();
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             generator_Fv->writeSnapshot();
             generator_Fe->writeSnapshot();
@@ -631,7 +630,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV) generator_X->endSamples();
         if (!useVX) generator_V->endSamples();
         generator_E->endSamples();
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             generator_Fv->endSamples();
             generator_Fe->endSamples();
@@ -658,7 +657,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         BasisGeneratorFinalSummary(generator_E, first_sv, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             cout << "Fv basis summary output: " << endl;
             BasisGeneratorFinalSummary(generator_Fv, 0, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
@@ -676,7 +675,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         printSnapshotTime(tSnapV, path_tSnap, "V", input.basisIdentifier);
         printSnapshotTime(tSnapE, path_tSnap, "E", input.basisIdentifier);
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             printSnapshotTime(tSnapFv, path_tSnap, "Fv", input.basisIdentifier);
             printSnapshotTime(tSnapFe, path_tSnap, "Fe", input.basisIdentifier);
@@ -724,7 +723,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     delete generator_V;
     delete generator_E;
 
-    if (!sns)
+    if (!sns && rhsBasis)
     {
         delete generator_Fv;
         delete generator_Fe;
@@ -1846,7 +1845,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (hyperreductionSamplingType == eqp) return; 
+    if (hyperreductionSamplingType == eqp) return;
 
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
@@ -2256,7 +2255,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
-      spaceTimeMethod(input.spaceTimeMethod), hyperreductionSamplingType(input.hyperreductionSamplingType), 
+      spaceTimeMethod(input.spaceTimeMethod), hyperreductionSamplingType(input.hyperreductionSamplingType),
       use_sample_mesh(input.use_sample_mesh), H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace)
 {
     if (use_sample_mesh && rank == 0)

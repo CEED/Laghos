@@ -478,7 +478,8 @@ public:
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time)
+          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time),
+          rhsBasis(input.hyperreductionSamplingType != eqp)
     {
         const int window = input.window;
 
@@ -540,7 +541,7 @@ public:
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::E + std::to_string(window) + input.basisIdentifier);
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             if (input.randomizedSVD)
             {
@@ -671,6 +672,7 @@ private:
     ParGridFunction gfH1, gfL2;
 
     const bool sns;
+    const bool rhsBasis;
 
     const bool Voffset;
     const bool useXV;

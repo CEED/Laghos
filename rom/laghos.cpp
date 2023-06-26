@@ -2038,7 +2038,7 @@ int main(int argc, char *argv[])
 
                     delete romOper[romOptions.window-1];
 
-                    if (!romOptions.use_sample_mesh)
+                    if (romOptions.use_sample_mesh)
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
