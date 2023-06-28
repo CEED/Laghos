@@ -822,6 +822,9 @@ private:
     void SetupEQP_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
                            const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input,
                            bool equationE);
+
+	void SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
+							  const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input);
 };
 
 class ROM_Basis

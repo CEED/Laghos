@@ -341,65 +341,65 @@ void ComputeElementRowOfG_E(const IntegrationRule *ir,
 
 // Sets the rows of constraints matrix G for the energy-conserving EQP rule. 
 void ComputeRowsOfG(const IntegrationRule *ir,
-                   hydrodynamics::QuadratureData const& quad_data,
-                   Vector const& w_e, Vector const& v_e,
-                   FiniteElement const& test_fe,
-				   FiniteElement const& trial_fe,
-				   const int zone_id,
-				   const bool equationV, const bool equationE,
-				   Vector & rv, Vector & re)
+					hydrodynamics::QuadratureData const& quad_data,
+					Vector const& w_e, Vector const& v_e,
+					FiniteElement const& test_fe,
+					FiniteElement const& trial_fe,
+					const int zone_id,
+					const bool equationV, const bool equationE,
+					Vector & rv, Vector & re)
 {
-    const int nqp = ir->GetNPoints();
-    const int dim = trial_fe.GetDim(); // TODO: shouldn't it be the dimension of test_fe?
-    const int h1dofs_cnt = test_fe.GetDof();
-    const int l2dofs_cnt = trial_fe.GetDof();
+	const int nqp = ir->GetNPoints();
+	const int dim = trial_fe.GetDim(); // TODO: shouldn't it be the dimension of test_fe?
+	const int h1dofs_cnt = test_fe.GetDof();
+	const int l2dofs_cnt = trial_fe.GetDof();
 
 	if (equationV)
 	{
 		MFEM_VERIFY(rv.Size() == nqp, "");
 	}
-	
+
 	if (equationE)
 	{
 		MFEM_VERIFY(re.Size() == nqp, "");
 		MFEM_VERIFY(v_e.Size() == h1dofs_cnt*dim, "");
-    	MFEM_VERIFY(w_e.Size() == l2dofs_cnt, "");
+		MFEM_VERIFY(w_e.Size() == l2dofs_cnt, "");
 	}
 
-    DenseMatrix grad_vshape(h1dofs_cnt, dim); // grad of velocity basis vector
+	DenseMatrix grad_vshape(h1dofs_cnt, dim); // grad of velocity basis vector
 	DenseMatrix loc_force(h1dofs_cnt, dim);
-    Vector Vloc_force(loc_force.Data(), h1dofs_cnt * dim);
+	Vector Vloc_force(loc_force.Data(), h1dofs_cnt * dim);
 
-    for (int q = 0; q < nqp; q++)
-    {
-        const IntegrationPoint &ip = ir->IntPoint(q);
+	for (int q = 0; q < nqp; q++)
+	{
+		const IntegrationPoint &ip = ir->IntPoint(q);
 
-        // Form stress:grad_vshape at the current point.
+		// Form stress:grad_vshape at the current point.
 		// TODO: how do we set which velocity basis vector is used for the
 		// gradient calculation?
-        test_fe.CalcDShape(ip, grad_vshape);
-        for (int i = 0; i < h1dofs_cnt; i++)
-        {
-            for (int vd = 0; vd < dim; vd++) // Velocity components.
-            {
-                loc_force(i, vd) = 0.0;
-                for (int gd = 0; gd < dim; gd++) // Gradient components.
-                {
-                    loc_force(i, vd) +=
-                        quad_data.stressJinvT(vd)(zone_id*nqp + q, gd) * grad_vshape(i,gd);
-                }
-            }
-        }
+		test_fe.CalcDShape(ip, grad_vshape);
+		for (int i = 0; i < h1dofs_cnt; i++)
+		{
+			for (int vd = 0; vd < dim; vd++) // Velocity components.
+			{
+				loc_force(i, vd) = 0.0;
+				for (int gd = 0; gd < dim; gd++) // Gradient components.
+				{
+					loc_force(i, vd) +=
+						quad_data.stressJinvT(vd)(zone_id*nqp + q, gd) * grad_vshape(i,gd);
+				}
+			}
+		}
 
-        // NOTE: UpdateQuadratureData includes ip.weight as a factor in quad_data.stressJinvT,
-        // set by LagrangianHydroOperator::UpdateQuadratureData.
-        loc_force *= 1.0 / ip.weight;  // Divide by exact quadrature weight
+		// NOTE: UpdateQuadratureData includes ip.weight as a factor in quad_data.stressJinvT,
+		// set by LagrangianHydroOperator::UpdateQuadratureData.
+		loc_force *= 1.0 / ip.weight;  // Divide by exact quadrature weight
 
 		if (equationV)
 		{
 			// set rv = sum(Vloc_force) 
 			rv[q] = 0.0;
-			for (i = 0; i < h1dofs_cnt * dim; i++)
+			for (int i = 0; i < h1dofs_cnt * dim; i++)
 			{
 				rv[q] += Vloc_force(i);
 			}
@@ -408,13 +408,13 @@ void ComputeRowsOfG(const IntegrationRule *ir,
 		{
 			// set re = F^T * v; F = integral of (stress : grad w_i)phi_j
 			re[q] = 0.0;
-			for (i = 0; i < l2dofs_cnt; i++)
+			for (int i = 0; i < l2dofs_cnt; i++)
 			{
 				re[q] += w_e(i);
 			}
-        	re[q] *= v_e * Vloc_force;
+			re[q] *= v_e * Vloc_force;
 		}
-    } // q -- quadrature point
+	} // q -- quadrature point
 }
 
 #include "linalg/NNLS.h"
@@ -488,6 +488,7 @@ void WriteSolutionNNLS(CAROM::Vector const& sol, const string filename)
     outfile.close();
 }
 
+// Compute the reduced quadrature rules for the basic EQP case.
 void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
                                     const CAROM::Matrix* snapV,
                                     const CAROM::Matrix* snapE,
@@ -523,10 +524,10 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
     CAROM::Matrix Gt(NQ, NB * (nsnap+1), true);
 
 	// Velocity equation.
-    // For 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
-    // entry G(j + (i*NB), (e*nqe) + m) is the coefficient of
+	// For 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+	// entry G(j + (i*NB), (e*nqe) + m) is the coefficient of
 	//
-    //				e_j^T M_v^{-1} F(v_i,e_i,x_i)^T 1E 
+	//				e_j^T M_v^{-1} F(v_i,e_i,x_i)^T 1E 
 	//
 	// at point m of element e with respect to the integration rule weight at
 	// that point, where the "exact" quadrature solution is ir0->GetWeights().
@@ -534,10 +535,10 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
 	// in the energy space.
 
 	// Energy equation.
-    // Similarly, for 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
-    // entry G(j + (i*NB), (e*nqe) + m) is the coefficient of
+	// Similarly, for 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+	// entry G(j + (i*NB), (e*nqe) + m) is the coefficient of
 	//
-    //				e_j^T M_e^{-1} F(v_i,e_i,x_i)^T v_i
+	//				e_j^T M_e^{-1} F(v_i,e_i,x_i)^T v_i
 	//
 	// where e_j is the jth energy basis vector, v_i is the ith velocity
 	// snapshot.
@@ -694,58 +695,60 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
                       std::to_string(rank));
 }
 
+// Compute the reduced quadrature rule for the energy-conserving EQP case.
 void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
-                                      const CAROM::Matrix* snapV,
-                                      const CAROM::Matrix* snapE,
-                                      const CAROM::Matrix* basisV,
-                                      const CAROM::Matrix* basisE,
-                                      ROM_Options const& input)
+									   const CAROM::Matrix* snapV,
+									   const CAROM::Matrix* snapE,
+									   const CAROM::Matrix* basisV,
+                                       const CAROM::Matrix* basisE,
+                                       ROM_Options const& input)
 {
-    const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
-    const int nqe = ir0->GetNPoints();
-    const int ne = input.H1FESpace->GetNE();
-    const int NQ = ne * nqe;
-    
+	const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
+	const int nqe = ir0->GetNPoints();
+	const int ne = input.H1FESpace->GetNE();
+	const int NQ = ne * nqe;
+
 	const int NBv = basisV->numColumns();
 	const int NBe = basisE->numColumns();
 	const int NBmin = min(NBv, NBe);
 
-    Array<int> numSnapVar(3);
-    numSnapVar[0] = snapX->numColumns();
-    numSnapVar[1] = snapV->numColumns();
-    numSnapVar[2] = snapE->numColumns();
+	Array<int> numSnapVar(3);
+	numSnapVar[0] = snapX->numColumns();
+	numSnapVar[1] = snapV->numColumns();
+	numSnapVar[2] = snapE->numColumns();
 
-    const int nsnap = numSnapVar.Max();
+	const int nsnap = numSnapVar.Max();
 
-    Array<int> numSkipped(3);
-    for (int i=0; i<3; ++i) numSkipped[i] = nsnap - numSnapVar[i];
-    MFEM_VERIFY(numSkipped.Max() <= 1, "");
+	Array<int> numSkipped(3);
+	for (int i=0; i<3; ++i) numSkipped[i] = nsnap - numSnapVar[i];
+	MFEM_VERIFY(numSkipped.Max() <= 1, "");
 
-    Vector rv(nqe), re(nqe);
+	Vector rv(nqe), re(nqe);
 
 	// G is the matrix of accuracy constraints used to enforce that the
 	// evaluated quantity remains close to the result of the full quadrature rule.
-    
+
 	// Declare G of size ((NBv + NBe) * (nsnap+1)) x NQ; store its transpose Gt.
 	// The first NBv*(nsnap+1) rows of G hold the velocity constraints;
 	// the remaining NBe*(nsnap+1) rows hold the energy constraints.
-    CAROM::Matrix Gt(NQ, (NBv + NBe) * (nsnap+1), true);
+	CAROM::Matrix Gt(NQ, (NBv + NBe) * (nsnap+1), true);
 
 	// row index of G where energy constraints start
-	int estart = NBv * (nsnap + 1);
+	const int estart = NBv * (nsnap + 1);
 
-    Vector v_i(tH1size), x_i(tH1size), e_i(tL2size);
-    Vector w_j_e, v_i_e, v_j_e;
+	Vector v_i(tH1size), x_i(tH1size), e_i(tL2size);
+	Vector w_j_e, v_i_e, v_j_e;
 
-    Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
-    Vector S_v(S, input.H1FESpace->GetVSize(), input.H1FESpace->GetVSize());  // Subvector
+	Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
+	Vector S_v(S, input.H1FESpace->GetVSize(), input.H1FESpace->GetVSize());  // Subvector
 
-    MFEM_VERIFY(tH1size == basisV->numRows(), "");
-    MFEM_VERIFY(tL2size == basisE->numRows(), "");
+	MFEM_VERIFY(tH1size == basisV->numRows(), "");
+	MFEM_VERIFY(tL2size == basisE->numRows(), "");
 	CAROM::Matrix Wv(H1size, NBv, true);
 	CAROM::Matrix We(L2size, NBe, true);
 
 	// jth Wv columnn holds the jth velocity basis vector
+	// TODO: do we need Wv anymore? it's not used anywhere
 	for (int j=0; j<NBv; ++j)
 	{
 		for (int i=0; i<tH1size; ++i) v_i[i] = (*basisV)(i,j);
@@ -754,163 +757,163 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 	}
 
 	// jth We column holds the jth energy basis vector
-    for (int j=0; j<NBe; ++j)
-    {
+	for (int j=0; j<NBe; ++j)
+	{
 		for (int i=0; i<tL2size; ++i) We(i,j) = (*basisE)(i,j);
 	}
 
 	// w_el contains the "exact" quadrature weights for the current element
-    Array<double> const& w_el = ir0->GetWeights();
-    MFEM_VERIFY(w_el.Size() == nqe, "");
+	Array<double> const& w_el = ir0->GetWeights();
+	MFEM_VERIFY(w_el.Size() == nqe, "");
 
-    for (int i=0; i<nsnap+1; ++i)
-    {
-        if (i == 0)  // Use the initial state as the first snapshot.
-        {
-            v_i = 0.0;
-            x_i = 0.0;
-            e_i = 0.0;
-        }
-        else
-        {
-            if (i == 1 && numSkipped[0] == 1)
-            {
-                x_i = 0.0;
-            }
-            else
-            {
-                for (int j = 0; j < tH1size; ++j)
-                    x_i[j] = (*snapX)(j, i - 1 - numSkipped[0]);
-            }
+	for (int i=0; i<nsnap+1; ++i)
+	{
+		if (i == 0)  // Use the initial state as the first snapshot.
+		{
+			v_i = 0.0;
+			x_i = 0.0;
+			e_i = 0.0;
+		}
+		else
+		{
+			if (i == 1 && numSkipped[0] == 1)
+			{
+				x_i = 0.0;
+			}
+			else
+			{
+				for (int j = 0; j < tH1size; ++j)
+					x_i[j] = (*snapX)(j, i - 1 - numSkipped[0]);
+			}
 
-            if (i == 1 && numSkipped[1] == 1)
-                v_i = 0.0;
-            else
-            {
-                for (int j = 0; j < tH1size; ++j)
-                    v_i[j] = (*snapV)(j, i - 1 - numSkipped[1]);
-            }
+			if (i == 1 && numSkipped[1] == 1)
+				v_i = 0.0;
+			else
+			{
+				for (int j = 0; j < tH1size; ++j)
+					v_i[j] = (*snapV)(j, i - 1 - numSkipped[1]);
+			}
 
-            if (i == 1 && numSkipped[2] == 1)
-                e_i = 0.0;
-            else
-            {
-                for (int j = 0; j < tL2size; ++j)
-                {
-                    e_i[j] = (*snapE)(j, i - 1 - numSkipped[2]);
-                }
-            }
-        }
+			if (i == 1 && numSkipped[2] == 1)
+				e_i = 0.0;
+			else
+			{
+				for (int j = 0; j < tL2size; ++j)
+				{
+					e_i[j] = (*snapE)(j, i - 1 - numSkipped[2]);
+				}
+			}
+		}
 
-        SetStateFromTrueDOFs(x_i, v_i, e_i, S);
+		SetStateFromTrueDOFs(x_i, v_i, e_i, S);
 
-        // NOTE: after SetStateFromTrueDOFs, gfH1 is the V-component of S
-        input.FOMoper->ResetQuadratureData();
-        input.FOMoper->GetTimeStepEstimate(S);  // Call this to call UpdateQuadratureData
-        input.FOMoper->ResetQuadratureData();
+		// NOTE: after SetStateFromTrueDOFs, gfH1 is the V-component of S
+		input.FOMoper->ResetQuadratureData();
+		input.FOMoper->GetTimeStepEstimate(S);  // to call UpdateQuadratureData
+		input.FOMoper->ResetQuadratureData();
 
 		// Velocity equation.
 		// For 0 <= j < NBv, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
-    	// entry G(j + (i*NBv), (e*nqe) + m) is the coefficient of
+		// entry G(j + (i*NBv), (e*nqe) + m) is the coefficient of
 		//
-    	//				stress(v_i,e_i,x_i) : grad w_j
+		//				stress(v_i,e_i,x_i) : grad w_j
 		//
 		// at point m of element e with respect to the integration rule weight at
 		// that point, where the "exact" quadrature solution is ir0->GetWeights().
 		// In the above, w_j is the jth velocity basis vector.
 
 		// Energy equation.
-	    // For 0 <= j < NBe, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
-	    // entry G(estart + j + (i*NBe), (e*nqe) + m) is the coefficient of
+		// For 0 <= j < NBe, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+		// entry G(estart + j + (i*NBe), (e*nqe) + m) is the coefficient of
 		//	
 		//				(stress(v_i,e_i,x_i) : grad v_i) w_j 
 		//
 		// at point m of element e with respect to the integration rule weight at
 		// that point, where the "exact" quadrature solution is ir0->GetWeights().
 		// In the above, w_j is the jth energy basis vector.
-       
+
 		// Set the contraints for velocity and energy at the same time, then
 		// add the rest for velocity or energy, depending on which variable has
 		// more basis vectors (if not equal).
 
 		for (int j=0; j<NBmin; ++j)
-        {
+		{
 			// gfH1: jth velocity basis vector
-            // for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
+			// for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
 
-			Array<double> Ediff(basisE->numRows());
-            for (int k = 0; k < basisE->numRows(); ++k)
-            {
-                Ediff[k] = We(k, j);
-            }
-            gfL2.SetFromTrueDofs(Ediff); // jth energy basis vector
-            gfH1 = S_v; // ith velocity snapshot
-            
+			Vector Ediff(basisE->numRows());
+			for (int k = 0; k < basisE->numRows(); ++k)
+			{
+				Ediff[k] = We(k, j);
+			}
+			gfL2.SetFromTrueDofs(Ediff); // jth energy basis vector
+			gfH1 = S_v; // ith velocity snapshot
+
 			for (int e=0; e<ne; ++e)
-            {
+			{
 				// get the values that correspond to the current element 
-			
+
 				// v_j_e: jth velocity basis vector
 				// gfH1.GetElementDofValues(e, v_j_e);
-				
+
 				// w_j_e: jth energy basis vector
 				// v_i_e: ith velocity snapshot
-                gfL2.GetElementDofValues(e, w_j_e);
-                gfH1.GetElementDofValues(e, v_i_e);
-				
+				gfL2.GetElementDofValues(e, w_j_e);
+				gfH1.GetElementDofValues(e, v_i_e);
+
 				// set the constraints for the current basis vector & element
 				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
-							  w_j_e, v_i_e,
-							  *input.H1FESpace->GetFE(e),
-							  *input.L2FESpace->GetFE(e),
-							  e, true, true,  rv, re);
+						w_j_e, v_i_e,
+						*input.H1FESpace->GetFE(e),
+						*input.L2FESpace->GetFE(e),
+						e, true, true,  rv, re);
 
-                for (int m=0; m<nqe; ++m)
-                {
-                    Gt((e*nqe) + m, j + (i*NBv)) = rv[m];
+				for (int m=0; m<nqe; ++m)
+				{
+					Gt((e*nqe) + m, j + (i*NBv)) = rv[m];
 					Gt((e*nqe) + m, estart + j +(i*NBe)) = re[m];
-                }
-            }  // e -- element
-        }  // j -- basis vector
+				}
+			}  // e -- element
+		}  // j -- basis vector
 
 		// case NBv > NBmin = NBe, so there's more velocity constraints
 		for (int j=NBmin; j<NBv; ++j)
 		{
-				// gfH1 is the jth velocity basis vector
-				// for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
-				
-				for (int e=0; e<ne; ++e)
-            	{
-					// get the values that correspond to the current element 
-				
-					// v_j_e: jth velocity basis vector
-					// gfH1.GetElementDofValues(e, v_j_e);
-					
-					// set the constraints for the current basis vector & element
-					ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
-								  w_j_e, v_i_e,
-								  *input.H1FESpace->GetFE(e),
-								  *input.L2FESpace->GetFE(e),
-								  e, true, false,  rv, re);
+			// gfH1 is the jth velocity basis vector
+			// for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
 
-            	    for (int m=0; m<nqe; ++m)
-            	    {
-						Gt((e*nqe) + m, j + (i*NBv)) = rv[m];
-            	    }
-            	}  // e -- element
+			for (int e=0; e<ne; ++e)
+			{
+				// get the values that correspond to the current element 
+
+				// v_j_e: jth velocity basis vector
+				// gfH1.GetElementDofValues(e, v_j_e);
+
+				// set the constraints for the current basis vector & element
+				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
+						w_j_e, v_i_e,
+						*input.H1FESpace->GetFE(e),
+						*input.L2FESpace->GetFE(e),
+						e, true, false,  rv, re);
+
+				for (int m=0; m<nqe; ++m)
+				{
+					Gt((e*nqe) + m, j + (i*NBv)) = rv[m];
+				}
+			}  // e -- element
 		} // j -- basis vector
 
 		// case NBe > NBmin = NBv, so there's more energy constraints
 		for (int j=NBmin; j<NBe; ++j)
 		{
-			Array<double> Ediff(basisE->numRows());
+			Vector Ediff(basisE->numRows());
 			for (int k = 0; k < basisE->numRows(); ++k)
 			{
 				Ediff[k] = We(k, j); // jth energy basis vector
 			}
 			gfL2.SetFromTrueDofs(Ediff);
 			gfH1 = S_v; // ith velocity snapshot
-			
+
 			for (int e=0; e<ne; ++e)
 			{
 				// get the values that correspond to the current element 
@@ -918,13 +921,13 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 				// v_i_e: ith velocity snapshot
 				gfL2.GetElementDofValues(e, w_j_e);
 				gfH1.GetElementDofValues(e, v_i_e);
-				
+
 				// set the constraints for the current basis vector & element
 				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
-							  w_j_e, v_i_e,
-							  *input.H1FESpace->GetFE(e),
-							  *input.L2FESpace->GetFE(e),
-							  e, false, true,  rv, re);
+						w_j_e, v_i_e,
+						*input.H1FESpace->GetFE(e),
+						*input.L2FESpace->GetFE(e),
+						e, false, true,  rv, re);
 
 				for (int m=0; m<nqe; ++m)
 				{
@@ -934,30 +937,32 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		} // j -- basis vector
 	}  // i -- snapshot
 
-    CAROM::Vector w(ne * nqe, true);
+	CAROM::Vector w(ne * nqe, true);
 
-    for (int i=0; i<ne; ++i)
-    {
-        for (int j=0; j<nqe; ++j)
+	for (int i=0; i<ne; ++i)
+	{
+		for (int j=0; j<nqe; ++j)
 			// w: "exact" quadrature weights for all elements
-            w((i*nqe) + j) = w_el[j];
-    }
+			w((i*nqe) + j) = w_el[j];
+	}
 
-    // TODO: input these NNLS parameters?
-    double tolNNLS = 1.0e-14;
+	// TODO: input these NNLS parameters?
+	double tolNNLS = 1.0e-14;
 
-    CAROM::Vector sol(ne * nqe, true);
-    SolveNNLS(rank, tolNNLS, input.maxNNLSnnz, w, Gt, sol);
+	CAROM::Vector sol(ne * nqe, true);
+	SolveNNLS(rank, tolNNLS, input.maxNNLSnnz, w, Gt, sol);
 
-	// TODO: need to modify the file names for reading & writing 
-    const std::string varName = equationE ? "E" : "V";
-    WriteSolutionNNLS(sol, "run/nnls" + varName + std::to_string(input.window) + "_" +
-                      std::to_string(rank));
+	const std::string varName = "EC"; // energy conserving
+	WriteSolutionNNLS(sol, "run/nnls" + varName + std::to_string(input.window)
+			+ "_" + std::to_string(rank));
 }
 
-void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
-                                 const CAROM::Matrix* basisV, const CAROM::Matrix* basisE,
-                                 ROM_Options const& input)
+void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
+								 const CAROM::Matrix* snapV,
+								 const CAROM::Matrix* snapE,
+								 const CAROM::Matrix* basisV,
+								 const CAROM::Matrix* basisE,
+								 ROM_Options const& input)
 {
     MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
@@ -966,13 +971,15 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix
     MFEM_VERIFY(snapV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(snapE->numRows() == input.L2FESpace->GetTrueVSize(), "");
 
-	if (input.hyperreductionSamplingType == "eqp")
+	if (input.hyperreductionSamplingType == eqp)
 	{
+		// basic EQP: different rules for velocity and energy
 		SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false);
 		SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true);
 	}
-	else if (input.hyperreductionSamplingType == "eqp_energy")
+	else if (input.hyperreductionSamplingType == eqp_energy)
 	{
+		// energy-conserving EQP: one combined rule for velocity and energy
 		SetupEQP_En_Force_Eq(snapX, snapV, snapE, basisV, basisE, input);
 	}
 }
@@ -2724,16 +2731,29 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         ComputeReducedMe();
     }
 
-    if (hyperreduce && hyperreductionSamplingType == eqp)
-    {
-        // TODO: are reduced mass matrices needed for EQP, or just W matrices?
+	if (hyperreduce && hyperreductionSamplingType == eqp)
+	{
+		// basic EQP
+		// TODO: are reduced mass matrices needed for EQP, or just W matrices?
 
-        ComputeReducedMv();
-        ComputeReducedMe();
+		// TODO: why compute the reduced mass matrices, when for the basic EQP
+		// case we've already multiplied my M^{-1} and basis^T when deriving
+		// the reduced quadrature rules?
 
-        ReadSolutionNNLS(input, "run/nnlsV", eqpI, eqpW);
-        ReadSolutionNNLS(input, "run/nnlsE", eqpI_E, eqpW_E);
-    }
+		// ComputeReducedMv();
+		// ComputeReducedMe();
+
+		ReadSolutionNNLS(input, "run/nnlsV", eqpI, eqpW);
+		ReadSolutionNNLS(input, "run/nnlsE", eqpI_E, eqpW_E);
+	}
+	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		// energy-conserving EQP
+		// NOTE: will not compute reduced M matrices; instead, will normalize 
+		// the basis matrices so that the reduced M matrices are identity.
+
+		ReadSolutionNNLS(input, "run/nnlsEC", eqpI, eqpW);
+	}
 }
 
 void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
