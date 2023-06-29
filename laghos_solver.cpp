@@ -1213,7 +1213,7 @@ namespace mfem
    
     hydro_oper->SolveVelocity(S, dS_dt, S_init, dt);
     // V = v0 + 0.5 * dt * dv_dt;
-    add(v0, 0.25 * dt, dv_dt, V);
+    add(v0, 0.5 * dt, dv_dt, V);
     hydro_oper->SolveEnergy(S, V, dS_dt);
     dx_dt = V;
 
