@@ -394,8 +394,15 @@ int main(int argc, char *argv[])
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
-    romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp);
-    MFEM_VERIFY(!(romOptions.SNS) || (romOptions.hyperreductionSamplingType != eqp), "Using SNS with EQP is prohibited");
+    romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp
+			|| romOptions.hyperreductionSamplingType != eqp_energy);
+
+    MFEM_VERIFY(!(romOptions.SNS) || (romOptions.hyperreductionSamplingType != eqp &&
+			romOptions.hyperreductionSamplingType != eqp_energy),
+			"Using SNS with EQP is prohibited");
+	
+	if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+		romOptions.GramSchmidt = true;
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
