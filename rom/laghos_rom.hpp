@@ -73,7 +73,8 @@ enum HyperreductionSamplingType
     gnat,       // Default, GNAT
     qdeim,      // QDEIM
     sopt,       // S-OPT
-    eqp         // EQP
+    eqp,        // EQP
+	eqp_energy  // Energy-conserving EQP
 };
 
 static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
@@ -83,7 +84,8 @@ static HyperreductionSamplingType getHyperreductionSamplingType(const char* samp
         {"gnat", gnat},
         {"qdeim", qdeim},
         {"sopt", sopt},
-        {"eqp", eqp}
+        {"eqp", eqp},
+		{"eqp_energy", eqp_energy}
     };
     auto iter = SamplingTypeMap.find(sampling_type);
     MFEM_VERIFY(iter != std::end(SamplingTypeMap), "Invalid input for hyperreduction sampling type");
@@ -1225,11 +1227,13 @@ public:
     void SolveSpaceTime(Vector &S);
     void SolveSpaceTimeGN(Vector &S);
 
-    void ForceIntegratorEQP_FOM(Vector & rhs) const;
-    void ForceIntegratorEQP(Vector & res) const;
+	void ForceIntegratorEQP_FOM(Vector & rhs, bool energy_conserve = false) const;
+	void ForceIntegratorEQP(Vector & res, bool energy_conserve = false) const;
 
-    void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
-    void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
+	void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs,
+			bool energy_conserve = false) const;
+	void ForceIntegratorEQP_E(Vector const& v, Vector & res,
+			bool energy_conserve = false) const;
 
     ~ROM_Operator()
     {

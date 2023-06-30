@@ -2084,6 +2084,9 @@ void ROM_Basis::ComputeReducedMatrices(bool sns1)
             MFEM_VERIFY(BX0->dim() == rdimx, "");
         }
 
+		// TODO: what do this and the following if-blocks compute?
+		// Which of those computations are needed in the energy-conserving
+		// EQP? 
         if (!sns1)
         {
             // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
@@ -2105,6 +2108,8 @@ void ROM_Basis::ComputeReducedMatrices(bool sns1)
             BsinvE = prod2;
         }
 
+		// TODO: We are using RK2-avg in energy-conserving EQP; do we need
+		// the matrices computed here though?
         if (RK2AvgFormulation)
         {
             const CAROM::Matrix *prodX = BXsp->transposeMult(BXsp);
@@ -3412,6 +3417,7 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_da
 
 void ROM_Operator::ApplyHyperreduction(Vector &S)
 {
+	// TODO: should set GramSchmidt = true when using energy-conserving EQP. 
     if (useGramSchmidt && !sns1)
     {
         InducedGramSchmidt(1, S); // velocity
@@ -4397,7 +4403,8 @@ CAROM::GreedySampler* UseROMDatabase(ROM_Options& romOptions, const int myid, co
     return parameterPointGreedySampler;
 }
 
-void ROM_Operator::ForceIntegratorEQP(Vector & res) const
+void ROM_Operator::ForceIntegratorEQP(Vector & res,
+		bool energy_conserve) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimV();
@@ -4407,13 +4414,9 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
     const int nqe = ir->GetWeights().Size();
 
     DenseMatrix vshape, loc_force;
-    Vector shape, unitE, rhs;
-
     Array<int> vdofs;
-
-    Vector v_e;
-
-    res = 0.0;
+    
+	res = 0.0;
 
     int eprev = -1;
     int dof = 0;
@@ -4501,14 +4504,12 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
         // TODO: reduce this UpdateQuadratureData function to the EQP points.
 
         const int h1dofs_cnt = test_fe->GetDof();
-        const int dim = trial_fe->GetDim();
+        const int dim = trial_fe->GetDim(); // TODO: shouldn't it be the dim of test_fe?
 
         const int l2dofs_cnt = trial_fe->GetDof();
 
         vshape.SetSize(h1dofs_cnt, dim);
         loc_force.SetSize(h1dofs_cnt, dim);
-
-        shape.SetSize(l2dofs_cnt);
 
         // Form stress:grad_shape at the current point.
         test_fe->CalcDShape(ip, vshape);
@@ -4524,36 +4525,52 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
                 }
             }
         }
-
         loc_force *= eqpW[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
+        
+		Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+		Vector v_e(h1dofs_cnt * dim);
 
-        trial_fe->CalcShape(ip, shape);
+		if (energy_conserve)
+		{
+			// energy-conserving EQP
+			for (int j = 0; j < rdim; ++j)
+			{
+				// TODO: v_e should be the jth velocity basis vector DOFs that
+				// correspond to the current element.
+				// Recall that the basis vectors have been renormalized by the
+				// induced Gram-Schmidt process, so that reduced Mv = I.
 
-        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+				// I think the below is not right.
+				basis->GetBasisVectorV(false, j, v_e);	
 
-        unitE.SetSize(shape.Size());
-        unitE = 1.0;
+				res[j] += v_e * Vloc_force;
+			}
+		}
+		else
+		{
+			// basic EQP
+			Vector shape(l2dofs_cnt), unitE(l2dofs_cnt);
+			trial_fe->CalcShape(ip, shape);
+			unitE = 1.0;
 
-        rhs.SetSize(h1dofs_cnt * dim);
+			const int eos = elemIndex * nvdof;
+			for (int j = 0; j < rdim; ++j)
+			{
+				for (int k = 0; k < nvdof; ++k) v_e[k] = W_elems(eos + k, j);
 
-        v_e.SetSize(rhs.Size());
-
-        const int eos = elemIndex * nvdof;
-        for (int j=0; j<rdim; ++j)
-        {
-            for (int k=0; k<nvdof; ++k)
-                v_e[k] = W_elems(eos + k, j);
-
-            // Compute the inner product, on this element, with the j-th W vector.
-            res[j] += (v_e * Vloc_force) * (shape * unitE);
-        }  // Loop (j) over V basis vectors
+				// Compute the inner product, on this element, with the j-th W vector.
+				// TODO: why compute shape * unitE just to get 1.0 back?
+				res[j] += (v_e * Vloc_force) * (shape * unitE);
+			}
+		}
     } // Loop (i) over EQP points
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 }
 
-void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
+void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
+		bool energy_conserve) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimE();
@@ -4563,11 +4580,9 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
     const int nqe = ir->GetWeights().Size();
 
     DenseMatrix vshape, loc_force;
-    Vector shape, rhs;
-
     Array<int> vdofs, edofs;
 
-    Vector v_e, w_e;
+    Vector v_e;
 
     res = 0.0;
 
@@ -4679,8 +4694,6 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
         vshape.SetSize(h1dofs_cnt, dim);
         loc_force.SetSize(h1dofs_cnt, dim);
 
-        shape.SetSize(l2dofs_cnt);
-
         // Form stress:grad_shape at the current point.
         test_fe->CalcDShape(ip, vshape);
         for (int k = 0; k < h1dofs_cnt; k++)
@@ -4696,40 +4709,54 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
             }
         }
 
-        loc_force *= eqpW_E[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
+		loc_force *= eqpW_E[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
 
-        trial_fe->CalcShape(ip, shape);
+		Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
 
-        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+		Vector shape(l2dofs_cnt);
+		trial_fe->CalcShape(ip, shape);
 
-        rhs.SetSize(h1dofs_cnt * dim);
+		if (energy_conserve)
+		{
+			// energy-conserving EQP
+			for (int j = 0; j < rdim; j++)
+			{
+				for (int k = 0; k < l2dofs_cnt; k++) res[j] += shape(k);
 
-        w_e.SetSize(nedof);
+				res[j] *= v_e * Vloc_force;
+			}
+		}
+		else
+		{
+			// basic EQP
+			Vector w_e(nedof);
+			const int eos = elemIndex * nedof;
 
-        const int eos = elemIndex * nedof;
-        for (int j=0; j<rdim; ++j)
-        {
-            for (int k=0; k<nedof; ++k)
-                w_e[k] = W_E_elems(eos + k, j);
+			for (int j=0; j<rdim; ++j)
+			{
+				for (int k=0; k<nedof; ++k) w_e[k] = W_E_elems(eos + k, j);
 
-            // Compute the inner product, on this element, with the j-th W vector.
-            res[j] += (v_e * Vloc_force) * (shape * w_e);
-        }  // Loop (j) over V basis vectors
+				// Compute the inner product, on this element, with the j-th W vector.
+				res[j] += (v_e * Vloc_force) * (shape * w_e);
+			}
+		}
     } // Loop (i) over EQP points
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 }
 
-void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs) const
+void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs,
+		bool energy_conserve) const
 {
     Vector res(basis->GetDimV());
 
-    ForceIntegratorEQP(res);
+    ForceIntegratorEQP(res, energy_conserve);
     basis->LiftROMtoFOM_dVdt(res, rhs);
 }
 
-void ROM_Operator::ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const
+void ROM_Operator::ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs,
+		bool energy_conserve) const
 {
     Vector res(basis->GetDimE());
 
@@ -4750,10 +4777,9 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         else
             basis->LiftROMtoFOM(S, fx);
 
-        if (hyperreduce && hyperreductionSamplingType == eqp)
-        {
-            operFOM->SetRomOperator(this);
-        }
+		if (hyperreduce)
+			if (hyperreductionSamplingType == eqp || hyperreductionSamplingType == eqp_energy)
+				operFOM->SetRomOperator(this);
 
         const int Vsize = use_sample_mesh ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
         const int Esize = basis->SolutionSizeL2SP();
@@ -4773,36 +4799,41 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // - Update V using dv_dt.
         // - Compute de_dt and dx_dt using S and V.
 
-        // -- 1.
-        // S is S0.
+		// -- Stage 1 of 2 (S is S_n = S0).
         hydro_oper->UpdateMesh(fx);
-        hydro_oper->SolveVelocity(fx, dS_dt);
-        if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
 
-        // V = v0 + 0.5 * dt * dv_dt;
+        hydro_oper->SolveVelocity(fx, dS_dt);
+		if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+
+		// time march velocity vector: V = V_{n+1/2} = v0 + 0.5 * dt * dv_dt
         add(v0, 0.5 * dt, dv_dt, V);
+
         hydro_oper->SolveEnergy(fx, V, dS_dt);
         if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
-        dx_dt = V;
+		dx_dt = V;
 
-        // -- 2.
-        // S = S0 + 0.5 * dt * dS_dt;
+		// time march full state vector: S = S_{n+1/2} = S0 + 0.5 * dt * dS_dt
         add(S0, 0.5 * dt, dS_dt, fx);
+
+		// -- Stage 2 of 2 (S is S_{n+1/2}).
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
+
         hydro_oper->SolveVelocity(fx, dS_dt);
         if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
-        // V = v0 + 0.5 * dt * dv_dt;
-        add(v0, 0.5 * dt, dv_dt, V);
-        hydro_oper->SolveEnergy(fx, V, dS_dt);
+
+		// time march velocity vector: V = v0 + 0.5 * dt * dv_dt
+		add(v0, 0.5 * dt, dv_dt, V);
+		
+		// V = average V_{n+1/2}
+		hydro_oper->SolveEnergy(fx, V, dS_dt);
         if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
-        dx_dt = V;
+		dx_dt = V;
 
-        // -- 3.
-        // S = S0 + dt * dS_dt.
+		// time march full state vector: S = S_{n+1} = S0 + dt * dS_dt
         add(S0, dt, dS_dt, fx);
-        hydro_oper->ResetQuadratureData();
-
+        
+		hydro_oper->ResetQuadratureData();
         MFEM_VERIFY(!useReducedM, "TODO");
 
         if (use_sample_mesh)

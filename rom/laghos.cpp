@@ -1573,7 +1573,15 @@ int main(int argc, char *argv[])
         {
             romOper[0]->ApplyHyperreduction(romS);
         }
-        double windowEndpoint = 0.0;
+
+		// To perform the induced Gram-Schmidt, so that the reduced mass
+		// matrices are identity.
+		if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+		{
+			romOper[0]->ApplyHyperreduction(romS);
+		}
+
+		double windowEndpoint = 0.0;
         double windowOverlapMidpoint = 0.0;
         for (ti = 1; !last_step; ti++)
         {
