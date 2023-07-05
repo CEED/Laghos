@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
   bool gfprint = false;
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
-  double blast_position[] = {0.0, 0.0, 0.0};
+  double blast_position[] = {-0.5, -0.5, -0.5};
   bool useEmbedded = false;
   int geometricShape = 0;
   int nTerms = 1; 
