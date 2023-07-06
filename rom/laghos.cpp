@@ -1581,9 +1581,9 @@ int main(int argc, char *argv[])
             romOper[0]->ApplyHyperreduction(romS);
         }
 
-		// To perform the induced Gram-Schmidt, so that the reduced mass
-		// matrices are identity.
-		if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+		// To perform the induced Gram-Schmidt during the online stage, so that
+		// the reduced mass matrices are identity.
+		if (rom_online && romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
 		{
 			romOper[0]->ApplyHyperreduction(romS);
 		}
@@ -1928,6 +1928,7 @@ int main(int argc, char *argv[])
                         }
                         else
                         {
+							// Form the reduced bases from the snapshots.
                             sampler->Finalize(cutoff, romOptions);
                         }
                         if (myid == 0 && romOptions.parameterID == -1) {
@@ -2057,6 +2058,13 @@ int main(int argc, char *argv[])
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
+		
+					// To apply the induced Gram-Schmid to the basis of the
+					// new time window.
+					if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+					{
+						romOper[romOptions.window]->ApplyHyperreduction(romS);
+					}
 
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {

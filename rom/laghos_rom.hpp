@@ -481,7 +481,7 @@ public:
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time),
-          rhsBasis(input.hyperreductionSamplingType != eqp)
+          rhsBasis(input.hyperreductionSamplingType != eqp && input.hyperreductionSamplingType != eqp_energy)
     {
         const int window = input.window;
 

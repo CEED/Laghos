@@ -862,6 +862,8 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 				gfH1.GetElementDofValues(e, v_i_e);
 
 				// set the constraints for the current basis vector & element
+				// rv: velocity constraints
+				// re: energy constraints
 				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
 						w_j_e, v_i_e,
 						*input.H1FESpace->GetFE(e),
@@ -986,6 +988,16 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 {
+	if (input.hyperreductionSamplingType == eqp_energy)
+	{
+		// For the energy-conserving EQP case, we increase the energy basis
+		// dimension by 1 to accomodate for the addition of the energy
+		// identity. 
+		// The change is done here, before the window basis parameters are
+		// written to their files, and is also carried to the caller's scope. 
+		cutoff[2] += 1;
+	}
+
     if (writeSnapshots)
     {
         if (!useXV) generator_X->writeSnapshot();
@@ -1090,6 +1102,44 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         delete tBasisV;
         delete tBasisE;
     }
+
+	if (input.hyperreductionSamplingType == eqp_energy)
+	{
+		const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
+		const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
+
+		MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
+
+		// Truncate the bases.
+		// For the energy basis, the cutoff parameter has already been
+		// increased by 1 to accomodate the energy identity.
+		CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
+		CAROM::Matrix *tBasisE = basisE->getFirstNColumns(cutoff[2]);
+
+		// Form the energy identity and replace the last basis vector by it. 
+		Vector unitE(input.tL2size);
+
+		// TODO: my understanding is that the "=" opetaror is overloaded, so
+		// that, by setting unitE = 1.0, the vector unitE contains the coeffs
+		// that result in the summed function being 1.0 on the grid points. 
+		// Is that correct?
+		unitE = 1.0;
+
+		for (int i = 0; i < input.tL2size; i++)
+		{
+			// TODO: I believe I can access the last column in this way,
+			// without having to use pointer arithmetic, right?
+			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
+		}
+
+		SetupEQP_Force(generator_X->getSnapshotMatrix(),
+				generator_V->getSnapshotMatrix(),
+				generator_E->getSnapshotMatrix(),
+				tBasisV, tBasisE, input);
+
+		delete tBasisV;
+		delete tBasisE;
+	}
 
     delete generator_X;
     delete generator_V;
@@ -2222,7 +2272,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (hyperreductionSamplingType == eqp) return;
+    if (hyperreductionSamplingType == eqp || hyperreductionSamplingType == eqp_energy) return;
 
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
