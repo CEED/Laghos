@@ -1117,7 +1117,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		CAROM::Matrix *tBasisE = basisE->getFirstNColumns(cutoff[2]);
 
 		// Form the energy identity and replace the last basis vector by it. 
-		Vector unitE(input.tL2size);
+		Vector unitE(tL2size);
 
 		// TODO: my understanding is that the "=" opetaror is overloaded, so
 		// that, by setting unitE = 1.0, the vector unitE contains the coeffs
@@ -1125,7 +1125,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		// Is that correct?
 		unitE = 1.0;
 
-		for (int i = 0; i < input.tL2size; i++)
+		for (int i = 0; i < tL2size; i++)
 		{
 			// TODO: I believe I can access the last column in this way,
 			// without having to use pointer arithmetic, right?
@@ -4898,4 +4898,9 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     }
 
     t += dt;
+}
+
+HyperreductionSamplingType ROM_Operator::getSamplingType() const
+{
+	return hyperreductionSamplingType;
 }

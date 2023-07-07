@@ -279,7 +279,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
         {
 			// TODO: this function doesn't have access to the hyperreduction 
 			// sampling type; how should I resolve this?
-            rom_op->ForceIntegratorEQP_FOM(rhs, hyperreduction.SamplingType == eqp_energy);
+            rom_op->ForceIntegratorEQP_FOM(rhs, rom_op->getSamplingType() == eqp_energy);
         }
         else
         {
@@ -412,7 +412,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
         {
 			// TODO: this function doesn't have access to the hyperreduction 
 			// sampling type; how should I resolve this?
-            rom_op->ForceIntegratorEQP_E_FOM(v, e_rhs, hyperreduction.SamplingType == eqp_energy);
+            rom_op->ForceIntegratorEQP_E_FOM(v, e_rhs, rom_op->getSamplingType() == eqp_energy);
         }
         else
         {

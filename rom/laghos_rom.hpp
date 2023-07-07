@@ -1235,6 +1235,8 @@ public:
 	void ForceIntegratorEQP_E(Vector const& v, Vector & res,
 			bool energy_conserve = false) const;
 
+	HyperreductionSamplingType getSamplingType() const;
+
     ~ROM_Operator()
     {
         delete mat_gf_coeff;
