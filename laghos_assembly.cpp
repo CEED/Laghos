@@ -764,7 +764,7 @@ namespace mfem
 	  // std::cout << " globa max " << globalmax_cs << " visc " << globalmax_viscous_coef << std::endl;
 	   // OLD //
 	  //	  penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * (1.0/std::pow(Trans_el1.Weight(),1.0/dim)) * 1.0  /* * (1.0 + globalmax_viscous_coef * h0 / globalmax_cs + (globalmax_cs / (globalmax_viscous_coef * h0)))*/ /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
-	  penaltyVal = penaltyParameter * globalmax_rho * (4.0/std::pow(Trans_el1.Weight(),1.0/dim)) * 4.0 ;
+	  penaltyVal = /* penaltyParameter * */ globalmax_rho * (penaltyParameter/std::pow(Trans_el1.Weight(),1.0/dim)) * penaltyParameter ;
 
 	  // penaltyVal = 4.0 * std::pow(penaltyParameter,1.0) * globalmax_rho;
 	  //////
