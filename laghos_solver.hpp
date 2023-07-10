@@ -127,6 +127,7 @@ namespace mfem
       mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
       const double penaltyParameter;
+      const double perimeter;
       const double nitscheVersion;
       const bool useEmbedded;
       const int geometricShape;
@@ -212,7 +213,7 @@ namespace mfem
 			      const double ghostPenaltyCoefficient,
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
-			      const int order_q, const double penaltyParameter,
+			      const int order_q, const double penaltyParameter, const double perimeter,
 			      const double nitscheVersion, const bool useEmb, const int gS, int nT, bool fP);
       ~LagrangianHydroOperator();
 

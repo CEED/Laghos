@@ -97,6 +97,7 @@ int main(int argc, char *argv[])
   int numberGhostTerms = 1;
   int numberEnergyGhostTerms = 1;
   double ghostPenaltyCoefficient = 1.0;
+  double perimeter = 1.0;
   
   OptionsParser args(argc, argv);
   args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -143,6 +144,8 @@ int main(int argc, char *argv[])
 		 "Name of the visit dump files");
   args.AddOption(&penaltyParameter, "-penPar", "--penaltyParameter",
 		 "Value of the penalty parameter");
+  args.AddOption(&perimeter, "-per", "--perimeter",
+		 "Perimeter of the bounding box of the domain");
   args.AddOption(&nitscheVersion, "-nitVer", "--nitscheVersion",
 		 "-1 and 1 for skew-symmetric and symmetric versions of Nitsche");
   args.AddOption(&useEmbedded, "-emb", "--use-embedded", "-no-emb",
@@ -432,7 +435,7 @@ int main(int argc, char *argv[])
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, numberGhostTerms, numberEnergyGhostTerms, ghostPenaltyCoefficient,
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
-					       order_q, penaltyParameter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);
+					       order_q, penaltyParameter, perimeter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);
 
   socketstream vis_rho, vis_v, vis_e;
   char vishost[] = "localhost";

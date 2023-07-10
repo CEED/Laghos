@@ -120,6 +120,7 @@ namespace mfem
 						     double ftz,
 						     const int oq,
 						     const double penaltyParameter,
+						     const double perimeter,
 						     const double nitscheVersion,
 						     const bool useEmb, const int gS,
 						     int nT, bool fP) :
@@ -141,7 +142,7 @@ namespace mfem
       ghostPenaltyCoefficient(ghostPenaltyCoefficient),
       use_viscosity(visc),
       use_vorticity(vort),
-      cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),
+      cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),perimeter(perimeter),
       nitscheVersion(nitscheVersion),
       useEmbedded(useEmb),
       geometricShape(gS),
@@ -450,7 +451,7 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       EnergyBoundaryForce.Assemble();
 
-      nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), order_v, rhoface_gf, v_gf, csface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), perimeter, order_v, rhoface_gf, v_gf, csface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
 
       nvmi->SetIntRule(&b_ir);
       Mv->AddBdrFaceIntegrator(nvmi);
