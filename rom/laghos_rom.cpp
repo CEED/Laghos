@@ -282,7 +282,6 @@ void ComputeElementRowOfG_V(const IntegrationRule *ir,
         trial_fe.CalcShape(ip, shape);
 
         // Compute the inner product, on this element, with the j-th V basis vector.
-		// TODO: Why compute shape * unitE just to get 1.0 back?
         r[q] = (v_e * Vloc_force) * (shape * unitE);
     }
 }
@@ -339,10 +338,11 @@ void ComputeElementRowOfG_E(const IntegrationRule *ir,
     }
 }
 
+// TODO: shouldn't we add the function prototype to the header file?
 // Sets the rows of constraints matrix G for the energy-conserving EQP rule. 
 void ComputeRowsOfG(const IntegrationRule *ir,
 					hydrodynamics::QuadratureData const& quad_data,
-					Vector const& w_e, Vector const& v_e,
+					Vector const& v_j_e, Vector const& w_j_e, Vector const& v_i_e,
 					FiniteElement const& test_fe,
 					FiniteElement const& trial_fe,
 					const int zone_id,
@@ -357,26 +357,28 @@ void ComputeRowsOfG(const IntegrationRule *ir,
 	if (equationV)
 	{
 		MFEM_VERIFY(rv.Size() == nqp, "");
+		MFEM_VERIFY(v_j_e.Size() == h1dofs_cnt*dim, "");
 	}
 
 	if (equationE)
 	{
 		MFEM_VERIFY(re.Size() == nqp, "");
-		MFEM_VERIFY(v_e.Size() == h1dofs_cnt*dim, "");
-		MFEM_VERIFY(w_e.Size() == l2dofs_cnt, "");
+		MFEM_VERIFY(v_i_e.Size() == h1dofs_cnt*dim, "");
+		MFEM_VERIFY(w_j_e.Size() == l2dofs_cnt, "");
 	}
 
-	DenseMatrix grad_vshape(h1dofs_cnt, dim); // grad of velocity basis vector
+	DenseMatrix grad_vshape(h1dofs_cnt, dim); // grad of velocity shape function 
 	DenseMatrix loc_force(h1dofs_cnt, dim);
 	Vector Vloc_force(loc_force.Data(), h1dofs_cnt * dim);
+
+    Vector eshape(l2dofs_cnt), unitE(l2dofs_cnt);
+	unitE = 1.0;
 
 	for (int q = 0; q < nqp; q++)
 	{
 		const IntegrationPoint &ip = ir->IntPoint(q);
 
 		// Form stress:grad_vshape at the current point.
-		// TODO: how do we set which velocity basis vector is used for the
-		// gradient calculation?
 		test_fe.CalcDShape(ip, grad_vshape);
 		for (int i = 0; i < h1dofs_cnt; i++)
 		{
@@ -394,25 +396,18 @@ void ComputeRowsOfG(const IntegrationRule *ir,
 		// NOTE: UpdateQuadratureData includes ip.weight as a factor in quad_data.stressJinvT,
 		// set by LagrangianHydroOperator::UpdateQuadratureData.
 		loc_force *= 1.0 / ip.weight;  // Divide by exact quadrature weight
+		
+		trial_fe.CalcShape(ip, eshape); // Energy shape function
 
 		if (equationV)
 		{
-			// set rv = sum(Vloc_force) 
-			rv[q] = 0.0;
-			for (int i = 0; i < h1dofs_cnt * dim; i++)
-			{
-				rv[q] += Vloc_force(i);
-			}
+			// Inner product, on this element, with the jth V basis vector.
+			rv[q] = (v_j_e * Vloc_force) * (eshape * unitE);
 		}
 		if (equationE)
 		{
-			// set re = F^T * v; F = integral of (stress : grad w_i)phi_j
-			re[q] = 0.0;
-			for (int i = 0; i < l2dofs_cnt; i++)
-			{
-				re[q] += w_e(i);
-			}
-			re[q] *= v_e * Vloc_force;
+			// Inner product, on this element, with the jth E basis vector.
+			re[q] = (v_i_e * Vloc_force) * (eshape * w_j_e);
 		}
 	} // q -- quadrature point
 }
@@ -747,8 +742,7 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 	CAROM::Matrix Wv(H1size, NBv, true);
 	CAROM::Matrix We(L2size, NBe, true);
 
-	// jth Wv columnn holds the jth velocity basis vector
-	// TODO: do we need Wv anymore? it's not used anywhere
+	// jth Wv columnn holds the jth velocity ROM basis vector
 	for (int j=0; j<NBv; ++j)
 	{
 		for (int i=0; i<tH1size; ++i) v_i[i] = (*basisV)(i,j);
@@ -756,7 +750,7 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		for (int i=0; i<H1size; ++i) Wv(i,j) = gfH1[i];
 	}
 
-	// jth We column holds the jth energy basis vector
+	// jth We column holds the jth energy ROM basis vector
 	for (int j=0; j<NBe; ++j)
 	{
 		for (int i=0; i<tL2size; ++i) We(i,j) = (*basisE)(i,j);
@@ -765,6 +759,8 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 	// w_el contains the "exact" quadrature weights for the current element
 	Array<double> const& w_el = ir0->GetWeights();
 	MFEM_VERIFY(w_el.Size() == nqe, "");
+
+    ParGridFunction gf2H1(gfH1);
 
 	for (int i=0; i<nsnap+1; ++i)
 	{
@@ -816,21 +812,23 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		// For 0 <= j < NBv, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
 		// entry G(j + (i*NBv), (e*nqe) + m) is the coefficient of
 		//
-		//				stress(v_i,e_i,x_i) : grad w_j
+		//					e_j^T * F(v_i,e_i,x_i) * 1E
 		//
 		// at point m of element e with respect to the integration rule weight at
 		// that point, where the "exact" quadrature solution is ir0->GetWeights().
-		// In the above, w_j is the jth velocity basis vector.
+		// In the above, e_j is the jth velocity basis vector, 1E is the
+		// identity vector in the energy space.
 
 		// Energy equation.
 		// For 0 <= j < NBe, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
 		// entry G(estart + j + (i*NBe), (e*nqe) + m) is the coefficient of
 		//	
-		//				(stress(v_i,e_i,x_i) : grad v_i) w_j 
+		//				 e_j^T * F(v_i,e_i,x_i)^T * v_i
 		//
 		// at point m of element e with respect to the integration rule weight at
 		// that point, where the "exact" quadrature solution is ir0->GetWeights().
-		// In the above, w_j is the jth energy basis vector.
+		// In the above, e_j is the jth energy basis vector, v_i is the ith
+		// velocity snapshot.
 
 		// Set the contraints for velocity and energy at the same time, then
 		// add the rest for velocity or energy, depending on which variable has
@@ -839,7 +837,7 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		for (int j=0; j<NBmin; ++j)
 		{
 			// gfH1: jth velocity basis vector
-			// for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
+			for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
 
 			Vector Ediff(basisE->numRows());
 			for (int k = 0; k < basisE->numRows(); ++k)
@@ -847,25 +845,25 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 				Ediff[k] = We(k, j);
 			}
 			gfL2.SetFromTrueDofs(Ediff); // jth energy basis vector
-			gfH1 = S_v; // ith velocity snapshot
+			gf2H1 = S_v; // ith velocity snapshot
 
 			for (int e=0; e<ne; ++e)
 			{
 				// get the values that correspond to the current element 
 
 				// v_j_e: jth velocity basis vector
-				// gfH1.GetElementDofValues(e, v_j_e);
+				gfH1.GetElementDofValues(e, v_j_e);
 
 				// w_j_e: jth energy basis vector
 				// v_i_e: ith velocity snapshot
 				gfL2.GetElementDofValues(e, w_j_e);
-				gfH1.GetElementDofValues(e, v_i_e);
+				gf2H1.GetElementDofValues(e, v_i_e);
 
 				// set the constraints for the current basis vector & element
 				// rv: velocity constraints
 				// re: energy constraints
 				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
-						w_j_e, v_i_e,
+						v_j_e, w_j_e, v_i_e,
 						*input.H1FESpace->GetFE(e),
 						*input.L2FESpace->GetFE(e),
 						e, true, true,  rv, re);
@@ -882,18 +880,18 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		for (int j=NBmin; j<NBv; ++j)
 		{
 			// gfH1 is the jth velocity basis vector
-			// for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
+			for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
 
 			for (int e=0; e<ne; ++e)
 			{
 				// get the values that correspond to the current element 
 
 				// v_j_e: jth velocity basis vector
-				// gfH1.GetElementDofValues(e, v_j_e);
+				gfH1.GetElementDofValues(e, v_j_e);
 
 				// set the constraints for the current basis vector & element
 				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
-						w_j_e, v_i_e,
+						v_j_e, w_j_e, v_i_e,
 						*input.H1FESpace->GetFE(e),
 						*input.L2FESpace->GetFE(e),
 						e, true, false,  rv, re);
@@ -911,22 +909,23 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 			Vector Ediff(basisE->numRows());
 			for (int k = 0; k < basisE->numRows(); ++k)
 			{
-				Ediff[k] = We(k, j); // jth energy basis vector
+				Ediff[k] = We(k, j);
 			}
-			gfL2.SetFromTrueDofs(Ediff);
-			gfH1 = S_v; // ith velocity snapshot
+			gfL2.SetFromTrueDofs(Ediff); // jth energy basis vector
+			gf2H1 = S_v; // ith velocity snapshot
 
 			for (int e=0; e<ne; ++e)
 			{
 				// get the values that correspond to the current element 
+
 				// w_j_e: jth energy basis vector
 				// v_i_e: ith velocity snapshot
 				gfL2.GetElementDofValues(e, w_j_e);
-				gfH1.GetElementDofValues(e, v_i_e);
+				gf2H1.GetElementDofValues(e, v_i_e);
 
 				// set the constraints for the current basis vector & element
 				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
-						w_j_e, v_i_e,
+						v_j_e, w_j_e, v_i_e,
 						*input.H1FESpace->GetFE(e),
 						*input.L2FESpace->GetFE(e),
 						e, false, true,  rv, re);
@@ -2780,6 +2779,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         fy.SetSize(input.FOMoper->Height());
     }
 
+	// TODO: remove this and the useReducedM flag?
     if (useReducedM)
     {
         ComputeReducedMv();
@@ -2788,15 +2788,12 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 
 	if (hyperreduce && hyperreductionSamplingType == eqp)
 	{
-		// basic EQP
-		// TODO: are reduced mass matrices needed for EQP, or just W matrices?
+		// basic EQP	
 
-		// TODO: why compute the reduced mass matrices, when for the basic EQP
-		// case we've already multiplied my M^{-1} and basis^T when deriving
-		// the reduced quadrature rules?
-
-		// ComputeReducedMv();
-		// ComputeReducedMe();
+		// Computes the product Phi_v^T * Mv^{-1} (similarly for energy)
+		// used in forming the RHS force vectors.
+		ComputeReducedMv();
+		ComputeReducedMe();
 
 		ReadSolutionNNLS(input, "run/nnlsV", eqpI, eqpW);
 		ReadSolutionNNLS(input, "run/nnlsE", eqpI_E, eqpW_E);
@@ -2804,8 +2801,11 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
 	{
 		// energy-conserving EQP
-		// NOTE: will not compute reduced M matrices; instead, will normalize 
-		// the basis matrices so that the reduced M matrices are identity.
+		
+		// TODO: use them to compute Phi_v^T * Mv * Phi_v (similarly for energy)
+		// needed to form the RHS vectors to time march.
+		ComputeReducedMv();
+		ComputeReducedMe();
 
 		ReadSolutionNNLS(input, "run/nnlsEC", eqpI, eqpW);
 	}
@@ -3177,6 +3177,10 @@ void ROM_Operator::ComputeReducedMv()
                 (*Wmat)(i,j) = Mvj[i];
         }
     }
+	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		// TODO: form the inverse of the reduced mass matrix
+	}
     else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
@@ -3224,6 +3228,10 @@ void ROM_Operator::ComputeReducedMe()
                 (*Wmat_E)(i,j) = Mej[i];
         }
     }
+	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		// TODO: form the inverse of the reduced mass matrix
+	}
     else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
@@ -3467,7 +3475,6 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_da
 
 void ROM_Operator::ApplyHyperreduction(Vector &S)
 {
-	// TODO: should set GramSchmidt = true when using energy-conserving EQP. 
     if (useGramSchmidt && !sns1)
     {
         InducedGramSchmidt(1, S); // velocity
@@ -4463,7 +4470,7 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 
     const int nqe = ir->GetWeights().Size();
 
-    DenseMatrix vshape, loc_force;
+    DenseMatrix grad_vshape, loc_force;
     Array<int> vdofs;
     
 	res = 0.0;
@@ -4558,11 +4565,11 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 
         const int l2dofs_cnt = trial_fe->GetDof();
 
-        vshape.SetSize(h1dofs_cnt, dim);
+        grad_vshape.SetSize(h1dofs_cnt, dim);
         loc_force.SetSize(h1dofs_cnt, dim);
 
-        // Form stress:grad_shape at the current point.
-        test_fe->CalcDShape(ip, vshape);
+        // Form stress:grad_vshape at the current point.
+        test_fe->CalcDShape(ip, grad_vshape);
         for (int k = 0; k < h1dofs_cnt; k++)
         {
             for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -4571,7 +4578,7 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
                 for (int gd = 0; gd < dim; gd++) // Gradient components.
                 {
                     loc_force(k, vd) +=
-                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
+                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * grad_vshape(k,gd);
                 }
             }
         }
@@ -4580,6 +4587,10 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 		Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
 		Vector v_e(h1dofs_cnt * dim);
 
+		Vector eshape(l2dofs_cnt), unitE(l2dofs_cnt);
+		trial_fe->CalcShape(ip, eshape);
+		unitE = 1.0;
+
 		if (energy_conserve)
 		{
 			// energy-conserving EQP
@@ -4587,30 +4598,24 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 			{
 				// TODO: v_e should be the jth velocity basis vector DOFs that
 				// correspond to the current element.
-				// Recall that the basis vectors have been renormalized by the
-				// induced Gram-Schmidt process, so that reduced Mv = I.
-
 				// I think the below is not right.
 				basis->GetBasisVectorV(false, j, v_e);	
 
-				res[j] += v_e * Vloc_force;
+				// Inner product, on this element, with the j-th V basis vector.
+				res[j] += (v_e * Vloc_force) * (eshape * unitE);
 			}
 		}
 		else
 		{
 			// basic EQP
-			Vector shape(l2dofs_cnt), unitE(l2dofs_cnt);
-			trial_fe->CalcShape(ip, shape);
-			unitE = 1.0;
-
 			const int eos = elemIndex * nvdof;
 			for (int j = 0; j < rdim; ++j)
 			{
 				for (int k = 0; k < nvdof; ++k) v_e[k] = W_elems(eos + k, j);
 
-				// Compute the inner product, on this element, with the j-th W vector.
-				// TODO: why compute shape * unitE just to get 1.0 back?
-				res[j] += (v_e * Vloc_force) * (shape * unitE);
+				// Inner product, on this element, with the j-th W vector.
+				// W is the product of Phi_v^T * Mv^{-1}
+				res[j] += (v_e * Vloc_force) * (eshape * unitE);
 			}
 		}
     } // Loop (i) over EQP points
@@ -4629,7 +4634,7 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
 
     const int nqe = ir->GetWeights().Size();
 
-    DenseMatrix vshape, loc_force;
+    DenseMatrix grad_vshape, loc_force;
     Array<int> vdofs, edofs;
 
     Vector v_e;
@@ -4741,11 +4746,11 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
 
         const int l2dofs_cnt = trial_fe->GetDof();
 
-        vshape.SetSize(h1dofs_cnt, dim);
+        grad_vshape.SetSize(h1dofs_cnt, dim);
         loc_force.SetSize(h1dofs_cnt, dim);
 
-        // Form stress:grad_shape at the current point.
-        test_fe->CalcDShape(ip, vshape);
+        // Form stress:grad_vshape at the current point.
+        test_fe->CalcDShape(ip, grad_vshape);
         for (int k = 0; k < h1dofs_cnt; k++)
         {
             for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -4754,7 +4759,7 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
                 for (int gd = 0; gd < dim; gd++) // Gradient components.
                 {
                     loc_force(k, vd) +=
-                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
+                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * grad_vshape(k,gd);
                 }
             }
         }
@@ -4763,31 +4768,33 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
 
 		Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
 
-		Vector shape(l2dofs_cnt);
-		trial_fe->CalcShape(ip, shape);
+		Vector eshape(l2dofs_cnt), w_e(nedof);
+		trial_fe->CalcShape(ip, eshape);
 
 		if (energy_conserve)
 		{
 			// energy-conserving EQP
 			for (int j = 0; j < rdim; j++)
 			{
-				for (int k = 0; k < l2dofs_cnt; k++) res[j] += shape(k);
+				// TODO: w_e should be the jth energy basis vector DOFs that
+				// correspond to the current element. 
 
-				res[j] *= v_e * Vloc_force;
+				// Inner product, on this element, with the jth E basis vector.
+				res[j] += (v_e * Vloc_force) * (eshape * w_e);
 			}
 		}
 		else
 		{
 			// basic EQP
-			Vector w_e(nedof);
 			const int eos = elemIndex * nedof;
 
 			for (int j=0; j<rdim; ++j)
 			{
 				for (int k=0; k<nedof; ++k) w_e[k] = W_E_elems(eos + k, j);
 
-				// Compute the inner product, on this element, with the j-th W vector.
-				res[j] += (v_e * Vloc_force) * (shape * w_e);
+				// Inner product, on this element, with the jth W vector.
+				// W is the product Phi_e^T * M_e^{-1}
+				res[j] += (v_e * Vloc_force) * (eshape * w_e);
 			}
 		}
     } // Loop (i) over EQP points

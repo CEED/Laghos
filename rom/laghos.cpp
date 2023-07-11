@@ -402,7 +402,7 @@ int main(int argc, char *argv[])
 			"Using SNS with EQP is prohibited");
 	
 	if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
-		romOptions.GramSchmidt = true;
+		romOptions.GramSchmidt = false;
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
@@ -1581,8 +1581,7 @@ int main(int argc, char *argv[])
             romOper[0]->ApplyHyperreduction(romS);
         }
 
-		// To perform the induced Gram-Schmidt during the online stage, so that
-		// the reduced mass matrices are identity.
+		// TODO: do we want that for the energy-conserving EQP?
 		if (rom_online && romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
 		{
 			romOper[0]->ApplyHyperreduction(romS);
@@ -2059,8 +2058,6 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
 		
-					// To apply the induced Gram-Schmid to the basis of the
-					// new time window.
 					if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
 					{
 						romOper[romOptions.window]->ApplyHyperreduction(romS);
