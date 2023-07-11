@@ -2111,6 +2111,22 @@ int main(int argc, char *argv[])
                              << ",\t|e| = " << setprecision(10)
                              << sqrt(tot_norm) << endl;
                     }
+					
+					if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+					{
+						double energy_total, energy_diff;
+						energy_total = oper->InternalEnergy(*e_gf) +
+							oper->KineticEnergy(*v_gf);
+						energy_diff	= energy_total - energy_init;
+
+						if (mpi.Root())
+						{
+							cout << "\tE_tot = " << setprecision(14)
+								<< energy_total
+								<< ",\tE_diff = " << setprecision(14)
+								<< energy_diff << endl; 
+						}
+					}
 
                     // Make sure all ranks have sent their 'v' solution before initiating
                     // another set of GLVis connections (one from each rank):
