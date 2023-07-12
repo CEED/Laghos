@@ -107,6 +107,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       p_assembly(pa), cg_rel_tol(cgt), cg_max_iter(cgiter),
       ftz_tol(ftz),
       noMvSolve(noMvSolve_), noMeSolve(noMeSolve_), use_eqp(use_eqp_),
+      eqp_init_points(false), eqp_init(false),
       material_pcf(material_),
       Mv(&h1_fes), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
@@ -123,7 +124,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       locEMassPA(&quad_data, l2_fes, &tensors1D),
       locCG(), timer()
 {
-
     GridFunctionCoefficient rho_coeff(&rho0);
 
     // Standard local assembly and inversion for energy mass matrices.
@@ -238,6 +238,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
     ParGridFunction dx;
     dx.MakeRef(&H1FESpace, dS_dt, 0);
     dx = v;
+
+    if (use_eqp && !eqp_init_points) rom_op->InitEQP();
 
     SolveVelocity(S, dS_dt);
     SolveEnergy(S, v, dS_dt);
@@ -696,6 +698,27 @@ inline double smooth_step_01(double x, double eps)
     return (3.0 - 2.0 * y) * y * y;
 }
 
+void LagrangianHydroOperator::SetPointsEQP(std::vector<int> const& points)
+{
+    const int nqe = integ_rule.GetNPoints();
+
+    eqp_init_points = true;
+
+    int eprev = -1;
+
+    for (int i=0; i<points.size(); ++i)
+    {
+        const int e = points[i] / nqe;  // Element index
+        if (e != eprev)
+        {
+            eqp_elem.insert(e);
+            eprev = e;
+        }
+
+        eqp_pts.insert(points[i]);
+    }
+}
+
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
     if (quad_data_is_current) {
@@ -716,12 +739,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
     DenseTensor grad_v_ref(dim, dim, nqp);
     Array<int> L2dofs, H1dofs;
 
+    const bool using_eqp = use_eqp && eqp_init_points;
+
     // Batched computations are needed, because hydrodynamic codes usually
     // involve expensive computations of material properties. Although this
     // miniapp uses simple EOS equations, we still want to represent the batched
     // cycle structure.
-    int nzones_batch = 3;
-    const int nbatches =  nzones / nzones_batch + 1; // +1 for the remainder.
+    int nzones_batch = using_eqp ? 1 : 3;
+    const int nbatches_FOM =  nzones / nzones_batch + 1; // +1 for the remainder.
+    const int nbatches = using_eqp ? eqp_elem.size() : nbatches_FOM;
     int nqp_batch = nqp * nzones_batch;
     double *gamma_b = new double[nqp_batch],
     *rho_b = new double[nqp_batch],
@@ -731,9 +757,53 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
     // Jacobians of reference->physical transformations for all quadrature points
     // in the batch.
     DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
+
+    if (using_eqp && !eqp_init)
+    {
+        eqp_init = true;
+
+        eqp_elid.resize(nbatches);
+        eqp_ptid.resize(eqp_pts.size());
+
+        int cnt = 0;
+        std::map<int, int> elmap;
+        for (auto e : eqp_elem)
+        {
+            eqp_elid[cnt] = e;
+            elmap[e] = cnt;
+            cnt++;
+        }
+
+        eqp_offset.assign(eqp_elem.size() + 1, 0);
+
+        cnt = 0;
+        for (auto p : eqp_pts)
+        {
+            const int e = p / nqp;  // Element index
+            const int qpi = p - (e*nqp);
+            eqp_ptid[cnt] = qpi;  // Local element quadrature point index
+            cnt++;
+
+            auto search = elmap.find(e);
+            const int eid = search->second;
+            eqp_offset[eid]++;
+        }
+
+        cnt = eqp_offset[0];
+        eqp_offset[0] = 0;
+        for (int i=0; i<eqp_offset.size()-1; ++i)
+        {
+            const int ci = (i < eqp_offset.size()) ? eqp_offset[i+1] : 0;
+            eqp_offset[i+1] = eqp_offset[i] + cnt;
+            cnt = ci;
+        }
+    }
+
     for (int b = 0; b < nbatches; b++)
     {
         int z_id = b * nzones_batch; // Global index over zones.
+        if (using_eqp) z_id = eqp_elid[b];
+
         // The last batch might not be full.
         if (z_id == nzones) {
             break;
@@ -743,6 +813,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             nzones_batch = nzones - z_id;
             nqp_batch    = nqp * nzones_batch;
         }
+
+        const int nqp_z = using_eqp ? eqp_offset[b + 1] - eqp_offset[b] : nqp;
+
+        if (using_eqp) nqp_batch = nqp_z * nzones_batch;
 
         double min_detJ = numeric_limits<double>::infinity();
         for (int z = 0; z < nzones_batch; z++)
@@ -765,14 +839,17 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             else {
                 e.GetValues(z_id, integ_rule, e_vals);
             }
-            for (int q = 0; q < nqp; q++)
+
+            for (int q = 0; q < nqp_z; q++)
             {
-                const IntegrationPoint &ip = integ_rule.IntPoint(q);
+                const int qloc = using_eqp ? eqp_ptid[eqp_offset[b] + q] : q;
+
+                const IntegrationPoint &ip = integ_rule.IntPoint(qloc);
                 T->SetIntPoint(&ip);
                 if (!p_assembly) {
-                    Jpr_b[z](q) = T->Jacobian();
+                    Jpr_b[z](qloc) = T->Jacobian();
                 }
-                const double detJ = Jpr_b[z](q).Det();
+                const double detJ = Jpr_b[z](qloc).Det();
                 min_detJ = min(min_detJ, detJ);
 
                 const int idx = z * nqp + q;
@@ -782,8 +859,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                 else {
                     gamma_b[idx] = material_pcf->Eval(*T, ip);
                 }
-                rho_b[idx] = quad_data.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
-                e_b[idx]   = max(0.0, e_vals(q));
+                rho_b[idx] = quad_data.rho0DetJ0w(z_id*nqp + qloc) / detJ / ip.weight;
+                e_b[idx]   = max(0.0, e_vals(qloc));
             }
             ++z_id;
         }
@@ -802,13 +879,15 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                 v.GetSubVector(H1dofs, vector_vals);
                 evaluator.GetVectorGrad(vecvalMat, grad_v_ref);
             }
-            for (int q = 0; q < nqp; q++)
+
+            for (int q = 0; q < nqp_z; q++)
             {
-                const IntegrationPoint &ip = integ_rule.IntPoint(q);
+                const int qloc = using_eqp ? eqp_ptid[eqp_offset[b] + q] : q;
+                const IntegrationPoint &ip = integ_rule.IntPoint(qloc);
                 T->SetIntPoint(&ip);
                 // Note that the Jacobian was already computed above. We've chosen
                 // not to store the Jacobians for all batched quadrature points.
-                const DenseMatrix &Jpr = Jpr_b[z](q);
+                const DenseMatrix &Jpr = Jpr_b[z](qloc);
                 CalcInverse(Jpr, Jinv);
                 const double detJ = Jpr.Det(), rho = rho_b[z*nqp + q],
                              p = p_b[z*nqp + q], sound_speed = cs_b[z*nqp + q];
@@ -827,7 +906,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     // relative change of the initial length scale.
                     if (p_assembly)
                     {
-                        mfem::Mult(grad_v_ref(q), Jinv, sgrad_v);
+                        mfem::Mult(grad_v_ref(qloc), Jinv, sgrad_v);
                     }
                     else
                     {
@@ -854,7 +933,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                     }
                     Vector compr_dir(eig_vec_data, dim);
                     // Computes the initial->physical transformation Jacobian.
-                    mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + q), Jpi);
+                    mfem::Mult(Jpr, quad_data.Jac0inv(z_id*nqp + qloc), Jpi);
                     Vector ph_dir(dim);
                     Jpi.Mult(compr_dir, ph_dir);
                     // Change of the initial mesh size in the compression direction.
@@ -895,12 +974,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
                 // Quadrature data for partial assembly of the force operator.
                 MultABt(stress, Jinv, stressJiT);
-                stressJiT *= integ_rule.IntPoint(q).weight * detJ;
+                stressJiT *= integ_rule.IntPoint(qloc).weight * detJ;
                 for (int vd = 0 ; vd < dim; vd++)
                 {
                     for (int gd = 0; gd < dim; gd++)
                     {
-                        quad_data.stressJinvT(vd)(z_id*nqp + q, gd) =
+                        quad_data.stressJinvT(vd)(z_id*nqp + qloc, gd) =
                             stressJiT(vd, gd);
                     }
                 }
