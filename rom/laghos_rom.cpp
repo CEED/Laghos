@@ -3177,9 +3177,34 @@ void ROM_Operator::ComputeReducedMv()
                 (*Wmat)(i,j) = Mvj[i];
         }
     }
+	// TODO: do I need to enforce MPI rank == 0?
 	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
 	{
-		// TODO: form the inverse of the reduced mass matrix
+		// Form inverse of reduced Mv
+		invMvROM.SetSize(nv);
+
+		const int size_H1 = basis->SolutionSizeH1FOM();
+		const int tsize_H1 = H1spaceFOM->GetTrueVSize();
+
+		ParGridFunction gf(H1spaceFOM), gf2(H1spaceFOM);
+		Vector vj(tsize_H1), vi(tsize_H1);
+		Vector Mvj(size_H1);
+
+		for (int j = 0; j < nv; ++j)
+		{
+			basis->GetBasisVectorV(false, j, vj);
+			gf.SetFromTrueDofs(vj);
+			operFOM->MultMv(gf, Mvj);
+
+			for (int i = 0; i < nv; ++i)
+			{
+				basis->GetBasisVectorV(false, i, vi);
+				gf2.SetFromTrueDofs(vi);
+
+				invMvROM(i,j) = gf2 * Mvj;
+			}
+		}
+		invMvROM.Invert();
 	}
     else if (!hyperreduce)
     {
@@ -3228,9 +3253,30 @@ void ROM_Operator::ComputeReducedMe()
                 (*Wmat_E)(i,j) = Mej[i];
         }
     }
+	// TODO: do I need to enforce MPI rank == 0?
 	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
 	{
-		// TODO: form the inverse of the reduced mass matrix
+		// Form inverse of reduced Me
+		invMeROM.SetSize(ne);
+
+		const int size_L2 = basis->SolutionSizeL2FOM();
+
+		Vector ej(size_L2), ei(size_L2);
+		Vector Mej(size_L2);
+
+		for (int j = 0; j < ne; ++j)
+		{
+			basis->GetBasisVectorE(false, j, ej);
+			operFOM->MultMe(ej, Mej);
+
+			for (int i = 0; i < ne; ++i)
+			{
+				basis->GetBasisVectorE(false, i, ei);
+
+				invMvROM(i,j) = ei * Mej;
+			}
+		}
+		invMvROM.Invert();
 	}
     else if (!hyperreduce)
     {
