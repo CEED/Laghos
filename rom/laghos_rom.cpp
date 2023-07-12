@@ -4012,6 +4012,12 @@ CAROM::GreedySampler* UseROMDatabase(ROM_Options& romOptions, const int myid, co
     return parameterPointGreedySampler;
 }
 
+void ROM_Operator::InitEQP() const
+{
+    operFOM->SetPointsEQP(eqpI);
+    operFOM->SetPointsEQP(eqpI_E);
+}
+
 void ROM_Operator::ForceIntegratorEQP(Vector & res) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
@@ -4084,8 +4090,12 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
 
         W_elems.SetSize(elemDofs.size(), rdim);
         for (int j=0; j<rdim; ++j)
+        {
             for (int i=0; i<elemDofs.size(); ++i)
+            {
                 W_elems(i,j) = (*Wmat)(elemDofs[i],j);
+            }
+        }
     }
 
     int elemIndex = -1;

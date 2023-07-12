@@ -1228,8 +1228,12 @@ public:
     void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
     void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
 
+    void InitEQP() const;
+
     ~ROM_Operator()
     {
+        operFOM->ResetEQP();
+
         delete mat_gf_coeff;
         delete mat_gf;
         delete L2FESpaceSP;

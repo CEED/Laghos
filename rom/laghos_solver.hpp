@@ -124,10 +124,16 @@ protected:
     void UpdateQuadratureData(const Vector &S) const;
     void AssembleForceMatrix() const;
 
+private:
     const bool noMvSolve;
     const bool noMeSolve;
     const bool use_eqp;
     const ROM_Operator *rom_op = nullptr;
+    bool eqp_init_points;
+    mutable bool eqp_init;
+
+    std::set<int> eqp_elem, eqp_pts;
+    mutable std::vector<int> eqp_elid, eqp_ptid, eqp_offset;
 
 public:
     LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
@@ -182,6 +188,20 @@ public:
 
     const QuadratureData & GetQuadData() const {
         return quad_data;
+    }
+
+    void SetPointsEQP(std::vector<int> const& points);
+
+    void ResetEQP()
+    {
+        eqp_init_points = false;
+        eqp_init = false;
+
+        eqp_elem.clear();
+        eqp_pts.clear();
+        eqp_elid.clear();
+        eqp_ptid.clear();
+        eqp_offset.clear();
     }
 };
 
