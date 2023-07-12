@@ -249,7 +249,7 @@ namespace mfem
       one = 1.0;
 
       
-      rho_gf.ExchangeFaceNbrData();
+      /* rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
       cs_gf.ExchangeFaceNbrData();
       rho0DetJ0_gf.ExchangeFaceNbrData();
@@ -261,7 +261,7 @@ namespace mfem
       viscousface_gf.ExchangeFaceNbrData();
       rho0DetJ0face_gf.ExchangeFaceNbrData();
       Jac0invface_gf.ExchangeFaceNbrData();
-      
+      */
       switch (pmesh->GetElementBaseGeometry(0))
 	{
 	case Geometry::TRIANGLE:
@@ -282,15 +282,15 @@ namespace mfem
 	 
       alpha_fec = new L2_FECollection(0, pmesh->Dimension());
       alpha_fes = new ParFiniteElementSpace(pmesh, alpha_fec);
-      alpha_fes->ExchangeFaceNbrData();
+      //alpha_fes->ExchangeFaceNbrData();
       alphaCut = new ParGridFunction(alpha_fes);
-      alphaCut->ExchangeFaceNbrData();
+      // alphaCut->ExchangeFaceNbrData();
       *alphaCut = 1;
     
       if (useEmbedded){
 	mfem::FiniteElementCollection* lsvec = new H1_FECollection(H1.GetOrder(0)+2,dim);
 	mfem::ParFiniteElementSpace* lsfes = new mfem::ParFiniteElementSpace(pmesh,lsvec);
-	lsfes->ExchangeFaceNbrData();
+	//	lsfes->ExchangeFaceNbrData();
 	// Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
 	// We need to define ess_tdofs and ess_vdofs, but they will be kept empty
 	level_set_gf = new ParGridFunction(lsfes);
@@ -300,7 +300,7 @@ namespace mfem
 	level_set_gf->ProjectCoefficient(*wall_dist_coef);
 	// Exchange information for ghost elements i.e. elements that share a face
 	// with element on the current processor, but belong to another processor.
-	level_set_gf->ExchangeFaceNbrData();
+	//	level_set_gf->ExchangeFaceNbrData();
 	// Setup the class to mark all elements based on whether they are located
 	// inside or outside the true domain, or intersected by the true boundary.
 	analyticalSurface->MarkElements(*level_set_gf);
@@ -320,7 +320,7 @@ namespace mfem
 	normal_vec = new Normal_Vector_Coefficient(dim, geometricShape);
 	//	}
 	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();	
+	//	alphaCut->ExchangeFaceNbrData();	
       }
       else {
 	for (int i = 0; i < pmesh->GetNE(); i++)
@@ -359,7 +359,7 @@ namespace mfem
 	      rho0DetJ0_gf(e * gl_nqp + q) = rho0DetJ0;
 	    }
 	}
-      rho0DetJ0_gf.ExchangeFaceNbrData();
+      // rho0DetJ0_gf.ExchangeFaceNbrData();
       
       for (int e = 0; e < NE; e++)
 	{
@@ -376,7 +376,7 @@ namespace mfem
 	      rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
 	    }
 	}
-      rho0DetJ0face_gf.ExchangeFaceNbrData();
+      // rho0DetJ0face_gf.ExchangeFaceNbrData();
       
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
       
@@ -397,19 +397,19 @@ namespace mfem
       UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
-      rho_gf.ExchangeFaceNbrData();
+      /* rho_gf.ExchangeFaceNbrData();
       p_gf.ExchangeFaceNbrData();
-      cs_gf.ExchangeFaceNbrData();
+      cs_gf.ExchangeFaceNbrData();*/
       
      //Compute quadrature quantities
       UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf,  dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
-      rhoface_gf.ExchangeFaceNbrData();
-      pface_gf.ExchangeFaceNbrData();
-      csface_gf.ExchangeFaceNbrData();
-      viscousface_gf.ExchangeFaceNbrData();
+      // rhoface_gf.ExchangeFaceNbrData();
+      // pface_gf.ExchangeFaceNbrData();
+      // csface_gf.ExchangeFaceNbrData();
+      // viscousface_gf.ExchangeFaceNbrData();
 
       // Standard local assembly and inversion for energy mass matrices.
       // 'Me' is used in the computation of the internal energy
@@ -543,7 +543,7 @@ namespace mfem
 	level_set_gf->ProjectCoefficient(*wall_dist_coef);
 	// Exchange information for ghost elements i.e. elements that share a face
 	// with element on the current processor, but belong to another processor.
-	level_set_gf->ExchangeFaceNbrData();
+	//	level_set_gf->ExchangeFaceNbrData();
 	// Setup the class to mark all elements based on whether they are located
 	// inside or outside the true domain, or intersected by the true boundary.
 
@@ -570,21 +570,21 @@ namespace mfem
       UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
       UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
-      rho_gf.ExchangeFaceNbrData();
-      p_gf.ExchangeFaceNbrData();
-      cs_gf.ExchangeFaceNbrData();
+      // rho_gf.ExchangeFaceNbrData();
+      // p_gf.ExchangeFaceNbrData();
+      // cs_gf.ExchangeFaceNbrData();
 	
       //Compute quadrature quantities
       UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
-      rhoface_gf.ExchangeFaceNbrData();
+      /* rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
       viscousface_gf.ExchangeFaceNbrData();
 
-      v_gf.ExchangeFaceNbrData();
+      v_gf.ExchangeFaceNbrData();*/
       /*  Mv->Update();
       Mv->BilinearForm::operator=(0.0);
       Array<BilinearFormIntegrator*> * temp = Mv->GetDBFI();
@@ -685,7 +685,7 @@ namespace mfem
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;
       v_updated.MakeRef(&H1, *sptr, 0);
-      v_updated.ExchangeFaceNbrData();
+      // v_updated.ExchangeFaceNbrData();
 
       
       efi->SetVelocityGridFunctionAtNewState(&v_updated);
