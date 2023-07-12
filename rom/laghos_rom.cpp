@@ -339,6 +339,7 @@ void ComputeElementRowOfG_E(const IntegrationRule *ir,
 }
 
 // TODO: shouldn't we add the function prototype to the header file?
+
 // Sets the rows of constraints matrix G for the energy-conserving EQP rule. 
 void ComputeRowsOfG(const IntegrationRule *ir,
 					hydrodynamics::QuadratureData const& quad_data,
@@ -2802,8 +2803,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 	{
 		// energy-conserving EQP
 		
-		// TODO: use them to compute Phi_v^T * Mv * Phi_v (similarly for energy)
-		// needed to form the RHS vectors to time march.
+		// Computes Phi_v^T * Mv * Phi_v (similarly for energy) needed to
+		// form the RHS vectors to time march.
 		ComputeReducedMv();
 		ComputeReducedMe();
 
@@ -3185,6 +3186,8 @@ void ROM_Operator::ComputeReducedMv()
 
 		const int size_H1 = basis->SolutionSizeH1FOM();
 		const int tsize_H1 = H1spaceFOM->GetTrueVSize();
+        
+		Wmat = new CAROM::Matrix(size_H1, nv, true);
 
 		ParGridFunction gf(H1spaceFOM), gf2(H1spaceFOM);
 		Vector vj(tsize_H1), vi(tsize_H1);
@@ -3194,6 +3197,10 @@ void ROM_Operator::ComputeReducedMv()
 		{
 			basis->GetBasisVectorV(false, j, vj);
 			gf.SetFromTrueDofs(vj);
+
+			// store jth V basis vector in Wmat(:,j)
+			for (int i=0; i<size_H1; ++i) (*Wmat)(i,j) = gf[i];
+
 			operFOM->MultMv(gf, Mvj);
 
 			for (int i = 0; i < nv; ++i)
@@ -3261,12 +3268,18 @@ void ROM_Operator::ComputeReducedMe()
 
 		const int size_L2 = basis->SolutionSizeL2FOM();
 
+		Wmat_E = new CAROM::Matrix(size_L2, ne, true);
+
 		Vector ej(size_L2), ei(size_L2);
 		Vector Mej(size_L2);
 
 		for (int j = 0; j < ne; ++j)
 		{
 			basis->GetBasisVectorE(false, j, ej);
+
+			// store jth E basis vector in Wmat_E(:,j)
+			for (int i=0; i<size_L2; ++i) (*Wmat_E)(i,j) = ej[i];
+
 			operFOM->MultMe(ej, Mej);
 
 			for (int i = 0; i < ne; ++i)
@@ -4647,34 +4660,44 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 		trial_fe->CalcShape(ip, eshape);
 		unitE = 1.0;
 
+		const int eos = elemIndex * nvdof;
+
 		if (energy_conserve)
 		{
 			// energy-conserving EQP
 			for (int j = 0; j < rdim; ++j)
 			{
-				// TODO: v_e should be the jth velocity basis vector DOFs that
-				// correspond to the current element.
-				// I think the below is not right.
-				basis->GetBasisVectorV(false, j, v_e);	
+				// v_e: jth V basis vector's DOFs on this element
+				for (int k = 0; k < nvdof; ++k) v_e[k] = W_elems(eos + k, j);
 
-				// Inner product, on this element, with the j-th V basis vector.
+				// Inner product, on this element, with the jth V basis vector.
 				res[j] += (v_e * Vloc_force) * (eshape * unitE);
 			}
 		}
 		else
 		{
 			// basic EQP
-			const int eos = elemIndex * nvdof;
 			for (int j = 0; j < rdim; ++j)
 			{
+				// v_e is the product Phi_v^T * Mv^{-1}
 				for (int k = 0; k < nvdof; ++k) v_e[k] = W_elems(eos + k, j);
 
-				// Inner product, on this element, with the j-th W vector.
-				// W is the product of Phi_v^T * Mv^{-1}
+				// Inner product, on this element, with the jth W vector.
 				res[j] += (v_e * Vloc_force) * (eshape * unitE);
 			}
 		}
     } // Loop (i) over EQP points
+
+	if (energy_conserve)
+	{
+		// Multiply by the reduced Mv inverse
+
+		// TODO: does that copy the data of res to res_tmp, or is it just
+		// a reference?
+		Vector res_tmp = res;
+
+		invMvROM.Mult(res_tmp, res); 
+	}
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
@@ -4827,13 +4850,15 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
 		Vector eshape(l2dofs_cnt), w_e(nedof);
 		trial_fe->CalcShape(ip, eshape);
 
+		const int eos = elemIndex * nedof;
+
 		if (energy_conserve)
 		{
 			// energy-conserving EQP
 			for (int j = 0; j < rdim; j++)
 			{
-				// TODO: w_e should be the jth energy basis vector DOFs that
-				// correspond to the current element. 
+				// w_e: jth E basis vector's DOFs on this element	
+				for (int k=0; k<nedof; ++k) w_e[k] = W_E_elems(eos + k, j);
 
 				// Inner product, on this element, with the jth E basis vector.
 				res[j] += (v_e * Vloc_force) * (eshape * w_e);
@@ -4842,18 +4867,27 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
 		else
 		{
 			// basic EQP
-			const int eos = elemIndex * nedof;
-
 			for (int j=0; j<rdim; ++j)
 			{
+				// w_e is the product Phi_e^T * M_e^{-1}
 				for (int k=0; k<nedof; ++k) w_e[k] = W_E_elems(eos + k, j);
 
 				// Inner product, on this element, with the jth W vector.
-				// W is the product Phi_e^T * M_e^{-1}
 				res[j] += (v_e * Vloc_force) * (eshape * w_e);
 			}
 		}
     } // Loop (i) over EQP points
+
+	if (energy_conserve)
+	{
+		// Multiply by the reduced Me inverse
+
+		// TODO: does that copy the data of res to res_tmp, or is it just
+		// a reference?
+		Vector res_tmp = res;
+
+		invMeROM.Mult(res_tmp, res); 
+	}
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
