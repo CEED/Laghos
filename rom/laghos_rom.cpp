@@ -1119,16 +1119,10 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		// Form the energy identity and replace the last basis vector by it. 
 		Vector unitE(tL2size);
 
-		// TODO: my understanding is that the "=" opetaror is overloaded, so
-		// that, by setting unitE = 1.0, the vector unitE contains the coeffs
-		// that result in the summed function being 1.0 on the grid points. 
-		// Is that correct?
 		unitE = 1.0;
 
 		for (int i = 0; i < tL2size; i++)
 		{
-			// TODO: I believe I can access the last column in this way,
-			// without having to use pointer arithmetic, right?
 			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
 		}
 
@@ -2808,7 +2802,12 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 		ComputeReducedMv();
 		ComputeReducedMe();
 
+		// Read the same data twice, because different variables are used
+		// when solving the velocity and energy problems (due to the way this
+		// is done for basic EQP). In this way, minimal changes to the code
+		// are needed.
 		ReadSolutionNNLS(input, "run/nnlsEC", eqpI, eqpW);
+		ReadSolutionNNLS(input, "run/nnlsEC", eqpI_E, eqpW_E);
 	}
 }
 
@@ -3286,10 +3285,10 @@ void ROM_Operator::ComputeReducedMe()
 			{
 				basis->GetBasisVectorE(false, i, ei);
 
-				invMvROM(i,j) = ei * Mej;
+				invMeROM(i,j) = ei * Mej;
 			}
 		}
-		invMvROM.Invert();
+		invMeROM.Invert();
 	}
     else if (!hyperreduce)
     {
@@ -4691,9 +4690,6 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 	if (energy_conserve)
 	{
 		// Multiply by the reduced Mv inverse
-
-		// TODO: does that copy the data of res to res_tmp, or is it just
-		// a reference?
 		Vector res_tmp = res;
 
 		invMvROM.Mult(res_tmp, res); 
@@ -4907,7 +4903,7 @@ void ROM_Operator::ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs,
 {
     Vector res(basis->GetDimE());
 
-    ForceIntegratorEQP_E(v, res);
+    ForceIntegratorEQP_E(v, res, energy_conserve);
     basis->LiftROMtoFOM_dEdt(res, rhs);
 }
 

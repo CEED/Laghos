@@ -395,13 +395,13 @@ int main(int argc, char *argv[])
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
     romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp
-			|| romOptions.hyperreductionSamplingType != eqp_energy);
+			&& romOptions.hyperreductionSamplingType != eqp_energy);
 
     MFEM_VERIFY(!(romOptions.SNS) || (romOptions.hyperreductionSamplingType != eqp &&
 			romOptions.hyperreductionSamplingType != eqp_energy),
 			"Using SNS with EQP is prohibited");
 	
-	if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+	if (romOptions.hyperreductionSamplingType == eqp_energy)
 		romOptions.GramSchmidt = false;
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
@@ -1004,14 +1004,14 @@ int main(int argc, char *argv[])
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
     {
-        const bool noMassSolve = rom_online && (romOptions.hyperreductionSamplingType == eqp);
+        const bool noMassSolve = rom_online && (romOptions.hyperreductionSamplingType == eqp || romOptions.hyperreductionSamplingType == eqp_energy);
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
                                            ess_tdofs, *rho, source, cfl,
                                            mat_gf_coeff, visc, vort, p_assembly,
                                            cg_tol, cg_max_iter, ftz_tol,
                                            H1FEC.GetBasisType(), noMassSolve,
                                            noMassSolve,
-                                           rom_online && (romOptions.hyperreductionSamplingType == eqp));
+                                           rom_online && (romOptions.hyperreductionSamplingType == eqp || romOptions.hyperreductionSamplingType == eqp_energy));
     }
 
     socketstream* vis_rho = NULL;
@@ -1581,11 +1581,11 @@ int main(int argc, char *argv[])
             romOper[0]->ApplyHyperreduction(romS);
         }
 
-		// TODO: do we want that for the energy-conserving EQP?
-		if (rom_online && romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
-		{
-			romOper[0]->ApplyHyperreduction(romS);
-		}
+	//	// TODO: do we want that for the energy-conserving EQP?
+	//	if (rom_online && romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+	//	{
+	//		romOper[0]->ApplyHyperreduction(romS);
+	//	}
 
 		double windowEndpoint = 0.0;
         double windowOverlapMidpoint = 0.0;
@@ -2058,10 +2058,10 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
 		
-					if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
-					{
-						romOper[romOptions.window]->ApplyHyperreduction(romS);
-					}
+					//if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+					//{
+					//	romOper[romOptions.window]->ApplyHyperreduction(romS);
+					//}
 
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {
@@ -2109,7 +2109,7 @@ int main(int argc, char *argv[])
                              << sqrt(tot_norm) << endl;
                     }
 					
-					if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+					if (romOptions.hyperreductionSamplingType == eqp_energy)
 					{
 						double energy_total, energy_diff;
 						energy_total = oper->InternalEnergy(*e_gf) +
