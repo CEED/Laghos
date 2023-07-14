@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
   int faceOrder = 0;
   int i = 0;
   while( i < pmesh->GetNFaces()){
-    if (pmesh->GetInteriorFaceTransformations(0) != NULL){
+    if (pmesh->GetInteriorFaceTransformations(i) != NULL){
       faceOrder = (pmesh->GetInteriorFaceTransformations(i))->OrderW();
       break;
     }
