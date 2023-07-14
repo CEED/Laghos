@@ -255,9 +255,19 @@ int main(int argc, char *argv[])
   //  L2_FECollection P_L2FEC(order_e, dim, BasisType::GaussLobatto);
 
   ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
-
-  // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
-  int quadRule_face =  H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) + (pmesh->GetInteriorFaceTransformations(0))->OrderW();
+  int faceOrder = 0;
+  int i = 0;
+  while( i < pmesh->GetNFaces()){
+    if (pmesh->GetInteriorFaceTransformations(0) != NULL){
+      faceOrder = (pmesh->GetInteriorFaceTransformations(i))->OrderW();
+      break;
+    }
+    else {
+      i++;
+    }
+  }
+  // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule.
+  int quadRule_face =  H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) + faceOrder;
   L2_FECollection PFace_L2FEC((int)(0.5*quadRule_face), dim, BasisType::GaussLobatto);
   // L2_FECollection PFace_L2FEC(order_e, dim, BasisType::GaussLobatto);
 
@@ -429,7 +439,7 @@ int main(int argc, char *argv[])
     }
   if (impose_visc) { visc = true; }
 
-  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
+  hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, i, faceOrder, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, numberGhostTerms, numberEnergyGhostTerms, ghostPenaltyCoefficient,
