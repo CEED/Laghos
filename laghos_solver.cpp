@@ -200,7 +200,7 @@ namespace mfem
       GLIntRules(0, Quadrature1D::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-      b_ir(GLIntRules.Get((pmesh->GetBdrFaceTransformations(0))->GetGeometryType(), 4.0*(H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetBdrFaceTransformations(0))->OrderW()) )),
+      b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(0))->GetGeometryType(), 4.0*(H1.GetOrder(0) + L2.GetOrder(0) + (pmesh->GetInteriorFaceTransformations(0))->OrderW()) )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(),
       qdata_is_current(false),
