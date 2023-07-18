@@ -202,7 +202,7 @@ namespace mfem
       GLIntRules(0, BasisType::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-      b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
+      b_ir(GLIntRules.Get(pmesh->GetElementBaseGeometry(0),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(),
       qdata_is_current(false),
