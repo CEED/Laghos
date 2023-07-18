@@ -312,6 +312,7 @@ namespace mfem
 	{
 	  const IntegrationPoint &ip = IntRule->IntPoint(q);
 	  Tr.SetIntPoint(&ip);
+	  // std::cout << " ass ip.x " << ip.x << " ass ip.y " << ip.y << std::endl;
 	  const DenseMatrix &Jpr = Tr.Jacobian();
 	  DenseMatrix Jinv(dim);
 	  Jinv = 0.0;
@@ -444,6 +445,8 @@ namespace mfem
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
 	  // Set the integration point in the face and the neighboring elements
 	  Tr.SetAllIntPoints(&ip_f);
+	  // std::cout << " face ass ip.x " << ip_f.x << " face ass ip.y " << ip_f.y << std::endl;
+	 
 	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
 	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
 	  Trans_el1.SetIntPoint(&eip);
