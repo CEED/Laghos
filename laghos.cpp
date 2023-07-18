@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
   ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
   int faceOrder = 0;
   int i = 0;
-  while( i < pmesh->GetNFaces()){
+  while( i < pmesh->GetNumFaces()){
     if (pmesh->GetInteriorFaceTransformations(i) != NULL){
       faceOrder = (pmesh->GetInteriorFaceTransformations(i))->OrderW();
       break;
