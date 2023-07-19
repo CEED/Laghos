@@ -445,27 +445,27 @@ namespace mfem
       
       v_bfi = new VelocityBoundaryForceIntegrator(qdata.h0, *alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       v_bfi->SetIntRule(&b_ir);
-      VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
+      // VelocityBoundaryForce.AddBdrFaceIntegrator(v_bfi);
       // Make a dummy assembly to figure out the sparsity.
-      VelocityBoundaryForce.Assemble();
+      // VelocityBoundaryForce.Assemble();
       
       e_bfi = new EnergyBoundaryForceIntegrator(qdata.h0, *alphaCut, pface_gf, v_gf, csface_gf, rho0DetJ0face_gf, Jac0invface_gf, use_viscosity, use_vorticity);
       e_bfi->SetIntRule(&b_ir);
-      EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
+      // EnergyBoundaryForce.AddBdrFaceIntegrator(e_bfi);    
       // Make a dummy assembly to figure out the sparsity.
-      EnergyBoundaryForce.Assemble();
+      // EnergyBoundaryForce.Assemble();
 
       nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), perimeter, order_v, rhoface_gf, v_gf, csface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
 
       nvmi->SetIntRule(&b_ir);
       Mv->AddBdrFaceIntegrator(nvmi);
 
-      d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), order_v, rhoface_gf, v_gf, pface_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef, use_viscosity, use_vorticity);
       d_nvmi->SetIntRule(&b_ir);
       DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
       DiffusionVelocityBoundaryForce.Assemble();
   
-      de_nvmi = new DiffusionEnergyNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), order_v, rhoface_gf, v_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
+      de_nvmi = new DiffusionEnergyNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), order_v, rhoface_gf, v_gf, pface_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef, use_viscosity, use_vorticity);
       de_nvmi->SetIntRule(&b_ir);
       DiffusionEnergyBoundaryForce.AddBdrFaceIntegrator(de_nvmi);
       DiffusionEnergyBoundaryForce.Assemble();
@@ -1119,7 +1119,7 @@ namespace mfem
     void LagrangianHydroOperator::AssembleVelocityBoundaryForceMatrix() const
     {   
       VelocityBoundaryForce = 0.0;
-      VelocityBoundaryForce.Assemble();
+      // VelocityBoundaryForce.Assemble();
       if (useEmbedded){
 	// reset mesh, needed to update the normal velocity penalty term.
 	ShiftedVelocityBoundaryForce = 0.0;
@@ -1144,7 +1144,7 @@ namespace mfem
     void LagrangianHydroOperator::AssembleEnergyBoundaryForceMatrix() const
     {
       EnergyBoundaryForce = 0.0;
-      EnergyBoundaryForce.Assemble();
+      // EnergyBoundaryForce.Assemble();
       be_forcemat_is_assembled = true;
     }
 

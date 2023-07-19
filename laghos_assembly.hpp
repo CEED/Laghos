@@ -258,9 +258,12 @@ public:
       const ParGridFunction &Jac0invface_gf;
       const ParGridFunction &rho0DetJ0face_gf;
       const ParGridFunction &v_gf;
-            
+      const ParGridFunction &pface_gf;
+      const bool use_viscosity;
+      const bool use_vorticity;
+      
     public:
-      DiffusionNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf,  const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef) {  }
+      DiffusionNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &pface_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf,  const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), pface_gf(pface_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), use_viscosity(use_viscosity), use_vorticity(use_vorticity) {  }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);
@@ -286,9 +289,13 @@ public:
       const ParGridFunction &rho0DetJ0face_gf;
       const ParGridFunction &v_gf;
       const ParGridFunction *Vnpt_gf;
-            
+
+      const ParGridFunction &pface_gf;
+      const bool use_viscosity;
+      const bool use_vorticity;
+      
     public:
-      DiffusionEnergyNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), Vnpt_gf(NULL) {  }
+      DiffusionEnergyNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &pface_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), pface_gf(pface_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) {  }
       virtual void AssembleRHSElementVect(const FiniteElement &el,
 					  FaceElementTransformations &Tr,
 					  Vector &elvect);

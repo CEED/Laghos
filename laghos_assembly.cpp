@@ -831,6 +831,7 @@ namespace mfem
 	  nor.SetSize(dim);
 	  nor = 0.0;
 	  CalcOrtho(Tr.Jacobian(), nor);
+
 	  
 	  Vector Jac0inv_vec(dim*dim);
 	  Jac0inv_vec = 0.0;
@@ -898,11 +899,26 @@ namespace mfem
 	  // penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	  ///
 	  el.CalcShape(eip, shape);
+	  //
+	  double pressure = pface_gf.GetValue(Trans_el1,eip);
+	  DenseMatrix stress(dim);
+	  stress = 0.0;    
+	  ComputeStress(pressure,dim,stress);	
+	  // evaluation of the normal stress at the face quadrature points
+	  Vector weightedNormalStress(dim);
+	  weightedNormalStress = 0.0;
+	  // Quadrature data for partial assembly of the force operator.
+	  stress.Mult( tn, weightedNormalStress);
+	  //
+	 
+	  
 	  for (int i = 0; i < h1dofs_cnt; i++)
 	    {
 	      for (int vd = 0; vd < dim; vd++) // Velocity components.
 		{
 		  elvect(i + vd * h1dofs_cnt) -= shape(i) * vDotn * tn(vd) * penaltyVal * ip_f.weight * nor_norm;
+		  elvect(i + vd * h1dofs_cnt) += weightedNormalStress(vd) * shape(i) * ip_f.weight * nor_norm;
+
 		  //  elvect(i + vd * h1dofs_cnt) -= shape(i) * vDotn * tN(vd) * penaltyVal * ip_f.weight * nor_norm;
 		}
 	    }
@@ -1018,9 +1034,30 @@ namespace mfem
 	    //  penaltyVal = penaltyParameter * globalmax_rho * cs_el1;
 	    ///
 	    el.CalcShape(eip, shape);
+	    //
+	    double pressure = pface_gf.GetValue(Trans_el1,eip);
+	    DenseMatrix stress(dim);
+	    stress = 0.0;
+	    ComputeStress(pressure,dim,stress);	
+	    // evaluation of the normal stress at the face quadrature points
+	    Vector weightedNormalStress(dim);
+	    weightedNormalStress = 0.0;
+	    
+	    // Quadrature data for partial assembly of the force operator.
+	    stress.Mult( tn, weightedNormalStress);
+
+	    double normalStressProjNormal = 0.0;
+	    for (int s = 0; s < dim; s++){
+	      // normalStressProjNormal += weightedNormalStress(s) * tN(s);
+	      normalStressProjNormal += weightedNormalStress(s) * tn(s);
+	    }
+	    normalStressProjNormal = normalStressProjNormal*nor_norm;
+	    //
+	    
 	    for (int i = 0; i < l2dofs_cnt; i++)
 	      {
 		elvect(i) += shape(i) * vDotn * vDotn_npt * penaltyVal * ip_f.weight * nor_norm;
+		elvect(i) -= normalStressProjNormal * shape(i) * ip_f.weight * vDotn_npt;
 		//		std::cout << " energ val " << elvect(i) << std::endl;
 	      }
 	  }
