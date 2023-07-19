@@ -376,7 +376,7 @@ namespace mfem
 	    {
 	      const IntegrationPoint &ip = ir_p.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
-	      std::cout << " faceip.x " << ip.x << " faceip.y " << ip.y << " faceip.z " << ip.z << std::endl;
+	      // std::cout << " faceip.x " << ip.x << " faceip.y " << ip.y << " faceip.z " << ip.z << std::endl;
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
 	      rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
