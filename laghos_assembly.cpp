@@ -439,13 +439,11 @@ namespace mfem
       elvect = 0.0;
       Vector te_shape(h1dofs_cnt);
       te_shape = 0.0;
-  
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
 	  // Set the integration point in the face and the neighboring elements
 	  Tr.SetAllIntPoints(&ip_f);
-	  // std::cout << " face ass ip.x " << ip_f.x << " face ass ip.y " << ip_f.y << " face ass ip.z " << ip_f.z << std::endl;
 	 
 	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
 	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
@@ -815,6 +813,7 @@ namespace mfem
       Vector shape(h1dofs_cnt);
       shape = 0.0;
       // std::cout << " visc " << globalmax_viscous_coef << std::endl;
+      // std::cout << " enetin " << std::endl;
      
       for (int q = 0; q  < nqp_face; q++)
 	{
@@ -823,9 +822,10 @@ namespace mfem
 	  Tr.SetAllIntPoints(&ip_f);
 	  const IntegrationPoint &eip = Tr.GetElement1IntPoint();
 	  ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-	  
+	 
 	  Trans_el1.SetIntPoint(&eip);
 	  const int elementNo = Trans_el1.ElementNo;
+	  //	  std::cout << " face ass ip.x " << eip.x << " face ass ip.y " << eip.y << " face ass ip.z " << eip.z << std::endl;
 	 
 	  Vector nor;
 	  nor.SetSize(dim);

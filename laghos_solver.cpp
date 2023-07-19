@@ -202,7 +202,9 @@ namespace mfem
       GLIntRules(0, BasisType::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
 		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-      b_ir(GLIntRules.Get(pmesh->GetElementBaseGeometry(0),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
+      //      b_ir(GLIntRules.Get(pmesh->GetElementBaseGeometry(0),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
+      //  b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(), 1.0*(H1.GetOrder(0) + L2.GetOrder(0) + faceOrder))),
+      b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(),
       qdata_is_current(false),
@@ -374,7 +376,7 @@ namespace mfem
 	    {
 	      const IntegrationPoint &ip = ir_p.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
-	      // std::cout << " faceip.x " << ip.x << " faceip.y " << ip.y << " faceip.z " << ip.z << std::endl;
+	      std::cout << " faceip.x " << ip.x << " faceip.y " << ip.y << " faceip.z " << ip.z << std::endl;
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
 	      rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
