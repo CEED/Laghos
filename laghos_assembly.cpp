@@ -308,11 +308,12 @@ namespace mfem
       elvect.SetSize(h1dofs_cnt*dim);
       elvect = 0.0;
       DenseMatrix vshape(h1dofs_cnt, dim);
+      // std::cout << " num " << nqp << std::endl;
       for (int q = 0; q < nqp; q++)
 	{
 	  const IntegrationPoint &ip = IntRule->IntPoint(q);
 	  Tr.SetIntPoint(&ip);
-	  // std::cout << " ass ip.x " << ip.x << " ass ip.y " << ip.y << " ass ip.z " << ip.z << std::endl;
+	  //  std::cout << " ass ip.x " << ip.x << " ass ip.y " << ip.y << " ass ip.z " << ip.z << std::endl;
 	  const DenseMatrix &Jpr = Tr.Jacobian();
 	  DenseMatrix Jinv(dim);
 	  Jinv = 0.0;
@@ -814,7 +815,7 @@ namespace mfem
       shape = 0.0;
       // std::cout << " visc " << globalmax_viscous_coef << std::endl;
       // std::cout << " enetin " << std::endl;
-     
+      // std::cout << " nqp _ fac " << nqp_face << std::endl;
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
@@ -825,7 +826,7 @@ namespace mfem
 	 
 	  Trans_el1.SetIntPoint(&eip);
 	  const int elementNo = Trans_el1.ElementNo;
-	  //	  std::cout << " face ass ip.x " << eip.x << " face ass ip.y " << eip.y << " face ass ip.z " << eip.z << std::endl;
+	  // std::cout << " face ass ip.x " << eip.x << " face ass ip.y " << eip.y << " face ass ip.z " << eip.z << std::endl;
 	 
 	  Vector nor;
 	  nor.SetSize(dim);
@@ -1405,7 +1406,7 @@ namespace mfem
 	    double penaltyVal = 0.0;
 	    //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
 	    // penaltyVal = std::pow(penaltyParameter, 1.0/hinit) * globalmax_rho * 1.0;
-	    penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * ( gamma_1 * (std::pow(1.0,dim)/Trans_el1.Weight()) + gamma_2 *  (std::pow(1.0,dim)/Trans_el2.Weight()))  * 1.0;
+	    penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * ( gamma_1 *  (4.0/std::pow(Trans_el1.Weight(),1.0/dim)) + gamma_2 * (4.0/std::pow(Trans_el2.Weight(),1.0/dim)) )  * 4.0;
 	    
 	    Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
 	    Jac0inv_vec_el1 = 0.0;

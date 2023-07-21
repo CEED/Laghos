@@ -201,10 +201,10 @@ namespace mfem
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
       GLIntRules(0, BasisType::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
-		      (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+		      0.5*((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
       //      b_ir(GLIntRules.Get(pmesh->GetElementBaseGeometry(0),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
       //  b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(), 1.0*(H1.GetOrder(0) + L2.GetOrder(0) + faceOrder))),
-      b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+      b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(),  0.75 * ((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(),
       qdata_is_current(false),
@@ -282,8 +282,8 @@ namespace mfem
 	}
 	default: MFEM_ABORT("Unknown zone type!");
 	}
-      
-	 
+      // int val  =  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1;
+      // std::cout << " val " << val << std::endl; 
       alpha_fec = new L2_FECollection(0, pmesh->Dimension());
       alpha_fes = new ParFiniteElementSpace(pmesh, alpha_fec);
       alpha_fes->ExchangeFaceNbrData();
@@ -358,7 +358,7 @@ namespace mfem
 	    {
 	      const IntegrationPoint &ip = ir.IntPoint(q);
 	      Tr.SetIntPoint(&ip);
-	      //    std::cout << " ip.x " << ip.x << " ip.y " << ip.y << " ip.z " << ip.z << std::endl;
+	      // std::cout << " ip.x " << ip.x << " ip.y " << ip.y << " ip.z " << ip.z << std::endl;
 	      double volumeFraction = alphaCut->GetValue(Tr, ip);
 	      const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip) * volumeFraction;
 	      rho0DetJ0_gf(e * gl_nqp + q) = rho0DetJ0;
