@@ -2118,9 +2118,9 @@ int main(int argc, char *argv[])
 
 						if (mpi.Root())
 						{
-							cout << "\tE_tot = " << setprecision(14)
+							cout << "\tE_tot = " << scientific << setprecision(5)
 								<< energy_total
-								<< ",\tE_diff = " << setprecision(14)
+								<< ",\tE_diff = " << scientific << setprecision(5)
 								<< energy_diff << endl; 
 						}
 					}
@@ -2502,8 +2502,12 @@ int main(int argc, char *argv[])
         if (mpi.Root())
         {
             cout << endl;
-            cout << "Energy diff: " << scientific << setprecision(2)
-                 << fabs(energy_init - energy_final) << endl;
+            cout << "Initial energy: " << scientific << setprecision(5)
+                 << energy_init << endl;
+            cout << "Energy diff: " << scientific << setprecision(5)
+                 << energy_final - energy_init << endl;
+			cout << "Rel. energy diff: " << scientific << setprecision(5)
+                 << (energy_final - energy_init) / energy_init << endl;
         }
 
         PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);

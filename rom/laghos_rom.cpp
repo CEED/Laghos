@@ -988,16 +988,6 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 {
-	if (input.hyperreductionSamplingType == eqp_energy)
-	{
-		// For the energy-conserving EQP case, we increase the energy basis
-		// dimension by 1 to accomodate for the addition of the energy
-		// identity. 
-		// The change is done here, before the window basis parameters are
-		// written to their files, and is also carried to the caller's scope. 
-		cutoff[2] += 1;
-	}
-
     if (writeSnapshots)
     {
         if (!useXV) generator_X->writeSnapshot();
@@ -1105,6 +1095,22 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 
 	if (input.hyperreductionSamplingType == eqp_energy)
 	{
+		if (rank == 0)
+		{
+			// For the energy-conserving EQP case, we increase the energy basis
+			// dimension by 1 to accomodate for the addition of the energy
+			// identity. 
+			// The change is done here, before the window basis parameters are
+			// written to their files, and is also carried to the caller's scope. 
+			
+			// TODO: if cutoff[2] == windowNumSamples then increasing this by
+			// 1 will lead to a function call trying to get more columns than
+			// there are available in basisE. In this case, we'd need to take
+			// all columns of basisE and then append one.
+			// And then do the same during the online stage. 
+			cutoff[2] += 1;
+		}
+
 		const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
 		const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
 
@@ -1118,13 +1124,14 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 
 		// Form the energy identity and replace the last basis vector by it. 
 		Vector unitE(tL2size);
-
 		unitE = 1.0;
 
 		for (int i = 0; i < tL2size; i++)
 		{
 			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
 		}
+
+		tBasisE->orthogonalize();
 
 		SetupEQP_Force(generator_X->getSnapshotMatrix(),
 				generator_V->getSnapshotMatrix(),
@@ -1282,6 +1289,19 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         mfL2.SetSize(tL2size);
 
         ReadSolutionBases(input.window);
+
+		if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+		{
+			// Form the energy identity and replace the last E-basis vector by it. 
+			Vector unitE(tL2size);
+			unitE = 1.0;
+			for (int i = 0; i < tL2size; i++)
+			{
+				(*basisE)(i, rdime-1) = unitE[i];
+			}
+			basisE->orthogonalize();
+		}
+
         if (spaceTime)
         {
             ReadTemporalBases(input.window);
