@@ -394,8 +394,15 @@ int main(int argc, char *argv[])
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
-    romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp);
-    MFEM_VERIFY(!(romOptions.SNS) || (romOptions.hyperreductionSamplingType != eqp), "Using SNS with EQP is prohibited");
+    romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp
+			&& romOptions.hyperreductionSamplingType != eqp_energy);
+
+    MFEM_VERIFY(!(romOptions.SNS) || (romOptions.hyperreductionSamplingType != eqp &&
+			romOptions.hyperreductionSamplingType != eqp_energy),
+			"Using SNS with EQP is prohibited");
+	
+	if (romOptions.hyperreductionSamplingType == eqp_energy)
+		romOptions.GramSchmidt = false;
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
@@ -997,14 +1004,14 @@ int main(int argc, char *argv[])
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
     {
-        const bool noMassSolve = rom_online && (romOptions.hyperreductionSamplingType == eqp);
+        const bool noMassSolve = rom_online && (romOptions.hyperreductionSamplingType == eqp || romOptions.hyperreductionSamplingType == eqp_energy);
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
                                            ess_tdofs, *rho, source, cfl,
                                            mat_gf_coeff, visc, vort, p_assembly,
                                            cg_tol, cg_max_iter, ftz_tol,
                                            H1FEC.GetBasisType(), noMassSolve,
                                            noMassSolve,
-                                           rom_online && (romOptions.hyperreductionSamplingType == eqp));
+                                           rom_online && (romOptions.hyperreductionSamplingType == eqp || romOptions.hyperreductionSamplingType == eqp_energy));
     }
 
     socketstream* vis_rho = NULL;
@@ -1573,7 +1580,14 @@ int main(int argc, char *argv[])
         {
             romOper[0]->ApplyHyperreduction(romS);
         }
-        double windowEndpoint = 0.0;
+
+	//	// TODO: do we want that for the energy-conserving EQP?
+	//	if (rom_online && romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+	//	{
+	//		romOper[0]->ApplyHyperreduction(romS);
+	//	}
+
+		double windowEndpoint = 0.0;
         double windowOverlapMidpoint = 0.0;
         for (ti = 1; !last_step; ti++)
         {
@@ -1913,6 +1927,7 @@ int main(int argc, char *argv[])
                         }
                         else
                         {
+							// Form the reduced bases from the snapshots.
                             sampler->Finalize(cutoff, romOptions);
                         }
                         if (myid == 0 && romOptions.parameterID == -1) {
@@ -2042,6 +2057,11 @@ int main(int argc, char *argv[])
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
+		
+					//if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
+					//{
+					//	romOper[romOptions.window]->ApplyHyperreduction(romS);
+					//}
 
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {
@@ -2088,6 +2108,22 @@ int main(int argc, char *argv[])
                              << ",\t|e| = " << setprecision(10)
                              << sqrt(tot_norm) << endl;
                     }
+					
+					if (romOptions.hyperreductionSamplingType == eqp_energy)
+					{
+						double energy_total, energy_diff;
+						energy_total = oper->InternalEnergy(*e_gf) +
+							oper->KineticEnergy(*v_gf);
+						energy_diff	= energy_total - energy_init;
+
+						if (mpi.Root())
+						{
+							cout << "\tE_tot = " << scientific << setprecision(5)
+								<< energy_total
+								<< ",\tE_diff = " << scientific << setprecision(5)
+								<< energy_diff << endl; 
+						}
+					}
 
                     // Make sure all ranks have sent their 'v' solution before initiating
                     // another set of GLVis connections (one from each rank):
@@ -2466,8 +2502,12 @@ int main(int argc, char *argv[])
         if (mpi.Root())
         {
             cout << endl;
-            cout << "Energy diff: " << scientific << setprecision(2)
-                 << fabs(energy_init - energy_final) << endl;
+            cout << "Initial energy: " << scientific << setprecision(5)
+                 << energy_init << endl;
+            cout << "Energy diff: " << scientific << setprecision(5)
+                 << energy_final - energy_init << endl;
+			cout << "Rel. energy diff: " << scientific << setprecision(5)
+                 << (energy_final - energy_init) / energy_init << endl;
         }
 
         PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);

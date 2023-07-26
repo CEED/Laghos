@@ -73,7 +73,8 @@ enum HyperreductionSamplingType
     gnat,       // Default, GNAT
     qdeim,      // QDEIM
     sopt,       // S-OPT
-    eqp         // EQP
+    eqp,        // EQP
+	eqp_energy  // Energy-conserving EQP
 };
 
 static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
@@ -83,7 +84,8 @@ static HyperreductionSamplingType getHyperreductionSamplingType(const char* samp
         {"gnat", gnat},
         {"qdeim", qdeim},
         {"sopt", sopt},
-        {"eqp", eqp}
+        {"eqp", eqp},
+		{"eqp_energy", eqp_energy}
     };
     auto iter = SamplingTypeMap.find(sampling_type);
     MFEM_VERIFY(iter != std::end(SamplingTypeMap), "Invalid input for hyperreduction sampling type");
@@ -479,7 +481,8 @@ public:
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time),
-          rhsBasis(input.hyperreductionSamplingType != eqp)
+          rhsBasis(input.hyperreductionSamplingType != eqp && input.hyperreductionSamplingType != eqp_energy),
+		  hyperreductionSamplingType(input.hyperreductionSamplingType)
     {
         const int window = input.window;
 
@@ -683,6 +686,8 @@ private:
 
     const bool spaceTime;
 
+	const bool hyperreductionSamplingType; 
+
     hydrodynamics::LagrangianHydroOperator *lhoper;
 
     int VTos = 0; // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
@@ -822,6 +827,9 @@ private:
     void SetupEQP_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
                            const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input,
                            bool equationE);
+
+	void SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
+							  const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input);
 };
 
 class ROM_Basis
@@ -1222,11 +1230,15 @@ public:
     void SolveSpaceTime(Vector &S);
     void SolveSpaceTimeGN(Vector &S);
 
-    void ForceIntegratorEQP_FOM(Vector & rhs) const;
-    void ForceIntegratorEQP(Vector & res) const;
+	void ForceIntegratorEQP_FOM(Vector & rhs, bool energy_conserve = false) const;
+	void ForceIntegratorEQP(Vector & res, bool energy_conserve = false) const;
 
-    void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
-    void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
+	void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs,
+			bool energy_conserve = false) const;
+	void ForceIntegratorEQP_E(Vector const& v, Vector & res,
+			bool energy_conserve = false) const;
+
+	HyperreductionSamplingType getSamplingType() const;
 
     void InitEQP() const;
 

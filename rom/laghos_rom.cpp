@@ -57,9 +57,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
-    const bool sampleX = generator_X->isNextSample(t);
-
-    Vector dSdt;
+	const bool sampleX = (hyperreductionSamplingType == eqp_energy) ? true :
+		generator_X->isNextSample(t);
+    
+	Vector dSdt;
     if (!sns && rhsBasis)
     {
         dSdt.SetSize(S.Size());
@@ -98,7 +99,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         }
     }
 
-    const bool sampleV = generator_V->isNextSample(t);
+	const bool sampleV = (hyperreductionSamplingType == eqp_energy) ? true :
+		generator_V->isNextSample(t);
 
     //TODO: use this, plus generator_Fv->computeNextSampleTime? So far, it seems sampleV == true on every step.
     //const bool sampleFv = generator_Fv->isNextSample(t);
@@ -152,7 +154,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         }
     }
 
-    const bool sampleE = generator_E->isNextSample(t);
+	const bool sampleE = (hyperreductionSamplingType == eqp_energy) ? true :
+		generator_E->isNextSample(t);
 
     if (sampleE)
     {
@@ -338,6 +341,81 @@ void ComputeElementRowOfG_E(const IntegrationRule *ir,
     }
 }
 
+// TODO: shouldn't we add the function prototype to the header file?
+
+// Sets the rows of constraints matrix G for the energy-conserving EQP rule. 
+void ComputeRowsOfG(const IntegrationRule *ir,
+					hydrodynamics::QuadratureData const& quad_data,
+					Vector const& v_j_e, Vector const& w_j_e, Vector const& v_i_e,
+					FiniteElement const& test_fe,
+					FiniteElement const& trial_fe,
+					const int zone_id,
+					const bool equationV, const bool equationE,
+					Vector & rv, Vector & re)
+{
+	const int nqp = ir->GetNPoints();
+	const int dim = trial_fe.GetDim(); // TODO: shouldn't it be the dimension of test_fe?
+	const int h1dofs_cnt = test_fe.GetDof();
+	const int l2dofs_cnt = trial_fe.GetDof();
+
+	if (equationV)
+	{
+		MFEM_VERIFY(rv.Size() == nqp, "");
+		MFEM_VERIFY(v_j_e.Size() == h1dofs_cnt*dim, "");
+	}
+
+	if (equationE)
+	{
+		MFEM_VERIFY(re.Size() == nqp, "");
+		MFEM_VERIFY(v_i_e.Size() == h1dofs_cnt*dim, "");
+		MFEM_VERIFY(w_j_e.Size() == l2dofs_cnt, "");
+	}
+
+	DenseMatrix grad_vshape(h1dofs_cnt, dim); // grad of velocity shape function 
+	DenseMatrix loc_force(h1dofs_cnt, dim);
+	Vector Vloc_force(loc_force.Data(), h1dofs_cnt * dim);
+
+    Vector eshape(l2dofs_cnt), unitE(l2dofs_cnt);
+	unitE = 1.0;
+
+	for (int q = 0; q < nqp; q++)
+	{
+		const IntegrationPoint &ip = ir->IntPoint(q);
+
+		// Form stress:grad_vshape at the current point.
+		test_fe.CalcDShape(ip, grad_vshape);
+		for (int i = 0; i < h1dofs_cnt; i++)
+		{
+			for (int vd = 0; vd < dim; vd++) // Velocity components.
+			{
+				loc_force(i, vd) = 0.0;
+				for (int gd = 0; gd < dim; gd++) // Gradient components.
+				{
+					loc_force(i, vd) +=
+						quad_data.stressJinvT(vd)(zone_id*nqp + q, gd) * grad_vshape(i,gd);
+				}
+			}
+		}
+
+		// NOTE: UpdateQuadratureData includes ip.weight as a factor in quad_data.stressJinvT,
+		// set by LagrangianHydroOperator::UpdateQuadratureData.
+		loc_force *= 1.0 / ip.weight;  // Divide by exact quadrature weight
+		
+		trial_fe.CalcShape(ip, eshape); // Energy shape function
+
+		if (equationV)
+		{
+			// Inner product, on this element, with the jth V basis vector.
+			rv[q] = (v_j_e * Vloc_force) * (eshape * unitE);
+		}
+		if (equationE)
+		{
+			// Inner product, on this element, with the jth E basis vector.
+			re[q] = (v_i_e * Vloc_force) * (eshape * w_j_e);
+		}
+	} // q -- quadrature point
+}
+
 #include "linalg/NNLS.h"
 
 void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
@@ -409,6 +487,7 @@ void WriteSolutionNNLS(CAROM::Vector const& sol, const string filename)
     outfile.close();
 }
 
+// Compute the reduced quadrature rules for the basic EQP case.
 void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
                                     const CAROM::Matrix* snapV,
                                     const CAROM::Matrix* snapE,
@@ -436,16 +515,34 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
 
     Vector r(nqe);
 
-    // Compute G of size (NB * (nsnap+1)) x NQ, storing its transpose Gt.
+	// G is the matrix of accuracy constraints used to enforce that the
+	// evaluated quantity remains close to the result of the full quadrature
+	// case.
+    
+	// Compute G of size (NB * (nsnap+1)) x NQ, storing its transpose Gt.
     CAROM::Matrix Gt(NQ, NB * (nsnap+1), true);
 
-    // For 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
-    // G(j + (i*NB), (e*nqe) + m)
-    // is the coefficient of e_j^T M_e^{-1} F(v_i,e_i,x_i)^T v_i at point m of
-    // element e, with respect to the integration rule weight at that point,
-    // where the "exact" quadrature solution is ir0->GetWeights().
+	// Velocity equation.
+	// For 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+	// entry G(j + (i*NB), (e*nqe) + m) is the coefficient of
+	//
+	//				e_j^T M_v^{-1} F(v_i,e_i,x_i)^T 1E 
+	//
+	// at point m of element e with respect to the integration rule weight at
+	// that point, where the "exact" quadrature solution is ir0->GetWeights().
+	// In the above, e_j is the jth velocity basis vector, 1E is the identity
+	// in the energy space.
 
-    Vector v_i(tH1size);
+	// Energy equation.
+	// Similarly, for 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+	// entry G(j + (i*NB), (e*nqe) + m) is the coefficient of
+	//
+	//				e_j^T M_e^{-1} F(v_i,e_i,x_i)^T v_i
+	//
+	// where e_j is the jth energy basis vector, v_i is the ith velocity
+	// snapshot.
+    
+	Vector v_i(tH1size);
     Vector x_i(tH1size);
     Vector e_i(tL2size);
 
@@ -578,7 +675,7 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
         }  // j
     }  // i
 
-    CAROM::Vector w(ne * nqe, true);
+	CAROM::Vector w(ne * nqe, true);
 
     for (int i=0; i<ne; ++i)
     {
@@ -597,9 +694,272 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
                       std::to_string(rank));
 }
 
-void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
-                                 const CAROM::Matrix* basisV, const CAROM::Matrix* basisE,
-                                 ROM_Options const& input)
+// Compute the reduced quadrature rule for the energy-conserving EQP case.
+void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
+									   const CAROM::Matrix* snapV,
+									   const CAROM::Matrix* snapE,
+									   const CAROM::Matrix* basisV,
+                                       const CAROM::Matrix* basisE,
+                                       ROM_Options const& input)
+{
+	const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
+	const int nqe = ir0->GetNPoints();
+	const int ne = input.H1FESpace->GetNE();
+	const int NQ = ne * nqe;
+
+	const int NBv = basisV->numColumns();
+	const int NBe = basisE->numColumns();
+	const int NBmin = min(NBv, NBe);
+
+	Array<int> numSnapVar(3);
+	numSnapVar[0] = snapX->numColumns();
+	numSnapVar[1] = snapV->numColumns();
+	numSnapVar[2] = snapE->numColumns();
+
+	const int nsnap = numSnapVar.Max();
+
+	Array<int> numSkipped(3);
+	for (int i=0; i<3; ++i) numSkipped[i] = nsnap - numSnapVar[i];
+	MFEM_VERIFY(numSkipped.Max() <= 1, "");
+
+	Vector rv(nqe), re(nqe);
+
+	// G is the matrix of accuracy constraints used to enforce that the
+	// evaluated quantity remains close to the result of the full quadrature rule.
+
+	// Declare G of size ((NBv + NBe) * nsnap) x NQ; store its transpose Gt.
+	// The first NBv * nsnap rows of G hold the velocity constraints;
+	// the remaining NBe * nsnap rows hold the energy constraints.
+	CAROM::Matrix Gt(NQ, (NBv + NBe) * nsnap, true);
+
+	// row index of G where energy constraints start
+	const int estart = NBv * nsnap;
+
+	Vector v_i(tH1size), x_i(tH1size), e_i(tL2size);
+	Vector w_j_e, v_i_e, v_j_e;
+
+	Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
+	Vector S_v(S, input.H1FESpace->GetVSize(), input.H1FESpace->GetVSize());  // Subvector
+
+	MFEM_VERIFY(tH1size == basisV->numRows(), "");
+	MFEM_VERIFY(tL2size == basisE->numRows(), "");
+	CAROM::Matrix Wv(H1size, NBv, true);
+	CAROM::Matrix We(L2size, NBe, true);
+
+	// jth Wv columnn holds the jth velocity ROM basis vector
+	for (int j=0; j<NBv; ++j)
+	{
+		for (int i=0; i<tH1size; ++i) v_i[i] = (*basisV)(i,j);
+		gfH1.SetFromTrueDofs(v_i);
+		for (int i=0; i<H1size; ++i) Wv(i,j) = gfH1[i];
+	}
+
+	// jth We column holds the jth energy ROM basis vector
+	for (int j=0; j<NBe; ++j)
+	{
+		for (int i=0; i<tL2size; ++i) We(i,j) = (*basisE)(i,j);
+	}
+
+	// w_el contains the "exact" quadrature weights for the current element
+	Array<double> const& w_el = ir0->GetWeights();
+	MFEM_VERIFY(w_el.Size() == nqe, "");
+
+    ParGridFunction gf2H1(gfH1);
+
+	for (int i=0; i<nsnap; ++i)
+	{
+		if (i == 0)
+		{
+			if (numSkipped[0] == 1)
+				x_i = 0.0;
+			else
+				for (int j = 0; j < tH1size; ++j) x_i[j] = (*snapX)(j, 0);
+
+			if (numSkipped[1] == 1)
+				v_i = 0.0;
+			else
+				for (int j = 0; j < tH1size; ++j) v_i[j] = (*snapV)(j, 0);
+
+			if (numSkipped[2] == 1)
+				e_i = 0.0;
+			else
+				for (int j = 0; j < tL2size; ++j) e_i[j] = (*snapE)(j, 0);
+		}
+		else
+		{
+			for (int j = 0; j < tH1size; ++j)
+				x_i[j] = (*snapX)(j, i - numSkipped[0]);
+			
+			for (int j = 0; j < tH1size; ++j)
+				v_i[j] = (*snapV)(j, i - numSkipped[1]);
+		
+			for (int j = 0; j < tL2size; ++j)
+				e_i[j] = (*snapE)(j, i - numSkipped[2]);
+		}
+
+		SetStateFromTrueDOFs(x_i, v_i, e_i, S);
+
+		// NOTE: after SetStateFromTrueDOFs, gfH1 is the V-component of S
+		input.FOMoper->ResetQuadratureData();
+		input.FOMoper->GetTimeStepEstimate(S);  // to call UpdateQuadratureData
+		input.FOMoper->ResetQuadratureData();
+
+		// Velocity equation.
+		// For 0 <= j < NBv, 0 <= i < nsnap, 0 <= e < ne, 0 <= m < nqe,
+		// entry G(j + (i*NBv), (e*nqe) + m) is the coefficient of
+		//
+		//					e_j^T * F(v_i,e_i,x_i) * 1E
+		//
+		// at point m of element e with respect to the integration rule weight at
+		// that point, where the "exact" quadrature solution is ir0->GetWeights().
+		// In the above, e_j is the jth velocity basis vector, 1E is the
+		// identity vector in the energy space.
+
+		// Energy equation.
+		// For 0 <= j < NBe, 0 <= i < nsnap, 0 <= e < ne, 0 <= m < nqe,
+		// entry G(estart + j + (i*NBe), (e*nqe) + m) is the coefficient of
+		//	
+		//				 e_j^T * F(v_i,e_i,x_i)^T * v_i
+		//
+		// at point m of element e with respect to the integration rule weight at
+		// that point, where the "exact" quadrature solution is ir0->GetWeights().
+		// In the above, e_j is the jth energy basis vector, v_i is the ith
+		// velocity snapshot.
+
+		// Set the contraints for velocity and energy at the same time, then
+		// add the rest for velocity or energy, depending on which variable has
+		// more basis vectors (if not equal).
+
+		for (int j=0; j<NBmin; ++j)
+		{
+			// gfH1: jth velocity basis vector
+			for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
+
+			Vector Ediff(basisE->numRows());
+			for (int k = 0; k < basisE->numRows(); ++k)
+			{
+				Ediff[k] = We(k, j);
+			}
+			gfL2.SetFromTrueDofs(Ediff); // jth energy basis vector
+			gf2H1 = S_v; // ith velocity snapshot
+
+			for (int e=0; e<ne; ++e)
+			{
+				// get the values that correspond to the current element 
+
+				// v_j_e: jth velocity basis vector
+				gfH1.GetElementDofValues(e, v_j_e);
+
+				// w_j_e: jth energy basis vector
+				// v_i_e: ith velocity snapshot
+				gfL2.GetElementDofValues(e, w_j_e);
+				gf2H1.GetElementDofValues(e, v_i_e);
+
+				// set the constraints for the current basis vector & element
+				// rv: velocity constraints
+				// re: energy constraints
+				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
+						v_j_e, w_j_e, v_i_e,
+						*input.H1FESpace->GetFE(e),
+						*input.L2FESpace->GetFE(e),
+						e, true, true,  rv, re);
+
+				for (int m=0; m<nqe; ++m)
+				{
+					Gt((e*nqe) + m, j + (i*NBv)) = rv[m];
+					Gt((e*nqe) + m, estart + j +(i*NBe)) = re[m];
+				}
+			}  // e -- element
+		}  // j -- basis vector
+
+		// case NBv > NBmin = NBe, so there's more velocity constraints
+		for (int j=NBmin; j<NBv; ++j)
+		{
+			// gfH1 is the jth velocity basis vector
+			for (int k = 0; k < H1size; ++k) gfH1[k] = Wv(k, j);
+
+			for (int e=0; e<ne; ++e)
+			{
+				// get the values that correspond to the current element 
+
+				// v_j_e: jth velocity basis vector
+				gfH1.GetElementDofValues(e, v_j_e);
+
+				// set the constraints for the current basis vector & element
+				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
+						v_j_e, w_j_e, v_i_e,
+						*input.H1FESpace->GetFE(e),
+						*input.L2FESpace->GetFE(e),
+						e, true, false,  rv, re);
+
+				for (int m=0; m<nqe; ++m)
+				{
+					Gt((e*nqe) + m, j + (i*NBv)) = rv[m];
+				}
+			}  // e -- element
+		} // j -- basis vector
+
+		// case NBe > NBmin = NBv, so there's more energy constraints
+		for (int j=NBmin; j<NBe; ++j)
+		{
+			Vector Ediff(basisE->numRows());
+			for (int k = 0; k < basisE->numRows(); ++k)
+			{
+				Ediff[k] = We(k, j);
+			}
+			gfL2.SetFromTrueDofs(Ediff); // jth energy basis vector
+			gf2H1 = S_v; // ith velocity snapshot
+
+			for (int e=0; e<ne; ++e)
+			{
+				// get the values that correspond to the current element 
+
+				// w_j_e: jth energy basis vector
+				// v_i_e: ith velocity snapshot
+				gfL2.GetElementDofValues(e, w_j_e);
+				gf2H1.GetElementDofValues(e, v_i_e);
+
+				// set the constraints for the current basis vector & element
+				ComputeRowsOfG(ir0, input.FOMoper->GetQuadData(),
+						v_j_e, w_j_e, v_i_e,
+						*input.H1FESpace->GetFE(e),
+						*input.L2FESpace->GetFE(e),
+						e, false, true,  rv, re);
+
+				for (int m=0; m<nqe; ++m)
+				{
+					Gt((e*nqe) + m, estart + j +(i*NBe)) = re[m];
+				}
+			}  // e -- element
+		} // j -- basis vector
+	}  // i -- snapshot
+
+	CAROM::Vector w(ne * nqe, true);
+
+	for (int i=0; i<ne; ++i)
+	{
+		for (int j=0; j<nqe; ++j)
+			// w: "exact" quadrature weights for all elements
+			w((i*nqe) + j) = w_el[j];
+	}
+
+	// TODO: input these NNLS parameters?
+	double tolNNLS = 1.0e-14;
+
+	CAROM::Vector sol(ne * nqe, true);
+	SolveNNLS(rank, tolNNLS, input.maxNNLSnnz, w, Gt, sol);
+
+	const std::string varName = "EC"; // energy conserving
+	WriteSolutionNNLS(sol, "run/nnls" + varName + std::to_string(input.window)
+			+ "_" + std::to_string(rank));
+}
+
+void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
+								 const CAROM::Matrix* snapV,
+								 const CAROM::Matrix* snapE,
+								 const CAROM::Matrix* basisV,
+								 const CAROM::Matrix* basisE,
+								 ROM_Options const& input)
 {
     MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
@@ -608,8 +968,17 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix
     MFEM_VERIFY(snapV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(snapE->numRows() == input.L2FESpace->GetTrueVSize(), "");
 
-    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false);
-    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true);
+	if (input.hyperreductionSamplingType == eqp)
+	{
+		// basic EQP: different rules for velocity and energy
+		SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false);
+		SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true);
+	}
+	else if (input.hyperreductionSamplingType == eqp_energy)
+	{
+		// energy-conserving EQP: one combined rule for velocity and energy
+		SetupEQP_En_Force_Eq(snapX, snapV, snapE, basisV, basisE, input);
+	}
 }
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
@@ -718,6 +1087,52 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         delete tBasisV;
         delete tBasisE;
     }
+
+	if (input.hyperreductionSamplingType == eqp_energy)
+	{
+		if (rank == 0)
+		{
+			// For the energy-conserving EQP case, increase the energy basis
+			// dimension by 1 to accomodate for the addition of the energy
+			// identity. 
+			
+			cutoff[2] += 1;
+		}
+
+		const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
+		const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
+
+		MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
+
+		// Truncate the bases.
+		// For the energy basis, the cutoff parameter has already been
+		// increased by 1 to accomodate the energy identity.
+		CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
+		
+		CAROM::Matrix *tBasisE = new CAROM::Matrix(tL2size, cutoff[2], false);
+
+		// Get the first cutoff[2]-1 columns of basisE
+		for (int i = 0; i < tL2size; i++)
+		{
+			for (int j = 0; j < cutoff[2] - 1; j++)
+				(*tBasisE)(i, j) = (*basisE)(i, j);
+		}
+
+		// Form the energy identity and include it as the last basis vector. 
+		Vector unitE(tL2size);
+		unitE = 1.0;
+		for (int i = 0; i < tL2size; i++)
+			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
+		tBasisE->orthogonalize();
+
+		SetupEQP_Force(generator_X->getSnapshotMatrix(),
+				generator_V->getSnapshotMatrix(),
+				generator_E->getSnapshotMatrix(),
+				tBasisV, tBasisE, input);
+
+		delete tBasisV;
+		delete tBasisE;
+	}
 
     delete generator_X;
     delete generator_V;
@@ -865,7 +1280,21 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         mfH1.SetSize(tH1size);
         mfL2.SetSize(tL2size);
 
+		if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+			basisE = new CAROM::Matrix(tL2size, rdime, true);
+
         ReadSolutionBases(input.window);
+
+		if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+		{
+			// Form the energy identity and include it as the last basis vector. 
+			Vector unitE(tL2size);
+			unitE = 1.0;
+			for (int i = 0; i < tL2size; i++)
+				(*basisE)(i, rdime-1) = unitE[i];
+			basisE->orthogonalize();
+		}
+
         if (spaceTime)
         {
             ReadTemporalBases(input.window);
@@ -1712,6 +2141,9 @@ void ROM_Basis::ComputeReducedMatrices(bool sns1)
             MFEM_VERIFY(BX0->dim() == rdimx, "");
         }
 
+		// TODO: what do this and the following if-blocks compute?
+		// Which of those computations are needed in the energy-conserving
+		// EQP? 
         if (!sns1)
         {
             // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
@@ -1733,6 +2165,8 @@ void ROM_Basis::ComputeReducedMatrices(bool sns1)
             BsinvE = prod2;
         }
 
+		// TODO: We are using RK2-avg in energy-conserving EQP; do we need
+		// the matrices computed here though?
         if (RK2AvgFormulation)
         {
             const CAROM::Matrix *prodX = BXsp->transposeMult(BXsp);
@@ -1781,7 +2215,29 @@ void ROM_Basis::ReadSolutionBases(const int window)
     if (!useVX)
         basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, rdimv);
 
-    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, rdime);
+	// In the energy-conserving EQP case we read the first rdime-1 basis
+	// vectors, since the rdime parameter has been increased by 1 to
+	// accommodate the addition of the energy identity. 
+	if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		int tmp_rdime = rdime - 1;
+		CAROM::Matrix *tmp_basisE = 0;
+
+		tmp_basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
+			std::to_string(window) + basisIdentifier, tL2size, tmp_rdime);
+		
+		for (int i = 0; i < tL2size; i++)
+		{
+			for (int j = 0; j < tmp_rdime; j++)
+				(*basisE)(i, j) = (*tmp_basisE)(i, j);
+		}
+	}
+	else
+	{
+		basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
+			std::to_string(window) + basisIdentifier, tL2size, rdime);
+	}
+			
 
     if (useXV)
         basisX = basisV;
@@ -1845,7 +2301,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (hyperreductionSamplingType == eqp) return;
+    if (hyperreductionSamplingType == eqp || hyperreductionSamplingType == eqp_energy) return;
 
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
@@ -2353,22 +2809,41 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         fy.SetSize(input.FOMoper->Height());
     }
 
+	// TODO: remove this and the useReducedM flag?
     if (useReducedM)
     {
         ComputeReducedMv();
         ComputeReducedMe();
     }
 
-    if (hyperreduce && hyperreductionSamplingType == eqp)
-    {
-        // TODO: are reduced mass matrices needed for EQP, or just W matrices?
+	if (hyperreduce && hyperreductionSamplingType == eqp)
+	{
+		// basic EQP	
 
-        ComputeReducedMv();
-        ComputeReducedMe();
+		// Computes the product Phi_v^T * Mv^{-1} (similarly for energy)
+		// used in forming the RHS force vectors.
+		ComputeReducedMv();
+		ComputeReducedMe();
 
-        ReadSolutionNNLS(input, "run/nnlsV", eqpI, eqpW);
-        ReadSolutionNNLS(input, "run/nnlsE", eqpI_E, eqpW_E);
-    }
+		ReadSolutionNNLS(input, "run/nnlsV", eqpI, eqpW);
+		ReadSolutionNNLS(input, "run/nnlsE", eqpI_E, eqpW_E);
+	}
+	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		// energy-conserving EQP
+		
+		// Computes Phi_v^T * Mv * Phi_v (similarly for energy) needed to
+		// form the RHS vectors to time march.
+		ComputeReducedMv();
+		ComputeReducedMe();
+
+		// Read the same data twice, because different variables are used
+		// when solving the velocity and energy problems (due to the way this
+		// is done for basic EQP). In this way, minimal changes to the code
+		// are needed.
+		ReadSolutionNNLS(input, "run/nnlsEC", eqpI, eqpW);
+		ReadSolutionNNLS(input, "run/nnlsEC", eqpI_E, eqpW_E);
+	}
 }
 
 void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
@@ -2737,6 +3212,41 @@ void ROM_Operator::ComputeReducedMv()
                 (*Wmat)(i,j) = Mvj[i];
         }
     }
+	// TODO: do I need to enforce MPI rank == 0?
+	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		// Form inverse of reduced Mv
+		invMvROM.SetSize(nv);
+
+		const int size_H1 = basis->SolutionSizeH1FOM();
+		const int tsize_H1 = H1spaceFOM->GetTrueVSize();
+        
+		Wmat = new CAROM::Matrix(size_H1, nv, true);
+
+		ParGridFunction gf(H1spaceFOM), gf2(H1spaceFOM);
+		Vector vj(tsize_H1), vi(tsize_H1);
+		Vector Mvj(size_H1);
+
+		for (int j = 0; j < nv; ++j)
+		{
+			basis->GetBasisVectorV(false, j, vj);
+			gf.SetFromTrueDofs(vj);
+
+			// store jth V basis vector in Wmat(:,j)
+			for (int i=0; i<size_H1; ++i) (*Wmat)(i,j) = gf[i];
+
+			operFOM->MultMv(gf, Mvj);
+
+			for (int i = 0; i < nv; ++i)
+			{
+				basis->GetBasisVectorV(false, i, vi);
+				gf2.SetFromTrueDofs(vi);
+
+				invMvROM(i,j) = gf2 * Mvj;
+			}
+		}
+		invMvROM.Invert();
+	}
     else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
@@ -2784,6 +3294,37 @@ void ROM_Operator::ComputeReducedMe()
                 (*Wmat_E)(i,j) = Mej[i];
         }
     }
+	// TODO: do I need to enforce MPI rank == 0?
+	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		// Form inverse of reduced Me
+		invMeROM.SetSize(ne);
+
+		const int size_L2 = basis->SolutionSizeL2FOM();
+
+		Wmat_E = new CAROM::Matrix(size_L2, ne, true);
+
+		Vector ej(size_L2), ei(size_L2);
+		Vector Mej(size_L2);
+
+		for (int j = 0; j < ne; ++j)
+		{
+			basis->GetBasisVectorE(false, j, ej);
+
+			// store jth E basis vector in Wmat_E(:,j)
+			for (int i=0; i<size_L2; ++i) (*Wmat_E)(i,j) = ej[i];
+
+			operFOM->MultMe(ej, Mej);
+
+			for (int i = 0; i < ne; ++i)
+			{
+				basis->GetBasisVectorE(false, i, ei);
+
+				invMeROM(i,j) = ei * Mej;
+			}
+		}
+		invMeROM.Invert();
+	}
     else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
@@ -4018,7 +4559,8 @@ void ROM_Operator::InitEQP() const
     operFOM->SetPointsEQP(eqpI_E);
 }
 
-void ROM_Operator::ForceIntegratorEQP(Vector & res) const
+void ROM_Operator::ForceIntegratorEQP(Vector & res,
+		bool energy_conserve) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimV();
@@ -4027,14 +4569,10 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
 
     const int nqe = ir->GetWeights().Size();
 
-    DenseMatrix vshape, loc_force;
-    Vector shape, unitE, rhs;
-
+    DenseMatrix grad_vshape, loc_force;
     Array<int> vdofs;
-
-    Vector v_e;
-
-    res = 0.0;
+    
+	res = 0.0;
 
     int eprev = -1;
     int dof = 0;
@@ -4126,17 +4664,15 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
         // TODO: reduce this UpdateQuadratureData function to the EQP points.
 
         const int h1dofs_cnt = test_fe->GetDof();
-        const int dim = trial_fe->GetDim();
+        const int dim = trial_fe->GetDim(); // TODO: shouldn't it be the dim of test_fe?
 
         const int l2dofs_cnt = trial_fe->GetDof();
 
-        vshape.SetSize(h1dofs_cnt, dim);
+        grad_vshape.SetSize(h1dofs_cnt, dim);
         loc_force.SetSize(h1dofs_cnt, dim);
 
-        shape.SetSize(l2dofs_cnt);
-
-        // Form stress:grad_shape at the current point.
-        test_fe->CalcDShape(ip, vshape);
+        // Form stress:grad_vshape at the current point.
+        test_fe->CalcDShape(ip, grad_vshape);
         for (int k = 0; k < h1dofs_cnt; k++)
         {
             for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -4145,40 +4681,61 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
                 for (int gd = 0; gd < dim; gd++) // Gradient components.
                 {
                     loc_force(k, vd) +=
-                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
+                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * grad_vshape(k,gd);
                 }
             }
         }
-
         loc_force *= eqpW[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
+        
+		Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+		Vector v_e(h1dofs_cnt * dim);
 
-        trial_fe->CalcShape(ip, shape);
+		Vector eshape(l2dofs_cnt), unitE(l2dofs_cnt);
+		trial_fe->CalcShape(ip, eshape);
+		unitE = 1.0;
 
-        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+		const int eos = elemIndex * nvdof;
 
-        unitE.SetSize(shape.Size());
-        unitE = 1.0;
+		if (energy_conserve)
+		{
+			// energy-conserving EQP
+			for (int j = 0; j < rdim; ++j)
+			{
+				// v_e: jth V basis vector's DOFs on this element
+				for (int k = 0; k < nvdof; ++k) v_e[k] = W_elems(eos + k, j);
 
-        rhs.SetSize(h1dofs_cnt * dim);
+				// Inner product, on this element, with the jth V basis vector.
+				res[j] += (v_e * Vloc_force) * (eshape * unitE);
+			}
+		}
+		else
+		{
+			// basic EQP
+			for (int j = 0; j < rdim; ++j)
+			{
+				// v_e is the product Phi_v^T * Mv^{-1}
+				for (int k = 0; k < nvdof; ++k) v_e[k] = W_elems(eos + k, j);
 
-        v_e.SetSize(rhs.Size());
-
-        const int eos = elemIndex * nvdof;
-        for (int j=0; j<rdim; ++j)
-        {
-            for (int k=0; k<nvdof; ++k)
-                v_e[k] = W_elems(eos + k, j);
-
-            // Compute the inner product, on this element, with the j-th W vector.
-            res[j] += (v_e * Vloc_force) * (shape * unitE);
-        }  // Loop (j) over V basis vectors
+				// Inner product, on this element, with the jth W vector.
+				res[j] += (v_e * Vloc_force) * (eshape * unitE);
+			}
+		}
     } // Loop (i) over EQP points
+
+	if (energy_conserve)
+	{
+		// Multiply by the reduced Mv inverse
+		Vector res_tmp = res;
+
+		invMvROM.Mult(res_tmp, res); 
+	}
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 }
 
-void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
+void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
+		bool energy_conserve) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimE();
@@ -4187,12 +4744,10 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
 
     const int nqe = ir->GetWeights().Size();
 
-    DenseMatrix vshape, loc_force;
-    Vector shape, rhs;
-
+    DenseMatrix grad_vshape, loc_force;
     Array<int> vdofs, edofs;
 
-    Vector v_e, w_e;
+    Vector v_e;
 
     res = 0.0;
 
@@ -4301,13 +4856,11 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
 
         const int l2dofs_cnt = trial_fe->GetDof();
 
-        vshape.SetSize(h1dofs_cnt, dim);
+        grad_vshape.SetSize(h1dofs_cnt, dim);
         loc_force.SetSize(h1dofs_cnt, dim);
 
-        shape.SetSize(l2dofs_cnt);
-
-        // Form stress:grad_shape at the current point.
-        test_fe->CalcDShape(ip, vshape);
+        // Form stress:grad_vshape at the current point.
+        test_fe->CalcDShape(ip, grad_vshape);
         for (int k = 0; k < h1dofs_cnt; k++)
         {
             for (int vd = 0; vd < dim; vd++) // Velocity components.
@@ -4316,49 +4869,76 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
                 for (int gd = 0; gd < dim; gd++) // Gradient components.
                 {
                     loc_force(k, vd) +=
-                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
+                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * grad_vshape(k,gd);
                 }
             }
         }
 
-        loc_force *= eqpW_E[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
+		loc_force *= eqpW_E[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
 
-        trial_fe->CalcShape(ip, shape);
+		Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
 
-        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+		Vector eshape(l2dofs_cnt), w_e(nedof);
+		trial_fe->CalcShape(ip, eshape);
 
-        rhs.SetSize(h1dofs_cnt * dim);
+		const int eos = elemIndex * nedof;
 
-        w_e.SetSize(nedof);
+		if (energy_conserve)
+		{
+			// energy-conserving EQP
+			for (int j = 0; j < rdim; j++)
+			{
+				// w_e: jth E basis vector's DOFs on this element	
+				for (int k=0; k<nedof; ++k) w_e[k] = W_E_elems(eos + k, j);
 
-        const int eos = elemIndex * nedof;
-        for (int j=0; j<rdim; ++j)
-        {
-            for (int k=0; k<nedof; ++k)
-                w_e[k] = W_E_elems(eos + k, j);
+				// Inner product, on this element, with the jth E basis vector.
+				res[j] += (v_e * Vloc_force) * (eshape * w_e);
+			}
+		}
+		else
+		{
+			// basic EQP
+			for (int j=0; j<rdim; ++j)
+			{
+				// w_e is the product Phi_e^T * M_e^{-1}
+				for (int k=0; k<nedof; ++k) w_e[k] = W_E_elems(eos + k, j);
 
-            // Compute the inner product, on this element, with the j-th W vector.
-            res[j] += (v_e * Vloc_force) * (shape * w_e);
-        }  // Loop (j) over V basis vectors
+				// Inner product, on this element, with the jth W vector.
+				res[j] += (v_e * Vloc_force) * (eshape * w_e);
+			}
+		}
     } // Loop (i) over EQP points
+
+	if (energy_conserve)
+	{
+		// Multiply by the reduced Me inverse
+
+		// TODO: does that copy the data of res to res_tmp, or is it just
+		// a reference?
+		Vector res_tmp = res;
+
+		invMeROM.Mult(res_tmp, res); 
+	}
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 }
 
-void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs) const
+void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs,
+		bool energy_conserve) const
 {
     Vector res(basis->GetDimV());
 
-    ForceIntegratorEQP(res);
+    ForceIntegratorEQP(res, energy_conserve);
     basis->LiftROMtoFOM_dVdt(res, rhs);
 }
 
-void ROM_Operator::ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const
+void ROM_Operator::ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs,
+		bool energy_conserve) const
 {
     Vector res(basis->GetDimE());
 
-    ForceIntegratorEQP_E(v, res);
+    ForceIntegratorEQP_E(v, res, energy_conserve);
     basis->LiftROMtoFOM_dEdt(res, rhs);
 }
 
@@ -4375,10 +4955,9 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         else
             basis->LiftROMtoFOM(S, fx);
 
-        if (hyperreduce && hyperreductionSamplingType == eqp)
-        {
-            operFOM->SetRomOperator(this);
-        }
+		if (hyperreduce)
+			if (hyperreductionSamplingType == eqp || hyperreductionSamplingType == eqp_energy)
+				operFOM->SetRomOperator(this);
 
         const int Vsize = use_sample_mesh ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
         const int Esize = basis->SolutionSizeL2SP();
@@ -4398,36 +4977,41 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // - Update V using dv_dt.
         // - Compute de_dt and dx_dt using S and V.
 
-        // -- 1.
-        // S is S0.
+		// -- Stage 1 of 2 (S is S_n = S0).
         hydro_oper->UpdateMesh(fx);
-        hydro_oper->SolveVelocity(fx, dS_dt);
-        if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
 
-        // V = v0 + 0.5 * dt * dv_dt;
+        hydro_oper->SolveVelocity(fx, dS_dt);
+		if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+
+		// time march velocity vector: V = V_{n+1/2} = v0 + 0.5 * dt * dv_dt
         add(v0, 0.5 * dt, dv_dt, V);
+
         hydro_oper->SolveEnergy(fx, V, dS_dt);
         if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
-        dx_dt = V;
+		dx_dt = V;
 
-        // -- 2.
-        // S = S0 + 0.5 * dt * dS_dt;
+		// time march full state vector: S = S_{n+1/2} = S0 + 0.5 * dt * dS_dt
         add(S0, 0.5 * dt, dS_dt, fx);
+
+		// -- Stage 2 of 2 (S is S_{n+1/2}).
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
+
         hydro_oper->SolveVelocity(fx, dS_dt);
         if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
-        // V = v0 + 0.5 * dt * dv_dt;
-        add(v0, 0.5 * dt, dv_dt, V);
-        hydro_oper->SolveEnergy(fx, V, dS_dt);
+
+		// time march velocity vector: V = v0 + 0.5 * dt * dv_dt
+		add(v0, 0.5 * dt, dv_dt, V);
+		
+		// V = average V_{n+1/2}
+		hydro_oper->SolveEnergy(fx, V, dS_dt);
         if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
-        dx_dt = V;
+		dx_dt = V;
 
-        // -- 3.
-        // S = S0 + dt * dS_dt.
+		// time march full state vector: S = S_{n+1} = S0 + dt * dS_dt
         add(S0, dt, dS_dt, fx);
-        hydro_oper->ResetQuadratureData();
-
+        
+		hydro_oper->ResetQuadratureData();
         MFEM_VERIFY(!useReducedM, "TODO");
 
         if (use_sample_mesh)
@@ -4442,4 +5026,9 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     }
 
     t += dt;
+}
+
+HyperreductionSamplingType ROM_Operator::getSamplingType() const
+{
+	return hyperreductionSamplingType;
 }

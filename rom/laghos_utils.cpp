@@ -507,11 +507,19 @@ void ReadPDweight(std::vector<double>& pd_weight, std::string outputPath)
 void SetWindowParameters(Array2D<int> const& twparam, ROM_Options & romOptions)
 {
     const int w = romOptions.window;
+
     romOptions.dimX = min(romOptions.max_dimX, twparam(w,0));
     romOptions.dimV = min(romOptions.max_dimV, twparam(w,1));
+
+	// TODO: for the energy-conserving EQP case, if twparam(w,2) exceeds the
+	// set maximum, truncating the stored basis will lead to loss of the
+	// energy identity vector, thus violating one of the energy conservation
+	// conditions. 
     romOptions.dimE = min(romOptions.max_dimE, twparam(w,2));
+
     romOptions.dimFv = romOptions.SNS ? romOptions.dimV : min(romOptions.max_dimFv, twparam(w,3));
     romOptions.dimFe = romOptions.SNS ? romOptions.dimE : min(romOptions.max_dimFe, twparam(w,4));
+
     if (romOptions.useXV) romOptions.dimX = romOptions.dimV;
     if (romOptions.useVX) romOptions.dimV = romOptions.dimX;
 

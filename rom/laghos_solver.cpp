@@ -279,7 +279,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
         if (use_eqp)
         {
-            rom_op->ForceIntegratorEQP_FOM(rhs);
+            rom_op->ForceIntegratorEQP_FOM(rhs, rom_op->getSamplingType() == eqp_energy);
         }
         else
         {
@@ -410,7 +410,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
         timer.sw_force.Start();
         if (use_eqp)
         {
-            rom_op->ForceIntegratorEQP_E_FOM(v, e_rhs);
+            rom_op->ForceIntegratorEQP_E_FOM(v, e_rhs, rom_op->getSamplingType() == eqp_energy);
         }
         else
         {
