@@ -57,9 +57,10 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
-    const bool sampleX = generator_X->isNextSample(t);
-
-    Vector dSdt;
+	const bool sampleX = (hyperreductionSamplingType == eqp_energy) ? true :
+		generator_X->isNextSample(t);
+    
+	Vector dSdt;
     if (!sns && rhsBasis)
     {
         dSdt.SetSize(S.Size());
@@ -98,7 +99,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         }
     }
 
-    const bool sampleV = generator_V->isNextSample(t);
+	const bool sampleV = (hyperreductionSamplingType == eqp_energy) ? true :
+		generator_V->isNextSample(t);
 
     //TODO: use this, plus generator_Fv->computeNextSampleTime? So far, it seems sampleV == true on every step.
     //const bool sampleFv = generator_Fv->isNextSample(t);
@@ -152,7 +154,8 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         }
     }
 
-    const bool sampleE = generator_E->isNextSample(t);
+	const bool sampleE = (hyperreductionSamplingType == eqp_energy) ? true :
+		generator_E->isNextSample(t);
 
     if (sampleE)
     {
@@ -672,7 +675,7 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
         }  // j
     }  // i
 
-    CAROM::Vector w(ne * nqe, true);
+	CAROM::Vector w(ne * nqe, true);
 
     for (int i=0; i<ne; ++i)
     {
@@ -724,13 +727,13 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 	// G is the matrix of accuracy constraints used to enforce that the
 	// evaluated quantity remains close to the result of the full quadrature rule.
 
-	// Declare G of size ((NBv + NBe) * (nsnap+1)) x NQ; store its transpose Gt.
-	// The first NBv*(nsnap+1) rows of G hold the velocity constraints;
-	// the remaining NBe*(nsnap+1) rows hold the energy constraints.
-	CAROM::Matrix Gt(NQ, (NBv + NBe) * (nsnap+1), true);
+	// Declare G of size ((NBv + NBe) * nsnap) x NQ; store its transpose Gt.
+	// The first NBv * nsnap rows of G hold the velocity constraints;
+	// the remaining NBe * nsnap rows hold the energy constraints.
+	CAROM::Matrix Gt(NQ, (NBv + NBe) * nsnap, true);
 
 	// row index of G where energy constraints start
-	const int estart = NBv * (nsnap + 1);
+	const int estart = NBv * nsnap;
 
 	Vector v_i(tH1size), x_i(tH1size), e_i(tL2size);
 	Vector w_j_e, v_i_e, v_j_e;
@@ -763,43 +766,35 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 
     ParGridFunction gf2H1(gfH1);
 
-	for (int i=0; i<nsnap+1; ++i)
+	for (int i=0; i<nsnap; ++i)
 	{
-		if (i == 0)  // Use the initial state as the first snapshot.
+		if (i == 0)
 		{
-			v_i = 0.0;
-			x_i = 0.0;
-			e_i = 0.0;
+			if (numSkipped[0] == 1)
+				x_i = 0.0;
+			else
+				for (int j = 0; j < tH1size; ++j) x_i[j] = (*snapX)(j, 0);
+
+			if (numSkipped[1] == 1)
+				v_i = 0.0;
+			else
+				for (int j = 0; j < tH1size; ++j) v_i[j] = (*snapV)(j, 0);
+
+			if (numSkipped[2] == 1)
+				e_i = 0.0;
+			else
+				for (int j = 0; j < tL2size; ++j) e_i[j] = (*snapE)(j, 0);
 		}
 		else
 		{
-			if (i == 1 && numSkipped[0] == 1)
-			{
-				x_i = 0.0;
-			}
-			else
-			{
-				for (int j = 0; j < tH1size; ++j)
-					x_i[j] = (*snapX)(j, i - 1 - numSkipped[0]);
-			}
-
-			if (i == 1 && numSkipped[1] == 1)
-				v_i = 0.0;
-			else
-			{
-				for (int j = 0; j < tH1size; ++j)
-					v_i[j] = (*snapV)(j, i - 1 - numSkipped[1]);
-			}
-
-			if (i == 1 && numSkipped[2] == 1)
-				e_i = 0.0;
-			else
-			{
-				for (int j = 0; j < tL2size; ++j)
-				{
-					e_i[j] = (*snapE)(j, i - 1 - numSkipped[2]);
-				}
-			}
+			for (int j = 0; j < tH1size; ++j)
+				x_i[j] = (*snapX)(j, i - numSkipped[0]);
+			
+			for (int j = 0; j < tH1size; ++j)
+				v_i[j] = (*snapV)(j, i - numSkipped[1]);
+		
+			for (int j = 0; j < tL2size; ++j)
+				e_i[j] = (*snapE)(j, i - numSkipped[2]);
 		}
 
 		SetStateFromTrueDOFs(x_i, v_i, e_i, S);
@@ -810,7 +805,7 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		input.FOMoper->ResetQuadratureData();
 
 		// Velocity equation.
-		// For 0 <= j < NBv, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+		// For 0 <= j < NBv, 0 <= i < nsnap, 0 <= e < ne, 0 <= m < nqe,
 		// entry G(j + (i*NBv), (e*nqe) + m) is the coefficient of
 		//
 		//					e_j^T * F(v_i,e_i,x_i) * 1E
@@ -821,7 +816,7 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		// identity vector in the energy space.
 
 		// Energy equation.
-		// For 0 <= j < NBe, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+		// For 0 <= j < NBe, 0 <= i < nsnap, 0 <= e < ne, 0 <= m < nqe,
 		// entry G(estart + j + (i*NBe), (e*nqe) + m) is the coefficient of
 		//	
 		//				 e_j^T * F(v_i,e_i,x_i)^T * v_i
@@ -1097,17 +1092,10 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 	{
 		if (rank == 0)
 		{
-			// For the energy-conserving EQP case, we increase the energy basis
+			// For the energy-conserving EQP case, increase the energy basis
 			// dimension by 1 to accomodate for the addition of the energy
 			// identity. 
-			// The change is done here, before the window basis parameters are
-			// written to their files, and is also carried to the caller's scope. 
 			
-			// TODO: if cutoff[2] == windowNumSamples then increasing this by
-			// 1 will lead to a function call trying to get more columns than
-			// there are available in basisE. In this case, we'd need to take
-			// all columns of basisE and then append one.
-			// And then do the same during the online stage. 
 			cutoff[2] += 1;
 		}
 
@@ -1120,17 +1108,21 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		// For the energy basis, the cutoff parameter has already been
 		// increased by 1 to accomodate the energy identity.
 		CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
-		CAROM::Matrix *tBasisE = basisE->getFirstNColumns(cutoff[2]);
+		
+		CAROM::Matrix *tBasisE = new CAROM::Matrix(tL2size, cutoff[2], false);
 
-		// Form the energy identity and replace the last basis vector by it. 
-		Vector unitE(tL2size);
-		unitE = 1.0;
-
+		// Get the first cutoff[2]-1 columns of basisE
 		for (int i = 0; i < tL2size; i++)
 		{
-			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
+			for (int j = 0; j < cutoff[2] - 1; j++)
+				(*tBasisE)(i, j) = (*basisE)(i, j);
 		}
 
+		// Form the energy identity and include it as the last basis vector. 
+		Vector unitE(tL2size);
+		unitE = 1.0;
+		for (int i = 0; i < tL2size; i++)
+			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
 		tBasisE->orthogonalize();
 
 		SetupEQP_Force(generator_X->getSnapshotMatrix(),
@@ -1288,17 +1280,18 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         mfH1.SetSize(tH1size);
         mfL2.SetSize(tL2size);
 
+		if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+			basisE = new CAROM::Matrix(tL2size, rdime, true);
+
         ReadSolutionBases(input.window);
 
 		if (hyperreduce && hyperreductionSamplingType == eqp_energy)
 		{
-			// Form the energy identity and replace the last E-basis vector by it. 
+			// Form the energy identity and include it as the last basis vector. 
 			Vector unitE(tL2size);
 			unitE = 1.0;
 			for (int i = 0; i < tL2size; i++)
-			{
 				(*basisE)(i, rdime-1) = unitE[i];
-			}
 			basisE->orthogonalize();
 		}
 
@@ -2222,7 +2215,29 @@ void ROM_Basis::ReadSolutionBases(const int window)
     if (!useVX)
         basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, rdimv);
 
-    basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, rdime);
+	// In the energy-conserving EQP case we read the first rdime-1 basis
+	// vectors, since the rdime parameter has been increased by 1 to
+	// accommodate the addition of the energy identity. 
+	if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	{
+		int tmp_rdime = rdime - 1;
+		CAROM::Matrix *tmp_basisE = 0;
+
+		tmp_basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
+			std::to_string(window) + basisIdentifier, tL2size, tmp_rdime);
+		
+		for (int i = 0; i < tL2size; i++)
+		{
+			for (int j = 0; j < tmp_rdime; j++)
+				(*basisE)(i, j) = (*tmp_basisE)(i, j);
+		}
+	}
+	else
+	{
+		basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
+			std::to_string(window) + basisIdentifier, tL2size, rdime);
+	}
+			
 
     if (useXV)
         basisX = basisV;
