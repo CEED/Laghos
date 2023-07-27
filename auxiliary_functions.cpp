@@ -66,7 +66,7 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT)){
+	  if ( pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE){
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -94,7 +94,7 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
+	  if ( pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE ){
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -122,7 +122,7 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
+	  if ( pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE ){
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();
@@ -154,7 +154,7 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
+	  if ( pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE ){
 	    // The points (and their numbering) coincide with the nodes of p.
 	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
 	    const int nqp = ir.GetNPoints();

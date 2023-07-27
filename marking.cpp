@@ -88,19 +88,6 @@ namespace mfem
 	    cutCount++;	
 	    pmesh.SetAttribute(i, SBElementType::CUT);
 	    mat_attr(i) = SBElementType::CUT;		
-	    //	    if (include_cut_cell){
-	    Array<int> dofs;
-	    pfes_sltn->GetElementVDofs(i, dofs);
-	    for (int k = 0; k < dofs.Size(); k++)
-	      {
-		ess_inactive[dofs[k]] = 0;
-	      }
-	    Array<int> dofs_p;
-	    sfes_sltn->GetElementVDofs(i, dofs_p);
-	    for (int k = 0; k < dofs_p.Size(); k++)
-	      {
-		ess_inactive_p[dofs_p[k]] = 0;
-	      }
 	  }
 	else // inside
 	  {
@@ -136,7 +123,7 @@ namespace mfem
 	  bool elem2_cut = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::CUT);
 	  bool elem2_outside = (pmesh.GetAttribute(ft->Elem2No) == SBElementType::OUTSIDE);
 	  // ghost faces
-	  if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ||  (elem1_cut && elem2_cut) ) {
+	  if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ) {
             pmesh.SetFaceAttribute(f, 77);
           }
           // outer surrogate boundaries
@@ -163,7 +150,7 @@ namespace mfem
 	bool elem2_cut = (attr2 == SBElementType::CUT);
 	bool elem2_outside = (attr2 == SBElementType::OUTSIDE);
 	// ghost faces
-	if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ||  (elem1_cut && elem2_cut) ) {
+	if ( (elem1_inside && elem2_cut) || (elem1_cut && elem2_inside) ) {
           pmesh.SetFaceAttribute(faceno, 77);
         }
         // outer surrogate boundaries

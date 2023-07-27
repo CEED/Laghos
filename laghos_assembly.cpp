@@ -766,7 +766,8 @@ namespace mfem
 	  // std::cout << " globa max " << globalmax_cs << " visc " << globalmax_viscous_coef << std::endl;
 	   // OLD //
 	  //	  penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * (1.0/std::pow(Trans_el1.Weight(),1.0/dim)) * 1.0  /* * (1.0 + globalmax_viscous_coef * h0 / globalmax_cs + (globalmax_cs / (globalmax_viscous_coef * h0)))*/ /* * ( nor_norm / Tr.Elem1->Weight()) */ ;
-	  penaltyVal = penaltyParameter * globalmax_rho * (perimeter/std::pow(Trans_el1.Weight(),1.0/dim)) * perimeter ;
+	  //	  penaltyVal = penaltyParameter * globalmax_rho * (perimeter/std::pow(Trans_el1.Weight(),1.0/dim)) * perimeter ;
+	  penaltyVal = penaltyParameter * globalmax_rho * (1.0/Trans_el1.Weight()) * 1.0 ;
 
 	  // penaltyVal = 4.0 * std::pow(penaltyParameter,1.0) * globalmax_rho;
 	  //////
@@ -1083,7 +1084,7 @@ namespace mfem
 									FaceElementTransformations &Tr,
 									Vector &elvect)      
     {
-      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+      if ( Tr.Attribute == 77 ){
 	const int dim = el.GetDim();      
 	const int nqp_face = IntRule->GetNPoints();
 	
@@ -1159,7 +1160,7 @@ namespace mfem
 								      Vector &elvect)
     {
       if (Vnpt_gf != NULL){ 
-	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	if ( Tr.Attribute == 77 ){
 	  const int dim = el.GetDim();
 	  const int nqp_face = IntRule->GetNPoints();
 
@@ -1322,7 +1323,7 @@ namespace mfem
 								 FaceElementTransformations &Tr,
 								 DenseMatrix &elmat)
     {
-      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+      if ( Tr.Attribute == 77 ){
 	const int dim = fe.GetDim();
 	DenseMatrix identity(dim);
 	identity = 0.0;
@@ -1406,7 +1407,7 @@ namespace mfem
 	    double penaltyVal = 0.0;
 	    //  penaltyVal = 4.0 * penaltyParameter * globalmax_rho ;
 	    // penaltyVal = std::pow(penaltyParameter, 1.0/hinit) * globalmax_rho * 1.0;
-	    penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * ( gamma_1 *  (4.0/std::pow(Trans_el1.Weight(),1.0/dim)) + gamma_2 * (4.0/std::pow(Trans_el2.Weight(),1.0/dim)) )  * 4.0;
+	    penaltyVal = std::pow(penaltyParameter, 1.0) * globalmax_rho * ( gamma_1 *  (1.0/Trans_el1.Weight()) + gamma_2 * (1.0/Trans_el2.Weight()) )  * 1.0;
 	    
 	    Vector Jac0inv_vec_el1(dim*dim),Jac0inv_vec_el2(dim*dim);
 	    Jac0inv_vec_el1 = 0.0;
@@ -1476,7 +1477,7 @@ namespace mfem
 								      FaceElementTransformations &Tr,
 								      Vector &elvect)
     {
-      if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+      if ( Tr.Attribute == 77 ){
 	const int dim = el.GetDim();
 	DenseMatrix identity(dim);
 	identity = 0.0;
@@ -1645,7 +1646,7 @@ namespace mfem
 									    Vector &elvect)
     {
       if (Vnpt_gf != NULL){ 
-	if ( (Tr.Attribute == 77) || (Tr.Attribute == 11) ){
+	if ( Tr.Attribute == 77 ){
 	  const int dim = el.GetDim();
 	  DenseMatrix identity(dim);
 	  identity = 0.0;

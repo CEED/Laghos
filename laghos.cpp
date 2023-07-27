@@ -94,9 +94,6 @@ int main(int argc, char *argv[])
   int geometricShape = 0;
   int nTerms = 1; 
   bool fullPenalty = false;
-  int numberGhostTerms = 1;
-  int numberEnergyGhostTerms = 1;
-  double ghostPenaltyCoefficient = 1.0;
   double perimeter = 1.0;
   
   OptionsParser args(argc, argv);
@@ -158,12 +155,6 @@ int main(int argc, char *argv[])
   args.AddOption(&fullPenalty, "-fP", "--full-Penalty", "-first-order-penalty",
 		 "--first-order-penalty",
 		 "Use full or first order for SBM penalty.");
-  args.AddOption(&numberGhostTerms, "-nGT", "--numberGhostTerms",
-                 "Number of terms in the  ghost penalty operator.");
-  args.AddOption(&numberEnergyGhostTerms, "-nEGT", "--numberEnergyGhostTerms",
-		  "Number of terms in the  energy equation ghost penalty operator.");
- 
-  args.AddOption(&ghostPenaltyCoefficient, "-gPenCoef", "--ghost-penalty-coefficient", "Ghost penalty scaling.");
   
   args.Parse();
   if (!args.Good())
@@ -251,7 +242,7 @@ int main(int argc, char *argv[])
   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
   // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
   int quadRule = (order_q > 0) ? order_q : 3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1;
-  L2_FECollection P_L2FEC((int)(quadRule*0.25), dim, BasisType::GaussLegendre);
+  L2_FECollection P_L2FEC((int)(quadRule*0.5), dim, BasisType::GaussLegendre);
   //  L2_FECollection P_L2FEC(order_e, dim, BasisType::GaussLobatto);
 
   ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
@@ -442,10 +433,7 @@ int main(int argc, char *argv[])
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, i, faceOrder, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
-					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, numberGhostTerms, numberEnergyGhostTerms, ghostPenaltyCoefficient,
-					       visc, vorticity,
-					       cg_tol, cg_max_iter, ftz_tol,
-					       order_q, penaltyParameter, perimeter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);
+					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, visc, vorticity, cg_tol, cg_max_iter, ftz_tol,  order_q, penaltyParameter, perimeter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);
 
   socketstream vis_rho, vis_v, vis_e;
   char vishost[] = "localhost";

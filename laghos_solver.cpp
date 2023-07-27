@@ -112,9 +112,6 @@ namespace mfem
 						     ParGridFunction &Jac0invface_gf,
 						     const int source,
 						     const double cfl,
-						     const int numberGhostTerms,
-						     const int numberEnergyGhostTerms,
-						     const double ghostPenaltyCoefficient,
 						     const bool visc,
 						     const bool vort,
 						     const double cgt,
@@ -139,9 +136,6 @@ namespace mfem
       l2dofs_cnt(L2.GetFE(0)->GetDof()),
       h1dofs_cnt(H1.GetFE(0)->GetDof()),
       source_type(source), cfl(cfl),
-      numberGhostTerms(numberGhostTerms),
-      numberEnergyGhostTerms(numberEnergyGhostTerms),
-      ghostPenaltyCoefficient(ghostPenaltyCoefficient),
       use_viscosity(visc),
       use_vorticity(vort),
       cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),perimeter(perimeter),
@@ -162,8 +156,6 @@ namespace mfem
       shifted_nvmi(NULL),
       shifted_d_nvmi(NULL),
       shifted_de_nvmi(NULL),
-      ghost_nvmi(NULL),
-      ghost_emi(NULL),
       mi(NULL),
       vmi(NULL),
       wall_dist_coef(NULL),
@@ -201,7 +193,7 @@ namespace mfem
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
       GLIntRules(0, BasisType::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
-		      0.5*((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
+		      ((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
       //      b_ir(GLIntRules.Get(pmesh->GetElementBaseGeometry(0),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
       //  b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(), 1.0*(H1.GetOrder(0) + L2.GetOrder(0) + faceOrder))),
       b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(),  0.75 * ((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
@@ -340,6 +332,7 @@ namespace mfem
       //    Set the entry corresponding to the inactive attribute to 0
       if (useEmbedded && (max_elem_attr >= 2)){
 	ess_elem[ShiftedFaceMarker::SBElementType::OUTSIDE-1] = 0;
+	ess_elem[ShiftedFaceMarker::SBElementType::CUT-1] = 0;
       }
       
       // Values of rho0DetJ0 and Jac0inv at all quadrature points.
@@ -500,14 +493,6 @@ namespace mfem
 	ShiftedDiffusionEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_de_nvmi);
 	ShiftedDiffusionEnergyBoundaryForce.Assemble();
 	
-	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
-	ghost_nvmi->SetIntRule(&b_ir);
-	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
-
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
-
-	ghost_emi->SetIntRule(&b_ir);
-	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
       }
       Me_mat->Assemble();
       Mv->Assemble();
@@ -704,7 +689,7 @@ namespace mfem
       AssembleDiffusionEnergyBoundaryForceMatrix();
       
       if (useEmbedded){
-	ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
+	//	ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
 	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
 	shifted_de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
 	AssembleShiftedEnergyBoundaryForceMatrix();
@@ -816,7 +801,7 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, dofs);
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE)  ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
+	  if ( pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE ){
 	    const FiniteElement &fe = *L2.GetFE(e);
 	    ElementTransformation &eltr = *L2.GetElementTransformation(e);
 	    di.AssembleRHSElementVect(fe, eltr, rhs);
@@ -865,7 +850,7 @@ namespace mfem
 
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
+	  if ( pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE ){
 	    L2.GetElementDofs(e, l2dofs);
 	    gf.GetSubVector(l2dofs, loc_e);
 	    ElementTransformation &Trans = *L2.GetElementTransformation(e);
@@ -958,7 +943,7 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ) {
+	      if ( pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE ) {
 	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
 		Jpr_b[z].SetSize(dim, dim, nqp);
 		e.GetValues(z_id, ir, e_vals);
@@ -989,7 +974,7 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ){
+	      if ( pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE ){
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)
