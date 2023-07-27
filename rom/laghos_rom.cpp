@@ -585,6 +585,31 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
         for (int j=0; j<nqe; ++j)
             w((i*nqe) + j) = w_el[j];
     }
+	
+	if (rank == 0)
+	{
+		int nGtcols = NB * (nsnap + 1);
+		int nGtrows = NQ;
+		for (int jj = 0; jj < nGtcols; jj++)
+		{
+			double tmpmax = fabs(Gt(0, jj));
+			for (int ii = 1; ii < nGtrows; ii++)
+			{
+				if (fabs(Gt(ii, jj)) > tmpmax)
+				{
+					tmpmax = fabs(Gt(ii, jj));
+				}
+			}
+
+			if (tmpmax > 1.0e-14)
+			{
+				for (int ii = 0; ii < nGtrows; ii++)
+				{
+					Gt(ii, jj) /= tmpmax;
+				}
+			}
+		}
+	}
 
     // TODO: input these NNLS parameters?
     double tolNNLS = 1.0e-14;

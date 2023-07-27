@@ -2089,6 +2089,22 @@ int main(int argc, char *argv[])
                              << sqrt(tot_norm) << endl;
                     }
 
+					if (romOptions.hyperreductionSamplingType == eqp)
+					{
+						double energy_total, energy_diff;
+						energy_total = oper->InternalEnergy(*e_gf) +
+							oper->KineticEnergy(*v_gf);
+						energy_diff	= energy_total - energy_init;
+
+						if (mpi.Root())
+						{
+							cout << "\tE_tot = " << scientific << setprecision(5)
+								<< energy_total
+								<< ",\tE_diff = " << scientific << setprecision(5)
+								<< energy_diff << endl; 
+						}
+					}
+
                     // Make sure all ranks have sent their 'v' solution before initiating
                     // another set of GLVis connections (one from each rank):
                     MPI_Barrier(pmesh->GetComm());
@@ -2465,9 +2481,13 @@ int main(int argc, char *argv[])
                                     oper->KineticEnergy(*v_gf);
         if (mpi.Root())
         {
-            cout << endl;
-            cout << "Energy diff: " << scientific << setprecision(2)
-                 << fabs(energy_init - energy_final) << endl;
+			cout << endl;
+			cout << "Initial energy: " << scientific << setprecision(5)
+				<< energy_init << endl;
+			cout << "Energy diff: " << scientific << setprecision(5)
+				<< energy_final - energy_init << endl;
+			cout << "Rel. energy diff: " << scientific << setprecision(5)
+				<< (energy_final - energy_init) / energy_init << endl;
         }
 
         PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
