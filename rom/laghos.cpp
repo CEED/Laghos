@@ -342,8 +342,11 @@ int main(int argc, char *argv[])
     args.AddOption(&hyperreductionSamplingType, "-hrsamptype", "--hrsamplingtype",
                    "Sampling type for the hyperreduction.");
     args.AddOption(&romOptions.maxNNLSnnz, "-maxnnls", "--max-nnls",
-                   "Maximum nnz for NNLS");
-    args.Parse();
+                   "Maximum number of nonzeros in NNLS solution.");
+    args.AddOption(&romOptions.tolNNLS, "-tolnnls", "--tol-nnls",
+                   "NNLS solver error tolerance.");
+    
+	args.Parse();
     if (!args.Good())
     {
         if (mpi.Root()) {

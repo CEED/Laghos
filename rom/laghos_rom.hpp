@@ -259,7 +259,8 @@ struct ROM_Options
 
     bool VTos = false;
 
-    int maxNNLSnnz = 0;
+	int maxNNLSnnz = 0; // max number of NNLS solution nonzeros
+	double tolNNLS = 1.0e-14; // NNLS solver error tolerance
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
