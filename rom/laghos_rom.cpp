@@ -611,11 +611,8 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
 		}
 	}
 
-    // TODO: input these NNLS parameters?
-    double tolNNLS = 1.0e-14;
-
     CAROM::Vector sol(ne * nqe, true);
-    SolveNNLS(rank, tolNNLS, input.maxNNLSnnz, w, Gt, sol);
+    SolveNNLS(rank, input.tolNNLS, input.maxNNLSnnz, w, Gt, sol);
 
     const std::string varName = equationE ? "E" : "V";
     WriteSolutionNNLS(sol, "run/nnls" + varName + std::to_string(input.window) + "_" +
