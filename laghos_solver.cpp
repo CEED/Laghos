@@ -201,7 +201,7 @@ namespace mfem
       Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
       GLIntRules(0, BasisType::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
-		      0.5*((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
+		      ((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
       //      b_ir(GLIntRules.Get(pmesh->GetElementBaseGeometry(0),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
       //  b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(), 1.0*(H1.GetOrder(0) + L2.GetOrder(0) + faceOrder))),
       b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(),  0.75 * ((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),

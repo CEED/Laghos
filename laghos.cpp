@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
   // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
   int quadRule = (order_q > 0) ? order_q : 3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1;
-  L2_FECollection P_L2FEC((int)(quadRule*0.25), dim, BasisType::GaussLegendre);
+  L2_FECollection P_L2FEC((int)(quadRule*0.5), dim, BasisType::GaussLegendre);
   //  L2_FECollection P_L2FEC(order_e, dim, BasisType::GaussLobatto);
 
   ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
