@@ -1797,8 +1797,8 @@ namespace mfem
 	    
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  elvect(i) += shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-		  elvect(i + l2dofs_cnt) += shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  elvect(i) += gamma_1 * shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  elvect(i + l2dofs_cnt) += gamma_2 * shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
 		}
 	    }
 	}
