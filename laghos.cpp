@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
   bool gfprint = false;
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
-  double blast_position[] = {0.0, 0.0, 0.0};
+  double blast_position[] = {-0.5, -0.5, -0.5};
   bool useEmbedded = false;
   int geometricShape = 0;
   int nTerms = 1; 
@@ -250,8 +250,8 @@ int main(int argc, char *argv[])
   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
   // Quad rule for interior terms. Define the pressure ParGridFunction with the same rule. 
-  int quadRule = (order_q > 0) ? order_q : 3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1;
-  L2_FECollection P_L2FEC((int)(quadRule*0.25), dim, BasisType::GaussLegendre);
+  int quadRule = (order_q > 0) ? order_q : 2 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1;
+  L2_FECollection P_L2FEC((int)(quadRule*0.5), dim, BasisType::GaussLegendre);
   //  L2_FECollection P_L2FEC(order_e, dim, BasisType::GaussLobatto);
 
   ParFiniteElementSpace P_L2FESpace(pmesh, &P_L2FEC);
