@@ -1286,9 +1286,11 @@ namespace mfem
 			{
 			  //		  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
 			  //  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
-			  elvect(i) -= (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * gamma_1 * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
-			  elvect(i+l2dofs_cnt) -= (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * gamma_2 * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
-			 
+			  //	  elvect(i) -= (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * gamma_1 * te_shape_el1(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
+			  //  elvect(i+l2dofs_cnt) -= (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * gamma_2 * te_shape_el2(i) * (volumeFraction_el1 * nor(vd) - volumeFraction_el2 * nor(vd) ) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
+			  elvect(i) -= (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * te_shape_el1(i) * volumeFraction_el1 * nor(vd) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
+			  elvect(i+l2dofs_cnt) += (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * te_shape_el2(i) * volumeFraction_el2 * nor(vd) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * ip_f.weight * tN_el1(md);
+		
 			  //			  elvect(i) -= gamma_1 * stress_el1(vd,md) * te_shape_el1(i) * (volumeFraction_el1 * nor(md) - volumeFraction_el2 * nor(md) ) * (gamma_1 * gradv_d_el1(vd) + gamma_2 * gradv_d_el2(vd)) * ip_f.weight;
 			  //  elvect(i+l2dofs_cnt) -= gamma_2 * stress_el2(vd,md) * te_shape_el2(i) * (volumeFraction_el1 * nor(md) - volumeFraction_el2 * nor(md) ) * (gamma_1 * gradv_d_el1(vd) + gamma_2 * gradv_d_el2(vd)) * ip_f.weight;
 			  //  elvect(i) -= (gamma_1 * stress_el1(vd,md) + gamma_2 * stress_el2(vd,md) ) * gamma_1 * te_shape_el1(i) * (volumeFraction_el1 * nor(md) - volumeFraction_el2 * nor(md) ) * (gamma_1 * gradv_d_el1(vd) + gamma_2 * gradv_d_el2(vd)) * ip_f.weight;
@@ -1797,8 +1799,8 @@ namespace mfem
 	    
 	      for (int i = 0; i < l2dofs_cnt; i++)
 		{
-		  elvect(i) += shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
-		  elvect(i + l2dofs_cnt) += shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  elvect(i) += gamma_1 * shape_el1(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
+		  elvect(i + l2dofs_cnt) += gamma_2 * shape_el2(i) * (gamma_1 * vDotn_el1 + gamma_2 * vDotn_el2) * (gamma_1 * vDotn_el1_n + gamma_2 * vDotn_el2_n) * nor_norm * penaltyVal * ip_f.weight * nTildaDotN * nTildaDotN * std::abs(volumeFraction_el1 - volumeFraction_el2);
 		}
 	    }
 	}
