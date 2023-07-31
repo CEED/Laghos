@@ -568,8 +568,8 @@ namespace mfem
 	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
 	L2.MarkerToList(ess_pdofs, ess_edofs);
 */
-	//	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	//	alphaCut->ExchangeFaceNbrData();		
+	UpdateAlpha(*alphaCut, H1, *level_set_gf);
+	alphaCut->ExchangeFaceNbrData();		
       }
       
       //Compute quadrature quantities
