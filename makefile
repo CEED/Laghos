@@ -95,9 +95,19 @@ CCC = $(strip $(CXX) $(LAGHOS_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)))
 LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 
+override jit = $(if $(MFEM_USE_JIT:YES=),,YES)
+ifeq ($(MFEM_USE_JIT),YES)
+JITTED_FILES = laghos_assembly.cpp laghos_solver.cpp
+SOURCE_FILES = $(filter-out $(JITTED_FILES), $(sort $(wildcard *.cpp)))
+HEADER_FILES = $(sort $(wildcard *.hpp))
+OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
+OBJECT_FILES += $(JITTED_FILES:.cpp=.o)
+JIT_OBJECT_FILES = $(JITTED_FILES:$(SRC)%.cpp=$(BLD)%.o)
+else
 SOURCE_FILES = $(sort $(wildcard *.cpp))
 HEADER_FILES = $(sort $(wildcard *.hpp))
 OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
+endif
 
 # Targets
 
@@ -114,6 +124,17 @@ laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 all:;@$(MAKE) -j $(NPROC) laghos
 
 $(OBJECT_FILES): $(HEADER_FILES) $(CONFIG_MK)
+
+JIT_LANG = -x c++
+ifeq ($(MFEM_USE_CUDA),YES)
+        JIT_LANG  = $(if $(jit),-x cu)
+endif
+ifeq ($(MFEM_USEHIP),YES)
+        JIT_LANG  = $(if $(jit),-x hip)
+endif
+MJIT = $(MFEM_DIR)/mfem/bin/mjit
+$(JIT_OBJECT_FILES): $(BLD)%.o: $(SRC)%.cpp $(CONFIG_MK)
+	$(MJIT) $(<) | $(MFEM_CXX) $(LAGHOS_FLAGS) $(JIT_LANG) -I. -c -o $(@) -
 
 # Quick test with specific execution options
 MFEM_TESTS = laghos
