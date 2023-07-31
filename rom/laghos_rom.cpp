@@ -934,6 +934,9 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		} // j -- basis vector
 	}  // i -- snapshot
 
+	// Rescale every column (NNLS equation) by its max absolute value
+	//Gt.rescale_cols_max();
+
 	CAROM::Vector w(ne * nqe, true);
 
 	for (int i=0; i<ne; ++i)
@@ -941,6 +944,31 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		for (int j=0; j<nqe; ++j)
 			// w: "exact" quadrature weights for all elements
 			w((i*nqe) + j) = w_el[j];
+	}
+
+	if (rank == 0)
+	{
+		int nGtcols = (NBv + NBe) * nsnap;
+		int nGtrows = NQ;
+		for (int jj = 0; jj < nGtcols; jj++)
+		{
+			double tmpmax = fabs(Gt(0, jj));
+			for (int ii = 1; ii < nGtrows; ii++)
+			{
+				if (fabs(Gt(ii, jj)) > tmpmax)
+				{
+					tmpmax = fabs(Gt(ii, jj));
+				}
+			}
+
+			if (tmpmax > 1.0e-14)
+			{
+				for (int ii = 0; ii < nGtrows; ii++)
+				{
+					Gt(ii, jj) /= tmpmax;
+				}
+			}
+		}
 	}
 
 	// TODO: input these NNLS parameters?
@@ -1093,7 +1121,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		if (rank == 0)
 		{
 			// For the energy-conserving EQP case, increase the energy basis
-			// dimension by 1 to accomodate for the addition of the energy
+			// dimension by 1 to accomodate the addition of the energy
 			// identity. 
 			
 			cutoff[2] += 1;
@@ -1280,12 +1308,12 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         mfH1.SetSize(tH1size);
         mfL2.SetSize(tL2size);
 
-		if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+		if (hyperreductionSamplingType == eqp_energy)
 			basisE = new CAROM::Matrix(tL2size, rdime, true);
 
         ReadSolutionBases(input.window);
 
-		if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+		if (hyperreductionSamplingType == eqp_energy)
 		{
 			// Form the energy identity and include it as the last basis vector. 
 			Vector unitE(tL2size);
@@ -2218,7 +2246,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
 	// In the energy-conserving EQP case we read the first rdime-1 basis
 	// vectors, since the rdime parameter has been increased by 1 to
 	// accommodate the addition of the energy identity. 
-	if (hyperreduce && hyperreductionSamplingType == eqp_energy)
+	if (hyperreductionSamplingType == eqp_energy)
 	{
 		int tmp_rdime = rdime - 1;
 		CAROM::Matrix *tmp_basisE = 0;
