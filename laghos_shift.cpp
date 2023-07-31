@@ -380,8 +380,6 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
       const FiniteElement &el_1, const FiniteElement &el_2,
       FaceElementTransformations &Trans, Vector &elvect)
 {
-   MFEM_VERIFY(v_shift_type == 1, "Implemented only for type 1.");
-
    const int h1dofs_cnt = el_1.GetDof();
    const int dim = el_1.GetDim();
    const int NE = mat_data.alpha_1.FESpace()->GetNE();
