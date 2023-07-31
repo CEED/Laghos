@@ -70,11 +70,11 @@ protected:
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
-   mutable bool qdata_is_current, forcemat_is_assembled;
+   mutable bool qdata_is_current;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force_1, Force_2, FaceForce;
+   mutable MixedBilinearForm Force_1, Force_2;
    mutable ParLinearForm FaceForceMomentum;
    mutable ParLinearForm FaceForceEnergy_1, FaceForceEnergy_2;
    mutable Vector one, rhs;

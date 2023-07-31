@@ -148,8 +148,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
-   forcemat_is_assembled(false),
-   Force_1(&H1, &L2), Force_2(&H1, &L2), FaceForce(&H1, &L2),
+   Force_1(&H1, &L2), Force_2(&H1, &L2),
    FaceForceMomentum(&H1), FaceForceEnergy_1(&L2), FaceForceEnergy_2(&L2),
    one(L2Vsize),
    rhs(H1Vsize),
@@ -261,14 +260,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Shifted interface setup.
    //
 
-   // Interface forces.
-   auto *ffi = new FaceForceIntegrator(mat_data, dist_coeff);
-   ffi->SetIntRule(&ir_face);
-   ffi->SetShiftType(si_options.v_shift_type);
-   ffi->SetScale(si_options.v_shift_scale);
-   //FaceForce.AddTraceFaceIntegrator(ffi);
-   FaceForce.AddFaceIntegrator(ffi);
-
+   // Momentum force.
    auto *mfi = new MomentumInterfaceIntegrator(mat_data, dist_coeff);
    mfi->SetIntRule(&ir_face);
    mfi->num_taylor    = si_options.num_taylor;
@@ -277,6 +269,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    mfi->use_mixed_elem = si_options.use_mixed_elem;
    FaceForceMomentum.AddInteriorFaceIntegrator(mfi);
 
+   // Energy 1 force.
    auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data, qdata, dist_coeff);
    efi_1->SetIntRule(&ir_face);
    efi_1->num_taylor      = si_options.num_taylor;
@@ -289,6 +282,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    efi_1->use_mixed_elem  = si_options.use_mixed_elem;
    FaceForceEnergy_1.AddInteriorFaceIntegrator(efi_1);
 
+   // Energy 2 force.
    auto *efi_2 = new EnergyInterfaceIntegrator(2, mat_data, qdata, dist_coeff);
    efi_2->SetIntRule(&ir_face);
    efi_2->num_taylor      = si_options.num_taylor;
@@ -300,21 +294,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    efi_2->diffusion_scale = si_options.e_shift_diffusion_scale;
    efi_2->use_mixed_elem  = si_options.use_mixed_elem;
    FaceForceEnergy_2.AddInteriorFaceIntegrator(efi_2);
-
-//   if (si_options.v_shift_type > 0)
-//   {
-//      // Make a dummy assembly to figure out the new sparsity.
-//      ParGridFunction &p_tmp_1 = mat_data.p_1->GetPressure(),
-//                      &p_tmp_2 = mat_data.p_2->GetPressure();
-//      p_tmp_1 = 1.0;
-//      p_tmp_2 = 1.0;
-//      UpdateAlpha(mat_data.level_set, mat_data.alpha_1, mat_data.alpha_2);
-//      FaceForce.Assemble(0);
-//      FaceForce.Finalize(0);
-//   }
-//   // Done after the dummy assembly to avoid extra calculations.
-//   ffi->SetDiffusion(si_options.v_shift_diffusion,
-//                     si_options.v_shift_diffusion_scale);
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() { }
@@ -372,11 +351,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    // This Force object is l2_dofs x h1_dofs (transpose of the paper one).
    Force_1.MultTranspose(one, rhs);
    Force_2.AddMultTranspose(one, rhs);
-
-//   if (si_options.v_shift_type > 0)
-//   {
-//      FaceForce.AddMultTranspose(one, rhs, 1.0);
-//   }
 
    rhs.Neg();
 
@@ -451,7 +425,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    Force_1.Mult(v, e_rhs_1);
    Force_2.Mult(v, e_rhs_2);
 
-//   if (si_options.e_shift_type == 1) { FaceForce.AddMult(v, e_rhs_1, 1.0); }
    if (si_options.e_shift_type > 1)
    {
       pmesh->ExchangeFaceNbrNodes();
@@ -772,7 +745,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    if (qdata_is_current) { return; }
 
    qdata_is_current = true;
-   forcemat_is_assembled = false;
 
    // This code is only for the 1D/FA mode
    const int nqp = ir.GetNPoints();
@@ -954,13 +926,6 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    Force_1.Assemble();
    Force_2 = 0.0;
    Force_2.Assemble();
-//   if (si_options.v_shift_type > 0)
-//   {
-//      FaceForce = 0.0;
-//      FaceForce.Assemble();
-//   }
-//   FaceForce_v.Assemble();
-   forcemat_is_assembled = true;
 }
 
 } // namespace hydrodynamics

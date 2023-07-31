@@ -93,47 +93,6 @@ public:
    virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip);
 };
 
-// Performs full assemble for the force face terms:
-// F_face_ij = < [grad_p.dist] * h1_shape_j * l2_shape_i >.
-class FaceForceIntegrator : public BilinearFormIntegrator
-{
-private:
-   Vector h1_shape_face, h1_shape, l2_shape;
-   const MaterialData &mat_data;
-   const ParGridFunction *v = nullptr;
-   VectorCoefficient &dist;
-
-   int v_shift_type = 0;
-   double v_shift_scale = 1.0;
-
-   bool diffuse_v = false;
-   double diffuse_v_scale = 1.0;
-
-  public:
-   FaceForceIntegrator(const MaterialData &mdata, VectorCoefficient &d)
-   : mat_data(mdata), dist(d) { }
-
-   // Goes over all H1 volumetric dofs in both cells around the interface.
-   void AssembleFaceMatrix(const FiniteElement &trial_fe,
-                           const FiniteElement &test_fe,
-                           FaceElementTransformations &Trans,
-                           DenseMatrix &elmat);
-
-   // Goes over only the H1 dofs that are exactly on the interface.
-   void AssembleFaceMatrix(const FiniteElement &trial_face_fe,
-                           const FiniteElement &test_fe1,
-                           const FiniteElement &test_fe2,
-                           FaceElementTransformations &Trans,
-                           DenseMatrix &elmat);
-
-   void SetShiftType(int type) { v_shift_type = type; }
-   void SetScale(double s) { v_shift_scale = s; }
-   void SetDiffusion(bool d, double s) { diffuse_v = d; diffuse_v_scale = s; }
-
-   void SetVelocity(const ParGridFunction &vel) { v = &vel; }
-   void UnsetVelocity() { v = nullptr; }
-};
-
 class MomentumInterfaceIntegrator : public LinearFormIntegrator
 {
 private:
