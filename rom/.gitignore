@@ -5,3 +5,4 @@ merge
 *.o
 *.out
 job*.sh
+logfiles/

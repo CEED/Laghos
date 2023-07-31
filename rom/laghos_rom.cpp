@@ -931,8 +931,9 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		} // j -- basis vector
 	}  // i -- snapshot
 
-	// Rescale every column (NNLS equation) by its max absolute value
-	//Gt.rescale_cols_max();
+	// Rescale every Gt column (NNLS equation) by its max absolute value.
+	// It seems to help the NNLS solver significantly.
+	Gt.rescale_cols_max();
 
 	CAROM::Vector w(ne * nqe, true);
 
@@ -941,31 +942,6 @@ void ROM_Sampler::SetupEQP_En_Force_Eq(const CAROM::Matrix* snapX,
 		for (int j=0; j<nqe; ++j)
 			// w: "exact" quadrature weights for all elements
 			w((i*nqe) + j) = w_el[j];
-	}
-
-	if (rank == 0)
-	{
-		int nGtcols = (NBv + NBe) * nsnap;
-		int nGtrows = NQ;
-		for (int jj = 0; jj < nGtcols; jj++)
-		{
-			double tmpmax = fabs(Gt(0, jj));
-			for (int ii = 1; ii < nGtrows; ii++)
-			{
-				if (fabs(Gt(ii, jj)) > tmpmax)
-				{
-					tmpmax = fabs(Gt(ii, jj));
-				}
-			}
-
-			if (tmpmax > 1.0e-14)
-			{
-				for (int ii = 0; ii < nGtrows; ii++)
-				{
-					Gt(ii, jj) /= tmpmax;
-				}
-			}
-		}
 	}
 
     CAROM::Vector sol(ne * nqe, true);
