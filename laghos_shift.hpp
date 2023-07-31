@@ -67,6 +67,7 @@ struct SIOptions
 
    int v_shift_type = 0;
    double v_shift_scale = 1.0;
+   double v_cut_scale   = 1.0;
    bool v_shift_diffusion = false;
    double v_shift_diffusion_scale = 1.0;
 
@@ -97,7 +98,6 @@ class MomentumInterfaceIntegrator : public LinearFormIntegrator
 {
 private:
    const MaterialData &mat_data;
-   const ParGridFunction *v = nullptr;
    VectorCoefficient &dist;
 
 public:
@@ -119,9 +119,6 @@ public:
                                        const FiniteElement &el_2,
                                        FaceElementTransformations &Trans,
                                        Vector &elvect);
-
-   void SetVelocity(const ParGridFunction &vel) { v = &vel; }
-   void UnsetVelocity() { v = nullptr; }
 };
 
 class EnergyInterfaceIntegrator : public LinearFormIntegrator
@@ -162,6 +159,31 @@ public:
    void SetVandE(const ParGridFunction *vel, const ParGridFunction *en)
    { v = vel; e = en; }
    void UnsetVandE() { v = nullptr; e = nullptr; }
+};
+
+class MomentumCutFaceIntegrator : public LinearFormIntegrator
+{
+private:
+   const MaterialData &mat_data;
+   VectorCoefficient &dist;
+
+public:
+   int    num_taylor = 1;
+   double v_cut_scale = 1.0;
+
+   MomentumCutFaceIntegrator(const MaterialData &mdata, VectorCoefficient &d)
+      : mat_data(mdata), dist(d) { }
+
+   using LinearFormIntegrator::AssembleRHSElementVect;
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+                                       ElementTransformation &Trans,
+                                       Vector &elvect)
+   { MFEM_ABORT("should not be used"); }
+
+   virtual void AssembleRHSElementVect(const FiniteElement &el_1,
+                                       const FiniteElement &el_2,
+                                       FaceElementTransformations &Trans,
+                                       Vector &elvect);
 };
 
 class EnergyCutFaceIntegrator : public LinearFormIntegrator

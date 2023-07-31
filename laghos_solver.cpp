@@ -260,7 +260,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Shifted interface setup.
    //
 
-   // Momentum force.
+   // Momentum interface force.
    auto *mfi = new MomentumInterfaceIntegrator(mat_data, dist_coeff);
    mfi->SetIntRule(&ir_face);
    mfi->num_taylor    = si_options.num_taylor;
@@ -268,6 +268,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    mfi->v_shift_scale = si_options.v_shift_scale;
    mfi->use_mixed_elem = si_options.use_mixed_elem;
    FaceForceMomentum.AddInteriorFaceIntegrator(mfi);
+
+   // Momentum cut face force.
+   if (si_options.v_shift_type == 2)
+   {
+      auto *mcfi = new MomentumCutFaceIntegrator(mat_data, dist_coeff);
+      mcfi->SetIntRule(&ir_face);
+      mcfi->num_taylor  = si_options.num_taylor;
+      mcfi->v_cut_scale = si_options.v_cut_scale;
+      FaceForceMomentum.AddInteriorFaceIntegrator(mcfi);
+   }
 
    // Energy 1 force.
    auto *efi_1 = new EnergyInterfaceIntegrator(1, mat_data, qdata, dist_coeff);
@@ -327,9 +337,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    ParGridFunction v;
    const int VsizeH1 = H1.GetVSize();
    v.MakeRef(&H1, *sptr, VsizeH1);
-   auto tfi_v = FaceForceMomentum.GetIFLFI();
-   auto v_integ = dynamic_cast<MomentumInterfaceIntegrator *>((*tfi_v)[0]);
-   v_integ->SetVelocity(v);
 
    UpdateQuadratureData(S);
    AssembleForceMatrix();
@@ -384,8 +391,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
    cg.Mult(B, X);
    Mv.RecoverFEMSolution(X, rhs, dv);
-
-   v_integ->UnsetVelocity();
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -397,14 +402,11 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    vel.MakeRef(&H1, *vptr, 0);
    energy_1.MakeRef(&L2, *sptr, 2*H1.GetVSize());
    energy_2.MakeRef(&L2, *sptr, 2*H1.GetVSize() + L2.GetVSize());
-   auto tfi_v = FaceForceMomentum.GetIFLFI();
-   auto v_integ = dynamic_cast<MomentumInterfaceIntegrator *>((*tfi_v)[0]);
    auto tfi_e_1 = FaceForceEnergy_1.GetIFLFI();
    auto e_integ_1 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_1)[0]);
    auto tfi_e_2 = FaceForceEnergy_2.GetIFLFI();
    auto e_integ_2 = dynamic_cast<EnergyInterfaceIntegrator *>((*tfi_e_2)[0]);
    vel.ExchangeFaceNbrData();
-   v_integ->SetVelocity(vel);
    e_integ_1->SetVandE(&vel, &energy_1);
    e_integ_2->SetVandE(&vel, &energy_2);
 
@@ -479,7 +481,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       }
    }
 
-   v_integ->UnsetVelocity();
    e_integ_1->UnsetVandE();
    e_integ_2->UnsetVandE();
 }

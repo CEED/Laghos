@@ -386,13 +386,12 @@ int main(int argc, char *argv[])
    // Contribution to the momentum RHS:
    // 0: no shifting terms.
    // 1: - < [grad_p.d] psi >
-   // 2: - < [grad_p.d * grad_psi.d] n >
-   // 3: - < [(p + grad_p.d) * grad_psi.d] n >
-   // 4: + < [p + grad_p.d] [psi + grad_psi.d] n >
-   // 5: - < [grad_p.d] [psi + grad_psi.d] n >
+   // 2: - < [grad_p.d] psi > - < [alpha_1] [(grad_p_pos+grad_p_neg).d] psi >
    si_options.v_shift_type = shift_v;
-   // Scaling of the momentum term.
+   // Scaling of the momentum interface term.
    si_options.v_shift_scale = 1.0;
+   // Scaling of the momentum cut face term.
+   si_options.v_cut_scale = 1.0;
    // Activate the momentum diffusion term.
    si_options.v_shift_diffusion = false;
    si_options.v_shift_diffusion_scale = 1.0;
@@ -423,6 +422,9 @@ int main(int argc, char *argv[])
                            si_options.e_shift_type > 0) ? true : false;
 
    mat_data.pointwise_alpha = si_options.pointwise_alpha;
+
+   MFEM_VERIFY(si_options.pointwise_alpha == false,
+               "The interface integrators must be fixed - search GetCenter");
 
    // Distance vector and distance solver setup.
    ParGridFunction dist(&H1FESpace);

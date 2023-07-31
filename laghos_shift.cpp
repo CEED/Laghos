@@ -529,7 +529,7 @@ void MomentumInterfaceIntegrator::AssembleRHSElementVect(
       // 2nd element if there is such (subtracting from the 1st).
       if (local_face)
       {
-         // L2 shape functions on the 2nd element.
+         // Shape functions in the 2nd element.
          el_2.CalcShape(ip_e2, h1_shape);
 
          for (int j = 0; j < h1dofs_cnt; j++)
@@ -924,6 +924,125 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
             Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
             // Switches sign, because it's a jump of the shape f-s.
             elvect_e2 -= shape_e;
+         }
+      }
+   }
+}
+
+void MomentumCutFaceIntegrator::AssembleRHSElementVect(
+      const FiniteElement &el_1, const FiniteElement &el_2,
+      FaceElementTransformations &Trans, Vector &elvect)
+{
+   const int h1dofs_cnt = el_1.GetDof();
+   const int dim = el_1.GetDim();
+   const int NE = mat_data.alpha_1.FESpace()->GetNE();
+   const bool local_face = (Trans.Elem2No < NE);
+
+   if (local_face == false)
+   {
+      // This is a shared face between mpi tasks.
+      // Each task assembles only its side, but uses info from the neighbor.
+      elvect.SetSize(h1dofs_cnt * dim);
+   }
+   else { elvect.SetSize(h1dofs_cnt * dim * 2); }
+   elvect = 0.0;
+
+   // The early return must be done after elmat.SetSize().
+   const int attr_face = Trans.Attribute;
+   if (attr_face != 15) { return; }
+
+   ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
+   ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
+
+   const ParGridFunction *p1, *p2, *alpha1;
+   p1     = &mat_data.p_1->GetPressure();
+   p2     = &mat_data.p_2->GetPressure();
+   alpha1 = &mat_data.alpha_1;
+
+   Vector h1_shape(h1dofs_cnt);
+   Vector nor(dim), d_q(dim);
+
+   MFEM_VERIFY(IntRule != nullptr, "Must have been set in advance");
+   const int nqp_face = IntRule->GetNPoints();
+
+   for (int q = 0; q < nqp_face; q++)
+   {
+      // Set the integration point in the face and the neighboring elements
+      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      Trans.SetAllIntPoints(&ip_f);
+
+      // Access the neighboring elements' integration points
+      const IntegrationPoint &ip_e1 = Trans.GetElement1IntPoint();
+      const IntegrationPoint &ip_e2 = Trans.GetElement2IntPoint();
+
+      // The normal includes the Jac scaling.
+      // The orientation is taken into account in the processing of element 1.
+      if (dim == 1)
+      {
+         nor(0) = (2*ip_e1.x - 1.0) * Trans.Weight();
+      }
+      else { CalcOrtho(Trans.Jacobian(), nor); }
+      nor *= ip_f.weight;
+
+      // Compute el1 quantities. Allows negative pressure.
+      // Note that the distance vector is a continuous function.
+      Trans_e1.SetIntPoint(&ip_e1);
+      dist.Eval(d_q, Trans_e1, ip_e1);
+      Vector shift_p1_q1(1), shift_p2_q1(1);
+      double p1_q1 = p1->GetValue(Trans_e1, ip_e1),
+             p2_q1 = p2->GetValue(Trans_e1, ip_e1);
+      get_shifted_value(*p1, Trans_e1.ElementNo, ip_e1, d_q,
+                        num_taylor, shift_p1_q1);
+      get_shifted_value(*p2, Trans_e1.ElementNo, ip_e1, d_q,
+                        num_taylor, shift_p2_q1);
+      double grad_p1_d_q1 = shift_p1_q1(0) - p1_q1,
+             grad_p2_d_q1 = shift_p2_q1(0) - p2_q1;
+      double alpha1_q1    = alpha1->GetValue(Trans_e1, ip_e1);
+
+      // Compute el1 quantities. Allows negative pressure.
+      Trans_e2.SetIntPoint(&ip_e2);
+      Vector shift_p1_q2(1), shift_p2_q2(1);
+      double p1_q2 = p1->GetValue(Trans_e2, ip_e2),
+             p2_q2 = p2->GetValue(Trans_e2, ip_e2);
+      get_shifted_value(*p1, Trans_e2.ElementNo, ip_e2, d_q,
+                        num_taylor, shift_p1_q2);
+      get_shifted_value(*p2, Trans_e2.ElementNo, ip_e2, d_q,
+                        num_taylor, shift_p2_q2);
+      double grad_p1_d_q2 = shift_p1_q2(0) - p1_q2,
+             grad_p2_d_q2 = shift_p2_q2(0) - p2_q2;
+      double alpha1_q2    = alpha1->GetValue(Trans_e2, ip_e2);
+
+      const double p_shift_jump = (grad_p1_d_q1 + grad_p1_d_q2) -
+                                  (grad_p2_d_q1 + grad_p2_d_q2);
+      // 1st element.
+      {
+         // Shape functions in the 1st element.
+         el_1.CalcShape(ip_e1, h1_shape);
+
+         for (int j = 0; j < h1dofs_cnt; j++)
+         {
+            for (int d = 0; d < dim; d++)
+            {
+               elvect(d*h1dofs_cnt + j) +=
+                     v_cut_scale * 0.5 * alpha1_q1 *
+                     p_shift_jump * h1_shape(j) * nor(d);
+            }
+         }
+      }
+      // 2nd element if there is such (subtracting from the 1st).
+      if (local_face)
+      {
+         // Shape functions in the 2nd element.
+         el_2.CalcShape(ip_e2, h1_shape);
+
+         for (int j = 0; j < h1dofs_cnt; j++)
+         {
+            for (int d = 0; d < dim; d++)
+            {
+               elvect(dim*h1dofs_cnt + d*h1dofs_cnt + j) -=
+                     v_cut_scale * 0.5 * alpha1_q2 *
+                     p_shift_jump * h1_shape(j) * nor(d);
+            }
          }
       }
    }
