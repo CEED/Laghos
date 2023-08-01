@@ -577,40 +577,18 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
             }  // e
         }  // j
     }  // i
+	
+	// Rescale every Gt column (NNLS equation) by its max absolute value.
+	// It seems to help the NNLS solver significantly.
+	Gt.rescale_cols_max();
 
     CAROM::Vector w(ne * nqe, true);
-
     for (int i=0; i<ne; ++i)
     {
         for (int j=0; j<nqe; ++j)
             w((i*nqe) + j) = w_el[j];
     }
 	
-	if (rank == 0)
-	{
-		int nGtcols = NB * (nsnap + 1);
-		int nGtrows = NQ;
-		for (int jj = 0; jj < nGtcols; jj++)
-		{
-			double tmpmax = fabs(Gt(0, jj));
-			for (int ii = 1; ii < nGtrows; ii++)
-			{
-				if (fabs(Gt(ii, jj)) > tmpmax)
-				{
-					tmpmax = fabs(Gt(ii, jj));
-				}
-			}
-
-			if (tmpmax > 1.0e-14)
-			{
-				for (int ii = 0; ii < nGtrows; ii++)
-				{
-					Gt(ii, jj) /= tmpmax;
-				}
-			}
-		}
-	}
-
     CAROM::Vector sol(ne * nqe, true);
     SolveNNLS(rank, input.tolNNLS, input.maxNNLSnnz, w, Gt, sol);
 
