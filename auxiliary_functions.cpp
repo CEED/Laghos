@@ -72,10 +72,12 @@ namespace mfem
 	    const int nqp = ir.GetNPoints();
 	    
 	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	    //  std::cout << " nqp " << nqp << std::endl;
 	    for (int q = 0; q < nqp; q++)
 	      {
 		const IntegrationPoint &ip = ir.IntPoint(q);
 		Tr.SetIntPoint(&ip);
+		//	std::cout << " ip.x " << ip.x << " ip.y " << ip.y << " ip.z " << ip.z << std::endl; 
 		double volumeFraction = alpha.GetValue(Tr, ip);
 		double rho0DetJ0 = rho0DetJ0_gf.GetValue(Tr, ip);
 		const double rho = rho0DetJ0 / (Tr.Weight() * volumeFraction);

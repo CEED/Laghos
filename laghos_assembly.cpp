@@ -671,6 +671,7 @@ namespace mfem
       elmat = 0.0;
       Vector shape(h1dofs_cnt);
       shape = 0.0;
+      // std::cout << " ass " << nqp_face << std::endl;
       for (int q = 0; q  < nqp_face; q++)
 	{
 	  const IntegrationPoint &ip_f = IntRule->IntPoint(q);
@@ -683,7 +684,7 @@ namespace mfem
 	  const int elementNo = Trans_el1.ElementNo;
 	  const int eq = elementNo*nqp_face + q;
 	 
-	  // std::cout << " Aip.x " << eip.x << " Aip.y " << eip.y << std::endl;
+	  //  std::cout << " Aip.x " << eip.x << " Aip.y " << eip.y << " Aop.z " << eip.z << std::endl;
 	 
 	  Vector nor;
 	  nor.SetSize(dim);
@@ -1096,6 +1097,7 @@ namespace mfem
 	te_shape_el1 = 0.0;
 	te_shape_el2 = 0.0;
 	nor = 0.0;
+	//	std::cout << " shifted " << nqp_face << std::endl;
 	for (int q = 0; q  < nqp_face; q++)
 	  {
 	    te_shape_el1 = 0.0;
@@ -1109,7 +1111,7 @@ namespace mfem
 	    const IntegrationPoint &eip_el2 = Tr.GetElement2IntPoint();	    
 	    ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
 	    ElementTransformation &Trans_el2 = Tr.GetElement2Transformation();
-	    
+	    //  std::cout << " shifted eip.x " << eip_el1.x <<  " shifted eip.y " << eip_el1.y <<  " shifted eip.z " << eip_el1.z << std::endl;
 	    CalcOrtho(Tr.Jacobian(), nor);
 
 	    double volumeFraction_el1 = alpha_gf.GetValue(Trans_el1, eip_el1);
