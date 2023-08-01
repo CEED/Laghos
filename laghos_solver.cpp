@@ -408,6 +408,7 @@ namespace mfem
       cs_gf.ExchangeFaceNbrData();
       
      //Compute quadrature quantities
+     // std::cout << " calling " << std::endl;
       UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
