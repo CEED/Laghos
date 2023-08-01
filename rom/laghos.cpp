@@ -345,6 +345,8 @@ int main(int argc, char *argv[])
                    "Maximum number of nonzeros in NNLS solution.");
     args.AddOption(&romOptions.tolNNLS, "-tolnnls", "--tol-nnls",
                    "NNLS solver error tolerance.");
+	args.AddOption(&romOptions.sampfreq, "-sampfreq", "--samp-freq",
+			"Snapshot sampling frequency.");
     
 	args.Parse();
     if (!args.Good())
@@ -1171,6 +1173,10 @@ int main(int argc, char *argv[])
             sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
         }
         samplerTimer.Stop();
+
+		if (myid == 0)
+			cout << "Sampling every " << romOptions.sampfreq <<
+				" timestep(s)." << endl;
     }
 
     if (outputTimes)
@@ -1806,7 +1812,8 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    sampler->SampleSolution(t, last_dt, real_pd, *S);
+					if (unique_steps % romOptions.sampfreq == 0)
+						sampler->SampleSolution(t, last_dt, real_pd, *S);
                 }
 
                 bool endWindow = false;
