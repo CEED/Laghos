@@ -57,8 +57,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     SetStateVariables(S);
     SetStateVariableRates(dt);
 
-	const bool sampleX = (hyperreductionSamplingType == eqp_energy) ? true :
-		generator_X->isNextSample(t);
+	const bool sampleX = generator_X->isNextSample(t);
     
 	Vector dSdt;
     if (!sns && rhsBasis)
@@ -99,8 +98,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         }
     }
 
-	const bool sampleV = (hyperreductionSamplingType == eqp_energy) ? true :
-		generator_V->isNextSample(t);
+    const bool sampleV = generator_V->isNextSample(t);
 
     //TODO: use this, plus generator_Fv->computeNextSampleTime? So far, it seems sampleV == true on every step.
     //const bool sampleFv = generator_Fv->isNextSample(t);
@@ -154,8 +152,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
         }
     }
 
-	const bool sampleE = (hyperreductionSamplingType == eqp_energy) ? true :
-		generator_E->isNextSample(t);
+	const bool sampleE = generator_E->isNextSample(t);
 
     if (sampleE)
     {
