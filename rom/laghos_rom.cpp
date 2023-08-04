@@ -1104,7 +1104,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		// increased by 1 to accomodate the energy identity.
 		CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
 		
-		CAROM::Matrix *tBasisE = new CAROM::Matrix(tL2size, cutoff[2], false);
+		CAROM::Matrix *tBasisE = new CAROM::Matrix(tL2size, cutoff[2], true);
 
 		// Get the first cutoff[2]-1 columns of basisE
 		for (int i = 0; i < tL2size; i++)
