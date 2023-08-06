@@ -423,6 +423,17 @@ namespace mfem
       // which is used twice: once at the start and once at the end of the run.
       mi = new WeightedMassIntegrator(*alphaCut, rho_gf, &ir);
       Me_mat->AddDomainIntegrator(mi, ess_elem);
+
+      MassIntegrator mi_2(rho0_coeff, &ir);
+      for (int e = 0; e < NE; e++)
+	{
+	  DenseMatrixInverse inv(&Me(e));
+	  const FiniteElement &fe = *L2.GetFE(e);
+	  ElementTransformation &Tr = *L2.GetElementTransformation(e);
+	  mi_2.AssembleElementMatrix(fe, Tr, Me(e));
+	  inv.Factor();
+	  inv.GetInverseMatrix(Me_inv(e));
+	}
       
       // Standard assembly for the velocity mass matrix.
       vmi = new WeightedVectorMassIntegrator(*alphaCut, rho_gf, &ir);
@@ -748,21 +759,21 @@ namespace mfem
       if (e_source) { e_rhs += *e_source; }
       Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
       
-      /* for (int e = 0; e < NE; e++)
+      for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);	 
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
+	  //	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
 	    e_rhs.GetSubVector(l2dofs, loc_rhs);
 	    Me_inv(e).Mult(loc_rhs, loc_de);
 	    de.SetSubVector(l2dofs, loc_de);
-	  }
+	    /* }
 	  else {
 	    loc_de = 0.0;
 	    de.SetSubVector(l2dofs, loc_de);
-	  }
-	}*/
+	  }*/
+	}
 
-      HypreParMatrix A;
+      /*   HypreParMatrix A;
       Me_mat->FormLinearSystem(ess_edofs, de, e_rhs, A, X_e, B_e);
       CGSolver cg(L2.GetParMesh()->GetComm());
       HypreSmoother prec;
@@ -775,7 +786,7 @@ namespace mfem
       cg.SetPrintLevel(-1);
       cg.Mult(B_e, X_e);
       Me_mat->RecoverFEMSolution(X_e, e_rhs, de);
- 
+ */
       
       delete e_source;
     }
