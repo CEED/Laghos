@@ -66,24 +66,22 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT)){
-	    // The points (and their numbering) coincide with the nodes of p.
-	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	    const int nqp = ir.GetNPoints();
-	    
-	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	    //  std::cout << " nqp " << nqp << std::endl;
-	    for (int q = 0; q < nqp; q++)
-	      {
-		const IntegrationPoint &ip = ir.IntPoint(q);
-		Tr.SetIntPoint(&ip);
-		//	std::cout << " ip.x " << ip.x << " ip.y " << ip.y << " ip.z " << ip.z << std::endl; 
-		double volumeFraction = alpha.GetValue(Tr, ip);
-		double rho0DetJ0 = rho0DetJ0_gf.GetValue(Tr, ip);
-		const double rho = rho0DetJ0 / (Tr.Weight() * volumeFraction);
-		rho_gf(e * nqp + q) = rho;
-	      }
-	  }
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	  //  std::cout << " nqp " << nqp << std::endl;
+	  for (int q = 0; q < nqp; q++)
+	    {
+	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      //	std::cout << " ip.x " << ip.x << " ip.y " << ip.y << " ip.z " << ip.z << std::endl; 
+	      double volumeFraction = alpha.GetValue(Tr, ip);
+	      double rho0DetJ0 = rho0DetJ0_gf.GetValue(Tr, ip);
+	      const double rho = rho0DetJ0 / (Tr.Weight() * volumeFraction);
+	      rho_gf(e * nqp + q) = rho;
+	    }
 	}
     }
     
@@ -96,24 +94,23 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    // The points (and their numbering) coincide with the nodes of p.
-	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	    const int nqp = ir.GetNPoints();
-	    
-	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	    for (int q = 0; q < nqp; q++)
-	      {
-		const IntegrationPoint &ip = ir.IntPoint(q);
-		Tr.SetIntPoint(&ip);
-		const double gamma_val = gamma_gf.GetValue(Tr, ip);
-		const double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
-		const double rho_val = rho_gf.GetValue(Tr, ip);
-		p_gf(e * nqp + q) = (gamma_val - 1.0) * rho_val * e_val;
-	      }
-	  }
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	  for (int q = 0; q < nqp; q++)
+	    {
+	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      const double gamma_val = gamma_gf.GetValue(Tr, ip);
+	      const double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+	      const double rho_val = rho_gf.GetValue(Tr, ip);
+	      p_gf(e * nqp + q) = (gamma_val - 1.0) * rho_val * e_val;
+	    }
 	}
     }
+  
     
     void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf)
     {
@@ -124,21 +121,19 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    // The points (and their numbering) coincide with the nodes of p.
-	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	    const int nqp = ir.GetNPoints();
-	    
-	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	    for (int q = 0; q < nqp; q++)
-	      {
-		const IntegrationPoint &ip = ir.IntPoint(q);
-		Tr.SetIntPoint(&ip);
-		double gamma_val = gamma_gf.GetValue(Tr, ip);
-		double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
-		cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
-	      }
-	  }
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	  for (int q = 0; q < nqp; q++)
+	    {
+	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      double gamma_val = gamma_gf.GetValue(Tr, ip);
+	      double e_val = fmax(0.0,e_gf.GetValue(Tr, ip));
+	      cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
+	    }
 	}
     }
     
@@ -156,31 +151,30 @@ namespace mfem
       // Compute L2 pressure at the quadrature points, element by element.
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) || (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    // The points (and their numbering) coincide with the nodes of p.
-	    const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	    const int nqp = ir.GetNPoints();
-	    
-	    ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	    
-	    for (int q = 0; q < nqp; q++)
-	      {
-		const IntegrationPoint &ip = ir.IntPoint(q);
-		Tr.SetIntPoint(&ip);
-		const double detJ = (Tr.Jacobian()).Det();
-		const DenseMatrix & Jac = Tr.Jacobian();
-		double rho_vals = rho_gf.GetValue(Tr,ip);
-		double sound_speed = cs_gf.GetValue(Tr,ip);
-		max_rho = std::max(max_rho, rho_vals);
-		max_cs = std::max(max_cs, sound_speed);
-		/////
-		Vector D_el1(dim);
-		D_el1 = 0.0;
+	  // The points (and their numbering) coincide with the nodes of p.
+	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+	  const int nqp = ir.GetNPoints();
+	  
+	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+	  
+	  for (int q = 0; q < nqp; q++)
+	    {
+	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      Tr.SetIntPoint(&ip);
+	      const double detJ = (Tr.Jacobian()).Det();
+	      const DenseMatrix & Jac = Tr.Jacobian();
+	      double rho_vals = rho_gf.GetValue(Tr,ip);
+	      double sound_speed = cs_gf.GetValue(Tr,ip);
+	      max_rho = std::max(max_rho, rho_vals);
+	      max_cs = std::max(max_cs, sound_speed);
+	      /////
+	      Vector D_el1(dim);
+	      D_el1 = 0.0;
 		double normD = 0.0;
 		if (useEmbedded){
 		  dist_vec->Eval(D_el1, Tr, ip);
 		}
-
+		
 		Vector Jac0inv_vec(dim*dim);
 		Jac0inv_vec = 0.0;
 		Jac0invface_gf.GetVectorValue(Tr.ElementNo,ip,Jac0inv_vec);
@@ -238,7 +232,6 @@ namespace mfem
 		  max_viscous_coef = std::max(max_viscous_coef, visc_coeff);
 		}
 	      }
-	  }
 	}
       globalmax_viscous_coef = 0.0;
       globalmax_rho = 0.0;
