@@ -822,7 +822,7 @@ namespace mfem
       Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
       Array<int> dofs(l2dofs_cnt);
       DenseMatrixInverse inv(&Mrho);
-      MassIntegrator mi(&ir);
+      MassIntegrator lmi(&ir);
       DensityIntegrator di(rho0DetJ0_gf);
       di.SetIntRule(&ir);
       for (int e = 0; e < NE; e++)
@@ -832,7 +832,7 @@ namespace mfem
 	    const FiniteElement &fe = *L2.GetFE(e);
 	    ElementTransformation &eltr = *L2.GetElementTransformation(e);
 	    di.AssembleRHSElementVect(fe, eltr, rhs);
-	    mi.AssembleElementMatrix2(fe, fe, eltr, Mrho);
+	    lmi.AssembleElementMatrix(fe, eltr, Mrho);
 	    inv.Factor();
 	    inv.Mult(rhs, rho_z);
 	    rho.SetSubVector(dofs, rho_z);
