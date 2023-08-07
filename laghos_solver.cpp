@@ -605,50 +605,26 @@ namespace mfem
 	}
     }
 
+
     double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
     {
       double glob_ie = 0.0;
-
-      double loc_ie = 0.0;	    
+      
+      Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
+      one = 1.0;
       Array<int> l2dofs;
-      Vector loc_e(l2dofs_cnt);
-      Vector shape(l2dofs_cnt);
-      shape = 0.0;
-
+      double loc_ie = 0.0;
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);
 	  gf.GetSubVector(l2dofs, loc_e);
-	  ElementTransformation &Trans = *L2.GetElementTransformation(e);
-	  const FiniteElement &el = *L2.GetFE(e);
-	  
-	  for (int q = 0; q < ir.GetNPoints(); q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      // Set the integration point in the face and the neighboring elements
-	      Trans.SetIntPoint(&ip);
-	      el.CalcShape(ip, shape);
-	      
-	      double volumeFraction = alphaCut->GetValue(Trans, ip);
-	      double density = rho_gf.GetValue(Trans, ip);
-	      double one = 0.0;
-	      double local_ie = gf.GetValue(Trans,ip);
-	      double internalE = 0.0;
-	      for (int i = 0; i < l2dofs_cnt; i++){
-		one += shape(i);
-		internalE += shape(i) * loc_e(i); 
-	      }
-	      
-	      loc_ie += one * density * ip.weight * volumeFraction * Trans.Weight() * internalE;
-	    }
+	  loc_ie += Me(e).InnerProduct(loc_e, one);
 	}
-      
       MPI_Comm comm = H1.GetParMesh()->GetComm();
       MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
       
       return glob_ie;
     }
-
 
     double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
     {
