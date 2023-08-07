@@ -140,9 +140,7 @@ namespace mfem
       void AssembleForceMatrix() const;
       void AssembleSourceVector() const;
       void AssembleEnergyForceMatrix() const;
-      void AssembleVelocityBoundaryForceMatrix() const;
       void AssembleDiffusionVelocityBoundaryForceMatrix() const;
-      void AssembleEnergyBoundaryForceMatrix() const;
       void AssembleDiffusionEnergyBoundaryForceMatrix() const;
 
     public:

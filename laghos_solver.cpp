@@ -377,7 +377,6 @@ namespace mfem
       // Make a dummy assembly to figure out the sparsity.
       SourceForce.Assemble();
       
-
       nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), perimeter, order_v, rhoface_gf, v_gf, csface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
 
       nvmi->SetIntRule(&b_ir);
@@ -601,6 +600,7 @@ namespace mfem
 	  rho.SetSubVector(dofs, rho_z);	  
 	}
     }
+
 
     double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
     {
