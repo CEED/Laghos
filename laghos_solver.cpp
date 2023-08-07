@@ -291,48 +291,11 @@ namespace mfem
       alphaCut->ExchangeFaceNbrData();
       *alphaCut = 1;
     
-      if (useEmbedded){
-	mfem::FiniteElementCollection* lsvec = new H1_FECollection(H1.GetOrder(0)+2,dim);
-	mfem::ParFiniteElementSpace* lsfes = new mfem::ParFiniteElementSpace(pmesh,lsvec);
-	lsfes->ExchangeFaceNbrData();
-	// Weak Boundary condition imposition: all tests use v.n = 0 on the boundary
-	// We need to define ess_tdofs and ess_vdofs, but they will be kept empty
-	level_set_gf = new ParGridFunction(lsfes);
-	analyticalSurface = new ShiftedFaceMarker(*pmesh, H1, L2, *alpha_fes, 0);
-	wall_dist_coef = new Dist_Level_Set_Coefficient(geometricShape);
-	
-	level_set_gf->ProjectCoefficient(*wall_dist_coef);
-	// Exchange information for ghost elements i.e. elements that share a face
-	// with element on the current processor, but belong to another processor.
-	level_set_gf->ExchangeFaceNbrData();
-	// Setup the class to mark all elements based on whether they are located
-	// inside or outside the true domain, or intersected by the true boundary.
-	analyticalSurface->MarkElements(*level_set_gf);
-
-	Array<int> ess_vdofs;
-	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
-	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
-	H1.MarkerToList(ess_vdofs, ess_tdofs);
-
-	Array<int> ess_pdofs;
-	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
-	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
-	L2.MarkerToList(ess_pdofs, ess_edofs);
-	
-	//	if (useAnalyticalShape){
-	dist_vec = new Dist_Vector_Coefficient(dim, geometricShape);
-	normal_vec = new Normal_Vector_Coefficient(dim, geometricShape);
-	//	}
-	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();	
-      }
-      else {
-	for (int i = 0; i < pmesh->GetNE(); i++)
-	  {
-	    pmesh->SetAttribute(i, ShiftedFaceMarker::SBElementType::INSIDE);
-	  }
-      }
-
+      for (int i = 0; i < pmesh->GetNE(); i++)
+	{
+	  pmesh->SetAttribute(i, ShiftedFaceMarker::SBElementType::INSIDE);
+	}
+      
     
       const int max_elem_attr = pmesh->attributes.Max();
       ess_elem.SetSize(max_elem_attr);
@@ -762,32 +725,11 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, l2dofs);	 
-	  //	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
 	    e_rhs.GetSubVector(l2dofs, loc_rhs);
 	    Me_inv(e).Mult(loc_rhs, loc_de);
 	    de.SetSubVector(l2dofs, loc_de);
-	    /* }
-	  else {
-	    loc_de = 0.0;
-	    de.SetSubVector(l2dofs, loc_de);
-	  }*/
+	 
 	}
-
-      /*   HypreParMatrix A;
-      Me_mat->FormLinearSystem(ess_edofs, de, e_rhs, A, X_e, B_e);
-      CGSolver cg(L2.GetParMesh()->GetComm());
-      HypreSmoother prec;
-      prec.SetType(HypreSmoother::Jacobi, 1);
-      cg.SetPreconditioner(prec);
-      cg.SetOperator(A);
-      cg.SetRelTol(cg_rel_tol);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(cg_max_iter);
-      cg.SetPrintLevel(-1);
-      cg.Mult(B_e, X_e);
-      Me_mat->RecoverFEMSolution(X_e, e_rhs, de);
- */
-      
       delete e_source;
     }
 
@@ -828,43 +770,16 @@ namespace mfem
       for (int e = 0; e < NE; e++)
 	{
 	  L2.GetElementDofs(e, dofs);
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE)  ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    const FiniteElement &fe = *L2.GetFE(e);
-	    ElementTransformation &eltr = *L2.GetElementTransformation(e);
-	    di.AssembleRHSElementVect(fe, eltr, rhs);
-	    lmi.AssembleElementMatrix(fe, eltr, Mrho);
-	    inv.Factor();
-	    inv.Mult(rhs, rho_z);
-	    rho.SetSubVector(dofs, rho_z);
-	  }
-	  else{
-	    rho_z = 0.0;
-	    rho.SetSubVector(dofs, rho_z);	    
-	  }
+	  const FiniteElement &fe = *L2.GetFE(e);
+	  ElementTransformation &eltr = *L2.GetElementTransformation(e);
+	  di.AssembleRHSElementVect(fe, eltr, rhs);
+	  lmi.AssembleElementMatrix(fe, eltr, Mrho);
+	  inv.Factor();
+	  inv.Mult(rhs, rho_z);
+	  rho.SetSubVector(dofs, rho_z);	  
 	}
     }
 
-    /*    double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
-    {
-      double glob_ie = 0.0;
-
-      Vector one(l2dofs_cnt), loc_e(l2dofs_cnt);
-      one = 1.0;
-      Array<int> l2dofs;
-      double loc_ie = 0.0;
-      for (int e = 0; e < NE; e++)
-	{
-	  L2.GetElementDofs(e, l2dofs);
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    gf.GetSubVector(l2dofs, loc_e); 
-	    loc_ie += Me(e).InnerProduct(loc_e, one);
-	  }
-	}
-      MPI_Comm comm = H1.GetParMesh()->GetComm();
-      MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
-
-      return glob_ie;
-      }*/
     double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
     {
       double glob_ie = 0.0;
@@ -877,37 +792,35 @@ namespace mfem
 
       for (int e = 0; e < NE; e++)
 	{
-	  if ( (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(e) == ShiftedFaceMarker::SBElementType::CUT) ){
-	    L2.GetElementDofs(e, l2dofs);
-	    gf.GetSubVector(l2dofs, loc_e);
-	    ElementTransformation &Trans = *L2.GetElementTransformation(e);
-	    const FiniteElement &el = *L2.GetFE(e);
-
-	    for (int q = 0; q < ir.GetNPoints(); q++)
-	      {
-		const IntegrationPoint &ip = ir.IntPoint(q);
-		// Set the integration point in the face and the neighboring elements
-		Trans.SetIntPoint(&ip);
-		el.CalcShape(ip, shape);
-		
-		double volumeFraction = alphaCut->GetValue(Trans, ip);
-		double density = rho_gf.GetValue(Trans, ip);
-		double one = 0.0;
-		double local_ie = gf.GetValue(Trans,ip);
-		double internalE = 0.0;
-		for (int i = 0; i < l2dofs_cnt; i++){
-		  one += shape(i);
-		  internalE += shape(i) * loc_e(i); 
-		}
-		
-		loc_ie += one * density * ip.weight * volumeFraction * Trans.Weight() * internalE;
+	  L2.GetElementDofs(e, l2dofs);
+	  gf.GetSubVector(l2dofs, loc_e);
+	  ElementTransformation &Trans = *L2.GetElementTransformation(e);
+	  const FiniteElement &el = *L2.GetFE(e);
+	  
+	  for (int q = 0; q < ir.GetNPoints(); q++)
+	    {
+	      const IntegrationPoint &ip = ir.IntPoint(q);
+	      // Set the integration point in the face and the neighboring elements
+	      Trans.SetIntPoint(&ip);
+	      el.CalcShape(ip, shape);
+	      
+	      double volumeFraction = alphaCut->GetValue(Trans, ip);
+	      double density = rho_gf.GetValue(Trans, ip);
+	      double one = 0.0;
+	      double local_ie = gf.GetValue(Trans,ip);
+	      double internalE = 0.0;
+	      for (int i = 0; i < l2dofs_cnt; i++){
+		one += shape(i);
+		internalE += shape(i) * loc_e(i); 
 	      }
-	  }
+	      
+	      loc_ie += one * density * ip.weight * volumeFraction * Trans.Weight() * internalE;
+	    }
 	}
       
       MPI_Comm comm = H1.GetParMesh()->GetComm();
       MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
-
+      
       return glob_ie;
     }
 
@@ -970,29 +883,27 @@ namespace mfem
 	  double min_detJ = std::numeric_limits<double>::infinity();
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ) {
-	 	ElementTransformation *T = H1.GetElementTransformation(z_id);
-		Jpr_b[z].SetSize(dim, dim, nqp);
-		e.GetValues(z_id, ir, e_vals);
-		for (int q = 0; q < nqp; q++)
+	      ElementTransformation *T = H1.GetElementTransformation(z_id);
+	      Jpr_b[z].SetSize(dim, dim, nqp);
+	      e.GetValues(z_id, ir, e_vals);
+	      for (int q = 0; q < nqp; q++)
 		{
 		  const IntegrationPoint &ip = ir.IntPoint(q);
 		  T->SetIntPoint(&ip);
 		  double volumeFraction = alphaCut->GetValue(*T, ip);
-	
+		  
 		  Jpr_b[z](q) = T->Jacobian();
 		  const double detJ = Jpr_b[z](q).Det();
 		  min_detJ = fmin(min_detJ, detJ);
 		  const int idx = z * nqp + q;
 		  double rho0DetJ0 = rho0DetJ0_gf.GetValue(*T, ip);
-
+		  
 		  // Assuming piecewise constant gamma that moves with the mesh.
 		  gamma_b[idx] = gamma_gf(z_id);		
 		  rho_b[idx] = rho0DetJ0 / (detJ * volumeFraction);
 		  e_b[idx] = fmax(0.0, e_vals(q));
 		}
-	      }
-		++z_id;
+	      ++z_id;
 	    }
 	  
 	  // Batched computation of material properties.
@@ -1001,7 +912,6 @@ namespace mfem
 	  z_id -= nzones_batch;
 	  for (int z = 0; z < nzones_batch; z++)
 	    {
-	      if ( (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::INSIDE) ||  (pmesh->GetAttribute(z_id) == ShiftedFaceMarker::SBElementType::CUT) ){
 		ElementTransformation *T = H1.GetElementTransformation(z_id);
 	
 		for (int q = 0; q < nqp; q++)
@@ -1085,7 +995,7 @@ namespace mfem
 			}
 		    }
 		}
-	      }
+	      
 	      ++z_id;
 	    }
 	}
