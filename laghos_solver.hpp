@@ -64,9 +64,6 @@ namespace mfem
      
       const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
       const double cfl;
-      const int numberGhostTerms;
-      const int numberEnergyGhostTerms;
-      const int ghostPenaltyCoefficient;		     
       const bool use_viscosity, use_vorticity;
       const double cg_rel_tol;
       const int cg_max_iter;
@@ -120,17 +117,10 @@ namespace mfem
       mutable ParLinearForm DiffusionVelocityBoundaryForce;
       mutable ParLinearForm EnergyBoundaryForce;
       mutable ParLinearForm DiffusionEnergyBoundaryForce;
-      mutable ParLinearForm ShiftedVelocityBoundaryForce;
-      mutable ParLinearForm ShiftedDiffusionVelocityBoundaryForce;
-      mutable ParLinearForm ShiftedDiffusionEnergyBoundaryForce;
-     
-      mutable ParLinearForm ShiftedEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
       const double penaltyParameter;
       const double perimeter;
       const double nitscheVersion;
-      const bool useEmbedded;
-      const int geometricShape;
       Array<int> ess_elem;
 
       ForceIntegrator *fi;
@@ -145,30 +135,8 @@ namespace mfem
       WeightedMassIntegrator *mi;
       WeightedVectorMassIntegrator *vmi;
       
-      ShiftedVelocityBoundaryForceIntegrator *shifted_v_bfi;
-      ShiftedEnergyBoundaryForceIntegrator *shifted_e_bfi;
-      ShiftedNormalVelocityMassIntegrator *shifted_nvmi;
-      ShiftedDiffusionNormalVelocityIntegrator *shifted_d_nvmi;
-      ShiftedDiffusionEnergyNormalVelocityIntegrator *shifted_de_nvmi;
-     
-      GhostVectorFullGradPenaltyIntegrator *ghost_nvmi;
-      GhostScalarFullGradPenaltyIntegrator *ghost_emi;
-      
-      Dist_Level_Set_Coefficient *wall_dist_coef;
-      // in case we are using level set to get distance and normal vectors
-      ParFiniteElementSpace *distance_vec_space;
-      ParGridFunction *distance;
-      ParFiniteElementSpace *normal_vec_space;
-      ParGridFunction *normal;
-      ParGridFunction *ls_func;
-      ParGridFunction *level_set_gf;
       ParGridFunction *alphaCut;
       //  
-      ShiftedFaceMarker *analyticalSurface;
-      VectorCoefficient *dist_vec;
-      VectorCoefficient *normal_vec;
-      int nTerms;
-      bool fullPenalty;
       double C_I_E;
       double C_I_V;
   
@@ -180,7 +148,6 @@ namespace mfem
       void AssembleDiffusionVelocityBoundaryForceMatrix() const;
       void AssembleEnergyBoundaryForceMatrix() const;
       void AssembleDiffusionEnergyBoundaryForceMatrix() const;
-      void AssembleShiftedEnergyBoundaryForceMatrix() const;
 
     public:
       LagrangianHydroOperator(const int size, const int order_e, const int order_v,

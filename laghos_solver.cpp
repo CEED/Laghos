@@ -139,15 +139,10 @@ namespace mfem
       l2dofs_cnt(L2.GetFE(0)->GetDof()),
       h1dofs_cnt(H1.GetFE(0)->GetDof()),
       source_type(source), cfl(cfl),
-      numberGhostTerms(numberGhostTerms),
-      numberEnergyGhostTerms(numberEnergyGhostTerms),
-      ghostPenaltyCoefficient(ghostPenaltyCoefficient),
       use_viscosity(visc),
       use_vorticity(vort),
       cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),penaltyParameter(penaltyParameter),perimeter(perimeter),
       nitscheVersion(nitscheVersion),
-      useEmbedded(useEmb),
-      geometricShape(gS),
       ess_elem(pmesh->attributes.Max()),
       fi(NULL),
       efi(NULL),
@@ -157,26 +152,9 @@ namespace mfem
       nvmi(NULL),
       d_nvmi(NULL),
       de_nvmi(NULL),
-      shifted_v_bfi(NULL),
-      shifted_e_bfi(NULL),
-      shifted_nvmi(NULL),
-      shifted_d_nvmi(NULL),
-      shifted_de_nvmi(NULL),
-      ghost_nvmi(NULL),
-      ghost_emi(NULL),
       mi(NULL),
       vmi(NULL),
-      wall_dist_coef(NULL),
-      distance_vec_space(NULL),
-      distance(NULL),
-      normal_vec_space(NULL),
-      normal(NULL),
-      ls_func(NULL),
-      level_set_gf(NULL),
       alphaCut(NULL),
-      analyticalSurface(NULL),
-      dist_vec(NULL),
-      normal_vec(NULL),
       rho0_gf(rho0_gf),
       rho_gf(rho_gf),
       rhoface_gf(rhoface_gf),
@@ -228,10 +206,6 @@ namespace mfem
       DiffusionVelocityBoundaryForce(&H1),
       EnergyBoundaryForce(&L2),
       DiffusionEnergyBoundaryForce(&L2),
-      ShiftedVelocityBoundaryForce(&H1),
-      ShiftedEnergyBoundaryForce(&L2),
-      ShiftedDiffusionVelocityBoundaryForce(&H1),
-      ShiftedDiffusionEnergyBoundaryForce(&L2),
       X(H1c.GetTrueVSize()),
       B(H1c.GetTrueVSize()),
       X_e(L2c.GetTrueVSize()),
@@ -241,8 +215,6 @@ namespace mfem
       b_rhs(H1Vsize),
       e_rhs(L2Vsize),
       be_rhs(L2Vsize),
-      nTerms(nT),
-      fullPenalty(fP),
       C_I_E(0.0),
       C_I_V(0.0)
     {
@@ -371,7 +343,7 @@ namespace mfem
       UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf,  dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -492,7 +464,7 @@ namespace mfem
       UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, dist_vec, qdata.h0, use_viscosity, use_vorticity, useEmbedded, penaltyParameter * C_I_V);
+      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -948,11 +920,6 @@ namespace mfem
       bediffusion_forcemat_is_assembled = true;
     }
 
-    void LagrangianHydroOperator::AssembleShiftedEnergyBoundaryForceMatrix() const
-    {
-   
-      beemb_forcemat_is_assembled = true;
-    }
 
   } // namespace hydrodynamics
 
