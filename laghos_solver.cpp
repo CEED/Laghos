@@ -112,9 +112,6 @@ namespace mfem
 						     ParGridFunction &Jac0invface_gf,
 						     const int source,
 						     const double cfl,
-						     const int numberGhostTerms,
-						     const int numberEnergyGhostTerms,
-						     const double ghostPenaltyCoefficient,
 						     const bool visc,
 						     const bool vort,
 						     const double cgt,
@@ -123,9 +120,7 @@ namespace mfem
 						     const int oq,
 						     const double penaltyParameter,
 						     const double perimeter,
-						     const double nitscheVersion,
-						     const bool useEmb, const int gS,
-						     int nT, bool fP) :
+						     const double nitscheVersion) :
       TimeDependentOperator(size),
       H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1), L2c(L2.GetParMesh(), L2.FEColl(), 1), 
       alpha_fes(NULL), alpha_fec(NULL),

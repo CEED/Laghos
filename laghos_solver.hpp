@@ -177,13 +177,10 @@ namespace mfem
 			      ParGridFunction &Jac0invface_gf,  
 			      const int source,
 			      const double cfl,
-			      const int numberGhostTerms,
-			      const int numberEnergyGhostTerms,
-			      const double ghostPenaltyCoefficient,
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter, const double perimeter,
-			      const double nitscheVersion, const bool useEmb, const int gS, int nT, bool fP);
+			      const double nitscheVersion);
       ~LagrangianHydroOperator();
 
       // Solve for dx_dt, dv_dt and de_dt.

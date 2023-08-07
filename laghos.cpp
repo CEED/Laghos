@@ -90,13 +90,6 @@ int main(int argc, char *argv[])
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
   double blast_position[] = {-0.5, -0.5, -0.5};
-  bool useEmbedded = false;
-  int geometricShape = 0;
-  int nTerms = 1; 
-  bool fullPenalty = false;
-  int numberGhostTerms = 1;
-  int numberEnergyGhostTerms = 1;
-  double ghostPenaltyCoefficient = 1.0;
   double perimeter = 1.0;
   
   OptionsParser args(argc, argv);
@@ -148,22 +141,6 @@ int main(int argc, char *argv[])
 		 "Perimeter of the bounding box of the domain");
   args.AddOption(&nitscheVersion, "-nitVer", "--nitscheVersion",
 		 "-1 and 1 for skew-symmetric and symmetric versions of Nitsche");
-  args.AddOption(&useEmbedded, "-emb", "--use-embedded", "-no-emb",
-		 "--no-embedded",
-		 "Use Embedded when there is surface that will be embedded in a pre-existing mesh");
-  args.AddOption(&geometricShape, "-gS", "--geometricShape",
-		 "Shape of the embedded geometry that will be embedded");
-  args.AddOption(&nTerms, "-tO", "--taylorOrder",
-		 "Number of terms in the Taylor expansion");
-  args.AddOption(&fullPenalty, "-fP", "--full-Penalty", "-first-order-penalty",
-		 "--first-order-penalty",
-		 "Use full or first order for SBM penalty.");
-  args.AddOption(&numberGhostTerms, "-nGT", "--numberGhostTerms",
-                 "Number of terms in the  ghost penalty operator.");
-  args.AddOption(&numberEnergyGhostTerms, "-nEGT", "--numberEnergyGhostTerms",
-		  "Number of terms in the  energy equation ghost penalty operator.");
- 
-  args.AddOption(&ghostPenaltyCoefficient, "-gPenCoef", "--ghost-penalty-coefficient", "Ghost penalty scaling.");
   
   args.Parse();
   if (!args.Good())
@@ -442,10 +419,10 @@ int main(int argc, char *argv[])
   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),order_e, order_v, i, faceOrder, globalmax_rho, globalmax_cs, globalmax_viscous_coef,
 					       H1FESpace, L2FESpace, P_L2FESpace, PFace_L2FESpace,
 					       rho0_coeff, rho0_gf, rho_gf, rhoface_gf,
-					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, numberGhostTerms, numberEnergyGhostTerms, ghostPenaltyCoefficient,
+					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, 
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
-					       order_q, penaltyParameter, perimeter, nitscheVersion, useEmbedded, geometricShape, nTerms, fullPenalty);
+					       order_q, penaltyParameter, perimeter, nitscheVersion);
 
   socketstream vis_rho, vis_v, vis_e;
   char vishost[] = "localhost";
