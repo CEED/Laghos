@@ -300,10 +300,6 @@ namespace mfem
       const int max_elem_attr = pmesh->attributes.Max();
       ess_elem.SetSize(max_elem_attr);
       ess_elem = 1;
-      //    Set the entry corresponding to the inactive attribute to 0
-      if (useEmbedded && (max_elem_attr >= 2)){
-	ess_elem[ShiftedFaceMarker::SBElementType::OUTSIDE-1] = 0;
-      }
       
       // Values of rho0DetJ0 and Jac0inv at all quadrature points.
       // Initial local mesh size (assumes all mesh elements are the same).
@@ -447,43 +443,6 @@ namespace mfem
       DiffusionEnergyBoundaryForce.AddBdrFaceIntegrator(de_nvmi);
       DiffusionEnergyBoundaryForce.Assemble();
       
-      if (useEmbedded){
-	shifted_v_bfi = new ShiftedVelocityBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf);
-	shifted_v_bfi->SetIntRule(&b_ir);
-	ShiftedVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_v_bfi);
-	// Make a dummy assembly to figure out the sparsity.
-      	ShiftedVelocityBoundaryForce.Assemble();    
-
-	shifted_e_bfi = new ShiftedEnergyBoundaryForceIntegrator(pmesh, *alphaCut, pface_gf, v_gf, dist_vec, normal_vec, nTerms);
-	shifted_e_bfi->SetIntRule(&b_ir);
-	ShiftedEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_e_bfi);
-	// Make a dummy assembly to figure out the sparsity.
-	ShiftedEnergyBoundaryForce.Assemble();
-
-	shifted_nvmi = new ShiftedNormalVelocityMassIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
-
-	shifted_nvmi->SetIntRule(&b_ir);
-	Mv->AddInteriorFaceIntegrator(shifted_nvmi);
-
-	shifted_d_nvmi = new ShiftedDiffusionNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
-	shifted_d_nvmi->SetIntRule(&b_ir);
-	ShiftedDiffusionVelocityBoundaryForce.AddInteriorFaceIntegrator(shifted_d_nvmi);
-	ShiftedDiffusionVelocityBoundaryForce.Assemble();
-	
-	shifted_de_nvmi = new ShiftedDiffusionEnergyNormalVelocityIntegrator(qdata.h0, pmesh, h1, *alphaCut, 2.0 * penaltyParameter  * (C_I_V+C_I_E), order_v, globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, viscousface_gf, csface_gf, v_gf, Jac0invface_gf, dist_vec, normal_vec, nTerms, fullPenalty);
-	shifted_de_nvmi->SetIntRule(&b_ir);
-	ShiftedDiffusionEnergyBoundaryForce.AddInteriorFaceIntegrator(shifted_de_nvmi);
-	ShiftedDiffusionEnergyBoundaryForce.Assemble();
-	
-	ghost_nvmi = new GhostVectorFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberGhostTerms);
-	ghost_nvmi->SetIntRule(&b_ir);
-	Mv->AddInteriorFaceIntegrator(ghost_nvmi);
-
-	ghost_emi = new GhostScalarFullGradPenaltyIntegrator(qdata.h0, pmesh, v_gf, rhoface_gf, Jac0invface_gf, globalmax_rho, ghostPenaltyCoefficient, numberEnergyGhostTerms);
-
-	ghost_emi->SetIntRule(&b_ir);
-	Me_mat->AddInteriorFaceIntegrator(ghost_emi);
-      }
       Me_mat->Assemble();
       Mv->Assemble();
       
@@ -520,32 +479,6 @@ namespace mfem
     }
 
     void LagrangianHydroOperator::UpdateLevelSet(const Vector &S, const Vector &S_init){
-      if (useEmbedded){	
-	level_set_gf->ProjectCoefficient(*wall_dist_coef);
-	// Exchange information for ghost elements i.e. elements that share a face
-	// with element on the current processor, but belong to another processor.
-	level_set_gf->ExchangeFaceNbrData();
-	// Setup the class to mark all elements based on whether they are located
-	// inside or outside the true domain, or intersected by the true boundary.
-
-	// inside or outside the true domain, or intersected by the true boundary.
-	/*	analyticalSurface->MarkElements(*level_set_gf);
-
-	ess_tdofs.DeleteAll();
-	Array<int> ess_vdofs;
-	Array<int> ess_inactive_dofs = analyticalSurface->GetEss_Vdofs();
-	H1.GetRestrictionMatrix()->BooleanMult(ess_inactive_dofs, ess_vdofs);
-	H1.MarkerToList(ess_vdofs, ess_tdofs);
-
-	ess_edofs.DeleteAll();
-	Array<int> ess_pdofs;
-	Array<int> ess_inactive_pdofs = analyticalSurface->GetEss_Pdofs();
-	L2.GetRestrictionMatrix()->BooleanMult(ess_inactive_pdofs, ess_pdofs);
-	L2.MarkerToList(ess_pdofs, ess_edofs);
-*/
-	UpdateAlpha(*alphaCut, H1, *level_set_gf);
-	alphaCut->ExchangeFaceNbrData();		
-      }
       
       //Compute quadrature quantities
       UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
@@ -566,42 +499,6 @@ namespace mfem
       viscousface_gf.ExchangeFaceNbrData();
 
       v_gf.ExchangeFaceNbrData();
-      /*  Mv->Update();
-      Mv->BilinearForm::operator=(0.0);
-      Array<BilinearFormIntegrator*> * temp = Mv->GetDBFI();
-      temp->DeleteAll();
-      Array<BilinearFormIntegrator*> * tempI = Mv->GetFBFI();
-      tempI->DeleteAll();
-      Array<BilinearFormIntegrator*> * tempB = Mv->GetBFBFI();
-      tempB->DeleteAll();
-      UpdateMesh(S_init);
-      Mv->AddInteriorFaceIntegrator(ghost_nvmi);
-      Mv->Assemble();
-      Array<BilinearFormIntegrator*> * tempIP2 = Mv->GetFBFI();
-      tempIP2->DeleteAll();
-      UpdateMesh(S);
-      Mv->AddDomainIntegrator(vmi, ess_elem);
-      Mv->AddBdrFaceIntegrator(nvmi);
-      Mv->AddInteriorFaceIntegrator(shifted_nvmi);
-      Mv->Assemble();
-
-      Mv_spmat_copy = Mv->SpMat();
-
-      Me_mat->Update();
-      Me_mat->BilinearForm::operator=(0.0);
-      Array<BilinearFormIntegrator*> * tempMe = Me_mat->GetDBFI();
-      tempMe->DeleteAll();
-      Array<BilinearFormIntegrator*> * tempMeI = Me_mat->GetFBFI();
-      tempMeI->DeleteAll();
-
-      UpdateMesh(S_init);
-      Me_mat->AddInteriorFaceIntegrator(ghost_emi);
-      Me_mat->Assemble();
-      Array<BilinearFormIntegrator*> * tempMeIP2 = Me_mat->GetFBFI();
-      tempMeIP2->DeleteAll();
-      UpdateMesh(S);
-      Me_mat->AddDomainIntegrator(mi, ess_elem);
-      Me_mat->Assemble();*/
  
     }
     
@@ -610,12 +507,7 @@ namespace mfem
 						const Vector &S_init,
 						const double dt) const
     {
-
-      // Mv->Update();
-      //  Mv->BilinearForm::operator=(0.0);
-      //  Mv->Assemble();
-      // Mv->Finalize();
-      
+     
       AssembleForceMatrix();
       AssembleVelocityBoundaryForceMatrix();
       AssembleDiffusionVelocityBoundaryForceMatrix();
@@ -634,11 +526,6 @@ namespace mfem
       rhs += VelocityBoundaryForce;
       rhs += DiffusionVelocityBoundaryForce;
       rhs += SourceForce;
-      
-      if (useEmbedded){
-	rhs += ShiftedVelocityBoundaryForce;
-	rhs += ShiftedDiffusionVelocityBoundaryForce;
-      }
       
       HypreParMatrix A;
       Mv->FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
@@ -678,12 +565,7 @@ namespace mfem
       de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleDiffusionEnergyBoundaryForceMatrix();
       
-      if (useEmbedded){
-	ghost_emi->SetVelocityGridFunctionAtNewState(&v_updated);
-	shifted_e_bfi->SetVelocityGridFunctionAtNewState(&v_updated);
-	shifted_de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
-	AssembleShiftedEnergyBoundaryForceMatrix();
-      }
+      
       // Me_mat->Update();
       // Me_mat->BilinearForm::operator=(0.0);
       // Me_mat->Assemble();
@@ -713,10 +595,6 @@ namespace mfem
       e_rhs += EnergyBoundaryForce;
       e_rhs += DiffusionEnergyBoundaryForce;
      
-      if (useEmbedded){
-	e_rhs += ShiftedEnergyBoundaryForce;
-	e_rhs += ShiftedDiffusionEnergyBoundaryForce; 
-      }
       Array<int> l2dofs;
    
       if (e_source) { e_rhs += *e_source; }
@@ -1044,15 +922,6 @@ namespace mfem
     {   
       VelocityBoundaryForce = 0.0;
       // VelocityBoundaryForce.Assemble();
-      if (useEmbedded){
-	// reset mesh, needed to update the normal velocity penalty term.
-	ShiftedVelocityBoundaryForce = 0.0;
-	ShiftedVelocityBoundaryForce.Assemble();
-	ShiftedDiffusionVelocityBoundaryForce = 0.0;
-	ShiftedDiffusionVelocityBoundaryForce.Assemble();
-   
-	bvemb_forcemat_is_assembled = true;
-      }
 
       bv_forcemat_is_assembled = true;
     }
@@ -1081,10 +950,6 @@ namespace mfem
 
     void LagrangianHydroOperator::AssembleShiftedEnergyBoundaryForceMatrix() const
     {
-      ShiftedEnergyBoundaryForce = 0.0;
-      ShiftedEnergyBoundaryForce.Assemble();
-      ShiftedDiffusionEnergyBoundaryForce = 0.0;
-      ShiftedDiffusionEnergyBoundaryForce.Assemble();
    
       beemb_forcemat_is_assembled = true;
     }
