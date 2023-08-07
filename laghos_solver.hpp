@@ -105,7 +105,7 @@ namespace mfem
       // These values are recomputed at each time step.
       const int Q1D;
       mutable QuadratureData qdata;
-      mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bv_forcemat_is_assembled, bvdiffusion_forcemat_is_assembled, be_forcemat_is_assembled, bediffusion_forcemat_is_assembled, bvemb_forcemat_is_assembled, bvemb_qdata_is_current, beemb_forcemat_is_assembled, beemb_qdata_is_current, sourcevec_is_assembled;
+      mutable bool qdata_is_current, forcemat_is_assembled, energyforcemat_is_assembled, bv_qdata_is_current, be_qdata_is_current, bvdiffusion_forcemat_is_assembled,  bediffusion_forcemat_is_assembled, bvemb_forcemat_is_assembled, bvemb_qdata_is_current, beemb_forcemat_is_assembled, beemb_qdata_is_current, sourcevec_is_assembled;
       
       // Force matrix that combines the kinematic and thermodynamic spaces. It is
       // assembled in each time step and then it is used to compute the final
@@ -113,9 +113,7 @@ namespace mfem
       mutable ParLinearForm Force;
       mutable ParLinearForm EnergyForce;
       mutable ParLinearForm SourceForce;
-      mutable ParLinearForm VelocityBoundaryForce;
       mutable ParLinearForm DiffusionVelocityBoundaryForce;
-      mutable ParLinearForm EnergyBoundaryForce;
       mutable ParLinearForm DiffusionEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
       const double penaltyParameter;
@@ -127,8 +125,6 @@ namespace mfem
       EnergyForceIntegrator *efi;
       SourceForceIntegrator *sfi;
       
-      VelocityBoundaryForceIntegrator *v_bfi;
-      EnergyBoundaryForceIntegrator *e_bfi;
       NormalVelocityMassIntegrator *nvmi;
       DiffusionNormalVelocityIntegrator *d_nvmi;
       DiffusionEnergyNormalVelocityIntegrator *de_nvmi;
