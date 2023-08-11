@@ -1993,8 +1993,9 @@ int main(int argc, char *argv[])
 
             if (rom_online)
             {
-				if (romOptions.hyperreductionSamplingType == eqp_energy)
+                if (romOptions.hyperreductionSamplingType == eqp_energy)
 				{
+                    timeLoopTimer.Stop();
 					double energy_total, energy_diff;
 					energy_total = oper->InternalEnergy(*e_gf) +
 						oper->KineticEnergy(*v_gf);
@@ -2007,6 +2008,7 @@ int main(int argc, char *argv[])
 							<< ",\tE_diff = " << scientific << setprecision(5)
 							<< energy_diff << endl; 
 					}
+                    timeLoopTimer.Start();
 				}
 
                 double window_par = t;
@@ -2082,6 +2084,7 @@ int main(int argc, char *argv[])
 					// place.
 					if (romOptions.hyperreductionSamplingType == eqp_energy)
 					{
+                        timeLoopTimer.Stop();
 						basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
 						double energy_total, energy_diff;
@@ -2096,6 +2099,7 @@ int main(int argc, char *argv[])
 								<< ",\tE_diff = " << scientific << setprecision(5)
 								<< energy_diff << endl; 
 						}
+                        timeLoopTimer.Start();
 					}
 
                     delete romOper[romOptions.window-1];
@@ -2158,6 +2162,7 @@ int main(int argc, char *argv[])
 					
 					if (romOptions.hyperreductionSamplingType == eqp_energy)
 					{
+                        timeLoopTimer.Stop();
 						double energy_total, energy_diff;
 						energy_total = oper->InternalEnergy(*e_gf) +
 							oper->KineticEnergy(*v_gf);
@@ -2170,6 +2175,7 @@ int main(int argc, char *argv[])
 								<< ",\tE_diff = " << scientific << setprecision(5)
 								<< energy_diff << endl; 
 						}
+                        timeLoopTimer.Start();
 					}
 
                     // Make sure all ranks have sent their 'v' solution before initiating
