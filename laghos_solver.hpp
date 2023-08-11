@@ -201,6 +201,7 @@ namespace mfem
       void ComputeDensity(ParGridFunction &rho) const;
       double InternalEnergy(const ParGridFunction &e) const;
       double KineticEnergy(const ParGridFunction &v) const;
+      void OutputSedovRho() const;
 
       int GetH1VSize() const { return H1.GetVSize(); }
       const Array<int> &GetBlockOffsets() const { return block_offsets; }

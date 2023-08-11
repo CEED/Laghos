@@ -632,6 +632,37 @@ namespace mfem
       return glob_ke;
     }
 
+    void LagrangianHydroOperator::OutputSedovRho() const
+    {
+       MFEM_VERIFY(L2.GetNRanks() == 1, "Use only in serial!");
+       MFEM_VERIFY(dim == 2, "Use only in 2D!");
+
+       std::ofstream fstream_rho;
+       fstream_rho.open("./sedov_out/rho.out");
+       fstream_rho.precision(8);
+
+       const int nqp = ir.GetNPoints();
+       Vector pos(dim);
+       for (int e = 0; e < NE; e++)
+       {
+          ElementTransformation &Tr = *L2.GetElementTransformation(e);
+          for (int q = 0; q < nqp; q++)
+          {
+             const IntegrationPoint &ip = ir.IntPoint(q);
+             Tr.SetIntPoint(&ip);
+             Tr.Transform(ip, pos);
+
+             double r = sqrt(pos(0)*pos(0) + pos(1)*pos(1));
+
+             double rho = rho0DetJ0_gf.GetValue(Tr, ip)
+                          / Tr.Weight() / alphaCut->GetValue(Tr, ip);
+             fstream_rho << r << " " << rho << "\n";
+             fstream_rho.flush();
+          }
+       }
+       fstream_rho.close();
+    }
+
     void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
     {
       if (qdata_is_current) { return; }
