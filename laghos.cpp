@@ -36,6 +36,7 @@
 // Test problems: see README.
 
 #include "laghos_solver.hpp"
+#include "sedov_exact.hpp"
 
 using std::cout;
 using std::endl;
@@ -51,6 +52,22 @@ double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
 static void display_banner(std::ostream&);
+
+void sedov_exact_out(double t)
+{
+   sedov_time(t);
+   std::ofstream fstream_rho;
+   fstream_rho.open("./sedov_out/rho_exact.out");
+   fstream_rho.precision(8);
+   for (int i = 0; i <= 200; i++)
+   {
+      double x = 0.0 + i / 200.0;
+
+      fstream_rho << x << " " << sedov_rho(x) << "\n";
+      fstream_rho.flush();
+   }
+   fstream_rho.close();
+}
 
 int main(int argc, char *argv[])
 {
@@ -560,6 +577,9 @@ int main(int argc, char *argv[])
               << "L_2    error: " << error_l2 << endl;
       }
    }
+
+   sedov_exact_out(t);
+   hydro.OutputSedovRho();
 
    if (visualization)
    {
