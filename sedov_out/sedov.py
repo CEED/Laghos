@@ -8,12 +8,16 @@ rc('legend', numpoints=6, fontsize=10)
 
 
 rE = loadtxt("rho_exact.out");
-r  = loadtxt("rho.out");
+r1  = loadtxt("rho_1.out");
+r2  = loadtxt("rho_2.out");
+r3  = loadtxt("rho_3.out");
 
 ###############
 figure(1)
 plot(rE[:,0], rE[:,1], 'g', label='Exact Density', linewidth = 1)
-scatter(r[:,0], r[:,1], s = 10, c = 'r', label = 'Density', edgecolors = 'none')
+scatter(r1[:,0], r1[:,1], s = 10, c = 'r', label = 'Density', edgecolors = 'none')
+scatter(r2[:,0], r2[:,1], s = 10, c = 'm', label = 'Density', edgecolors = 'none')
+scatter(r3[:,0], r3[:,1], s = 10, c = 'c', label = 'Density', edgecolors = 'none')
 
 
 grid('on')
