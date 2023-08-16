@@ -573,8 +573,10 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    elvect = 0.0;
 
    // The early return must be done after elvect.SetSize().
+   // Material 1 uses 20-faces, material 2 uses 10-faces.
    const int attr_face = Trans.Attribute;
-   if (attr_face != 10 && attr_face != 20 && attr_face != 15) { return; }
+   if (mat_id == 1 && attr_face != 20) { return; }
+   if (mat_id == 2 && attr_face != 10) { return; }
 
    ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
    ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
