@@ -573,10 +573,8 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    elvect = 0.0;
 
    // The early return must be done after elvect.SetSize().
-   // Material 1 uses 20-faces, material 2 uses 10-faces.
    const int attr_face = Trans.Attribute;
-   if (mat_id == 1 && attr_face != 20) { return; }
-   if (mat_id == 2 && attr_face != 10) { return; }
+   if (attr_face != 10 && attr_face != 20 && attr_face != 15) { return; }
 
    ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
    ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
@@ -1053,96 +1051,6 @@ void MomentumCutFaceIntegrator::AssembleRHSElementVect(
                      p_shift_jump * h1_shape(j) * nor(d);
             }
          }
-      }
-   }
-}
-
-void EnergyCutFaceIntegrator::AssembleRHSElementVect(
-      const FiniteElement &el_1, const FiniteElement &el_2,
-      FaceElementTransformations &Trans, Vector &elvect)
-{
-   MFEM_VERIFY(mat_data.e_1.ParFESpace()->GetNRanks() == 1,
-               "Implemented only in serial, because CutFaceQuadratureData "
-               "does not know about MPI neighbors.");
-
-   const int l2dofs_cnt = el_1.GetDof();
-   const int NE = mat_data.alpha_1.FESpace()->GetNE();
-   const bool local_face = (Trans.Elem2No < NE);
-
-   if (local_face == false)
-   {
-      // This is a shared face between mpi tasks.
-      // Each task assembles only its side, but uses info from the neighbor.
-      elvect.SetSize(l2dofs_cnt);
-   }
-   else { elvect.SetSize(l2dofs_cnt * 2); }
-   elvect = 0.0;
-
-   // The early return must be done after elvect.SetSize().
-   const int attr_face = Trans.Attribute;
-   if (attr_face != 15) { return; }
-
-   ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
-   ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
-
-   const ParGridFunction *p = (mat_id == 1) ? &mat_data.p_1->GetPressure()
-                                            : &mat_data.p_2->GetPressure();
-   const ParGridFunction *rho0DetJ = (mat_id == 1) ? &mat_data.rho0DetJ_1
-                                                   : &mat_data.rho0DetJ_2;
-   const ParGridFunction *ind      = (mat_id == 1) ? &mat_data.ind_1
-                                                   : &mat_data.ind_2;
-   const double gamma = (mat_id == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
-
-   Vector shape_e(l2dofs_cnt);
-
-   const IntegrationRule *ir = IntRule;
-   MFEM_VERIFY(ir != NULL, "Set the correct IntRule!");
-   const int nqp_face = ir->GetNPoints();
-
-   for (int q = 0; q < nqp_face; q++)
-   {
-      const IntegrationPoint &ip_f = ir->IntPoint(q);
-
-      // Set the integration point in the face and the neighboring elements
-      Trans.SetAllIntPoints(&ip_f);
-
-      // Access the neighboring elements' integration points
-      // Note: eip2 will only contain valid data if Elem2 exists
-      const IntegrationPoint &ip_e1 = Trans.GetElement1IntPoint();
-      const IntegrationPoint &ip_e2 = Trans.GetElement2IntPoint();
-
-      const double p_q1 = fmax(1e-5, p->GetValue(Trans_e1, ip_e1)),
-                   p_q2 = fmax(1e-5, p->GetValue(Trans_e2, ip_e2));
-      const double jump_p = p_q1 - p_q2;
-      const double gamma_avg = p_q1 / (p_q1 + p_q2);
-
-      const double rho_q1  = rho0DetJ->GetValue(Trans_e1, ip_e1) /
-                             Trans_e1.Weight() / ind->GetValue(Trans_e1, ip_e1),
-                   rho_q2  = rho0DetJ->GetValue(Trans_e2, ip_e2) /
-                             Trans_e2.Weight() / ind->GetValue(Trans_e2, ip_e2);
-      const double cs_q1   = sqrt(gamma * p_q1 / rho_q1),
-                   cs_q2   = sqrt(gamma * p_q2 / rho_q2),
-                   cs_avg  = gamma_avg * cs_q1 + (1.0 - gamma_avg) * cs_q2;
-
-      MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
-                  "Negative density at the face, not good.");
-
-      // The term is: + < {cs} [p] [phi] >
-      // phi is DG, so [phi] = phi - 0.
-
-      // 1st element.
-      el_1.CalcShape(ip_e1, shape_e);
-      shape_e *= ip_f.weight * Trans.Weight() * cs_avg * jump_p;
-      Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
-      elvect_e1.Add(+1.0, shape_e);
-
-      // 2nd element.
-      if (local_face)
-      {
-         el_2.CalcShape(ip_e2, shape_e);
-         shape_e *= ip_f.weight * Trans.Weight() * cs_avg * jump_p;
-         Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
-         elvect_e2.Add(-1.0, shape_e);
       }
    }
 }
