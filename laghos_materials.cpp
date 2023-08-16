@@ -35,12 +35,12 @@ void UpdateAlpha(const ParGridFunction &level_set,
              nqp = ir.GetNPoints();
    Vector ls_vals;
 
-   const int ndof_l2 = (mat_data) ? mat_data->ind0_1.Size() / NE : 0;
+   const int ndof_l2 = (mat_data) ? mat_data->ind_1.Size() / NE : 0;
 
    Array<int> l2_dofs;
    Vector vol_1_loc(ndof_l2), vol_2_loc(ndof_l2);
    const IntegrationRule ir_nodes =
-      (mat_data) ? mat_data->ind0_1.ParFESpace()->GetFE(0)->GetNodes() : ir;
+      (mat_data) ? mat_data->ind_1.ParFESpace()->GetFE(0)->GetNodes() : ir;
    Vector bounds_max(ndof_l2), bounds_min(ndof_l2), target_1(ndof_l2);
    bounds_max = 1.0; bounds_min = 0.0;
    Vector ls_vals_nodes;
@@ -57,9 +57,9 @@ void UpdateAlpha(const ParGridFunction &level_set,
          {
             vol_1_loc = 1.0;
             vol_2_loc = 0.0;
-            mat_data->ind0_1.ParFESpace()->GetElementDofs(e, l2_dofs);
-            mat_data->ind0_1.SetSubVector(l2_dofs, vol_1_loc);
-            mat_data->ind0_2.SetSubVector(l2_dofs, vol_2_loc);
+            mat_data->ind_1.ParFESpace()->GetElementDofs(e, l2_dofs);
+            mat_data->ind_1.SetSubVector(l2_dofs, vol_1_loc);
+            mat_data->ind_2.SetSubVector(l2_dofs, vol_2_loc);
          }
          continue;
       }
@@ -71,9 +71,9 @@ void UpdateAlpha(const ParGridFunction &level_set,
          {
             vol_1_loc = 0.0;
             vol_2_loc = 1.0;
-            mat_data->ind0_1.ParFESpace()->GetElementDofs(e, l2_dofs);
-            mat_data->ind0_1.SetSubVector(l2_dofs, vol_1_loc);
-            mat_data->ind0_2.SetSubVector(l2_dofs, vol_2_loc);
+            mat_data->ind_1.ParFESpace()->GetElementDofs(e, l2_dofs);
+            mat_data->ind_1.SetSubVector(l2_dofs, vol_1_loc);
+            mat_data->ind_2.SetSubVector(l2_dofs, vol_2_loc);
          }
          continue;
       }
@@ -91,7 +91,7 @@ void UpdateAlpha(const ParGridFunction &level_set,
                      ((ls_vals(q) < 0.0) ? 1.0 : 0.0);
          if (mat_data)
          {
-            mat_data->ind0_1.ParFESpace()->GetFE(e)->CalcShape(ip, l2_shape);
+            mat_data->ind_1.ParFESpace()->GetFE(e)->CalcShape(ip, l2_shape);
             for (int i = 0; i < ndof_l2; i++)
             {
                vol_moments(i) += ip.weight * Tr.Weight() * l2_shape(i);
@@ -105,13 +105,13 @@ void UpdateAlpha(const ParGridFunction &level_set,
       // Target values are 1 or 0 at the dof locations.
       if (mat_data)
       {
-         mat_data->ind0_1.ParFESpace()->GetElementDofs(e, l2_dofs);
+         mat_data->ind_1.ParFESpace()->GetElementDofs(e, l2_dofs);
          if (pointwise_alpha == false)
          {
             vol_1_loc = alpha_1(e);
             vol_2_loc = alpha_2(e);
-            mat_data->ind0_1.SetSubVector(l2_dofs, vol_1_loc);
-            mat_data->ind0_2.SetSubVector(l2_dofs, vol_2_loc);
+            mat_data->ind_1.SetSubVector(l2_dofs, vol_1_loc);
+            mat_data->ind_2.SetSubVector(l2_dofs, vol_2_loc);
             continue;
          }
          level_set.GetValues(Tr, ir_nodes, ls_vals_nodes);
@@ -130,8 +130,8 @@ void UpdateAlpha(const ParGridFunction &level_set,
          {
             vol_2_loc(i) = 1.0 - vol_1_loc(i);
          }
-         mat_data->ind0_1.SetSubVector(l2_dofs, vol_1_loc);
-         mat_data->ind0_2.SetSubVector(l2_dofs, vol_2_loc);
+         mat_data->ind_1.SetSubVector(l2_dofs, vol_1_loc);
+         mat_data->ind_2.SetSubVector(l2_dofs, vol_2_loc);
       }
    }
 }
@@ -149,8 +149,10 @@ void MaterialData::UpdateInitialMasses()
          const IntegrationPoint &ip = ir_L2_nodes.IntPoint(i);
          tr_e.SetIntPoint(&ip);
          const double detJ = tr_e.Weight();
-         rho0DetJ_1(e * nd + i) = rho0_1(e * nd + i) * detJ;
-         rho0DetJ_2(e * nd + i) = rho0_2(e * nd + i) * detJ;
+         rho0DetJ_1(e * nd + i) =
+               rho0_1(e * nd + i) * detJ * ind_1.GetValue(tr_e);
+         rho0DetJ_2(e * nd + i) =
+               rho0_2(e * nd + i) * detJ * ind_2.GetValue(tr_e);
       }
    }
 }
@@ -215,7 +217,7 @@ void PressureFunction::UpdateRho0Alpha0(const ParGridFunction &ind0,
    }
 }
 
-void PressureFunction::UpdatePressure(const ParGridFunction &ind0,
+void PressureFunction::UpdatePressure(const ParGridFunction &ind,
                                       const ParGridFunction &energy)
 {
    const int NE = p_fes_L2.GetParMesh()->GetNE();
@@ -243,7 +245,7 @@ void PressureFunction::UpdatePressure(const ParGridFunction &ind0,
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
          const double rho = rho0DetJ0(e * nqp + q) /
-                            ind0.GetValue(Tr, ip) / Tr.Weight();
+                            ind.GetValue(Tr, ip) / Tr.Weight();
          p_L2(e * nqp + q) = fmax(1e-5, (gamma - 1.0) * rho * e_vals(q));
 
          if (problem == 9 && mat_id == 1)

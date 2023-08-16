@@ -50,13 +50,13 @@ public:
    void UpdateRho0Alpha0(const ParGridFunction &alpha0,
                          const ParGridFunction &rho0);
 
-   void UpdatePressure(const ParGridFunction &ind0,
+   void UpdatePressure(const ParGridFunction &ind,
                        const ParGridFunction &energy);
 
-   ParGridFunction &ComputePressure(const ParGridFunction &ind0,
+   ParGridFunction &ComputePressure(const ParGridFunction &ind,
                                     const ParGridFunction &energy)
    {
-      UpdatePressure(ind0, energy);
+      UpdatePressure(ind, energy);
       return GetPressure();
    }
 
@@ -86,7 +86,8 @@ struct MaterialData
    ParGridFunction  p;                // recomputed by ComputeTotalPressure().
    ParGridFunction  alpha_1, alpha_2; // recomputed in UpdateQuadratureData().
    bool             pointwise_alpha;
-   ParGridFunction  ind0_1, ind0_2;   // recomputed in UpdateQuadratureData().
+   ParGridFunction  ind_1, ind_2;     // recomputed in UpdateQuadratureData().
+                                      // high-order versions of the alphas.
    ParGridFunction  rho0DetJ_1,       // pointwise masses as GridFunctions.
                     rho0DetJ_2;       // not updated.
 

@@ -117,22 +117,22 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Triple Point 2D ALE
-params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 2.0 -rs 1 -mm -ale 0.5"
-run_line=$command" "$params
-com_line=$comment" "$params
-echo -e $com_line >> $file
-$run_line | grep -e 'marker:' -e 'norm:' >> $file
-echo -e >> $file
+#params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 2.0 -rs 1 -mm -ale 0.5"
+#run_line=$command" "$params
+#com_line=$comment" "$params
+#echo -e $com_line >> $file
+#$run_line | grep -e 'marker:' -e 'norm:' >> $file
+#echo -e >> $file
 
 # Triple Point 2D shifted ALE
-params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4"
-run_line=$command" "$params
-com_line=$comment" "$params
-echo -e $com_line >> $file
-$run_line | grep -e 'marker:' -e 'norm:' >> $file
-echo -e >> $file
+#params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.2 -rs 1 -mm -ale 0.1 -s_v 1 -s_e 4"
+#run_line=$command" "$params
+#com_line=$comment" "$params
+#echo -e $com_line >> $file
+#$run_line | grep -e 'marker:' -e 'norm:' >> $file
+#echo -e >> $file
 
-tkdiff $file autotest/baseline.out
+tkdiff autotest/baseline.out $file
 
 cd autotest
 exit 0

@@ -226,9 +226,9 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          T.SetIntPoint(&ip);
-         rhoDetJw_1(k*nqp + q) = rho_1_vals(q) * mat_data.ind0_1.GetValue(T, ip) *
+         rhoDetJw_1(k*nqp + q) = rho_1_vals(q) * mat_data.ind_1.GetValue(T, ip) *
                                  T.Jacobian().Det() * ip.weight;
-         rhoDetJw_2(k*nqp + q) = rho_2_vals(q) * mat_data.ind0_2.GetValue(T, ip) *
+         rhoDetJw_2(k*nqp + q) = rho_2_vals(q) * mat_data.ind_2.GetValue(T, ip) *
                                  T.Jacobian().Det() * ip.weight;
       }
    }
@@ -252,10 +252,10 @@ void RemapAdvector::TransferToLagr(ParGridFunction &vel,
       }
    }
 
-   mat_data.p_1->UpdateRho0Alpha0(mat_data.ind0_1, mat_data.rho0_1);
-   mat_data.p_2->UpdateRho0Alpha0(mat_data.ind0_2, mat_data.rho0_2);
-   mat_data.p_1->UpdatePressure(mat_data.ind0_1, mat_data.e_1);
-   mat_data.p_2->UpdatePressure(mat_data.ind0_2, mat_data.e_2);
+   mat_data.p_1->UpdateRho0Alpha0(mat_data.ind_1, mat_data.rho0_1);
+   mat_data.p_2->UpdateRho0Alpha0(mat_data.ind_2, mat_data.rho0_2);
+   mat_data.p_1->UpdatePressure(mat_data.ind_1, mat_data.e_1);
+   mat_data.p_2->UpdatePressure(mat_data.ind_2, mat_data.e_2);
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
@@ -684,6 +684,7 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho,
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          T.SetIntPoint(&ip);
          const double detJ = T.Jacobian().Det();
+         MFEM_ABORT("check ind division below");
          const double rho = quad_rho(k * nqp + q) / detJ / ip.weight;
 
          rho_min_loc(k) = std::min(rho_min_loc(k), rho);
