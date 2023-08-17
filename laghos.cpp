@@ -60,9 +60,9 @@ void sedov_exact_out(double t)
    std::ofstream fstream_rho;
    fstream_rho.open("./sedov_out/rho_exact.out");
    fstream_rho.precision(8);
-   for (int i = 0; i <= 200; i++)
+   for (int i = 0; i <= 2000; i++)
    {
-      double x = 0.0 + i / 200.0;
+      double x = 0.0 + i / 2000.0;
 
       fstream_rho << x << " " << sedov_rho(x) << "\n";
       fstream_rho.flush();
@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
   bool gfprint = false;
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
-  double blast_position[] = {-0.5, -0.5, -0.5};
+  double blast_position[] = {0.0, 0.0, 0.0};
   double perimeter = 1.0;
   
   OptionsParser args(argc, argv);
