@@ -657,8 +657,8 @@ int main(int argc, char *argv[])
 	}
     }
 
-  sedov_exact_out(t);
-  hydro.OutputSedovRho();
+  // sedov_exact_out(t);
+  // hydro.OutputSedovRho();
 
   if (visualization)
     {
