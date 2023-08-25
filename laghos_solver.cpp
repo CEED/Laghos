@@ -173,8 +173,6 @@ namespace mfem
       GLIntRules(0, BasisType::GaussLobatto),
       ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
 		      ((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
-      //      b_ir(GLIntRules.Get(pmesh->GetElementBaseGeometry(0),  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
-      //  b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(), 1.0*(H1.GetOrder(0) + L2.GetOrder(0) + faceOrder))),
       b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(), ( 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
       Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
       qdata(),
@@ -333,7 +331,6 @@ namespace mfem
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdateGlobalMaxRho(globalmax_rho, rhoface_gf);
-      // UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -443,7 +440,6 @@ namespace mfem
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
       UpdateGlobalMaxRho(globalmax_rho, rhoface_gf);
-      //      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -493,11 +489,7 @@ namespace mfem
 
     void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
 					      Vector &dS_dt) const
-    {
-      // Me_mat->Update();
-      // Me_mat->Assemble();
-      //  Me_mat->Finalize();
-      
+    {      
       // Updated Velocity, needed for the energy solve
       Vector* sptr = const_cast<Vector*>(&v);
       ParGridFunction v_updated;
@@ -510,11 +502,6 @@ namespace mfem
       
       de_nvmi->SetVelocityGridFunctionAtNewState(&v_updated);
       AssembleDiffusionEnergyBoundaryForceMatrix();
-      
-      
-      // Me_mat->Update();
-      // Me_mat->BilinearForm::operator=(0.0);
-      // Me_mat->Assemble();
       
       // The monolithic BlockVector stores the unknown fields as follows:
       // (Position, Velocity, Specific Internal Energy).
