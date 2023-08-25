@@ -332,7 +332,8 @@ namespace mfem
       UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
+      UpdateGlobalMaxRho(globalmax_rho, rhoface_gf);
+      // UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();
@@ -441,7 +442,8 @@ namespace mfem
       UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
       UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
       UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
-      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
+      UpdateGlobalMaxRho(globalmax_rho, rhoface_gf);
+      //      UpdatePenaltyParameter(globalmax_rho, globalmax_cs, globalmax_viscous_coef, rhoface_gf, csface_gf, v_gf, Jac0invface_gf, viscousface_gf, qdata.h0, use_viscosity, use_vorticity, penaltyParameter * C_I_V);
       rhoface_gf.ExchangeFaceNbrData();
       pface_gf.ExchangeFaceNbrData();
       csface_gf.ExchangeFaceNbrData();

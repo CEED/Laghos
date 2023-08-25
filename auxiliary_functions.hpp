@@ -55,7 +55,9 @@ namespace mfem
     void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf);
 
     void UpdateSoundSpeed(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, ParGridFunction &cs_gf);
-    
+
+    void UpdateGlobalMaxRho(double &globalmax_rho, const ParGridFunction &rho_gf);
+   
     void UpdatePenaltyParameter(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, const ParGridFunction &Jac0invface_gf, ParGridFunction &viscous_gf,  const double h0, const bool use_viscosity, const bool use_vorticity,  const double penaltyParameter);
       
     void ComputeMaterialProperty(const double gamma,
