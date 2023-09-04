@@ -1087,10 +1087,8 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 	{
 		if (rank == 0)
 		{
-			// For the energy-conserving EQP case, increase the energy basis
-			// dimension by 1 to accomodate the addition of the energy
-			// identity. 
-			
+			// Increase the energy basis dimension by 1 to accomodate the
+			// addition of the energy identity. 
 			cutoff[2] += 1;
 		}
 
@@ -1103,7 +1101,6 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		// For the energy basis, the cutoff parameter has already been
 		// increased by 1 to accomodate the energy identity.
 		CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
-		
 		CAROM::Matrix *tBasisE = new CAROM::Matrix(tL2size, cutoff[2], true);
 
 		// Get the first cutoff[2]-1 columns of basisE
@@ -1116,8 +1113,10 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		// Form the energy identity and include it as the last basis vector. 
 		Vector unitE(tL2size);
 		unitE = 1.0;
+	
 		for (int i = 0; i < tL2size; i++)
 			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
+		
 		tBasisE->orthogonalize();
 
 		SetupEQP_Force(generator_X->getSnapshotMatrix(),
@@ -1127,6 +1126,17 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 
 		delete tBasisV;
 		delete tBasisE;
+
+		if (rank == 0 && input.window > 0)
+		{
+			// If not first window, increase the dimension of the velocity and
+			// energy bases by 1, to accomodate the future addition of the
+			// lifted solution vector in the online stage.
+			// The change is made here so that the right dimensions are written
+			// in the window parameters file in the caller's scope.
+			cutoff[1] += 1;
+			cutoff[2] += 1;
+		}
 	}
 
     delete generator_X;
