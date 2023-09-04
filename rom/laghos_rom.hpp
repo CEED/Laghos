@@ -858,6 +858,9 @@ public:
     void ProjectFOMtoROM_V(Vector const& f, Vector & r,
                            const bool timeDerivative=false);
 
+	void AddLastCol_V(Vector const& f);
+	void AddLastCol_E(Vector const& f);
+
     void LiftROMtoFOM(Vector const& r, Vector & f);
     void LiftROMtoFOM_dVdt(Vector const& r, Vector & f);
     void LiftROMtoFOM_dEdt(Vector const& r, Vector & f);

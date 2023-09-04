@@ -2072,6 +2072,14 @@ int main(int argc, char *argv[])
 
                     if (!romOptions.use_sample_mesh)
                     {
+						if (romOptions.hyperreductionSamplingType == eqp_energy)
+						{
+							// Add the corresponding lifted solution vector
+							// to the velocity and energy bases to ensure
+							// energy is conserved across windows.
+							basis[romOptions.window]->AddLastCol_V(*S);
+							basis[romOptions.window]->AddLastCol_E(*S);
+						}
                         basis[romOptions.window]->ProjectFOMtoROM(*S, romS);
                     }
 					if (myid == 0)
