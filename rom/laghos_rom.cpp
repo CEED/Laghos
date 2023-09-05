@@ -412,7 +412,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
-      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
+      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),precondCLS(input.precondCLS),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
@@ -990,11 +990,13 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
     BsinvV = spaceTime ? NULL : new CAROM::Matrix(numSamplesV, rdimfv, false);
-
+//edited
+    KV = precondCLS ? new CAROM::Vector(BsinvV->numRows(),false) : nullptr;
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
     vector<int> num_sample_dofs_per_procE(nprocs);
     BsinvE = spaceTime ? NULL : new CAROM::Matrix(numSamplesE, rdimfe, false);
+    KE = precondCLS ? new CAROM::Vector(BsinvE->numRows(),false) : nullptr;
 
     if (rank == 0)
     {
@@ -1184,7 +1186,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                          *BsinvV,
                          rank,
                          nprocs,
-                         numSamplesV);
+                         numSamplesV,
+			 precondCLS, KV);
 
             CAROM::QDEIM(basisFe,
                          rdimfe,
@@ -1193,7 +1196,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                          *BsinvE,
                          rank,
                          nprocs,
-                         numSamplesE);
+                         numSamplesE,
+			 precondCLS, KE);
         }
         else if (hyperreductionSamplingType == sopt)
         {
@@ -1205,6 +1209,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                          rank,
                          nprocs,
                          numSamplesV,
+			 precondCLS, KV,
                          &initSamplesV);
 
             CAROM::S_OPT(basisFe,
@@ -1215,6 +1220,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                          rank,
                          nprocs,
                          numSamplesE,
+			 precondCLS, KE,
                          &initSamplesE);
         }
         else
@@ -1227,6 +1233,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                         rank,
                         nprocs,
                         numSamplesV,
+			precondCLS, KV,
                         &initSamplesV);
 
             CAROM::GNAT(basisFe,
@@ -1237,8 +1244,10 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
                         rank,
                         nprocs,
                         numSamplesE,
+			precondCLS, KE,
                         &initSamplesE);
         }
+	printf("\tE%d",BsinvE->numRows());
     }
 
     // Construct sample mesh
@@ -1666,7 +1675,14 @@ void ROM_Basis::RestrictFromSampleMesh(const Vector &usp, Vector &u, const bool 
 
         sampleSelector->GetSampledValues("E", spL2, *sE);
     }
-
+    if(precondCLS){
+	for(int i=0; i < BsinvV->numRows(); i++){
+	    sV->item(i) *= KV->item(i);
+	} 
+	for(int i=0; i < BsinvE->numRows(); i++){
+	    sE->item(i) *= KE->item(i);
+	} 
+    }
     // ROM operation on source: map sample mesh evaluation to reduced coefficients with respect to solution bases
     BsinvV->transposeMult(*sV, *rV);
     BsinvE->transposeMult(*sE, *rE);
@@ -1791,7 +1807,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            const double ftz_tol, H1_FECollection *H1fec,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
-      rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
+      rank(b->GetRank()), hyperreduce(input.hyperreduce), precondCLS(input.precondCLS), useGramSchmidt(input.GramSchmidt),
       spaceTimeMethod(input.spaceTimeMethod)
 {
     if (hyperreduce && rank == 0)
@@ -1955,7 +1971,12 @@ void ROM_Basis::HyperreduceRHS_V(Vector &v) const
     MFEM_VERIFY(v.Size() == size_H1_sp, "");
 
     sampleSelector->GetSampledValues("V", v, *sV);
-
+    if(precondCLS){
+	for(int i=0; i < BsinvV->numRows(); i++){
+	    sV->item(i) *= KV -> item(i);
+	}
+    }
+    printf("numRowV %d\n",BsinvV->numRows());
     BsinvV->transposeMult(*sV, *rV);
 
     // Lift from rV to v
@@ -1971,6 +1992,12 @@ void ROM_Basis::HyperreduceRHS_E(Vector &e) const
     MFEM_VERIFY(e.Size() == size_L2_sp, "");
 
     sampleSelector->GetSampledValues("E", e, *sE);
+    if(precondCLS){
+	for(int i=0; i < BsinvE->numRows(); i++){
+	    sE->item(i) *= KE -> item(i);
+	}
+    }
+    printf("numRowE%d\n",BsinvE->numRows());
 
     BsinvE->transposeMult(*sE, *rE);
 
@@ -2060,6 +2087,8 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     if (spaceTimeMethod == gnat_lspg) BsinvX->write(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
     BsinvV->write(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->write(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
+    if(precondCLS) KV->write(hyperreduce_basename + "/" + "KV" + "_" + to_string(window));
+    if(precondCLS) KE->write(hyperreduce_basename + "/" + "KE" + "_" + to_string(window));
     BXsp->write(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->write(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->write(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
@@ -2131,6 +2160,8 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     BsinvX = NULL;
     BsinvV = new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false);
     BsinvE = new CAROM::Matrix(ntsamp * numSamplesE, rdimfe, false);
+    KV = precondCLS? new CAROM::Vector(ntsamp * numSamplesV, false) : nullptr;
+    KE = precondCLS? new CAROM::Vector(ntsamp * numSamplesE, false) : nullptr;
 
     BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
     BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -2152,6 +2183,8 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
 
     BsinvV->read(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->read(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
+    if(precondCLS) KV->read(hyperreduce_basename + "/" + "KV" + "_" + to_string(window));
+    if(precondCLS) KE->read(hyperreduce_basename + "/" + "KE" + "_" + to_string(window));
 
     BXsp->read(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->read(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));

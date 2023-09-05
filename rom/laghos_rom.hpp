@@ -236,7 +236,7 @@ struct ROM_Options
     // Number of temporal samples for each variable
     int tsampV = 1;
     int tsampE = 1;
-
+    bool precondCLS = false; // whether to precondition the hyper-reduction based on the Christoffel function weight.
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
     bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
@@ -787,6 +787,10 @@ public:
         delete BsinvX;
         delete BsinvV;
         delete BsinvE;
+        if(precondCLS) {
+	    delete KV;
+            delete KE;
+	}
         delete BX0;
         delete initX;
         delete initV;
@@ -925,6 +929,7 @@ public:
     CAROM::Matrix* PiXtransPiXlag = 0;  // TODO: make this private and use a function to access its mult
 
 private:
+    const bool precondCLS;
     const bool hyperreduce;
     const bool hyperreduce_prep;
     const bool offsetInit;
@@ -995,6 +1000,8 @@ protected:
     CAROM::Matrix *BsinvX = NULL;
     CAROM::Matrix *BsinvV = NULL;
     CAROM::Matrix *BsinvE = NULL;
+    CAROM::Vector *KV = NULL;
+    CAROM::Vector *KE = NULL;
 
     CAROM::Matrix *BwinX = NULL;
     CAROM::Matrix *BwinV = NULL;
@@ -1212,6 +1219,7 @@ private:
     mutable Vector fx, fy;
 
     const bool hyperreduce;
+    const bool precondCLS;
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;

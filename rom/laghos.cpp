@@ -289,7 +289,8 @@ int main(int argc, char *argv[])
                    "Enable or disable ROM hyperreduction.");
     args.AddOption(&romOptions.hyperreduce_prep, "-romhrprep", "--romhrprep", "-no-romhrprep", "--no-romhrprep",
                    "Enable or disable ROM hyperreduction preprocessing.");
-    args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
+    args.AddOption(&romOptions.precondCLS, "-precls", "--precls", "-no-precls", "--no-precls",
+                   "Enable or disable preconditioning the hyper-reduction based on the Christoffel function weight.");    args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
     args.AddOption(&romOptions.randomizedSVD, "-romsvdrm", "--romsvdrandom", "-no-romsvdrm", "--no-romsvdrm",
                    "Enable or disable ROM randomized SVD.");
