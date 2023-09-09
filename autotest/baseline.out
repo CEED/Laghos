@@ -22,17 +22,17 @@ e1 norm:    0.375023422446
 e2 norm:    1.303280980707
 dist norm:  0.000000000000
 
-mpirun -np X laghos -p 0 -dim 2 -s 7 -tf 0.05 -rs 3 -vs 1 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 0 -dim 2 -s 7 -tf 0.05 -rs 3 -vs 1 -mm -s_v 2 -s_e 4
 init dist norm: 0.0652179042989
 Material marker: 17.265625000000
 Face marker:     2.349511297318
-alpha norm: 0.268337982757
-v norm:     0.405291438214
+alpha norm: 0.268337901296
+v norm:     0.405291396624
 rho1 norm:  0.268358069999
 rho2 norm:  0.731641930001
-e1 norm:    0.375466010033
-e2 norm:    1.303644004910
-dist norm:  0.065079731375
+e1 norm:    0.375466258437
+e2 norm:    1.303644047958
+dist norm:  0.065079765531
 
 mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.1
 init dist norm: 0
@@ -58,7 +58,7 @@ e1 norm:    1.024138350206
 e2 norm:    0.861819332579
 dist norm:  0.000000000000
 
-mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 2 -s_e 4
 init dist norm: 0.196333509059
 Material marker: 14.950000000000
 Face marker:     0.128190114295
@@ -94,7 +94,7 @@ e1 norm:    785744.51243801
 e2 norm:    3613.77976644
 dist norm:  0.00000000
 
-mpirun -np X laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 2 -s_e 4
 init dist norm: 0.240829860465
 Material marker: 12.950000000000
 Face marker:     0.128190114295
@@ -130,15 +130,15 @@ e1 norm:    21.189519409921
 e2 norm:    3.191186351087
 dist norm:  0.000000000000
 
-mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 1 -s_e 4
+mpirun -np X laghos -p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 2 -s_e 4
 init dist norm: 1.80383765302
 Material marker: 320.000000000000
 Face marker:     65.246201547914
-alpha norm: 9.527389590677
-v norm:     0.427188818042
+alpha norm: 9.527385024152
+v norm:     0.427142157464
 rho1 norm:  3.304801878940
 rho2 norm:  11.484987053230
-e1 norm:    20.398089920013
-e2 norm:    3.269571455834
-dist norm:  1.829794490818
+e1 norm:    20.398119710887
+e2 norm:    3.269555583719
+dist norm:  1.829773392024
 

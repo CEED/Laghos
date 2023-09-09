@@ -37,7 +37,7 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Taylor-Green 2D shifted
-params="-p 0 -dim 2 -s 7 -tf 0.05 -rs 3 -vs 1 -mm -s_v 1 -s_e 4"
+params="-p 0 -dim 2 -s 7 -tf 0.05 -rs 3 -vs 1 -mm -s_v 2 -s_e 4"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file
@@ -61,7 +61,7 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Sod 1D shifted
-params="-p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 1 -s_e 4"
+params="-p 8 -dim 1 -s 7 -z 100 -rs 0 -tf 0.02 -mm -s_v 2 -s_e 4"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file
@@ -85,7 +85,7 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Water-Air 1D shifted
-params="-p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 1 -s_e 4"
+params="-p 9 -dim 1 -s 7 -z 100 -rs 0 -tf 1.0e-4 -mm -s_v 2 -s_e 4"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file
@@ -109,7 +109,7 @@ $run_line | grep -e 'marker:' -e 'norm:' >> $file
 echo -e >> $file
 
 # Triple Point 2D shifted
-params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 1 -s_e 4"
+params="-p 10 -m data/rectangle01_quad.mesh -s 7 -tf 0.1 -rs 1 -mm -s_v 2 -s_e 4"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file
