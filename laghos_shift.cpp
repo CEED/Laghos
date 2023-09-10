@@ -572,21 +572,34 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    elvect = 0.0;
 
    // The early return must be done after elvect.SetSize().
-   // Material 1 uses 20-faces, material 2 uses 10-faces.
    const int attr_face = Trans.Attribute;
    if (mat_id == 1 && attr_face != 20) { return; }
    if (mat_id == 2 && attr_face != 10) { return; }
 
-   ElementTransformation &Trans_e1 = Trans.GetElement1Transformation();
-   ElementTransformation &Trans_e2 = Trans.GetElement2Transformation();
+   ElementTransformation &Trans_e_L = Trans.GetElement1Transformation();
+   ElementTransformation &Trans_e_R = Trans.GetElement2Transformation();
 
    const IntegrationRule *ir = IntRule;
    MFEM_VERIFY(ir != NULL, "Set the correct IntRule!");
    const int nqp_face = ir->GetNPoints();
 
-   const int attr_e1 = Trans_e1.Attribute;
+   const int attr_e1 = Trans_e_L.Attribute;
+   const int geom    = el_L.GetGeomType();
+
    const ParGridFunction *p_e1, *p_e2, *rho0DetJ_e1, *rho0DetJ_e2,
                          *ind_e1, *ind_e2;
+
+   const ParGridFunction *p_mat, *alpha_mat;
+   if (mat_id == 1)
+   {
+      p_mat          = &mat_data.p_1->GetPressure();
+      alpha_mat      = &mat_data.alpha_1;
+   }
+   else
+   {
+      p_mat          = &mat_data.p_2->GetPressure();
+      alpha_mat      = &mat_data.alpha_2;
+   }
 
    double gamma_e1, gamma_e2;
    if ( (attr_face == 10 && attr_e1 == 10) ||
@@ -618,9 +631,9 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    // The alpha scaling is always taken from the mixed element.
    // GetValue() is used so that this can work in parallel.
    double alpha_scale = (attr_e1 == 15)
-      ? mat_data.alpha_1.GetValue(Trans_e1,
+      ? mat_data.alpha_1.GetValue(Trans_e_L,
                                   Geometries.GetCenter(el_L.GetGeomType()))
-      : mat_data.alpha_1.GetValue(Trans_e2,
+      : mat_data.alpha_1.GetValue(Trans_e_R,
                                   Geometries.GetCenter(el_R.GetGeomType()));
    // For 10-faces we use 1-alpha_1, for 20-faces we use 1-alpha_2 = alpha_1.
    if (attr_face == 10) { alpha_scale = 1.0 - alpha_scale; }
@@ -652,41 +665,49 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
       else { CalcOrtho(Trans.Jacobian(), nor); }
 
+      // The four pressures at the face. Allows negative pressure.
+      double p_mat_q_L   = p_mat->GetValue(Trans_e_L, ip_e_L),
+             p_mat_q_R   = p_mat->GetValue(Trans_e_R, ip_e_R);
+
+      // Gamma values for averaging.
+      const double gamma_mat =
+            fabs(p_mat_q_L) / (fabs(p_mat_q_L) + fabs(p_mat_q_R));
+
       // Compute el1 quantities. Allows negative pressure.
       double p_q1;
-      if (use_mixed_elem == false) { p_q1 = p_e1->GetValue(Trans_e1, ip_e_L); }
-      else if (attr_e1 == 15)      { p_q1 = p_e1->GetValue(Trans_e1, ip_e_L); }
-      else                         { p_q1 = p_e1->GetValue(Trans_e2, ip_e_R); }
-      p_e1->GetGradient(Trans_e1, p_grad_q1);
-      v->GetVectorGradient(Trans_e1, v_grad_q1);
+      if (use_mixed_elem == false) { p_q1 = p_e1->GetValue(Trans_e_L, ip_e_L); }
+      else if (attr_e1 == 15)      { p_q1 = p_e1->GetValue(Trans_e_L, ip_e_L); }
+      else                         { p_q1 = p_e1->GetValue(Trans_e_R, ip_e_R); }
+      p_e1->GetGradient(Trans_e_L, p_grad_q1);
+      v->GetVectorGradient(Trans_e_L, v_grad_q1);
 
       // Compute el2 quantities. Allows negative pressure.
       double p_q2;
-      if (use_mixed_elem == false) { p_q2 = p_e2->GetValue(Trans_e2, ip_e_R); }
-      else if (attr_e1 == 15)      { p_q2 = p_e2->GetValue(Trans_e1, ip_e_L); }
-      else                         { p_q2 = p_e2->GetValue(Trans_e2, ip_e_R); }
-      p_e2->GetGradient(Trans_e2, p_grad_q2);
-      v->GetVectorGradient(Trans_e2, v_grad_q2);
+      if (use_mixed_elem == false) { p_q2 = p_e2->GetValue(Trans_e_R, ip_e_R); }
+      else if (attr_e1 == 15)      { p_q2 = p_e2->GetValue(Trans_e_L, ip_e_L); }
+      else                         { p_q2 = p_e2->GetValue(Trans_e_R, ip_e_R); }
+      p_e2->GetGradient(Trans_e_R, p_grad_q2);
+      v->GetVectorGradient(Trans_e_R, v_grad_q2);
 
       const double gamma_avg = fabs(p_q1) / (fabs(p_q1) + fabs(p_q2));
 
       //
       // The velocity jump.
       //
-      dist.Eval(d_q, Trans_e1, ip_e_L);
+      dist.Eval(d_q, Trans_e_L, ip_e_L);
       v->GetVectorValue(Trans, ip_f, v_vals);
       Vector true_normal = d_q;
       true_normal /= sqrt(d_q * d_q + 1e-12);
 
       Vector gradv_d(dim);
-      get_shifted_value(*v, Trans_e1.ElementNo, ip_e_L, d_q,
+      get_shifted_value(*v, Trans_e_L.ElementNo, ip_e_L, d_q,
                         num_taylor, gradv_d);
       gradv_d -= v_vals;
       double gradv_d_n = gradv_d * true_normal;
       Vector gradv_d_n_n_e1(true_normal);
       gradv_d_n_n_e1 *= gradv_d_n;
 
-      get_shifted_value(*v, Trans_e2.ElementNo, ip_e_R, d_q,
+      get_shifted_value(*v, Trans_e_R.ElementNo, ip_e_R, d_q,
                         num_taylor, gradv_d);
       gradv_d -= v_vals;
       gradv_d_n = gradv_d * true_normal;
@@ -702,20 +723,25 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       //
       // Left element.
       el_L.CalcShape(ip_e_L, shape_e);
-      shape_e *= ip_f.weight * alpha_scale * e_shift_scale *
-                 jump_gradv_d_n_n * gamma_avg * p_q1;
+      shape_e *= e_shift_scale * ip_f.weight * jump_gradv_d_n_n *
+                 gamma_mat * p_mat_q_L *
+                 alpha_mat->GetValue(Trans_e_L, Geometries.GetCenter(geom));
       Vector elvect_e_L(elvect.GetData(), l2dofs_cnt);
       elvect_e_L -= shape_e;
       // Right element.
       if (local_face)
       {
          el_R.CalcShape(ip_e_R, shape_e);
-         shape_e *= ip_f.weight * alpha_scale * e_shift_scale *
-                    jump_gradv_d_n_n * (1.0 - gamma_avg) * p_q2;
+         shape_e *= e_shift_scale * ip_f.weight * jump_gradv_d_n_n *
+                    (1.0 - gamma_mat) * p_mat_q_R *
+                    alpha_mat->GetValue(Trans_e_R, Geometries.GetCenter(geom));
          Vector elvect_e_R(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
          // Same sign as above, because it's an average of the shape f-s.
          elvect_e_R -= shape_e;
       }
+
+      if (mat_id == 1 && attr_face != 20) { continue; }
+      if (mat_id == 2 && attr_face != 10) { continue; }
 
       if (problem_visc == false) { continue; }
       if (diffusion == false)    { continue; }
@@ -730,34 +756,34 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       Vector p_ext(1);
       if (use_mixed_elem == false)
       {
-         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e_L, d_q,
+         get_shifted_value(*p_e1, Trans_e_L.ElementNo, ip_e_L, d_q,
                            num_taylor, p_ext);
       }
       else if (attr_e1 == 15)
       {
-         get_shifted_value(*p_e1, Trans_e1.ElementNo, ip_e_L, d_q,
+         get_shifted_value(*p_e1, Trans_e_L.ElementNo, ip_e_L, d_q,
                            num_taylor, p_ext);
       }
       else
       {
-         get_shifted_value(*p_e1, Trans_e2.ElementNo, ip_e_R, d_q,
+         get_shifted_value(*p_e1, Trans_e_R.ElementNo, ip_e_R, d_q,
                            num_taylor, p_ext);
       }
       double p_q1_ext = p_ext(0);
 
       if (use_mixed_elem == false)
       {
-         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e_R, d_q,
+         get_shifted_value(*p_e2, Trans_e_R.ElementNo, ip_e_R, d_q,
                            num_taylor, p_ext);
       }
       else if (attr_e1 == 15)
       {
-         get_shifted_value(*p_e2, Trans_e1.ElementNo, ip_e_L, d_q,
+         get_shifted_value(*p_e2, Trans_e_L.ElementNo, ip_e_L, d_q,
                            num_taylor, p_ext);
       }
       else
       {
-         get_shifted_value(*p_e2, Trans_e2.ElementNo, ip_e_R, d_q,
+         get_shifted_value(*p_e2, Trans_e_R.ElementNo, ip_e_R, d_q,
                            num_taylor, p_ext);
       }
       double p_q2_ext = p_ext(0);
@@ -779,8 +805,8 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       else if (diffusion_type == 1)
       {
          // Mesh size with grad_v.
-         h_1  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e1, 0);
-         h_2  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e2, 0);
+         h_1  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e_L, 0);
+         h_2  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e_R, 0);
          mu_1 = v_grad_q1.FNorm();
          mu_2 = v_grad_q2.FNorm();
          visc_q1 = h_1 * fabs(mu_1);
@@ -791,24 +817,24 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          double rho_q1, rho_q2;
          if (use_mixed_elem == false)
          {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e_L)
-                     / Trans_e1.Weight() / ind_e1->GetValue(Trans_e1, ip_e_L);
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e_R)
-                     / Trans_e2.Weight() / ind_e2->GetValue(Trans_e2, ip_e_R);
+            rho_q1 = rho0DetJ_e1->GetValue(Trans_e_L, ip_e_L)
+                     / Trans_e_L.Weight() / ind_e1->GetValue(Trans_e_L, ip_e_L);
+            rho_q2 = rho0DetJ_e2->GetValue(Trans_e_R, ip_e_R)
+                     / Trans_e_R.Weight() / ind_e2->GetValue(Trans_e_R, ip_e_R);
          }
          else if (attr_e1 == 15)
          {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e1, ip_e_L)
-                     / Trans_e1.Weight() / ind_e1->GetValue(Trans_e1, ip_e_L);
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e1, ip_e_L)
-                     / Trans_e1.Weight() / ind_e2->GetValue(Trans_e1, ip_e_L);
+            rho_q1 = rho0DetJ_e1->GetValue(Trans_e_L, ip_e_L)
+                     / Trans_e_L.Weight() / ind_e1->GetValue(Trans_e_L, ip_e_L);
+            rho_q2 = rho0DetJ_e2->GetValue(Trans_e_L, ip_e_L)
+                     / Trans_e_L.Weight() / ind_e2->GetValue(Trans_e_L, ip_e_L);
          }
          else
          {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e2, ip_e_R)
-                     / Trans_e2.Weight() / ind_e1->GetValue(Trans_e2, ip_e_R);
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e2, ip_e_R)
-                     / Trans_e2.Weight() / ind_e2->GetValue(Trans_e2, ip_e_R);
+            rho_q1 = rho0DetJ_e1->GetValue(Trans_e_R, ip_e_R)
+                     / Trans_e_R.Weight() / ind_e1->GetValue(Trans_e_R, ip_e_R);
+            rho_q2 = rho0DetJ_e2->GetValue(Trans_e_R, ip_e_R)
+                     / Trans_e_R.Weight() / ind_e2->GetValue(Trans_e_R, ip_e_R);
          }
          MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
                      "Negative density at the face, not good: "
@@ -817,9 +843,9 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          // As in the volumetric viscosity.
          v_grad_q1.Symmetrize();
          v_grad_q2.Symmetrize();
-         LengthScaleAndCompression(v_grad_q1, Trans_e1, quad_data.Jac0inv(0),
+         LengthScaleAndCompression(v_grad_q1, Trans_e_L, quad_data.Jac0inv(0),
                                    quad_data.h0, h_1, mu_1);
-         LengthScaleAndCompression(v_grad_q2, Trans_e2, quad_data.Jac0inv(0),
+         LengthScaleAndCompression(v_grad_q2, Trans_e_R, quad_data.Jac0inv(0),
                                    quad_data.h0, h_2, mu_2);
          visc_q1 = 2.0 * h_1 * fabs(mu_1);
          if (mu_1 < 0.0)
@@ -837,7 +863,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
       // Left element.
       shift_shape(*e->ParFESpace(), *p_e1->ParFESpace(),
-                  Trans_e1.ElementNo, ip_e_L, d_q, num_taylor, shape_e);
+                  Trans_e_L.ElementNo, ip_e_L, d_q, num_taylor, shape_e);
       shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
                  diffusion_scale * grad_v_avg * p_gradp_jump;
       Vector elvect_e1(elvect.GetData(), l2dofs_cnt);
@@ -847,7 +873,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       if (local_face)
       {
          shift_shape(*e->ParFESpace(), *p_e1->ParFESpace(),
-                     Trans_e2.ElementNo, ip_e_R, d_q, num_taylor, shape_e);
+                     Trans_e_R.ElementNo, ip_e_R, d_q, num_taylor, shape_e);
          shape_e *= Trans.Weight() * ip_f.weight * alpha_scale *
                     diffusion_scale * grad_v_avg * p_gradp_jump;
          Vector elvect_e2(elvect.GetData() + l2dofs_cnt, l2dofs_cnt);
