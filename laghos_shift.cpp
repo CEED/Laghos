@@ -573,8 +573,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
    // The early return must be done after elvect.SetSize().
    const int attr_face = Trans.Attribute;
-   if (mat_id == 1 && attr_face != 20) { return; }
-   if (mat_id == 2 && attr_face != 10) { return; }
+   if (attr_face != 10 && attr_face != 20 && attr_face != 15) { return; }
 
    ElementTransformation &Trans_e_L = Trans.GetElement1Transformation();
    ElementTransformation &Trans_e_R = Trans.GetElement2Transformation();
@@ -603,7 +602,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
    double gamma_e1, gamma_e2;
    if ( (attr_face == 10 && attr_e1 == 10) ||
-        (attr_face == 20 && attr_e1 == 15) )
+        (attr_face == 20 && attr_e1 == 15) || attr_face == 15)
    {
       p_e1        = &mat_data.p_1->GetPressure();
       rho0DetJ_e1 = &mat_data.rho0DetJ_1;
@@ -631,10 +630,8 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
    // The alpha scaling is always taken from the mixed element.
    // GetValue() is used so that this can work in parallel.
    double alpha_scale = (attr_e1 == 15)
-      ? mat_data.alpha_1.GetValue(Trans_e_L,
-                                  Geometries.GetCenter(el_L.GetGeomType()))
-      : mat_data.alpha_1.GetValue(Trans_e_R,
-                                  Geometries.GetCenter(el_R.GetGeomType()));
+      ? mat_data.alpha_1.GetValue(Trans_e_L, Geometries.GetCenter(geom))
+      : mat_data.alpha_1.GetValue(Trans_e_R, Geometries.GetCenter(geom));
    // For 10-faces we use 1-alpha_1, for 20-faces we use 1-alpha_2 = alpha_1.
    if (attr_face == 10) { alpha_scale = 1.0 - alpha_scale; }
    MFEM_VERIFY(alpha_scale > 1e-12 && alpha_scale < 1.0-1e-12,
