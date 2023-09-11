@@ -745,46 +745,18 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
 
       //
       // mat 1:
-      // < scale * {h |grad_v|} [p + grad_p d] [phi + grad_phi d] >
+      // < scale * alpha_1 {h |grad_v|} [p + grad_p d] [phi + grad_phi d] >_20
       // mat 2:
-      // < scale * {h |grad_v|} [p + grad_p d] [phi + grad_phi d] >
+      // < scale * alpha_2 {h |grad_v|} [p + grad_p d] [phi + grad_phi d] >_10
       //
-      // Take the material's pressure extension.
+      // Pressure extensions on both sides and their jump.
       Vector p_ext(1);
-      if (use_mixed_elem == false)
-      {
-         get_shifted_value(*p_e1, Trans_e_L.ElementNo, ip_e_L, d_q,
-                           num_taylor, p_ext);
-      }
-      else if (attr_e1 == 15)
-      {
-         get_shifted_value(*p_e1, Trans_e_L.ElementNo, ip_e_L, d_q,
-                           num_taylor, p_ext);
-      }
-      else
-      {
-         get_shifted_value(*p_e1, Trans_e_R.ElementNo, ip_e_R, d_q,
-                           num_taylor, p_ext);
-      }
+      get_shifted_value(*p_e1, Trans_e_L.ElementNo, ip_e_L, d_q,
+                        num_taylor, p_ext);
       double p_q1_ext = p_ext(0);
-
-      if (use_mixed_elem == false)
-      {
-         get_shifted_value(*p_e2, Trans_e_R.ElementNo, ip_e_R, d_q,
-                           num_taylor, p_ext);
-      }
-      else if (attr_e1 == 15)
-      {
-         get_shifted_value(*p_e2, Trans_e_L.ElementNo, ip_e_L, d_q,
-                           num_taylor, p_ext);
-      }
-      else
-      {
-         get_shifted_value(*p_e2, Trans_e_R.ElementNo, ip_e_R, d_q,
-                           num_taylor, p_ext);
-      }
+      get_shifted_value(*p_e2, Trans_e_R.ElementNo, ip_e_R, d_q,
+                        num_taylor, p_ext);
       double p_q2_ext = p_ext(0);
-
       double p_gradp_jump = p_q1_ext - p_q2_ext;
 
       double h_1, h_2, mu_1, mu_2, visc_q1, visc_q2;
