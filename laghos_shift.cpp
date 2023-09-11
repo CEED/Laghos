@@ -774,8 +774,8 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       else if (diffusion_type == 1)
       {
          // Mesh size with grad_v.
-         h_1  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e_L, 0);
-         h_2  = mat_data.e_1.ParFESpace()->GetMesh()->GetElementSize(&Trans_e_R, 0);
+         h_1  = v->ParFESpace()->GetMesh()->GetElementSize(&Trans_e_L, 0);
+         h_2  = v->ParFESpace()->GetMesh()->GetElementSize(&Trans_e_R, 0);
          mu_1 = v_grad_q1.FNorm();
          mu_2 = v_grad_q2.FNorm();
          visc_q1 = h_1 * fabs(mu_1);

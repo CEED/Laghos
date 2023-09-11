@@ -397,15 +397,7 @@ int main(int argc, char *argv[])
    si_options.v_shift_diffusion_scale = 1.0;
    // Contributions to the energy LHS:
    // 0: no shifting terms.
-   // 1: the energy RHS gets the conservative momentum term:
-   //    + < [grad_p.d] v phi >                         for v_shift_type = 1.
-   //    + < [grad_p.d * sum_i grad_vi.d] n phi >       for v_shift_type = 2.
-   //    + < [(p + grad_p.d) * sum_i grad_vi.d] n phi > for v_shift_type = 3.
-   //    + < [(p + grad_p.d)] [sum_i grad_vi.d] n phi > for v_shift_type = 4.
-   // 4: - < [((grad_v.d).n) n] {p phi} >
-   // 5: - < [((grad_v d).n) n] ({p phi} - gamma(1-gamma) [p + grad_p.d].[phi]>
-   //    - < [p + grad_p.d].v {phi} >
-   // 6: + < |[((grad_v d).n) n]| [p] [phi] >
+   // 4: - < [((grad_v.d).n) n] {alpha p phi} >
    si_options.e_shift_type = shift_e;
    // Scaling of the energy term.
    si_options.e_shift_scale = 1.0;
