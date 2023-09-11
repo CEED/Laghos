@@ -759,27 +759,27 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       double p_q2_ext = p_ext(0);
       double p_gradp_jump = p_q1_ext - p_q2_ext;
 
-      double h_1, h_2, mu_1, mu_2, visc_q1, visc_q2;
+      double h_L, h_R, mu_L, mu_R, visc_q_L, visc_q_R;
 
       // Distance with grad_v.
       if (diffusion_type == 0)
       {
-         h_1  = d_q.Norml2();
-         h_2  = d_q.Norml2();
-         mu_1 = v_grad_q1.FNorm();
-         mu_2 = v_grad_q2.FNorm();
-         visc_q1 = h_1 * fabs(mu_1);
-         visc_q2 = h_2 * fabs(mu_2);
+         h_L  = d_q.Norml2();
+         h_R  = d_q.Norml2();
+         mu_L = v_grad_q1.FNorm();
+         mu_R = v_grad_q2.FNorm();
+         visc_q_L = h_L * fabs(mu_L);
+         visc_q_R = h_R * fabs(mu_R);
       }
       else if (diffusion_type == 1)
       {
          // Mesh size with grad_v.
-         h_1  = v->ParFESpace()->GetMesh()->GetElementSize(&Trans_e_L, 0);
-         h_2  = v->ParFESpace()->GetMesh()->GetElementSize(&Trans_e_R, 0);
-         mu_1 = v_grad_q1.FNorm();
-         mu_2 = v_grad_q2.FNorm();
-         visc_q1 = h_1 * fabs(mu_1);
-         visc_q2 = h_2 * fabs(mu_2);
+         h_L  = v->ParFESpace()->GetMesh()->GetElementSize(&Trans_e_L, 0);
+         h_R  = v->ParFESpace()->GetMesh()->GetElementSize(&Trans_e_R, 0);
+         mu_L = v_grad_q1.FNorm();
+         mu_R = v_grad_q2.FNorm();
+         visc_q_L = h_L * fabs(mu_L);
+         visc_q_R = h_R * fabs(mu_R);
       }
       else
       {
@@ -813,22 +813,22 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          v_grad_q1.Symmetrize();
          v_grad_q2.Symmetrize();
          LengthScaleAndCompression(v_grad_q1, Trans_e_L, quad_data.Jac0inv(0),
-                                   quad_data.h0, h_1, mu_1);
+                                   quad_data.h0, h_L, mu_L);
          LengthScaleAndCompression(v_grad_q2, Trans_e_R, quad_data.Jac0inv(0),
-                                   quad_data.h0, h_2, mu_2);
-         visc_q1 = 2.0 * h_1 * fabs(mu_1);
-         if (mu_1 < 0.0)
+                                   quad_data.h0, h_R, mu_R);
+         visc_q_L = 2.0 * h_L * fabs(mu_L);
+         if (mu_L < 0.0)
          {
-            visc_q1 += 0.5 * sqrt(gamma_e1 * fmax(p_q1, 1e-5) / rho_q1);
+            visc_q_L += 0.5 * sqrt(gamma_e1 * fmax(p_q1, 1e-5) / rho_q1);
          }
-         visc_q2 = 2.0 * h_2 * fabs(mu_2);
-         if (mu_2 < 0.0)
+         visc_q_R = 2.0 * h_R * fabs(mu_R);
+         if (mu_R < 0.0)
          {
-            visc_q2 += 0.5 * sqrt(gamma_e2 * fmax(p_q2, 1e-5) / rho_q2);
+            visc_q_R += 0.5 * sqrt(gamma_e2 * fmax(p_q2, 1e-5) / rho_q2);
          }
       }
 
-      double grad_v_avg = gamma_avg * visc_q1 + (1.0 - gamma_avg) * visc_q2;
+      double grad_v_avg = gamma_avg * visc_q_L + (1.0 - gamma_avg) * visc_q_R;
 
       // Left element.
       shift_shape(*e->ParFESpace(), *p_e1->ParFESpace(),
