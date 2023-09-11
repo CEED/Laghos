@@ -623,7 +623,7 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       p_e2        = &mat_data.p_1->GetPressure();
       rho0DetJ_e2 = &mat_data.rho0DetJ_1;
       ind_e2      = &mat_data.ind_1;
-      gamma_e1    =  mat_data.gamma_1;
+      gamma_e2    =  mat_data.gamma_1;
    }
    else { MFEM_ABORT("Invalid marking configuration."); return; }
 
