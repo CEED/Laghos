@@ -783,31 +783,14 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
       }
       else
       {
-         double rho_q1, rho_q2;
-         if (use_mixed_elem == false)
-         {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e_L, ip_e_L)
-                     / Trans_e_L.Weight() / ind_e1->GetValue(Trans_e_L, ip_e_L);
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e_R, ip_e_R)
-                     / Trans_e_R.Weight() / ind_e2->GetValue(Trans_e_R, ip_e_R);
-         }
-         else if (attr_e1 == 15)
-         {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e_L, ip_e_L)
-                     / Trans_e_L.Weight() / ind_e1->GetValue(Trans_e_L, ip_e_L);
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e_L, ip_e_L)
-                     / Trans_e_L.Weight() / ind_e2->GetValue(Trans_e_L, ip_e_L);
-         }
-         else
-         {
-            rho_q1 = rho0DetJ_e1->GetValue(Trans_e_R, ip_e_R)
-                     / Trans_e_R.Weight() / ind_e1->GetValue(Trans_e_R, ip_e_R);
-            rho_q2 = rho0DetJ_e2->GetValue(Trans_e_R, ip_e_R)
-                     / Trans_e_R.Weight() / ind_e2->GetValue(Trans_e_R, ip_e_R);
-         }
-         MFEM_VERIFY(rho_q1 > 0.0 && rho_q2 > 0.0,
+         double rho_q_L, rho_q_R;
+         rho_q_L = rho0DetJ_e1->GetValue(Trans_e_L, ip_e_L)
+                   / Trans_e_L.Weight() / ind_e1->GetValue(Trans_e_L, ip_e_L);
+         rho_q_R = rho0DetJ_e2->GetValue(Trans_e_R, ip_e_R)
+                   / Trans_e_R.Weight() / ind_e2->GetValue(Trans_e_R, ip_e_R);
+         MFEM_VERIFY(rho_q_L > 0.0 && rho_q_R > 0.0,
                      "Negative density at the face, not good: "
-                        << rho_q1 << " " << rho_q2);
+                     << rho_q_L << " " << rho_q_R);
 
          // As in the volumetric viscosity.
          v_grad_q1.Symmetrize();
@@ -819,12 +802,12 @@ void EnergyInterfaceIntegrator::AssembleRHSElementVect(
          visc_q_L = 2.0 * h_L * fabs(mu_L);
          if (mu_L < 0.0)
          {
-            visc_q_L += 0.5 * sqrt(gamma_e1 * fmax(p_q1, 1e-5) / rho_q1);
+            visc_q_L += 0.5 * sqrt(gamma_e1 * fmax(p_q1, 1e-5) / rho_q_L);
          }
          visc_q_R = 2.0 * h_R * fabs(mu_R);
          if (mu_R < 0.0)
          {
-            visc_q_R += 0.5 * sqrt(gamma_e2 * fmax(p_q2, 1e-5) / rho_q2);
+            visc_q_R += 0.5 * sqrt(gamma_e2 * fmax(p_q2, 1e-5) / rho_q_R);
          }
       }
 
