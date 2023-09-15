@@ -52,6 +52,7 @@
 //    p = 10 --> (6.5)
 //       mpirun -np 8 ./laghos -p 10 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -tf 0.4 -fa -vis -cfl 0.5 -rs 10 
 //    p = 11 --> (6.6)
+//       mpirun -np 8 ./laghos -p 10 -m ../Laglos/data/segment-n1p7-1.mesh -dim 1 -tf 0.005 -fa -vis -cfl 1.3 -rs 10 
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //
@@ -902,6 +903,7 @@ double rho0(const Vector &x)
       case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
       case 9: return x(0) <= 0. ? 0.245 : 0.1225;
       case 10: return x(0) <= 0. ? 2.5e-1 : 4.9e-5;
+      case 11: return x(0) <= 0. ? 0.9932 : 0.95;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -994,6 +996,7 @@ void v0(const Vector &x, Vector &v)
       }
       case 9: 
       case 10: v = 0.0; break;
+      case 11: v = (x(0) < 0.0) ? 3. : -3.; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -1076,6 +1079,15 @@ double e0(const Vector &x)
       {
          double rho = rho0(x);
          double pressure = (x(0) <= 0.) ? 3.e-2 : 5.e-8;
+         double a = 1., b = 1.;
+         double gamma = gamma_func(x);
+
+         return ((pressure + a * pow(rho,2)) * (1. - b*rho)  / (rho * (gamma - 1.))) - a * rho;
+      }
+      case 11:
+      {
+         double rho = rho0(x);
+         double pressure = 2.;
          double a = 1., b = 1.;
          double gamma = gamma_func(x);
 
