@@ -47,6 +47,7 @@
 //    INVARIANT DOMAIN-PRESERVING APPROXIMATIONS FOR THE
 //    EULER EQUATIONS WITH TABULATED EQUATION OF STATE
 //    p = 8  --> (6.1)
+//       mpirun -np 8 ./laghos -p 8 -m ../Laglos/data/ref-segment-c0.mesh -dim 1 -tf 0.5 -fa -vis -cfl 0.5 -rs 10
 //    p = 9  --> (6.4)
 //       mpirun -np 8 ./laghos -p 9 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -tf 1.25 -fa -vis -cfl 0.5 -rs 10 
 //    p = 10 --> (6.5)
@@ -901,6 +902,7 @@ double rho0(const Vector &x)
          return 1.0;
       }
       case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
+      case 8: return x(0) <= 0. ? 0.1 : 0.39;
       case 9: return x(0) <= 0. ? 0.245 : 0.1225;
       case 10: return x(0) <= 0. ? 2.5e-1 : 4.9e-5;
       case 11: return x(0) <= 0. ? 0.9932 : 0.95;
@@ -994,9 +996,10 @@ void v0(const Vector &x, Vector &v)
          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
          break;
       }
+      case 8: v = (x(0) <= 0.) ? -0.475504638574729 : -0.121375781741349; break;
       case 9: 
       case 10: v = 0.0; break;
-      case 11: v = (x(0) < 0.0) ? 3. : -3.; break;
+      case 11: v = (x(0) <= 0.0) ? 3. : -3.; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -1065,6 +1068,15 @@ double e0(const Vector &x)
       {
          const double rho = rho0(x), gamma = gamma_func(x);
          return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+      }
+      case 8:
+      {
+         double rho = rho0(x);
+         double pressure = (x(0) <= 0.) ? 0.022084258693080 : 0.039073167077590;
+         double a = 1., b = 1.;
+         double gamma = gamma_func(x);
+
+         return ((pressure + a * pow(rho,2)) * (1. - b*rho)  / (rho * (gamma - 1.))) - a * rho;
       }
       case 9:
       {
