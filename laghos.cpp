@@ -48,8 +48,9 @@
 //    EULER EQUATIONS WITH TABULATED EQUATION OF STATE
 //    p = 8  --> (6.1)
 //    p = 9  --> (6.4)
+//       mpirun -np 8 ./laghos -p 9 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -tf 1.25 -fa -vis -cfl 0.5 -rs 10 
 //    p = 10 --> (6.5)
-//       mpirun -np 8 ./laghos -p 10 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -rs 10 -tf 0.4 -fa -vis -cfl 0.5
+//       mpirun -np 8 ./laghos -p 10 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -tf 0.4 -fa -vis -cfl 0.5 -rs 10 
 //    p = 11 --> (6.6)
 //
 // Sample runs: see README.md, section 'Verification of Results'.
@@ -899,6 +900,7 @@ double rho0(const Vector &x)
          return 1.0;
       }
       case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
+      case 9: return x(0) <= 0. ? 0.245 : 0.1225;
       case 10: return x(0) <= 0. ? 2.5e-1 : 4.9e-5;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
@@ -990,6 +992,7 @@ void v0(const Vector &x, Vector &v)
          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
          break;
       }
+      case 9: 
       case 10: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
@@ -1060,6 +1063,15 @@ double e0(const Vector &x)
          const double rho = rho0(x), gamma = gamma_func(x);
          return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
       }
+      case 9:
+      {
+         double rho = rho0(x);
+         double pressure = (x(0) <= 0.) ? 2.9123894332846005e-2 : 2.0685894810791836e-2;
+         double a = 1., b = 1.;
+         double gamma = gamma_func(x);
+
+         return ((pressure + a * pow(rho,2)) * (1. - b*rho)  / (rho * (gamma - 1.))) - a * rho;
+      }
       case 10:
       {
          double rho = rho0(x);
@@ -1068,7 +1080,6 @@ double e0(const Vector &x)
          double gamma = gamma_func(x);
 
          return ((pressure + a * pow(rho,2)) * (1. - b*rho)  / (rho * (gamma - 1.))) - a * rho;
-      
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
