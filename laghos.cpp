@@ -42,6 +42,15 @@
 //    p = 5  --> 2D Riemann problem, config. 12 of doi.org/10.1002/num.10025
 //    p = 6  --> 2D Riemann problem, config.  6 of doi.org/10.1002/num.10025
 //    p = 7  --> 2D Rayleigh-Taylor instability problem.
+//    
+//    VDW cases from the paper:
+//    INVARIANT DOMAIN-PRESERVING APPROXIMATIONS FOR THE
+//    EULER EQUATIONS WITH TABULATED EQUATION OF STATE
+//    p = 8  --> (6.1)
+//    p = 9  --> (6.4)
+//    p = 10 --> (6.5)
+//       mpirun -np 8 ./laghos -p 10 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -rs 10 -tf 0.4 -fa -vis -cfl 0.5
+//    p = 11 --> (6.6)
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //
@@ -548,6 +557,11 @@ int main(int argc, char *argv[])
       case 5: visc = true; break;
       case 6: visc = true; break;
       case 7: source = 2; visc = true; vorticity = true;  break;
+      // vdw
+      case 8: 
+      case 9:
+      case 10:
+      case 11: visc = true; break;
       default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -885,6 +899,7 @@ double rho0(const Vector &x)
          return 1.0;
       }
       case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
+      case 10: return x(0) <= 0. ? 2.5e-1 : 4.9e-5;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -903,6 +918,10 @@ double gamma_func(const Vector &x)
       case 5: return 1.4;
       case 6: return 1.4;
       case 7: return 5.0 / 3.0;
+      case 8:
+      case 9:
+      case 10: 
+      case 11: return 1.02;
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
 }
@@ -971,6 +990,7 @@ void v0(const Vector &x, Vector &v)
          v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
          break;
       }
+      case 10: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
@@ -1039,6 +1059,16 @@ double e0(const Vector &x)
       {
          const double rho = rho0(x), gamma = gamma_func(x);
          return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+      }
+      case 10:
+      {
+         double rho = rho0(x);
+         double pressure = (x(0) <= 0.) ? 3.e-2 : 5.e-8;
+         double a = 1., b = 1.;
+         double gamma = gamma_func(x);
+
+         return ((pressure + a * pow(rho,2)) * (1. - b*rho)  / (rho * (gamma - 1.))) - a * rho;
+      
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
