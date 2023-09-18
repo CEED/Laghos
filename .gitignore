@@ -3,3 +3,5 @@ laghos
 laghos.o
 laghos_assembly.o
 laghos_solver.o
+
+output.txt
