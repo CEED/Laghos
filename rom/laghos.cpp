@@ -342,8 +342,13 @@ int main(int argc, char *argv[])
     args.AddOption(&hyperreductionSamplingType, "-hrsamptype", "--hrsamplingtype",
                    "Sampling type for the hyperreduction.");
     args.AddOption(&romOptions.maxNNLSnnz, "-maxnnls", "--max-nnls",
-                   "Maximum nnz for NNLS");
-    args.Parse();
+                   "Maximum number of nonzeros in NNLS solution.");
+    args.AddOption(&romOptions.tolNNLS, "-tolnnls", "--tol-nnls",
+                   "NNLS solver error tolerance.");
+	args.AddOption(&romOptions.sampfreq, "-sampfreq", "--samp-freq",
+			"Snapshot sampling frequency.");
+    
+	args.Parse();
     if (!args.Good())
     {
         if (mpi.Root()) {
@@ -1169,6 +1174,10 @@ int main(int argc, char *argv[])
             sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
         }
         samplerTimer.Stop();
+
+		if (myid == 0)
+			cout << "Sampling every " << romOptions.sampfreq <<
+				" timestep(s)." << endl;
     }
 
     if (outputTimes)
@@ -1804,7 +1813,8 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    sampler->SampleSolution(t, last_dt, real_pd, *S);
+					if (unique_steps % romOptions.sampfreq == 0)
+						sampler->SampleSolution(t, last_dt, real_pd, *S);
                 }
 
                 bool endWindow = false;
@@ -2089,6 +2099,22 @@ int main(int argc, char *argv[])
                              << ",\t|e| = " << setprecision(10)
                              << sqrt(tot_norm) << endl;
                     }
+
+					if (romOptions.hyperreductionSamplingType == eqp)
+					{
+						double energy_total, energy_diff;
+						energy_total = oper->InternalEnergy(*e_gf) +
+							oper->KineticEnergy(*v_gf);
+						energy_diff	= energy_total - energy_init;
+
+						if (mpi.Root())
+						{
+							cout << "\tE_tot = " << scientific << setprecision(5)
+								<< energy_total
+								<< ",\tE_diff = " << scientific << setprecision(5)
+								<< energy_diff << endl; 
+						}
+					}
 
                     // Make sure all ranks have sent their 'v' solution before initiating
                     // another set of GLVis connections (one from each rank):
@@ -2466,9 +2492,13 @@ int main(int argc, char *argv[])
                                     oper->KineticEnergy(*v_gf);
         if (mpi.Root())
         {
-            cout << endl;
-            cout << "Energy diff: " << scientific << setprecision(2)
-                 << fabs(energy_init - energy_final) << endl;
+			cout << endl;
+			cout << "Initial energy: " << scientific << setprecision(5)
+				<< energy_init << endl;
+			cout << "Energy diff: " << scientific << setprecision(5)
+				<< energy_final - energy_init << endl;
+			cout << "Rel. energy diff: " << scientific << setprecision(5)
+				<< (energy_final - energy_init) / energy_init << endl;
         }
 
         PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
