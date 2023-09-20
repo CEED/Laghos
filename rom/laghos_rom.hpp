@@ -160,6 +160,7 @@ static localROMIndicator getlocalROMIndicator(const char* indicatorType)
 struct ROM_Options
 {
     int rank = 0;  // MPI rank
+    int nprocs = 0;  // Number of MPI processes
     ParFiniteElementSpace *H1FESpace = NULL; // FOM H1 FEM space
     ParFiniteElementSpace *L2FESpace = NULL; // FOM L2 FEM space
 
@@ -816,12 +817,14 @@ private:
         return path + prefix + fileName;
     }
 
-    void SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
-                        const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input);
+    void SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV,
+                        const CAROM::Matrix* snapE, const CAROM::Matrix* basisV,
+                        const CAROM::Matrix* basisE, ROM_Options const& input);
 
-    void SetupEQP_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
-                           const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input,
-                           bool equationE);
+    void SetupEQP_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV,
+                           const CAROM::Matrix* snapE, const CAROM::Matrix* basisV,
+                           const CAROM::Matrix* basisE, ROM_Options const& input,
+                           bool equationE, std::set<int> & elems);
 };
 
 class ROM_Basis
@@ -1069,7 +1072,9 @@ protected:
 
     double energyFraction_X;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
+                             ParFiniteElementSpace *L2FESpace,
+                             Array<int>& nH1, const int window,
                              const std::vector<double> *timesteps);
 
     std::vector<int> paramID_list;

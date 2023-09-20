@@ -1084,6 +1084,7 @@ int main(int argc, char *argv[])
     }
 
     romOptions.rank = myid;
+    romOptions.nprocs = nprocs;
     romOptions.H1FESpace = H1FESpace;
     romOptions.L2FESpace = L2FESpace;
     romOptions.window = 0;

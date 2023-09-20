@@ -394,16 +394,32 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
          relNorm << endl;
 }
 
-void WriteSolutionNNLS(CAROM::Vector const& sol, const string filename)
+void ExtractNonzeros(CAROM::Vector const& v, std::vector<int> & indices,
+                     std::vector<double> & nnz)
+{
+    nnz.clear();
+    indices.clear();
+    for (int i=0; i<v.dim(); ++i)
+    {
+        if (v(i) != 0.0)
+        {
+            indices.push_back(i);
+            nnz.push_back(v(i));
+        }
+    }
+}
+
+void WriteSolutionNNLS(std::vector<int> const& indices, std::vector<double> const& sol,
+                       const string filename)
 {
     std::ofstream outfile(filename);
 
-    for (int i=0; i<sol.dim(); ++i)
+    const int n = indices.size();
+    MFEM_VERIFY(n == sol.size(), "");
+
+    for (int i=0; i<n; ++i)
     {
-        if (sol(i) != 0.0)
-        {
-            outfile << i << " " << sol(i) << "\n";
-        }
+        outfile << indices[i] << " " << sol[i] << "\n";
     }
 
     outfile.close();
@@ -415,7 +431,8 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
                                     const CAROM::Matrix* basisV,
                                     const CAROM::Matrix* basisE,
                                     ROM_Options const& input,
-                                    bool equationE)
+                                    bool equationE,
+                                    std::set<int> & elems)
 {
     const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
     const int nqe = ir0->GetNPoints();
@@ -592,9 +609,410 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
     CAROM::Vector sol(ne * nqe, true);
     SolveNNLS(rank, tolNNLS, input.maxNNLSnnz, w, Gt, sol);
 
+    std::vector<double> solnnz;
+    std::vector<int> indices;
+    ExtractNonzeros(sol, indices, solnnz);
+
+    int prev = -1;
+    for (auto i : indices)
+    {
+        const int elem = i / nqe;
+        if (elem != prev)
+        {
+            elems.insert(elem);
+            prev = elem;
+        }
+    }
+
     const std::string varName = equationE ? "E" : "V";
-    WriteSolutionNNLS(sol, "run/nnls" + varName + std::to_string(input.window) + "_" +
-                      std::to_string(rank));
+    WriteSolutionNNLS(indices, solnnz, "run/nnls" + varName +
+                      std::to_string(input.window) + "_" + std::to_string(rank));
+}
+
+void WriteElements(std::set<int> const& elems, const string filename)
+{
+    std::ofstream outfile(filename);
+
+    for (auto elem : elems)
+    {
+        outfile << elem << "\n";
+    }
+
+    outfile.close();
+}
+
+// The input pmesh is the parallel, distributed FOM mesh with boundary attributes
+// to be copied to smesh. The sample mesh smesh is parallel but not distributed.
+// That is, smesh is entirely on the root process. The indices of elements in
+// pmesh (necessarily on this rank) contained in smesh are stored in elems.
+void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
+                                       std::set<int> const& elems,
+                                       vector<int> const& allNumLocalElems,
+                                       const ParMesh *pmesh, ParMesh *smesh)
+{
+    const int dim = pmesh->SpaceDimension();
+
+    // First, find the elements of smesh touching its boundary. These elements may
+    // or may not be on the boundary of pmesh. All interior elements of smesh are
+    // definitely interior to pmesh.
+
+    // Note that this version gathers data from pmesh for all sampled
+    // elements in smesh. This could be further optimized by gathering data
+    // only from elements on the boundary.
+
+    std::set<int> elemOnBdry;
+
+    Array<int> f2be;
+
+    if (rank == 0)
+    {
+        const int nbe = smesh->GetNBE();
+
+        // Initialize all boundary attributes to 4, which will denote the
+        // boundary elements of smesh that are interior to pmesh.
+        for (int i=0; i<nbe; ++i)
+            smesh->SetBdrAttribute(i, 4);
+
+        f2be = smesh->GetFaceToBdrElMap();
+
+        MFEM_VERIFY(f2be.Size() == smesh->GetNumFaces(), "");
+        MFEM_VERIFY(nbe < smesh->GetNumFaces(), "");
+
+        for (int e=0; e<smesh->GetNE(); ++e)
+        {
+            Array<int> faces, ori;
+            // TODO: is this the right function in 2D?
+            smesh->GetElementFaces(e, faces, ori);
+            for (auto f : faces)
+            {
+                if (f2be[f] >= 0)
+                {
+                    const int bel = f2be[f];
+                    elemOnBdry.insert(e);
+                    break;
+                }
+            }
+        }
+    }
+
+    vector<int> counts(nprocs);
+    vector<int> offsets(nprocs);
+
+    const int numLocalElems = elems.size();
+    vector<int> myLocalElems(numLocalElems);
+
+    int cnt = 0;
+    for (auto e : elems)
+    {
+        myLocalElems[cnt] = e;
+        cnt++;
+    }
+
+    MFEM_VERIFY(cnt == numLocalElems, "");
+
+    // Now that the elements on the boundary of smesh are known, gather vertex
+    // coordinates from the sampled elements of pmesh, in order to map vertices
+    // on those elements.
+
+    Array<int> vert, faces, ori;
+    pmesh->GetElementVertices(0, vert);  // Just getting number of vertices.
+    pmesh->GetElementFaces(0, faces, ori);  // Just getting number of faces.
+    const int nve = vert.Size();  // Number of vertices per element, assumed constant.
+    const int nfe = faces.Size();  // Number of faces per element, assumed constant.
+    pmesh->GetFaceVertices(0, vert);  // Just getting number of vertices.
+    const int nvf = vert.Size();  // Number of vertices per face, assumed constant.
+
+    if (rank == 0)
+    {
+        offsets[0] = 0;
+        for (int i=0; i<nprocs; ++i)
+        {
+            counts[i] = dim * nve * allNumLocalElems[i];
+            if (i > 0)
+                offsets[i] = offsets[i-1] + counts[i-1];
+        }
+    }
+
+    vector<double> pcrd(dim * nve * numLocalElems);
+    vector<int> pvid(nve * numLocalElems);
+
+    vector<int> patt((nfe * (nvf + 1)) * numLocalElems);
+
+    const Array<int> pf2be = pmesh->GetFaceToBdrElMap();
+
+    for (int i=0; i<numLocalElems; ++i)
+    {
+        const int e = myLocalElems[i];
+        pmesh->GetElementVertices(e, vert);
+        MFEM_VERIFY(vert.Size() == nve, "All elements must be of the same type.");
+
+        for (int v=0; v<nve; ++v)
+        {
+            pvid[(i * nve) + v] = vert[v];  // Note that this is a local index.
+            const double *vc = pmesh->GetVertex(vert[v]);
+            for (int j=0; j<dim; ++j)
+                pcrd[(i * dim * nve) + (v * dim) + j] = vc[j];
+        }
+
+        Array<int> fvert;
+        // TODO: is this the right function in 2D?
+        pmesh->GetElementFaces(e, faces, ori);
+        MFEM_VERIFY(faces.Size() == nfe, "");
+        for (int j=0; j<nfe; ++j)
+        {
+            const int f = faces[j];
+            const int bel = pf2be[f];
+            pmesh->GetFaceVertices(f, fvert);
+            MFEM_VERIFY(fvert.Size() == nvf, "");
+            for (int k=0; k<nvf; ++k)
+                patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + k] = fvert[k];
+
+            // If it is not a boundary element, use attribute -1.
+            const int attr = (bel >= 0) ? pmesh->GetBdrAttribute(bel) : -1;
+            patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = attr;
+        }
+    }
+
+    vector<double> allpcrd;
+    if (rank == 0) allpcrd.resize(offsets[nprocs-1] + counts[nprocs-1]);
+    MPI_Gatherv(pcrd.data(), counts[rank], MPI_DOUBLE, allpcrd.data(), counts.data(),
+                offsets.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Also gather vertex indices on the corresponding elements.
+    for (int i=0; i<nprocs; ++i)
+    {
+        counts[i] /= dim;
+        offsets[i] /= dim;
+    }
+
+    vector<int> allpvid;
+    if (rank == 0) allpvid.resize(allpcrd.size() / dim);
+    MPI_Gatherv(pvid.data(), counts[rank], MPI_INT, allpvid.data(), counts.data(),
+                offsets.data(), MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Use the element vertex coordinate data in allpcrd and index data in allpvid
+    // to map pmesh vertices to smesh vertices. Note that vertex indices in
+    // allpvid are local to their rank, so we construct separate maps on each rank.
+    // It would be more convenient to use global indices, but constructing them
+    // is a more expensive operation.
+    vector<std::map<int,int>> vmap(nprocs);
+
+    if (rank == 0)
+    {
+        Vector diff(dim);
+        for (int i=0; i<nprocs; ++i)
+        {
+            for (int j=0; j<counts[i]; ++j)
+            {
+                const int pid = allpvid[offsets[i] + j];
+
+                const int selem = (int) ((offsets[i] + j) / nve);
+
+                auto search = elemOnBdry.find(selem);
+                if (search == elemOnBdry.end())
+                    continue;  // Skip elements not on smesh boundary
+
+                // Find the vertex of element selem of smesh with the same
+                // coordinates as pid.
+
+                smesh->GetElementVertices(selem, vert);
+                MFEM_VERIFY(vert.Size() == nve, "All elements must be of the same type.");
+
+                int sid = -1;
+                for (int v=0; v<nve; ++v)
+                {
+                    const double *vc = smesh->GetVertex(vert[v]);
+                    for (int k=0; k<dim; ++k)
+                        diff[k] = vc[k] - allpcrd[(dim*(offsets[i] + j)) + k];
+
+                    if (diff.Norml2() < 1.0e-8)
+                    {
+                        MFEM_VERIFY(sid == -1, "");
+                        sid = vert[v];
+                        // TODO: break
+                    }
+                }
+
+                MFEM_VERIFY(sid >= 0, "");
+                vmap[i][pid] = sid;
+            }
+        }
+    }
+
+    // Now that the vertices are mapped on the elements of interest, gather
+    // boundary element attributes, with boundary elements defined by sorted
+    // vertex indices.
+
+    for (int i=0; i<nprocs; ++i)
+    {
+        counts[i] /= nve;
+        offsets[i] /= nve;
+
+        // Now counts[i] == allNumLocalElems[i]
+
+        counts[i] *= nfe * (nvf + 1);
+        offsets[i] *= nfe * (nvf + 1);
+    }
+
+    vector<int> allpatt;
+    if (rank == 0) allpatt.resize(offsets[nprocs-1] + counts[nprocs-1]);
+    MPI_Gatherv(patt.data(), counts[rank], MPI_INT, allpatt.data(), counts.data(),
+                offsets.data(), MPI_INT, 0, MPI_COMM_WORLD);
+
+    // The rest of this function is only for the root process, involving smesh
+    // but not pmesh.
+    if (rank != 0)
+        return;
+
+    // Copy the boundary element attributes to smesh.
+
+    vert.SetSize(nvf);
+    Array<int> svert(nvf);
+    cnt = 0;
+    for (int p=0; p<nprocs; ++p)
+    {
+        for (int e=0; e<allNumLocalElems[p]; ++e)
+        {
+            const int selem = cnt;
+            auto search = elemOnBdry.find(selem);
+            if (search == elemOnBdry.end())
+            {
+                cnt++;
+                continue;  // Skip elements not on smesh boundary
+            }
+
+            // TODO: is this the right function in 2D?
+            smesh->GetElementFaces(selem, faces, ori);
+            MFEM_VERIFY(faces.Size() == nfe, "");
+
+            // Now counts[p] == nfe * (nvf + 1) * allNumLocalElems[p]
+            for (int f=0; f<nfe; ++f)
+            {
+                const int attr = allpatt[offsets[p] + (e * nfe * (nvf + 1)) + (f * (nvf + 1)) + nvf];
+                if (attr > 0)
+                {
+                    // Set vert to be the sorted smesh vertices corresponding to
+                    // the pmesh vertices on this face.
+                    for (int i=0; i<nvf; ++i)
+                        vert[i] = vmap[p][allpatt[offsets[p] + (e * nfe * (nvf + 1)) + (f * (nvf + 1)) + i]];
+
+                    vert.Sort();
+
+                    // Find the face of smesh element selem with vertices matching vert.
+                    int sfi = -1;
+                    for (int sf=0; sf<nfe; ++sf)
+                    {
+                        smesh->GetFaceVertices(faces[sf], svert);
+                        MFEM_VERIFY(svert.Size() == nvf, "");
+                        svert.Sort();
+
+                        // Compare the sorted arrays vert and svert
+                        if (svert == vert)  // See mfem/general/array.hpp for ==
+                        {
+                            MFEM_VERIFY(sfi == -1, "");
+                            sfi = sf;
+                        }
+                    }
+
+                    MFEM_VERIFY(sfi >= 0, "");
+                    const int bel = f2be[faces[sfi]];
+                    // Since the boundary attribute is set, this face must be a
+                    // boundary element of smesh.
+                    MFEM_VERIFY(bel >= 0, "");
+                    smesh->SetBdrAttribute(bel, attr);
+                }
+            }
+
+            cnt++;
+        }
+    }
+
+    MFEM_VERIFY(cnt == smesh->GetNE(), "");
+}
+
+void WriteSampleMeshEQP(ROM_Options const& input, std::set<int> const& elems)
+{
+    ParMesh *pmesh = input.H1FESpace->GetParMesh();
+
+    // Must be zero-order, to get a bijection between elements and DOFs.
+    L2_FECollection l2_coll(0, pmesh->Dimension());  // order 0
+    ParFiniteElementSpace pwc_space(pmesh, &l2_coll);
+
+    MFEM_VERIFY(pwc_space.GetNDofs() == pmesh->GetNE(), "");
+
+    std::vector<ParFiniteElementSpace*> fespace(1);
+    fespace[0] = &pwc_space;
+
+    vector<int> sample_dofs_elems(elems.size());
+
+    bool pwc = true;
+    int cnt = 0;
+    for (auto elem : elems)
+    {
+        Array<int> dofs;
+        pwc_space.GetElementDofs(elem, dofs);
+        pwc = pwc && (dofs.Size() == 1);
+        sample_dofs_elems[cnt] = dofs[0];
+        cnt++;
+    }
+
+    MFEM_VERIFY(pwc && cnt == elems.size(), "");
+
+    const int numLocalElems = elems.size();
+
+    vector<int> num_sample_dofs_per_proc;
+    num_sample_dofs_per_proc.assign(input.nprocs, 0);
+
+    MPI_Allgather(&numLocalElems, 1, MPI_INT, num_sample_dofs_per_proc.data(),
+                  1, MPI_INT, MPI_COMM_WORLD);
+
+    CAROM::SampleMeshManager smm(fespace);
+    // We register only the 0-order L2 DOFs on sampled elements, to ensure that the
+    // sample mesh only contains the sampled elements, without additional neighbors.
+    smm.RegisterSampledVariable("elem", 0, sample_dofs_elems, num_sample_dofs_per_proc);
+
+    smm.ConstructSampleMesh();
+
+    // TODO: is this used?
+    ParFiniteElementSpace *sp_L2_space = (input.rank == 0) ? smm.GetSampleFESpace(0) : NULL;
+
+    ParMesh *sample_pmesh = nullptr;
+
+    if (input.rank == 0)
+    {
+        // TODO: is this used?
+        const int size_L2_sp = sp_L2_space->GetTrueVSize();
+
+        sample_pmesh = smm.GetSampleMesh();
+
+        MFEM_VERIFY(sample_pmesh->GetNE() == numLocalElems,
+                    "TODO: this is only for the serial case");
+
+        // Set velocity boundary conditions. This is done differently than for
+        // non-EQP hyperreduction, because the EQP sample mesh is minimal (not
+        // including elements around the sampled DOFs). In the EQP case,
+        // boundary conditions should be set only on boundary elements on the
+        // FOM domain boundary.
+
+        set<int> *selem = smm.GetSampleElements();
+        MFEM_VERIFY(selem->size() == elems.size(), "TODO: this is valid only in serial!");
+
+        // TODO: is it necessary to write the sample map?
+        smm.WriteVariableSampleMap("elem", "run/s2sp_elem_" + to_string(input.window));
+
+        WriteElements(elems, "run/sp_elems_" + to_string(input.window));
+    }
+
+    MapBoundaryAttributesToSampleMesh(input.rank, input.nprocs, elems,
+                                      num_sample_dofs_per_proc,
+                                      pmesh, sample_pmesh);
+
+    if (input.rank == 0)
+    {
+        std::string outfile_string = "run/sample_pmesh_" + std::to_string(input.window);
+        std::ofstream outfile_spmesh(outfile_string.c_str());
+        sample_pmesh->ParPrint(outfile_spmesh);
+    }
 }
 
 void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
@@ -608,8 +1026,11 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix
     MFEM_VERIFY(snapV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(snapE->numRows() == input.L2FESpace->GetTrueVSize(), "");
 
-    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false);
-    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true);
+    std::set<int> elems;
+    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false, elems);
+    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true, elems);
+
+    WriteSampleMeshEQP(input, elems);
 }
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
@@ -878,7 +1299,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             writeNum(rdime, basename + "/" + "rdime" + "_" + to_string(input.window));
         }
     }
-    else if (rank == 0 && !spaceTime)  // TODO: read/write this for spaceTime case?
+    else if (rank == 0 && !spaceTime && input.hyperreductionSamplingType != eqp)  // TODO: read/write this for spaceTime case?
     {
         readNum(rdimx, basename + "/" + "rdimx" + "_" + to_string(input.window));
         readNum(rdimv, basename + "/" + "rdimv" + "_" + to_string(input.window));
@@ -903,7 +1324,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
-    if (use_sample_mesh)
+    if (use_sample_mesh && input.hyperreductionSamplingType != eqp)
     {
         if (rank == 0)
         {
@@ -921,7 +1342,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
     if (offsetInit)
     {
-        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
+        std::string path_init = testing_parameter_basename + "/ROMoffset" +
+                                input.basisIdentifier + "/init";
 
         if (input.offsetType == useInitialState)
         {
@@ -932,7 +1354,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->read(path_init + "V0");
             initE->read(path_init + "E0");
 
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Read init vectors X, V, E with norms " << initX->norm()
+                 << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.restore || input.offsetType == saveLoadOffset)
         {
@@ -943,7 +1366,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
 
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Read init vectors X, V, E with norms " << initX->norm()
+                 << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.offsetType == interpolateOffset)
         {
@@ -977,7 +1401,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             }
 
             // Determine the coefficients with respect to the offline parameters
-            // The coefficients are inversely porportional to distances and form a convex combination of offset data
+            // The coefficients are inversely porportional to distances and form
+            // a convex combination of offset data
             for (int param=0; param<paramID_list.size(); ++param)
             {
                 if (true_idx >= 0)
@@ -1027,7 +1452,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
 
-            cout << "Interpolated init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Interpolated init vectors X, V, E with norms " << initX->norm()
+                 << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
     }
 
@@ -1038,7 +1464,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         preprocessHyperreductionTimer.Start();
         SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window, timesteps);
         preprocessHyperreductionTimer.Stop();
-        if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTimer.RealTime() << " sec\n";
+        if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: "
+                                << preprocessHyperreductionTimer.RealTime() << " sec\n";
     }
 
     if (spaceTime && hyperreduce) // spaceTime && use_sample_mesh?
@@ -1048,7 +1475,9 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     }
 }
 
-void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
+void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS,
+        int window, int rdimxPrev, int rdimvPrev,
+        int rdimePrev)
 {
     MFEM_VERIFY(rank == 0 && window > 0, "");
 
@@ -1372,7 +1801,9 @@ void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
+void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
+                                    ParFiniteElementSpace *L2FESpace,
+                                    Array<int>& nH1, const int window,
                                     const std::vector<double> *timesteps)
 {
     ParMesh *pmesh = H1FESpace->GetParMesh();
@@ -1643,7 +2074,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     // Construct sample mesh
     const int nspaces = 2;
     std::vector<ParFiniteElementSpace*> fespace(nspaces);
-    std::vector<ParFiniteElementSpace*> spfespace(nspaces);
     fespace[0] = H1FESpace;
     fespace[1] = L2FESpace;
 
@@ -2541,7 +2971,7 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "testing_parameter_basename"
     // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
 
-    std::string outfile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::string outfile_string = hyperreduce_basename + "/sample_pmesh_" + to_string(window);
     std::ofstream outfile_spmesh(outfile_string.c_str());
     sample_pmesh->ParPrint(outfile_spmesh);
 
@@ -2609,7 +3039,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "testing_parameter_basename"
     // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
 
-    std::string infile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::string infile_string = hyperreduce_basename + "/sample_pmesh_" + to_string(window);
     std::ifstream infile_spmesh(infile_string.c_str());
     sample_pmesh = new ParMesh(comm, infile_spmesh);
 
