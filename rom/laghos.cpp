@@ -1536,7 +1536,16 @@ int main(int argc, char *argv[])
                     SetWindowParameters(twparam, romOptions);
                     basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
                     delete basis[romOptions.window-1];
+                    
                     basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                   
+                    if (romOptions.hyperreductionSamplingType == eqp_energy)
+                    {
+                        // Add the last lifted solution vector as the last
+                        // column in the bases.
+                        basis[romOptions.window]->AddLastCol_V(*S);
+                        basis[romOptions.window]->AddLastCol_E(*S);
+                    }
                     basis[romOptions.window]->Init(romOptions, *S);
 
                     if (romOptions.mergeXV)
