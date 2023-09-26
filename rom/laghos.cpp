@@ -1244,18 +1244,37 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
         if (usingWindows)
         {
-            // Construct the ROM_Basis for each window.
-            for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
+            if (romOptions.hyperreductionSamplingType != eqp_energy)
             {
+                // Construct the ROM_Basis for each window.
+                for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
+                {
+                    SetWindowParameters(twparam, romOptions);
+                    basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                    if (!romOptions.hyperreduce_prep)
+                    {
+                        romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
+                                visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                    }
+                }
+            romOptions.window = 0;
+            }
+            else
+            {
+                // Construct the ROM basis and operator only for the first
+                // window; the ones for the next windows will be constructed
+                // at the time of each window change, because the current
+                // vector S is needed for their construction.
+                // In particular, forming the bases and reduced inverse mass
+                // matrices requires knoweldege of vector S.
                 SetWindowParameters(twparam, romOptions);
-                basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+                basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
                 if (!romOptions.hyperreduce_prep)
                 {
-                    romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, order_e, source,
-                            visc, vort, cfl, p_assembly, cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC);
+                    romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
+                            cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
                 }
             }
-            romOptions.window = 0;
         }
         else
         {
@@ -1589,12 +1608,6 @@ int main(int argc, char *argv[])
         {
             romOper[0]->ApplyHyperreduction(romS);
         }
-
-	//	// TODO: do we want that for the energy-conserving EQP?
-	//	if (rom_online && romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
-	//	{
-	//		romOper[0]->ApplyHyperreduction(romS);
-	//	}
 
 		double windowEndpoint = 0.0;
         double windowOverlapMidpoint = 0.0;
@@ -2045,6 +2058,34 @@ int main(int argc, char *argv[])
                     int rdimeprev = romOptions.dimE;
 
                     SetWindowParameters(twparam, romOptions);
+                    if (romOptions.hyperreductionSamplingType == eqp_energy)
+                    {
+                        timeLoopTimer.Stop();
+                        onlinePreprocessTimer.Start();
+                       
+                        // Form the ROM basis and operator for the new window.
+                        basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
+                        
+                        onlinePreprocessTimer.Stop();
+                        timeLoopTimer.Start();
+                        
+                        // Add the last lifted solution vector as the last
+                        // column in the bases.
+                        basis[romOptions.window]->AddLastCol_V(*S);
+                        basis[romOptions.window]->AddLastCol_E(*S);
+                        
+                        timeLoopTimer.Stop();
+                        onlinePreprocessTimer.Start();
+                       
+                        if (!romOptions.hyperreduce_prep)
+                        {
+                            romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, 
+                                    order_e, source, visc, vort, cfl, p_assembly,
+                                    cg_tol, cg_max_iter, ftz_tol, &H1FEC, &L2FEC, &timesteps);
+                        }
+                        onlinePreprocessTimer.Stop();
+                        timeLoopTimer.Start();
+                    }
                     if (romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->ProjectFromPreviousWindow(romOptions, romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
@@ -2072,14 +2113,6 @@ int main(int argc, char *argv[])
 
                     if (!romOptions.use_sample_mesh)
                     {
-						if (romOptions.hyperreductionSamplingType == eqp_energy)
-						{
-							// Add the corresponding lifted solution vector
-							// to the velocity and energy bases to ensure
-							// energy is conserved across windows.
-							basis[romOptions.window]->AddLastCol_V(*S);
-							basis[romOptions.window]->AddLastCol_E(*S);
-						}
                         basis[romOptions.window]->ProjectFOMtoROM(*S, romS);
                     }
 					if (myid == 0)
@@ -2117,11 +2150,6 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
 		
-					//if (romOptions.hyperreduce && romOptions.hyperreductionSamplingType == eqp_energy)
-					//{
-					//	romOper[romOptions.window]->ApplyHyperreduction(romS);
-					//}
-
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)
                     {
                         std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight" + to_string(romOptions.window);
