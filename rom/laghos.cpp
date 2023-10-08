@@ -290,7 +290,8 @@ int main(int argc, char *argv[])
     args.AddOption(&romOptions.hyperreduce_prep, "-romhrprep", "--romhrprep", "-no-romhrprep", "--no-romhrprep",
                    "Enable or disable ROM hyperreduction preprocessing.");
     args.AddOption(&romOptions.precondCLS, "-precls", "--precls", "-no-precls", "--no-precls",
-                   "Enable or disable preconditioning the hyper-reduction based on the Christoffel function weight.");    args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
+                   "Enable or disable preconditioning the hyper-reduction based on the Christoffel function weight.");   
+    args.AddOption(&romOptions.staticSVD, "-romsvds", "--romsvdstatic", "-no-romsvds", "--no-romsvds",
                    "Enable or disable ROM static SVD.");
     args.AddOption(&romOptions.randomizedSVD, "-romsvdrm", "--romsvdrandom", "-no-romsvdrm", "--no-romsvdrm",
                    "Enable or disable ROM randomized SVD.");
@@ -1209,8 +1210,8 @@ int main(int argc, char *argv[])
     if (!usingWindows)
     {
         if (romOptions.sampX == 0 && !romOptions.mergeXV) romOptions.sampX = sFactorX * romOptions.dimX;
-        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV * romOptions.dimFv;
-        if (romOptions.sampE == 0) romOptions.sampE = sFactorE * romOptions.dimFe;
+        if (romOptions.sampV == 0 && !romOptions.mergeXV) romOptions.sampV = sFactorV + romOptions.dimFv;
+        if (romOptions.sampE == 0) romOptions.sampE = sFactorE + romOptions.dimFe;
     }
 
     StopWatch onlinePreprocessTimer;
