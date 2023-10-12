@@ -465,6 +465,7 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
     Vector v_i(tH1size);
     Vector x_i(tH1size);
     Vector e_i(tL2size);
+    Vector g_i(tL2size);
 
     Vector w_j_e, v_i_e, v_j_e;
 
@@ -482,17 +483,21 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
         if (equationE)
         {
             for (int i=0; i<tL2size; ++i)
-                v_i[i] = (*basisE)(i,j);
+            {
+                e_i[i] = (*basisE)(i,j);
+            }
 
-            input.FOMoper->MultMeInv(v_i, x_i);
+            input.FOMoper->MultMeInv(e_i, g_i);
 
             for (int i=0; i<tL2size; ++i)
-                W(i,j) = x_i[i];
+                W(i,j) = g_i[i];
         }
         else
         {
             for (int i=0; i<tH1size; ++i)
+            {
                 v_i[i] = (*basisV)(i,j);
+            }
 
             gfH1.SetFromTrueDofs(v_i);
             input.FOMoper->MultMvInv(gfH1, gf2H1);
@@ -507,7 +512,7 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
 
     for (int i=0; i<nsnap+1; ++i)
     {
-        if (i == 0)  // Use the initial state as the first snapshot.
+        if (i == 0)  // Use the offset as the first snapshot.
         {
             v_i = 0.0;
             x_i = 0.0;
@@ -594,10 +599,10 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
             }  // e
         }  // j
     }  // i
-	
-	// Rescale every Gt column (NNLS equation) by its max absolute value.
-	// It seems to help the NNLS solver significantly.
-	Gt.rescale_cols_max();
+
+    // Rescale every Gt column (NNLS equation) by its max absolute value.
+    // It seems to help the NNLS solver significantly.
+    Gt.rescale_cols_max();
 
     CAROM::Vector w(ne * nqe, true);
     for (int i=0; i<ne; ++i)
@@ -605,7 +610,7 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
         for (int j=0; j<nqe; ++j)
             w((i*nqe) + j) = w_el[j];
     }
-	
+
     CAROM::Vector sol(ne * nqe, true);
     SolveNNLS(rank, input.tolNNLS, input.maxNNLSnnz, w, Gt, sol);
 
@@ -1017,7 +1022,7 @@ void WriteSampleMeshEQP(ROM_Options const& input, std::set<int> const& elems)
 
 void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
                                  const CAROM::Matrix* basisV, const CAROM::Matrix* basisE,
-                                 ROM_Options const& input)
+                                 ROM_Options const& input, Vector const& sol)
 {
     MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
@@ -1030,10 +1035,13 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix
     SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false, elems);
     SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true, elems);
 
+    // Call this to call UpdateQuadratureData and restore the FOM state.
+    input.FOMoper->GetTimeStepEstimate(sol);
+
     WriteSampleMeshEQP(input, elems);
 }
 
-void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
+void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input, Vector const& sol)
 {
     if (writeSnapshots)
     {
@@ -1134,7 +1142,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         SetupEQP_Force(generator_X->getSnapshotMatrix(),
                        generator_V->getSnapshotMatrix(),
                        generator_E->getSnapshotMatrix(),
-                       tBasisV, tBasisE, input);
+                       tBasisV, tBasisE, input, sol);
 
         delete tBasisV;
         delete tBasisE;

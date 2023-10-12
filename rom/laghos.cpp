@@ -345,10 +345,10 @@ int main(int argc, char *argv[])
                    "Maximum number of nonzeros in NNLS solution.");
     args.AddOption(&romOptions.tolNNLS, "-tolnnls", "--tol-nnls",
                    "NNLS solver error tolerance.");
-	args.AddOption(&romOptions.sampfreq, "-sampfreq", "--samp-freq",
-			"Snapshot sampling frequency.");
-    
-	args.Parse();
+    args.AddOption(&romOptions.sampfreq, "-sampfreq", "--samp-freq",
+                   "Snapshot sampling frequency.");
+
+    args.Parse();
     if (!args.Good())
     {
         if (mpi.Root()) {
@@ -1175,9 +1175,9 @@ int main(int argc, char *argv[])
         }
         samplerTimer.Stop();
 
-		if (myid == 0)
-			cout << "Sampling every " << romOptions.sampfreq <<
-				" timestep(s)." << endl;
+        if (myid == 0)
+            cout << "Sampling every " << romOptions.sampfreq <<
+                 " timestep(s)." << endl;
     }
 
     if (outputTimes)
@@ -1813,8 +1813,8 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-					if (unique_steps % romOptions.sampfreq == 0)
-						sampler->SampleSolution(t, last_dt, real_pd, *S);
+                    if (unique_steps % romOptions.sampfreq == 0)
+                        sampler->SampleSolution(t, last_dt, real_pd, *S);
                 }
 
                 bool endWindow = false;
@@ -1879,7 +1879,7 @@ int main(int argc, char *argv[])
 
                         if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                         {
-                            samplerLast->Finalize(cutoff, romOptions);
+                            samplerLast->Finalize(cutoff, romOptions, *S);
                             if (last_step)
                             {
                                 // Let samplerLast define the final window, discarding the sampler window.
@@ -1924,7 +1924,7 @@ int main(int argc, char *argv[])
                         }
                         else
                         {
-                            sampler->Finalize(cutoff, romOptions);
+                            sampler->Finalize(cutoff, romOptions, *S);
                         }
                         if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
@@ -2041,6 +2041,7 @@ int main(int argc, char *argv[])
                     if (!romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->ProjectFOMtoROM(*S, romS);
+                        //romS = 0.0;  // TODO: remove this hack, which sets to loaded init state for the window.
                     }
                     if (myid == 0)
                     {
@@ -2100,21 +2101,21 @@ int main(int argc, char *argv[])
                              << sqrt(tot_norm) << endl;
                     }
 
-					if (romOptions.hyperreductionSamplingType == eqp)
-					{
-						double energy_total, energy_diff;
-						energy_total = oper->InternalEnergy(*e_gf) +
-							oper->KineticEnergy(*v_gf);
-						energy_diff	= energy_total - energy_init;
+                    if (romOptions.hyperreductionSamplingType == eqp)
+                    {
+                        double energy_total, energy_diff;
+                        energy_total = oper->InternalEnergy(*e_gf) +
+                                       oper->KineticEnergy(*v_gf);
+                        energy_diff	= energy_total - energy_init;
 
-						if (mpi.Root())
-						{
-							cout << "\tE_tot = " << scientific << setprecision(5)
-								<< energy_total
-								<< ",\tE_diff = " << scientific << setprecision(5)
-								<< energy_diff << endl; 
-						}
-					}
+                        if (mpi.Root())
+                        {
+                            cout << "\tE_tot = " << scientific << setprecision(5)
+                                 << energy_total
+                                 << ",\tE_diff = " << scientific << setprecision(5)
+                                 << energy_diff << endl;
+                        }
+                    }
 
                     // Make sure all ranks have sent their 'v' solution before initiating
                     // another set of GLVis connections (one from each rank):
@@ -2216,9 +2217,9 @@ int main(int argc, char *argv[])
         else
         {
             if (samplerLast)
-                samplerLast->Finalize(cutoff, romOptions);
+                samplerLast->Finalize(cutoff, romOptions, *S);
             else if (sampler)
-                sampler->Finalize(cutoff, romOptions);
+                sampler->Finalize(cutoff, romOptions, *S);
         }
         basisConstructionTimer.Stop();
 
@@ -2492,13 +2493,13 @@ int main(int argc, char *argv[])
                                     oper->KineticEnergy(*v_gf);
         if (mpi.Root())
         {
-			cout << endl;
-			cout << "Initial energy: " << scientific << setprecision(5)
-				<< energy_init << endl;
-			cout << "Energy diff: " << scientific << setprecision(5)
-				<< energy_final - energy_init << endl;
-			cout << "Rel. energy diff: " << scientific << setprecision(5)
-				<< (energy_final - energy_init) / energy_init << endl;
+            cout << endl;
+            cout << "Initial energy: " << scientific << setprecision(5)
+                 << energy_init << endl;
+            cout << "Energy diff: " << scientific << setprecision(5)
+                 << energy_final - energy_init << endl;
+            cout << "Rel. energy diff: " << scientific << setprecision(5)
+                 << (energy_final - energy_init) / energy_init << endl;
         }
 
         PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);

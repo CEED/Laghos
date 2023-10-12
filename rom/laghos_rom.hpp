@@ -258,11 +258,11 @@ struct ROM_Options
 
     bool VTos = false;
 
-	int maxNNLSnnz = 0; // max number of NNLS solution nonzeros
-	double tolNNLS = 1.0e-14; // NNLS solver error tolerance
+    int maxNNLSnnz = 0; // max number of NNLS solution nonzeros
+    double tolNNLS = 1.0e-14; // NNLS solver error tolerance
 
-	// snapshot sampling frequency (sample every sampfreq timestep)
-	int sampfreq = 1;
+    // snapshot sampling frequency (sample every sampfreq timestep)
+    int sampfreq = 1;
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
@@ -490,7 +490,7 @@ public:
 
         // TODO: update the following comment, since there should now be a maximum of 1 time interval now.
         const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
-        const int max_model_dim = (input.max_dim > 0) ? input.max_dim : max_model_dim_est;
+        const int max_model_dim = (input.max_dim > 0) ? input.max_dim + 1 : max_model_dim_est;
 
         std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
 
@@ -630,7 +630,7 @@ public:
 
     void SampleSolution(const double t, const double dt, const double pd, Vector const& S);
 
-    void Finalize(Array<int> &cutoff, ROM_Options& input);
+    void Finalize(Array<int> &cutoff, ROM_Options& input, Vector const& sol);
 
     int MaxNumSamples()
     {
@@ -823,7 +823,8 @@ private:
 
     void SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV,
                         const CAROM::Matrix* snapE, const CAROM::Matrix* basisV,
-                        const CAROM::Matrix* basisE, ROM_Options const& input);
+                        const CAROM::Matrix* basisE, ROM_Options const& input,
+                        Vector const& sol);
 
     void SetupEQP_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV,
                            const CAROM::Matrix* snapE, const CAROM::Matrix* basisV,
