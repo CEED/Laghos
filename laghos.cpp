@@ -34,7 +34,10 @@
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
 // Test problems: see README.
-// mpirun -np 1 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -s 7 -penPar 10.0 -vis -ok 1 -ot 0 -emb -tO 1 -nGT 0 -gPenCoef 1.0 -gS 1 -fP
+// mpirun -np 1 ./laghos -m data/cube_gmsh_19.msh -p 1 -dim 3 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
+// where
+// penPar is the penalty Parameter
+// per is the perimeter of the bounding box of the domain 
 
 #include "laghos_solver.hpp"
 #include "sedov_exact.hpp"
