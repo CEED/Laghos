@@ -1914,7 +1914,7 @@ int main(int argc, char *argv[])
 
                         if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                         {
-                            samplerLast->Finalize(cutoff, romOptions);
+                            samplerLast->Finalize(cutoff, romOptions, *S);
                             if (last_step)
                             {
                                 // Let samplerLast define the final window, discarding the sampler window.
@@ -1960,7 +1960,7 @@ int main(int argc, char *argv[])
                         else
                         {
 							// Form the reduced bases from the snapshots.
-                            sampler->Finalize(cutoff, romOptions);
+                            sampler->Finalize(cutoff, romOptions, *S);
                         }
                         if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
@@ -2323,9 +2323,9 @@ int main(int argc, char *argv[])
         else
         {
             if (samplerLast)
-                samplerLast->Finalize(cutoff, romOptions);
+                samplerLast->Finalize(cutoff, romOptions, *S);
             else if (sampler)
-                sampler->Finalize(cutoff, romOptions);
+                sampler->Finalize(cutoff, romOptions, *S);
         }
         basisConstructionTimer.Stop();
 

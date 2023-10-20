@@ -954,7 +954,8 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
 								 const CAROM::Matrix* snapE,
 								 const CAROM::Matrix* basisV,
 								 const CAROM::Matrix* basisE,
-								 ROM_Options const& input)
+								 ROM_Options const& input,
+                                 Vector const& sol)
 {
     MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
@@ -974,9 +975,13 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
 		// energy-conserving EQP: one combined rule for velocity and energy
 		SetupEQP_En_Force_Eq(snapX, snapV, snapE, basisV, basisE, input);
 	}
+
+    // Call this to call UpdateQuadratureData and restore the FOM state.
+    input.FOMoper->GetTimeStepEstimate(sol);
 }
 
-void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
+void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
+        Vector const& sol)
 {
     if (writeSnapshots)
     {
@@ -1077,7 +1082,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         SetupEQP_Force(generator_X->getSnapshotMatrix(),
                        generator_V->getSnapshotMatrix(),
                        generator_E->getSnapshotMatrix(),
-                       tBasisV, tBasisE, input);
+                       tBasisV, tBasisE, input, sol);
 
         delete tBasisV;
         delete tBasisE;
@@ -1122,7 +1127,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 		SetupEQP_Force(generator_X->getSnapshotMatrix(),
 				generator_V->getSnapshotMatrix(),
 				generator_E->getSnapshotMatrix(),
-				tBasisV, tBasisE, input);
+				tBasisV, tBasisE, input, sol);
 
 		delete tBasisV;
 		delete tBasisE;
