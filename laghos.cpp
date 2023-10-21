@@ -33,11 +33,19 @@
 //    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
-// Test problems: see README.
-// mpirun -np 1 ./laghos -m data/cube_gmsh_19.msh -p 1 -dim 3 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
-// where
-// penPar is the penalty Parameter
-// per is the perimeter of the bounding box of the domain 
+// Wall BC tests:
+//   mpirun -np 1 ./laghos -m data/cube_gmsh_19.msh -p 1 -dim 3 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
+// * penPar is the penalty Parameter
+// * per is the perimeter of the bounding box of the domain
+//
+// 2D trapezoid:
+// mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// 2D circular hole:
+// mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// 3D cube:
+// mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// 3D spherical hole:
+// mpirun -np 4 laghos -m data/cube_gmsh_19.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
 
 #include "laghos_solver.hpp"
 #include "sedov_exact.hpp"

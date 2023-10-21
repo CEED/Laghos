@@ -1,0 +1,284 @@
+mpirun -np X laghos -m data/trapezoid_quad.mesh -tf 1.5 -rs 1
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/trapezoid_quad.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 1.5
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --penaltyParameter 10
+   --perimeter 12
+   --nitscheVersion -1
+Number of zones in the serial mesh: 16
+Zones min/max: 3 5
+Number of kinematic (position, velocity) dofs: 162
+Number of specific internal energy dofs: 64
+Repeating step 11
+Repeating step 27
+Repeating step 41
+step    50,	t = 0.3716,	dt = 0.005844,	|e| = 7.9278100544e+00
+Repeating step 61
+Repeating step 61
+Repeating step 62
+Repeating step 63
+Repeating step 64
+Repeating step 65
+Repeating step 66
+Repeating step 68
+Repeating step 71
+Repeating step 77
+Repeating step 87
+step   100,	t = 0.5099,	dt = 0.001542,	|e| = 7.1776564960e+00
+step   150,	t = 0.5889,	dt = 0.001636,	|e| = 6.8531611202e+00
+step   200,	t = 0.6707,	dt = 0.001636,	|e| = 6.5734300062e+00
+step   250,	t = 0.7534,	dt = 0.001703,	|e| = 6.3357663946e+00
+step   300,	t = 0.8425,	dt = 0.001880,	|e| = 6.1143761386e+00
+step   350,	t = 0.9466,	dt = 0.002291,	|e| = 5.8909195045e+00
+Repeating step 390
+step   400,	t = 1.0656,	dt = 0.002237,	|e| = 5.6728978477e+00
+step   450,	t = 1.1795,	dt = 0.002422,	|e| = 5.4962638525e+00
+Repeating step 500
+step   500,	t = 1.3262,	dt = 0.002826,	|e| = 5.3076182872e+00
+Repeating step 513
+Repeating step 534
+Repeating step 547
+step   550,	t = 1.4441,	dt = 0.001735,	|e| = 5.1809029648e+00
+Repeating step 571
+Repeating step 571
+Repeating step 571
+Repeating step 572
+step   594,	t = 1.5000,	dt = 0.000237,	|e| = 5.1278500869e+00
+
+Energy  diff: 3.10e-09
+
+mpirun -np X laghos -m data/refined.mesh -tf 0.4 -rs 2
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/refined.mesh
+   --refine-serial 2
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.4
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --penaltyParameter 10
+   --perimeter 12
+   --nitscheVersion -1
+Number of zones in the serial mesh: 64
+Zones min/max: 16 16
+Number of kinematic (position, velocity) dofs: 576
+Number of specific internal energy dofs: 256
+step    50,	t = 0.0883,	dt = 0.001815,	|e| = 2.4166817647e+01
+Repeating step 62
+Repeating step 81
+Repeating step 90
+step   100,	t = 0.1616,	dt = 0.001114,	|e| = 2.0369047424e+01
+Repeating step 125
+Repeating step 133
+Repeating step 137
+step   150,	t = 0.2135,	dt = 0.000921,	|e| = 1.8663204062e+01
+Repeating step 160
+Repeating step 177
+step   200,	t = 0.2544,	dt = 0.000896,	|e| = 1.7638278765e+01
+Repeating step 212
+Repeating step 224
+Repeating step 247
+step   250,	t = 0.2970,	dt = 0.000817,	|e| = 1.6876055020e+01
+Repeating step 258
+Repeating step 270
+Repeating step 280
+step   300,	t = 0.3275,	dt = 0.000502,	|e| = 1.6474382385e+01
+Repeating step 301
+Repeating step 305
+Repeating step 315
+step   350,	t = 0.3442,	dt = 0.000327,	|e| = 1.6276697333e+01
+Repeating step 361
+Repeating step 392
+step   400,	t = 0.3582,	dt = 0.000236,	|e| = 1.6101393782e+01
+Repeating step 412
+Repeating step 448
+step   450,	t = 0.3701,	dt = 0.000204,	|e| = 1.5944371912e+01
+Repeating step 463
+Repeating step 477
+Repeating step 493
+step   500,	t = 0.3791,	dt = 0.000175,	|e| = 1.5827621268e+01
+Repeating step 516
+Repeating step 539
+step   550,	t = 0.3875,	dt = 0.000161,	|e| = 1.5726459415e+01
+step   600,	t = 0.3955,	dt = 0.000161,	|e| = 1.5637436421e+01
+step   628,	t = 0.4000,	dt = 0.000126,	|e| = 1.5592120070e+01
+
+Energy  diff: 9.35e-11
+
+mpirun -np X laghos -m data/refined.mesh -tf 0.8 -rs 1 -ok 3 -ot 2
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/refined.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 3
+   --order-thermo 2
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.8
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --penaltyParameter 10
+   --perimeter 12
+   --nitscheVersion -1
+Number of zones in the serial mesh: 16
+Zones min/max: 4 4
+Number of kinematic (position, velocity) dofs: 336
+Number of specific internal energy dofs: 144
+step    50,	t = 0.1902,	dt = 0.004435,	|e| = 1.4118125171e+01
+Repeating step 51
+Repeating step 72
+Repeating step 83
+Repeating step 86
+Repeating step 88
+Repeating step 91
+Repeating step 95
+step   100,	t = 0.3451,	dt = 0.001509,	|e| = 1.2028194482e+01
+Repeating step 102
+Repeating step 115
+Repeating step 119
+Repeating step 130
+Repeating step 137
+Repeating step 139
+Repeating step 143
+step   150,	t = 0.3908,	dt = 0.000484,	|e| = 1.1605928339e+01
+step   200,	t = 0.4150,	dt = 0.000484,	|e| = 1.1366895452e+01
+step   250,	t = 0.4392,	dt = 0.000484,	|e| = 1.1156624042e+01
+step   300,	t = 0.4646,	dt = 0.000545,	|e| = 1.1001136134e+01
+step   350,	t = 0.4931,	dt = 0.000601,	|e| = 1.0909852893e+01
+step   400,	t = 0.5255,	dt = 0.000705,	|e| = 1.0898165114e+01
+step   450,	t = 0.5623,	dt = 0.000763,	|e| = 1.0958316438e+01
+step   500,	t = 0.6005,	dt = 0.000763,	|e| = 1.1058074203e+01
+Repeating step 511
+Repeating step 521
+Repeating step 533
+step   550,	t = 0.6346,	dt = 0.000630,	|e| = 1.1156592694e+01
+step   600,	t = 0.6661,	dt = 0.000630,	|e| = 1.1239167994e+01
+Repeating step 628
+step   650,	t = 0.6954,	dt = 0.000536,	|e| = 1.1304398715e+01
+step   700,	t = 0.7222,	dt = 0.000536,	|e| = 1.1353114438e+01
+Repeating step 715
+step   750,	t = 0.7461,	dt = 0.000455,	|e| = 1.1386525345e+01
+step   800,	t = 0.7689,	dt = 0.000455,	|e| = 1.1408931167e+01
+Repeating step 839
+step   850,	t = 0.7909,	dt = 0.000387,	|e| = 1.1420344454e+01
+step   874,	t = 0.8000,	dt = 0.000240,	|e| = 1.1422106520e+01
+
+Energy  diff: 1.70e-11
+
+mpirun -np X laghos -m data/cube01_hex.mesh -tf 0.25 -rs 1
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.25
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --penaltyParameter 10
+   --perimeter 12
+   --nitscheVersion -1
+Number of zones in the serial mesh: 64
+Zones min/max: 16 16
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+Repeating step 42
+Repeating step 42
+Repeating step 42
+Repeating step 45
+step    50,	t = 0.1841,	dt = 0.002280,	|e| = 4.8556471447e+01
+Repeating step 58
+Repeating step 58
+step    86,	t = 0.2500,	dt = 0.001659,	|e| = 4.3122622906e+01
+
+Energy  diff: 5.19e-12
+
