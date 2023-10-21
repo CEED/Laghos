@@ -34,17 +34,18 @@
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
 // Wall BC tests:
-//   mpirun -np 1 ./laghos -m data/cube_gmsh_19.msh -p 1 -dim 3 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -ok 3 -ot 2 -vs 1000
+//   mpirun -np 1 ./laghos -m data/cube_gmsh_19.msh -p 1 -dim 3 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
 // * penPar is the penalty Parameter
+// * per is the perimeter of the bounding box of the domain
 //
 // 2D trapezoid:
-// mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -penPar 10.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
 // 2D circular hole:
-// mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -penPar 10.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
 // 3D cube:
-// mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -penPar 10.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
 // 3D spherical hole:
-// mpirun -np 4 laghos -m data/cube_gmsh_19.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -ok 3 -ot 2 -vs 1000
+// mpirun -np 4 laghos -m data/cube_gmsh_19.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
 
 #include "laghos_solver.hpp"
 #include "sedov_exact.hpp"
@@ -117,6 +118,7 @@ int main(int argc, char *argv[])
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
   double blast_position[] = {0.0, 0.0, 0.0};
+  double perimeter = 1.0;
   
   OptionsParser args(argc, argv);
   args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -163,6 +165,8 @@ int main(int argc, char *argv[])
 		 "Name of the visit dump files");
   args.AddOption(&penaltyParameter, "-penPar", "--penaltyParameter",
 		 "Value of the penalty parameter");
+  args.AddOption(&perimeter, "-per", "--perimeter",
+		 "Perimeter of the bounding box of the domain");
   args.AddOption(&nitscheVersion, "-nitVer", "--nitscheVersion",
 		 "-1 and 1 for skew-symmetric and symmetric versions of Nitsche");
   
@@ -446,7 +450,7 @@ int main(int argc, char *argv[])
 					       mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, viscousface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl, 
 					       visc, vorticity,
 					       cg_tol, cg_max_iter, ftz_tol,
-                      order_q, penaltyParameter, nitscheVersion);
+					       order_q, penaltyParameter, perimeter, nitscheVersion);
 
   socketstream vis_rho, vis_v, vis_e;
   char vishost[] = "localhost";

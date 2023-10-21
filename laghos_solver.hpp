@@ -117,6 +117,7 @@ namespace mfem
       mutable ParLinearForm DiffusionEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
       const double penaltyParameter;
+      const double perimeter;
       const double nitscheVersion;
       Array<int> ess_elem;
 
@@ -172,7 +173,7 @@ namespace mfem
 			      const double cfl,
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
-               const int order_q, const double penaltyParameter,
+			      const int order_q, const double penaltyParameter, const double perimeter,
 			      const double nitscheVersion);
       ~LagrangianHydroOperator();
 
