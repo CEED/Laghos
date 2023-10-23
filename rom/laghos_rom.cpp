@@ -656,6 +656,7 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
                                        const ParMesh *pmesh, ParMesh *smesh)
 {
     const int dim = pmesh->SpaceDimension();
+    const bool mesh3D = (pmesh->Dimension() == 3);
 
     // First, find the elements of smesh touching its boundary. These elements may
     // or may not be on the boundary of pmesh. All interior elements of smesh are
@@ -686,8 +687,11 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
         for (int e=0; e<smesh->GetNE(); ++e)
         {
             Array<int> faces, ori;
-            // TODO: is this the right function in 2D?
-            smesh->GetElementFaces(e, faces, ori);
+            if (mesh3D)
+                smesh->GetElementFaces(e, faces, ori);
+            else
+                smesh->GetElementEdges(e, faces, ori);
+
             for (auto f : faces)
             {
                 if (f2be[f] >= 0)
@@ -721,7 +725,12 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     Array<int> vert, faces, ori;
     pmesh->GetElementVertices(0, vert);  // Just getting number of vertices.
-    pmesh->GetElementFaces(0, faces, ori);  // Just getting number of faces.
+
+    if (mesh3D)
+        pmesh->GetElementFaces(0, faces, ori);  // Just getting number of faces.
+    else
+        pmesh->GetElementEdges(0, faces, ori);  // Just getting number of faces.
+
     const int nve = vert.Size();  // Number of vertices per element, assumed constant.
     const int nfe = faces.Size();  // Number of faces per element, assumed constant.
     pmesh->GetFaceVertices(0, vert);  // Just getting number of vertices.
@@ -760,8 +769,11 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
         }
 
         Array<int> fvert;
-        // TODO: is this the right function in 2D?
-        pmesh->GetElementFaces(e, faces, ori);
+        if (mesh3D)
+            pmesh->GetElementFaces(e, faces, ori);
+        else
+            pmesh->GetElementEdges(e, faces, ori);
+
         MFEM_VERIFY(faces.Size() == nfe, "");
         for (int j=0; j<nfe; ++j)
         {
@@ -886,8 +898,11 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
                 continue;  // Skip elements not on smesh boundary
             }
 
-            // TODO: is this the right function in 2D?
-            smesh->GetElementFaces(selem, faces, ori);
+            if (mesh3D)
+                smesh->GetElementFaces(selem, faces, ori);
+            else
+                smesh->GetElementEdges(selem, faces, ori);
+
             MFEM_VERIFY(faces.Size() == nfe, "");
 
             // Now counts[p] == nfe * (nvf + 1) * allNumLocalElems[p]
