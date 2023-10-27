@@ -20,7 +20,6 @@
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 #include "dist_solver.hpp"
-#include "ghost_penalty.hpp"
 
 #ifdef MFEM_USE_MPI
 class Dist_Level_Set_Coefficient;

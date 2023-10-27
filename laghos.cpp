@@ -34,14 +34,14 @@
 //    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
 //
 // Wall BC tests:
-//   mpirun -np 1 ./laghos -m data/cube_gmsh_19.msh -p 1 -dim 3 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
 // * penPar is the penalty Parameter
 // * per is the perimeter of the bounding box of the domain
-//
 // 2D trapezoid:
 // mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
 // 2D circular hole:
 // mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// 2D disc:
+// mpirun -np 4 laghos -m data/disc-nurbs.mesh -p 1 -rs 3 -tf 10 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
 // 3D cube:
 // mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
 // 3D spherical hole:
@@ -83,12 +83,12 @@ void sedov_exact_out(double t)
 
 int main(int argc, char *argv[])
 {
-  // Initialize MPI.
-  MPI_Session mpi(argc, argv);
-  const int myid = mpi.WorldRank();
+   // Initialize MPI.
+   MPI_Session mpi(argc, argv);
+   const int myid = mpi.WorldRank();
 
-  // Print the banner.
-  if (mpi.Root()) { display_banner(cout); }
+   // Print the banner.
+   if (mpi.Root()) { display_banner(cout); }
 
   // Parse command-line options.
   // penalty parameter is a user-defined non-dimensional constant for the penalty term: suggested value 10.0, but default set to 1.
@@ -172,52 +172,57 @@ int main(int argc, char *argv[])
   
   args.Parse();
   if (!args.Good())
-    {
-      if (mpi.Root()) { args.PrintUsage(cout); }
-      return 1;
-    }
+  {
+     if (mpi.Root()) { args.PrintUsage(cout); }
+     return 1;
+  }
   if (mpi.Root()) { args.PrintOptions(cout); }
+
+   if (strcmp(mesh_file, "data/disc-nurbs.mesh") == 0)
+   {
+      blast_position[0] = - sqrt(8.0);
+   }
 
   // On all processors, use the default builtin 1D/2D/3D mesh or read the
   // serial one given on the command line.
   Mesh *mesh;
   if (strncmp(mesh_file, "default", 7) != 0)
-    {
-      mesh = new Mesh(mesh_file, true, true);
-    }
+  {
+     mesh = new Mesh(mesh_file, true, true);
+  }
   else
-    {
-      if (dim == 1)
-	{
-	  mesh = new Mesh(Mesh::MakeCartesian1D(2));
-	  mesh->GetBdrElement(0)->SetAttribute(1);
-	  mesh->GetBdrElement(1)->SetAttribute(1);
-	}
-      if (dim == 2)
-	{
-	  mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
-						true));
-	  const int NBE = mesh->GetNBE();
-	  for (int b = 0; b < NBE; b++)
-	    {
-	      Element *bel = mesh->GetBdrElement(b);
-	      const int attr = (b < NBE/2) ? 2 : 1;
-	      bel->SetAttribute(attr);
-	    }
-	}
-      if (dim == 3)
-	{
-	  mesh = new Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON,
-						true));
-	  const int NBE = mesh->GetNBE();
-	  for (int b = 0; b < NBE; b++)
-	    {
-	      Element *bel = mesh->GetBdrElement(b);
-	      const int attr = (b < NBE/3) ? 3 : (b < 2*NBE/3) ? 1 : 2;
-	      bel->SetAttribute(attr);
-	    }
-	}
-    }
+  {
+     if (dim == 1)
+     {
+        mesh = new Mesh(Mesh::MakeCartesian1D(2));
+        mesh->GetBdrElement(0)->SetAttribute(1);
+        mesh->GetBdrElement(1)->SetAttribute(1);
+     }
+     if (dim == 2)
+     {
+        mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
+                                              true));
+        const int NBE = mesh->GetNBE();
+        for (int b = 0; b < NBE; b++)
+        {
+           Element *bel = mesh->GetBdrElement(b);
+           const int attr = (b < NBE/2) ? 2 : 1;
+           bel->SetAttribute(attr);
+        }
+     }
+     if (dim == 3)
+     {
+        mesh = new Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON,
+                                              true));
+        const int NBE = mesh->GetNBE();
+        for (int b = 0; b < NBE; b++)
+        {
+           Element *bel = mesh->GetBdrElement(b);
+           const int attr = (b < NBE/3) ? 3 : (b < 2*NBE/3) ? 1 : 2;
+           bel->SetAttribute(attr);
+        }
+     }
+  }
   dim = mesh->Dimension();
   
   if (mesh->NURBSext){

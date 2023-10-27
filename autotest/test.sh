@@ -45,6 +45,14 @@ echo -e $com_line >> $file
 $run_line >> $file
 echo -e >> $file
 
+# 2D disc.
+params="-m data/disc-nurbs.mesh -tf 5.0 -rs 2"
+run_line=$command" "$params
+com_line=$comment" "$params
+echo -e $com_line >> $file
+$run_line >> $file
+echo -e >> $file
+
 # 3D cube.
 params="-m data/cube01_hex.mesh -tf 0.25 -rs 1"
 run_line=$command" "$params
