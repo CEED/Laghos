@@ -18,7 +18,6 @@
 #define MFEM_AUXILIARY_FUNCTIONS
 
 #include "mfem.hpp"
-#include "marking.hpp"
 #include "sbm_aux.hpp"
 
 #ifdef MFEM_USE_MPI

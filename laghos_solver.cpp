@@ -226,21 +226,22 @@ namespace mfem
       Jac0invface_gf.ExchangeFaceNbrData();
       
       switch (pmesh->GetElementBaseGeometry(0))
-	{
-	case Geometry::TRIANGLE:
-	case Geometry::TETRAHEDRON:{
-	  C_I_E = (order_e+1)*(order_e+dim)/dim+1.0;
-	  C_I_V = (order_v+1)*(order_v+dim)/dim;
-	  break;
-	}
-	case Geometry::SQUARE:
-	case Geometry::CUBE:{
-	  C_I_E = order_e*order_e+1.0;
-	  C_I_V = order_v*order_v;
-	  break;
-	}
-	default: MFEM_ABORT("Unknown zone type!");
-	}
+      {
+      case Geometry::TRIANGLE:
+      case Geometry::TETRAHEDRON:{
+         C_I_E = (order_e+1)*(order_e+dim)/dim+1.0;
+         C_I_V = (order_v+1)*(order_v+dim)/dim;
+         break;
+      }
+      case Geometry::SQUARE:
+      case Geometry::CUBE:{
+         C_I_E = order_e*order_e+1.0;
+         C_I_V = order_v*order_v;
+         break;
+      }
+      default: MFEM_ABORT("Unknown zone type!");
+      }
+
       // int val  =  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1;
       // std::cout << " val " << val << std::endl; 
       alpha_fec = new L2_FECollection(0, pmesh->Dimension());
@@ -249,12 +250,6 @@ namespace mfem
       alphaCut = new ParGridFunction(alpha_fes);
       alphaCut->ExchangeFaceNbrData();
       *alphaCut = 1;
-    
-      for (int i = 0; i < pmesh->GetNE(); i++)
-	{
-	  pmesh->SetAttribute(i, ShiftedFaceMarker::SBElementType::INSIDE);
-	}
-      
     
       const int max_elem_attr = pmesh->attributes.Max();
       ess_elem.SetSize(max_elem_attr);

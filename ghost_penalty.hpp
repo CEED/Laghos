@@ -18,7 +18,6 @@
 #define MFEM_GHOST_PENALTY
 
 #include "mfem.hpp"
-#include "marking.hpp"
 #include "general/forall.hpp"
 #include "linalg/dtensor.hpp"
 #include "auxiliary_functions.hpp"
