@@ -45,8 +45,16 @@ echo -e $com_line >> $file
 $run_line >> $file
 echo -e >> $file
 
-# 2D disc.
+# 2D disc (inside).
 params="-m data/disc-nurbs.mesh -tf 5.0 -rs 2"
+run_line=$command" "$params
+com_line=$comment" "$params
+echo -e $com_line >> $file
+$run_line >> $file
+echo -e >> $file
+
+# 2D disc (outside).
+params="-m data/convex.mesh -tf 0.1 -rs 2"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file

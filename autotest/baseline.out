@@ -286,6 +286,51 @@ step   156,	t = 5.0000,	dt = 0.014833,	|e| = 7.0756357837e-01
 
 Energy  diff: 1.11e-11
 
+mpirun -np X laghos -m data/convex.mesh -tf 0.1 -rs 2
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/convex.mesh
+   --refine-serial 2
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.1
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --penaltyParameter 10
+   --perimeter 12
+   --nitscheVersion -1
+Number of zones in the serial mesh: 64
+Zones min/max: 16 16
+Number of kinematic (position, velocity) dofs: 576
+Number of specific internal energy dofs: 256
+Repeating step 42
+step    50,	t = 0.0585,	dt = 0.001024,	|e| = 5.1675769448e+01
+Repeating step 65
+step    96,	t = 0.1000,	dt = 0.000179,	|e| = 4.3868704699e+01
+
+Energy  diff: 1.18e-13
+
 mpirun -np X laghos -m data/cube01_hex.mesh -tf 0.25 -rs 1
 
        __                __                 
