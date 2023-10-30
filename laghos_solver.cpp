@@ -86,7 +86,6 @@ namespace mfem
 						     const int order_e,
 						     const int order_v,
 						     const int faceIndex,
-						     const int faceOrder,
 						     double &globalmax_rho,
 						     double &globalmax_cs,
 						     double &globalmax_viscous_coef,
