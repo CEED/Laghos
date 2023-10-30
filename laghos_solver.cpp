@@ -349,7 +349,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    // Standard assembly for the velocity mass matrix.
    vmi = new WeightedVectorMassIntegrator(*alphaCut, rho_gf, &ir);
+   // VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv->AddDomainIntegrator(vmi, ess_elem);
+
+   nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut,
+                                           2.0 * penaltyParameter * (C_I_V),
+                                           perimeter, order_v, rhoface_gf, v_gf,
+                                           csface_gf, Jac0invface_gf,
+                                           rho0DetJ0face_gf, globalmax_rho,
+                                           globalmax_cs, globalmax_viscous_coef);
+   nvmi->SetIntRule(&b_ir);
+   Mv->AddBdrFaceIntegrator(nvmi);
 
    fi = new ForceIntegrator(qdata.h0, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
    fi->SetIntRule(&ir);
@@ -369,11 +379,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Make a dummy assembly to figure out the sparsity.
    SourceForce.Assemble();
 
-   nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), perimeter, order_v, rhoface_gf, v_gf, csface_gf, Jac0invface_gf, rho0DetJ0face_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef);
-
-   nvmi->SetIntRule(&b_ir);
-   Mv->AddBdrFaceIntegrator(nvmi);
-
    d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), order_v, rhoface_gf, v_gf, pface_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef, use_viscosity, use_vorticity);
    d_nvmi->SetIntRule(&b_ir);
    DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
@@ -388,7 +393,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv->Assemble();
 
    Mv_spmat_copy = Mv->SpMat();
-
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator() {}
