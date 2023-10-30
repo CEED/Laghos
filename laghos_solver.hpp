@@ -126,7 +126,6 @@ namespace mfem
       DiffusionNormalVelocityIntegrator *d_nvmi;
       DiffusionEnergyNormalVelocityIntegrator *de_nvmi;
       WeightedMassIntegrator *mi;
-      WeightedVectorMassIntegrator *vmi;
       
       ParGridFunction *alphaCut;
       //  

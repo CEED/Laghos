@@ -554,17 +554,12 @@ void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteEleme
       CalcOrtho(Tr.Jacobian(), nor);
 
       double nor_norm = 0.0;
-      for (int s = 0; s < dim; s++){
-         nor_norm += nor(s) * nor(s);
-      }
+      for (int s = 0; s < dim; s++) { nor_norm += nor(s) * nor(s); }
       nor_norm = sqrt(nor_norm);
 
-      Vector tn(dim);
-      tn = 0.0;
-      tn = nor;
+      Vector tn(nor);
       tn /= nor_norm;
 
-      double penaltyVal = 0.0;
       double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
 
       Vector vShape;
@@ -577,11 +572,9 @@ void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteEleme
 
       double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 
-      // NEW //
-      penaltyVal =  std::pow(penaltyParameter,1.0) * density_el1 * cs_el1;
-      ///
+      double penaltyVal =  penaltyParameter * density_el1 * cs_el1;
+
       el.CalcShape(eip, shape);
-      //
       double pressure = pface_gf.GetValue(Trans_el1,eip);
       DenseMatrix stress(dim);
       stress = 0.0;
@@ -590,8 +583,7 @@ void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteEleme
       Vector weightedNormalStress(dim);
       weightedNormalStress = 0.0;
       // Quadrature data for partial assembly of the force operator.
-      stress.Mult( tn, weightedNormalStress);
-      //
+      stress.Mult(tn, weightedNormalStress);
 
       for (int i = 0; i < h1dofs_cnt; i++)
       {
@@ -603,13 +595,6 @@ void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteEleme
       }
    }
 }
-
-void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(
-      const FiniteElement &el, ElementTransformation &Tr, Vector &elvect)
-{
-   mfem_error("DGDirichletLFIntegrator::AssembleRHSElementVect");
-}
-
 
 void DiffusionEnergyNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteElement &el,
                                                                      FaceElementTransformations &Tr,

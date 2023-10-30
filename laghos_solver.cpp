@@ -146,7 +146,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    d_nvmi(NULL),
    de_nvmi(NULL),
    mi(NULL),
-   vmi(NULL),
    alphaCut(NULL),
    rho0_gf(rho0_gf),
    rho_gf(rho_gf),
@@ -226,19 +225,21 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    switch (pmesh->GetElementBaseGeometry(0))
    {
-   case Geometry::TRIANGLE:
-   case Geometry::TETRAHEDRON:{
-      C_I_E = (order_e+1)*(order_e+dim)/dim+1.0;
-      C_I_V = (order_v+1)*(order_v+dim)/dim;
-      break;
-   }
-   case Geometry::SQUARE:
-   case Geometry::CUBE:{
-      C_I_E = order_e*order_e+1.0;
-      C_I_V = order_v*order_v;
-      break;
-   }
-   default: MFEM_ABORT("Unknown zone type!");
+      case Geometry::TRIANGLE:
+      case Geometry::TETRAHEDRON:
+      {
+         C_I_E = (order_e+1)*(order_e+dim)/dim+1.0;
+         C_I_V = (order_v+1)*(order_v+dim)/dim;
+         break;
+      }
+      case Geometry::SQUARE:
+      case Geometry::CUBE:
+      {
+         C_I_E = order_e*order_e+1.0;
+         C_I_V = order_v*order_v;
+         break;
+      }
+      default: MFEM_ABORT("Unknown zone type!");
    }
 
    // int val  =  (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1;
@@ -258,8 +259,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Initial local mesh size (assumes all mesh elements are the same).
    int Ne, ne = NE;
    double Volume, vol = 0.0;
-
-   const int NQ = ir.GetNPoints();
 
    for (int e = 0; e < NE; e++)
    {
@@ -348,8 +347,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
 
    // Standard assembly for the velocity mass matrix.
-   vmi = new WeightedVectorMassIntegrator(*alphaCut, rho_gf, &ir);
-   // VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
+   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv->AddDomainIntegrator(vmi, ess_elem);
 
    nvmi = new NormalVelocityMassIntegrator(qdata.h0,
@@ -358,13 +356,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    nvmi->SetIntRule(&b_ir);
    Mv->AddBdrFaceIntegrator(nvmi);
 
-   fi = new ForceIntegrator(qdata.h0, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
+   fi = new ForceIntegrator(qdata.h0, *alphaCut, v_gf, e_gf, p_gf, cs_gf,
+                            rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
    fi->SetIntRule(&ir);
    Force.AddDomainIntegrator(fi, ess_elem);
    // Make a dummy assembly to figure out the sparsity.
    Force.Assemble();
 
-   efi = new EnergyForceIntegrator(qdata.h0, *alphaCut, v_gf, e_gf, p_gf, cs_gf, rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
+   efi = new EnergyForceIntegrator(qdata.h0, *alphaCut, v_gf, e_gf, p_gf, cs_gf,
+                                   rho_gf, Jac0inv_gf, use_viscosity, use_vorticity);
    efi->SetIntRule(&ir);
    EnergyForce.AddDomainIntegrator(efi, ess_elem);
    // Make a dummy assembly to figure out the sparsity.
@@ -376,7 +376,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Make a dummy assembly to figure out the sparsity.
    SourceForce.Assemble();
 
-   d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0, *alphaCut, 2.0 * penaltyParameter * (C_I_V), order_v, rhoface_gf, v_gf, pface_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef, use_viscosity, use_vorticity);
+   d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0,
+                                                  2.0 * penaltyParameter * C_I_V,
+                                                  order_v, rhoface_gf, v_gf,
+                                                  pface_gf, csface_gf,
+                                                  globalmax_rho, globalmax_cs,
+                                                  globalmax_viscous_coef);
    d_nvmi->SetIntRule(&b_ir);
    DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
    DiffusionVelocityBoundaryForce.Assemble();
@@ -448,7 +453,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
                                             const Vector &S_init,
                                             const double dt) const
 {
-
    AssembleForceMatrix();
    AssembleDiffusionVelocityBoundaryForceMatrix();
 
@@ -459,7 +463,6 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    dv = 0.0;
 
    AssembleSourceVector();
-
 
    rhs = 0.0;
    rhs += Force;

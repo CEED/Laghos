@@ -353,26 +353,26 @@ namespace mfem
       return (3.0 - 2.0 * y) * y * y;
     }
 
-    void ConvertVectorToDenseMatrix(const int dim, const Vector & vec, DenseMatrix &mat){
-
-      mat = 0.0;
-      if (dim == 2){
-	mat(0,0) = vec(0);
-	mat(0,1) = vec(1);
-	mat(1,0) = vec(2);
-	mat(1,1) = vec(3);
-      }
-      else {
-	mat(0,0) = vec(0);
-	mat(0,1) = vec(1);
-	mat(0,2) = vec(2);
-	mat(1,0) = vec(3);
-	mat(1,1) = vec(4);
-	mat(1,2) = vec(5);
-	mat(2,0) = vec(6);
-	mat(2,1) = vec(7);
-	mat(2,2) = vec(8);
-      }	  
+    void ConvertVectorToDenseMatrix(const int dim, const Vector & vec, DenseMatrix &mat)
+    {
+       mat = 0.0;
+       if (dim == 2){
+          mat(0,0) = vec(0);
+          mat(0,1) = vec(1);
+          mat(1,0) = vec(2);
+          mat(1,1) = vec(3);
+       }
+       else {
+          mat(0,0) = vec(0);
+          mat(0,1) = vec(1);
+          mat(0,2) = vec(2);
+          mat(1,0) = vec(3);
+          mat(1,1) = vec(4);
+          mat(1,2) = vec(5);
+          mat(2,0) = vec(6);
+          mat(2,1) = vec(7);
+          mat(2,2) = vec(8);
+       }
     }
 
   } // namespace hydrodynamics
