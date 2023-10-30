@@ -352,12 +352,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv->AddDomainIntegrator(vmi, ess_elem);
 
-   nvmi = new NormalVelocityMassIntegrator(qdata.h0, *alphaCut,
-                                           2.0 * penaltyParameter * (C_I_V),
-                                           perimeter, order_v, rhoface_gf, v_gf,
-                                           csface_gf, Jac0invface_gf,
-                                           rho0DetJ0face_gf, globalmax_rho,
-                                           globalmax_cs, globalmax_viscous_coef);
+   nvmi = new NormalVelocityMassIntegrator(qdata.h0,
+                                           2.0 * penaltyParameter * C_I_V,
+                                           perimeter, globalmax_rho);
    nvmi->SetIntRule(&b_ir);
    Mv->AddBdrFaceIntegrator(nvmi);
 

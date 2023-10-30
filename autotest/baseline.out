@@ -39,7 +39,7 @@ Number of specific internal energy dofs: 64
 Repeating step 11
 Repeating step 27
 Repeating step 41
-step    50,	t = 0.3716,	dt = 0.005844,	|e| = 7.9278100544e+00
+step    50,	t = 0.3716,	dt = 0.005844,	|e| = 7.9278100650e+00
 Repeating step 61
 Repeating step 61
 Repeating step 62
@@ -51,28 +51,28 @@ Repeating step 68
 Repeating step 71
 Repeating step 77
 Repeating step 87
-step   100,	t = 0.5099,	dt = 0.001542,	|e| = 7.1776564960e+00
-step   150,	t = 0.5889,	dt = 0.001636,	|e| = 6.8531611202e+00
-step   200,	t = 0.6707,	dt = 0.001636,	|e| = 6.5734300062e+00
-step   250,	t = 0.7534,	dt = 0.001703,	|e| = 6.3357663946e+00
-step   300,	t = 0.8425,	dt = 0.001880,	|e| = 6.1143761386e+00
-step   350,	t = 0.9466,	dt = 0.002291,	|e| = 5.8909195045e+00
+step   100,	t = 0.5099,	dt = 0.001542,	|e| = 7.1776565168e+00
+step   150,	t = 0.5889,	dt = 0.001636,	|e| = 6.8531611354e+00
+step   200,	t = 0.6707,	dt = 0.001636,	|e| = 6.5734300232e+00
+step   250,	t = 0.7535,	dt = 0.001703,	|e| = 6.3354125720e+00
+step   300,	t = 0.8426,	dt = 0.001880,	|e| = 6.1143142962e+00
+step   350,	t = 0.9465,	dt = 0.002291,	|e| = 5.8911779926e+00
 Repeating step 390
-step   400,	t = 1.0656,	dt = 0.002237,	|e| = 5.6728978477e+00
-step   450,	t = 1.1795,	dt = 0.002422,	|e| = 5.4962638525e+00
+step   400,	t = 1.0654,	dt = 0.002237,	|e| = 5.6732511137e+00
+step   450,	t = 1.1792,	dt = 0.002422,	|e| = 5.4966833253e+00
 Repeating step 500
-step   500,	t = 1.3262,	dt = 0.002826,	|e| = 5.3076182872e+00
+step   500,	t = 1.3259,	dt = 0.002826,	|e| = 5.3079479509e+00
 Repeating step 513
 Repeating step 534
 Repeating step 547
-step   550,	t = 1.4441,	dt = 0.001735,	|e| = 5.1809029648e+00
+step   550,	t = 1.4438,	dt = 0.001735,	|e| = 5.1811837786e+00
 Repeating step 571
 Repeating step 571
 Repeating step 571
 Repeating step 572
-step   594,	t = 1.5000,	dt = 0.000237,	|e| = 5.1278500869e+00
+step   594,	t = 1.5000,	dt = 0.000118,	|e| = 5.1278266637e+00
 
-Energy  diff: 3.10e-09
+Energy  diff: 3.73e-09
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.4 -rs 2
 
@@ -112,7 +112,7 @@ Number of zones in the serial mesh: 64
 Zones min/max: 16 16
 Number of kinematic (position, velocity) dofs: 576
 Number of specific internal energy dofs: 256
-step    50,	t = 0.0883,	dt = 0.001815,	|e| = 2.4166817647e+01
+step    50,	t = 0.0883,	dt = 0.001815,	|e| = 2.4166817646e+01
 Repeating step 62
 Repeating step 81
 Repeating step 90
@@ -123,36 +123,36 @@ Repeating step 137
 step   150,	t = 0.2135,	dt = 0.000921,	|e| = 1.8663204062e+01
 Repeating step 160
 Repeating step 177
-step   200,	t = 0.2544,	dt = 0.000896,	|e| = 1.7638278765e+01
+step   200,	t = 0.2544,	dt = 0.000896,	|e| = 1.7638278763e+01
 Repeating step 212
 Repeating step 224
 Repeating step 247
-step   250,	t = 0.2970,	dt = 0.000817,	|e| = 1.6876055020e+01
+step   250,	t = 0.2970,	dt = 0.000817,	|e| = 1.6876055001e+01
 Repeating step 258
 Repeating step 270
 Repeating step 280
-step   300,	t = 0.3275,	dt = 0.000502,	|e| = 1.6474382385e+01
+step   300,	t = 0.3275,	dt = 0.000502,	|e| = 1.6474382299e+01
 Repeating step 301
 Repeating step 305
 Repeating step 315
-step   350,	t = 0.3442,	dt = 0.000327,	|e| = 1.6276697333e+01
+step   350,	t = 0.3442,	dt = 0.000327,	|e| = 1.6276697202e+01
 Repeating step 361
 Repeating step 392
-step   400,	t = 0.3582,	dt = 0.000236,	|e| = 1.6101393782e+01
+step   400,	t = 0.3582,	dt = 0.000236,	|e| = 1.6101393638e+01
 Repeating step 412
 Repeating step 448
-step   450,	t = 0.3701,	dt = 0.000204,	|e| = 1.5944371912e+01
+step   450,	t = 0.3701,	dt = 0.000204,	|e| = 1.5944371772e+01
 Repeating step 463
 Repeating step 477
 Repeating step 493
-step   500,	t = 0.3791,	dt = 0.000175,	|e| = 1.5827621268e+01
+step   500,	t = 0.3791,	dt = 0.000175,	|e| = 1.5827621133e+01
 Repeating step 516
 Repeating step 539
-step   550,	t = 0.3875,	dt = 0.000161,	|e| = 1.5726459415e+01
-step   600,	t = 0.3955,	dt = 0.000161,	|e| = 1.5637436421e+01
-step   628,	t = 0.4000,	dt = 0.000126,	|e| = 1.5592120070e+01
+step   550,	t = 0.3875,	dt = 0.000161,	|e| = 1.5726459294e+01
+step   600,	t = 0.3955,	dt = 0.000161,	|e| = 1.5637436309e+01
+step   628,	t = 0.4000,	dt = 0.000126,	|e| = 1.5592120623e+01
 
-Energy  diff: 9.35e-11
+Energy  diff: 9.41e-11
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.8 -rs 1 -ok 3 -ot 2
 
@@ -210,7 +210,7 @@ Repeating step 139
 Repeating step 143
 step   150,	t = 0.3908,	dt = 0.000484,	|e| = 1.1605928339e+01
 step   200,	t = 0.4150,	dt = 0.000484,	|e| = 1.1366895452e+01
-step   250,	t = 0.4392,	dt = 0.000484,	|e| = 1.1156624042e+01
+step   250,	t = 0.4392,	dt = 0.000484,	|e| = 1.1156624041e+01
 step   300,	t = 0.4646,	dt = 0.000545,	|e| = 1.1001136134e+01
 step   350,	t = 0.4931,	dt = 0.000601,	|e| = 1.0909852893e+01
 step   400,	t = 0.5255,	dt = 0.000705,	|e| = 1.0898165114e+01
@@ -220,18 +220,18 @@ Repeating step 511
 Repeating step 521
 Repeating step 533
 step   550,	t = 0.6346,	dt = 0.000630,	|e| = 1.1156592694e+01
-step   600,	t = 0.6661,	dt = 0.000630,	|e| = 1.1239167994e+01
+step   600,	t = 0.6661,	dt = 0.000630,	|e| = 1.1239168019e+01
 Repeating step 628
-step   650,	t = 0.6954,	dt = 0.000536,	|e| = 1.1304398715e+01
-step   700,	t = 0.7222,	dt = 0.000536,	|e| = 1.1353114438e+01
+step   650,	t = 0.6954,	dt = 0.000536,	|e| = 1.1304398749e+01
+step   700,	t = 0.7222,	dt = 0.000536,	|e| = 1.1353114457e+01
 Repeating step 715
-step   750,	t = 0.7461,	dt = 0.000455,	|e| = 1.1386525345e+01
-step   800,	t = 0.7689,	dt = 0.000455,	|e| = 1.1408931167e+01
+step   750,	t = 0.7461,	dt = 0.000455,	|e| = 1.1386525344e+01
+step   800,	t = 0.7689,	dt = 0.000455,	|e| = 1.1408931151e+01
 Repeating step 839
-step   850,	t = 0.7909,	dt = 0.000387,	|e| = 1.1420344454e+01
-step   874,	t = 0.8000,	dt = 0.000240,	|e| = 1.1422106520e+01
+step   850,	t = 0.7909,	dt = 0.000387,	|e| = 1.1420344438e+01
+step   874,	t = 0.8000,	dt = 0.000240,	|e| = 1.1422106504e+01
 
-Energy  diff: 1.70e-11
+Energy  diff: 1.91e-11
 
 mpirun -np X laghos -m data/disc-nurbs.mesh -tf 5.0 -rs 2
 
@@ -280,11 +280,11 @@ Repeating step 45
 step    50,	t = 2.2808,	dt = 0.025191,	|e| = 8.9333817115e-01
 Repeating step 99
 Repeating step 99
-step   100,	t = 3.6416,	dt = 0.022186,	|e| = 7.7307959763e-01
-step   150,	t = 4.8475,	dt = 0.027586,	|e| = 7.1357482105e-01
-step   156,	t = 5.0000,	dt = 0.014833,	|e| = 7.0756357837e-01
+step   100,	t = 3.6416,	dt = 0.022186,	|e| = 7.7307959758e-01
+step   150,	t = 4.8475,	dt = 0.027586,	|e| = 7.1357482097e-01
+step   156,	t = 5.0000,	dt = 0.014833,	|e| = 7.0756357830e-01
 
-Energy  diff: 1.11e-11
+Energy  diff: 8.49e-12
 
 mpirun -np X laghos -m data/convex.mesh -tf 0.1 -rs 2
 
@@ -325,11 +325,11 @@ Zones min/max: 16 16
 Number of kinematic (position, velocity) dofs: 576
 Number of specific internal energy dofs: 256
 Repeating step 42
-step    50,	t = 0.0585,	dt = 0.001024,	|e| = 5.1675769448e+01
+step    50,	t = 0.0585,	dt = 0.001024,	|e| = 5.1675769449e+01
 Repeating step 65
 step    96,	t = 0.1000,	dt = 0.000179,	|e| = 4.3868704699e+01
 
-Energy  diff: 1.18e-13
+Energy  diff: 3.39e-13
 
 mpirun -np X laghos -m data/cube01_hex.mesh -tf 0.25 -rs 1
 
@@ -378,5 +378,5 @@ Repeating step 58
 Repeating step 58
 step    86,	t = 0.2500,	dt = 0.001659,	|e| = 4.3122622906e+01
 
-Energy  diff: 5.19e-12
+Energy  diff: 4.03e-12
 

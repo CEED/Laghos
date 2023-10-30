@@ -488,30 +488,24 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
       // Set the integration point in the face and the neighboring elements
       Tr.SetAllIntPoints(&ip_f);
       const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+
       ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
-
       Trans_el1.SetIntPoint(&eip);
-      const int elementNo = Trans_el1.ElementNo;
-      const int eq = elementNo*nqp_face + q;
+      const double alpha_0 = penaltyParameter * perimeter /
+                             std::pow(Trans_el1.Weight(), 1.0/dim);
 
-      Vector nor;
-      nor.SetSize(dim);
-      nor = 0.0;
+      Vector nor(dim);
       CalcOrtho(Tr.Jacobian(), nor);
 
       double nor_norm = 0.0;
-      for (int s = 0; s < dim; s++){
-         nor_norm += nor(s) * nor(s);
-      }
+      for (int s = 0; s < dim; s++) { nor_norm += nor(s) * nor(s); }
       nor_norm = sqrt(nor_norm);
 
-      Vector tn(dim);
-      tn = 0.0;
-      tn = nor;
+      Vector tn(nor);
       tn /= nor_norm;
       double penaltyVal = 0.0;
 
-      penaltyVal = penaltyParameter * globalmax_rho * (perimeter/std::pow(Trans_el1.Weight(),1.0/dim)) * perimeter ;
+      penaltyVal = alpha_0 * globalmax_rho * perimeter;
 
       fe.CalcShape(eip, shape);
       for (int i = 0; i < h1dofs_cnt; i++)
@@ -522,7 +516,8 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
             {
                for (int md = 0; md < dim; md++) // Velocity components.
                {
-                  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * tn(vd) * tn(md) * penaltyVal * ip_f.weight * nor_norm;
+                  elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) +=
+                     shape(i) * shape(j) * tn(vd) * tn(md) * penaltyVal * ip_f.weight * nor_norm;
                }
             }
          }
