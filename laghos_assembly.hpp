@@ -237,9 +237,6 @@ private:
    const ParGridFunction &v_gf;
    const ParGridFunction &pface_gf;
    const ParGridFunction &csface_gf;
-   const double &globalmax_rho;
-   const double &globalmax_cs;
-   const double &globalmax_viscous_coef;
 
 public:
    DiffusionNormalVelocityIntegrator(const double h0,
@@ -247,14 +244,10 @@ public:
                                      const ParGridFunction &rhoface_gf,
                                      const ParGridFunction &v_gf,
                                      const ParGridFunction &pface_gf,
-                                     const ParGridFunction &csface_gf,
-                                     const double &globalmax_rho,
-                                     const double &globalmax_cs,
-                                     const double &globalmax_viscous_coef)
+                                     const ParGridFunction &csface_gf)
       : h0(h0), penaltyParameter(penaltyParameter), order_v(order_v),
-        rhoface_gf(rhoface_gf), v_gf(v_gf), pface_gf(pface_gf),
-        csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs),
-        globalmax_viscous_coef(globalmax_viscous_coef) { }
+        rhoface_gf(rhoface_gf), v_gf(v_gf),
+        pface_gf(pface_gf), csface_gf(csface_gf) { }
 
    virtual void AssembleRHSElementVect(const FiniteElement &el,
                                        FaceElementTransformations &Tr,
@@ -262,9 +255,7 @@ public:
    virtual void AssembleRHSElementVect(const FiniteElement &el,
                                        ElementTransformation &Tr,
                                        Vector &elvect)
-   {
-      MFEM_ABORT("Should not be used.");
-   }
+   { MFEM_ABORT("Should not be used."); }
 };
 
 // Performs full assembly for the normal velocity mass matrix operator.

@@ -29,7 +29,7 @@ Options used:
    --no-visit
    --no-print
    --outputfilename results/Laghos
-   --penaltyParameter 10
+   --penaltyParameter 20
    --perimeter 12
    --nitscheVersion -1
 Number of zones in the serial mesh: 16
@@ -105,7 +105,7 @@ Options used:
    --no-visit
    --no-print
    --outputfilename results/Laghos
-   --penaltyParameter 10
+   --penaltyParameter 20
    --perimeter 12
    --nitscheVersion -1
 Number of zones in the serial mesh: 64
@@ -185,7 +185,7 @@ Options used:
    --no-visit
    --no-print
    --outputfilename results/Laghos
-   --penaltyParameter 10
+   --penaltyParameter 20
    --perimeter 12
    --nitscheVersion -1
 Number of zones in the serial mesh: 16
@@ -264,7 +264,7 @@ Options used:
    --no-visit
    --no-print
    --outputfilename results/Laghos
-   --penaltyParameter 10
+   --penaltyParameter 20
    --perimeter 12
    --nitscheVersion -1
 Number of zones in the serial mesh: 80
@@ -317,7 +317,7 @@ Options used:
    --no-visit
    --no-print
    --outputfilename results/Laghos
-   --penaltyParameter 10
+   --penaltyParameter 20
    --perimeter 12
    --nitscheVersion -1
 Number of zones in the serial mesh: 64
@@ -362,7 +362,7 @@ Options used:
    --no-visit
    --no-print
    --outputfilename results/Laghos
-   --penaltyParameter 10
+   --penaltyParameter 20
    --perimeter 12
    --nitscheVersion -1
 Number of zones in the serial mesh: 64

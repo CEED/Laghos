@@ -37,17 +37,17 @@
 // * penPar is the penalty Parameter
 // * per is the perimeter of the bounding box of the domain
 // 2D trapezoid:
-// mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -penPar 20.0 -per 12.0 -vs 20 -vis
 // 2D circular hole:
-// mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -penPar 20.0 -per 12.0 -vs 20 -vis
 // 2D disc (inside):
-// mpirun -np 4 laghos -m data/disc-nurbs.mesh -p 1 -rs 3 -tf 10 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/disc-nurbs.mesh -p 1 -rs 3 -tf 10 -s 7 -penPar 20.0 -per 12.0 -vs 20 -vis
 // 2D disc (outside):
-// mpirun -np 4 laghos -m data/convex.mesh -p 1 -rs 3 -tf 0.1 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/convex.mesh -p 1 -rs 3 -tf 0.1 -s 7 -penPar 20.0 -per 12.0 -vs 20 -vis
 // 3D cube:
-// mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -vs 20 -vis
+// mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -penPar 20.0 -per 12.0 -vs 20 -vis
 // 3D spherical hole:
-// mpirun -np 4 laghos -m data/cube_gmsh_19.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 10.0 -per 12.0 -ok 3 -ot 2 -vs 1000
+// mpirun -np 4 laghos -m data/cube_gmsh_19.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 20.0 -per 12.0 -ok 3 -ot 2 -vs 1000
 
 #include "laghos_solver.hpp"
 #include "sedov_exact.hpp"

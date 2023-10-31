@@ -113,7 +113,6 @@ namespace mfem
       mutable ParLinearForm DiffusionVelocityBoundaryForce;
       mutable ParLinearForm DiffusionEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
-      const double penaltyParameter;
       const double perimeter;
       const double nitscheVersion;
       Array<int> ess_elem;

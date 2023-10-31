@@ -17,7 +17,7 @@ cd ..
 file="autotest/run_"$((ntask))".out"
 rm -f $file
 
-command="mpirun -np "$((ntask))" laghos -p 1 -s 7 -vs 50 -penPar 10.0 -per 12.0"
+command="mpirun -np "$((ntask))" laghos -p 1 -s 7 -vs 50 -penPar 20.0 -per 12.0"
 comment="mpirun -np X laghos"
 
 
