@@ -123,13 +123,11 @@ namespace mfem
       
       NormalVelocityMassIntegrator *nvmi;
       DiffusionNormalVelocityIntegrator *d_nvmi;
-      DiffusionEnergyNormalVelocityIntegrator *de_nvmi;
+      EnergyPenaltyBLFI *de_nvmi;
       WeightedMassIntegrator *mi;
       
       ParGridFunction *alphaCut;
-      //  
-      double C_I_E;
-      double C_I_V;
+      double C_I;
   
       void UpdateQuadratureData(const Vector &S) const;
       void AssembleForceMatrix() const;

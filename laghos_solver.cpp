@@ -201,8 +201,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    b_rhs(H1Vsize),
    e_rhs(L2Vsize),
    be_rhs(L2Vsize),
-   C_I_E(0.0),
-   C_I_V(0.0)
+   C_I(0.0)
 {
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
@@ -228,15 +227,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       case Geometry::TRIANGLE:
       case Geometry::TETRAHEDRON:
       {
-         C_I_E = (order_e+1)*(order_e+dim)/dim+1.0;
-         C_I_V = (order_v+1)*(order_v+dim)/dim;
+         C_I = (order_v+1)*(order_v+dim)/dim;
          break;
       }
       case Geometry::SQUARE:
       case Geometry::CUBE:
       {
-         C_I_E = order_e*order_e+1.0;
-         C_I_V = order_v*order_v;
+         C_I = order_v*order_v;
          break;
       }
       default: MFEM_ABORT("Unknown zone type!");
@@ -351,7 +348,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv->AddDomainIntegrator(vmi, ess_elem);
 
    nvmi = new NormalVelocityMassIntegrator(qdata.h0,
-                                           penaltyParameter * C_I_V,
+                                           penaltyParameter * C_I,
                                            perimeter, globalmax_rho);
    nvmi->SetIntRule(&b_ir);
    Mv->AddBdrFaceIntegrator(nvmi);
@@ -377,15 +374,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    SourceForce.Assemble();
 
    d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0,
-                                                  penaltyParameter * C_I_V,
-                                                  order_v, rhoface_gf, v_gf,
+                                                  penaltyParameter * C_I,
+                                                  rhoface_gf, v_gf,
                                                   pface_gf, csface_gf);
    d_nvmi->SetIntRule(&b_ir);
    DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
    DiffusionVelocityBoundaryForce.Assemble();
 
-   de_nvmi = new DiffusionEnergyNormalVelocityIntegrator(qdata.h0, *alphaCut,
-                                                         penaltyParameter * C_I_V, order_v, rhoface_gf, v_gf, pface_gf, Jac0invface_gf, rho0DetJ0face_gf, csface_gf, globalmax_rho, globalmax_cs, globalmax_viscous_coef, use_viscosity, use_vorticity);
+   de_nvmi = new EnergyPenaltyBLFI(qdata.h0, penaltyParameter * C_I,
+                                   rhoface_gf, v_gf, pface_gf, csface_gf);
    de_nvmi->SetIntRule(&b_ir);
    DiffusionEnergyBoundaryForce.AddBdrFaceIntegrator(de_nvmi);
    DiffusionEnergyBoundaryForce.Assemble();

@@ -173,37 +173,6 @@ public:
                                        Vector &elvect);
 };
 
-// Performs full assembly for the boundary force operator on the energy equation.
-// < sigma_{ij} n_{j} n_{i}, \phi * v.n >
-class EnergyBoundaryForceIntegrator : public LinearFormIntegrator
-{
-private:
-   const double h0;
-   const ParGridFunction &alpha;
-   const ParGridFunction &pface_gf;
-   const ParGridFunction &v_gf;
-   const ParGridFunction *Vnpt_gf;
-   const ParGridFunction &csface_gf;
-   const ParGridFunction &rho0DetJ0face_gf;
-   const ParGridFunction &Jac0invface_gf;
-
-   const bool use_viscosity;
-   const bool use_vorticity;
-
-public:
-   EnergyBoundaryForceIntegrator(const double h0, const ParGridFunction &alphaF, const ParGridFunction &pface_gf, const ParGridFunction &v_gf, const ParGridFunction &csface_gf, const ParGridFunction &rho0DetJ0face_gf,  const ParGridFunction &Jac0invface_gf , const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), pface_gf(pface_gf), v_gf(v_gf), csface_gf(csface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), Jac0invface_gf(Jac0invface_gf), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) { }
-   virtual void AssembleRHSElementVect(const FiniteElement &el,
-                                       FaceElementTransformations &Tr,
-                                       Vector &elvect);
-   virtual void AssembleRHSElementVect(const FiniteElement &el,
-                                       ElementTransformation &Tr,
-                                       Vector &elvect);
-   virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
-      Vnpt_gf = velocity_NPT;
-   }
-
-};
-
 // Performs full assembly for the normal velocity mass matrix operator.
 class NormalVelocityMassIntegrator : public BilinearFormIntegrator
 {
@@ -226,13 +195,12 @@ public:
                                    DenseMatrix &elmat);
 };
 
-// Performs full assembly for the normal velocity mass matrix operator.
+// Velocity RHS boundary integrator.
 class DiffusionNormalVelocityIntegrator : public LinearFormIntegrator
 {
 private:
    const double h0 ;
    double penaltyParameter;
-   const int order_v;
    const ParGridFunction &rhoface_gf;
    const ParGridFunction &v_gf;
    const ParGridFunction &pface_gf;
@@ -240,12 +208,12 @@ private:
 
 public:
    DiffusionNormalVelocityIntegrator(const double h0,
-                                     double penaltyParameter, const int order_v,
+                                     double penaltyParameter,
                                      const ParGridFunction &rhoface_gf,
                                      const ParGridFunction &v_gf,
                                      const ParGridFunction &pface_gf,
                                      const ParGridFunction &csface_gf)
-      : h0(h0), penaltyParameter(penaltyParameter), order_v(order_v),
+      : h0(h0), penaltyParameter(penaltyParameter),
         rhoface_gf(rhoface_gf), v_gf(v_gf),
         pface_gf(pface_gf), csface_gf(csface_gf) { }
 
@@ -258,40 +226,38 @@ public:
    { MFEM_ABORT("Should not be used."); }
 };
 
-// Performs full assembly for the normal velocity mass matrix operator.
-class DiffusionEnergyNormalVelocityIntegrator : public LinearFormIntegrator
+// Energy RHS boundary integrator.
+class EnergyPenaltyBLFI : public LinearFormIntegrator
 {
 private:
    const double h0 ;
-   const ParGridFunction &alpha;
    double penaltyParameter;
-   const int order_v;
-   const double &globalmax_rho;
-   const double &globalmax_cs;
-   const double &globalmax_viscous_coef;
    const ParGridFunction &rhoface_gf;
    const ParGridFunction &csface_gf;
-   const ParGridFunction &Jac0invface_gf;
-   const ParGridFunction &rho0DetJ0face_gf;
    const ParGridFunction &v_gf;
+   const ParGridFunction &pface_gf;
    const ParGridFunction *Vnpt_gf;
 
-   const ParGridFunction &pface_gf;
-   const bool use_viscosity;
-   const bool use_vorticity;
-
 public:
-   DiffusionEnergyNormalVelocityIntegrator(const double h0, const ParGridFunction &alphaF, double penaltyParameter, const int order_v, const ParGridFunction &rhoface_gf, const ParGridFunction &v_gf, const ParGridFunction &pface_gf, const ParGridFunction &Jac0invface_gf, const ParGridFunction & rho0DetJ0face_gf, const ParGridFunction &csface_gf, const double &globalmax_rho, const double &globalmax_cs, const double &globalmax_viscous_coef, const bool use_viscosity, const bool use_vorticity) : h0(h0), alpha(alphaF), penaltyParameter(penaltyParameter), order_v(order_v), rhoface_gf(rhoface_gf), v_gf(v_gf), pface_gf(pface_gf), Jac0invface_gf(Jac0invface_gf), rho0DetJ0face_gf(rho0DetJ0face_gf), csface_gf(csface_gf), globalmax_rho(globalmax_rho), globalmax_cs(globalmax_cs), globalmax_viscous_coef(globalmax_viscous_coef), use_viscosity(use_viscosity), use_vorticity(use_vorticity), Vnpt_gf(NULL) {  }
+   EnergyPenaltyBLFI(const double h0, double penaltyParameter,
+                     const ParGridFunction &rhoface_gf,
+                     const ParGridFunction &v_gf,
+                     const ParGridFunction &pface_gf,
+                     const ParGridFunction &csface_gf)
+      : h0(h0), penaltyParameter(penaltyParameter),
+        rhoface_gf(rhoface_gf), csface_gf(csface_gf), v_gf(v_gf),
+        pface_gf(pface_gf), Vnpt_gf(NULL) {  }
+
    virtual void AssembleRHSElementVect(const FiniteElement &el,
                                        FaceElementTransformations &Tr,
                                        Vector &elvect);
    virtual void AssembleRHSElementVect(const FiniteElement &el,
                                        ElementTransformation &Tr,
-                                       Vector &elvect);
-   virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction * velocity_NPT){
-      Vnpt_gf = velocity_NPT;
-   }
+                                       Vector &elvect)
+   { MFEM_ABORT("Should not be used."); }
 
+   virtual void SetVelocityGridFunctionAtNewState(const ParGridFunction *v_new)
+   { Vnpt_gf = v_new; }
 };
 
 } // namespace hydrodynamics
