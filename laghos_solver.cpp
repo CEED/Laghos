@@ -86,7 +86,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int order_e,
                                                  const int order_v,
                                                  const int faceIndex,
-                                                 double &globalmax_rho,
                                                  double &globalmax_cs,
                                                  double &globalmax_viscous_coef,
                                                  ParFiniteElementSpace &h1,
@@ -104,7 +103,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParGridFunction &e_gf,
                                                  ParGridFunction &cs_gf,
                                                  ParGridFunction &csface_gf,
-                                                 ParGridFunction &viscousface_gf,
                                                  ParGridFunction &rho0DetJ0_gf,
                                                  ParGridFunction &rho0DetJ0face_gf,
                                                  ParGridFunction &Jac0inv_gf,
@@ -136,7 +134,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    source_type(source), cfl(cfl),
    use_viscosity(visc),
    use_vorticity(vort),
-   cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz), perimeter(perimeter),
+   cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
    nitscheVersion(nitscheVersion),
    ess_elem(pmesh->attributes.Max()),
    fi(NULL),
@@ -155,12 +153,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    p_gf(p_gf),
    e_gf(e_gf),
    cs_gf(cs_gf),
-   globalmax_rho(globalmax_rho),
    globalmax_cs(globalmax_cs),
    globalmax_viscous_coef(globalmax_viscous_coef),
    pface_gf(pface_gf),
    csface_gf(csface_gf),
-   viscousface_gf(viscousface_gf),
    rho0DetJ0_gf(rho0DetJ0_gf),
    rho0DetJ0face_gf(rho0DetJ0face_gf),
    Jac0inv_gf(Jac0inv_gf),
@@ -172,7 +168,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    GLIntRules(0, BasisType::GaussLobatto),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    ((oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
-   b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(), ( 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1) )),
+   b_ir(GLIntRules.Get((pmesh->GetInteriorFaceTransformations(faceIndex))->GetGeometryType(),
+                       3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(),
    qdata_is_current(false),
@@ -218,7 +215,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    rhoface_gf.ExchangeFaceNbrData();
    pface_gf.ExchangeFaceNbrData();
    csface_gf.ExchangeFaceNbrData();
-   viscousface_gf.ExchangeFaceNbrData();
    rho0DetJ0face_gf.ExchangeFaceNbrData();
    Jac0invface_gf.ExchangeFaceNbrData();
 
@@ -278,16 +274,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    {
       // The points (and their numbering) coincide with the nodes of p.
       const IntegrationRule &ir_p = PFace_L2.GetFE(e)->GetNodes();
-      const int gl_nqp = ir_p.GetNPoints();
+      const int nqp = ir_p.GetNPoints();
       ElementTransformation &Tr = *PFace_L2.GetElementTransformation(e);
-      for (int q = 0; q < gl_nqp; q++)
+      for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir_p.IntPoint(q);
          Tr.SetIntPoint(&ip);
-         // std::cout << " faceip.x " << ip.x << " faceip.y " << ip.y << " faceip.z " << ip.z << std::endl;
-         const double rho0DetJ0 = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
-         double volumeFraction = alphaCut->GetValue(Tr, ip);
-         rho0DetJ0face_gf(e * gl_nqp + q) = rho0DetJ0 * volumeFraction;
+         rho0DetJ0face_gf(e * nqp + q) = Tr.Weight() * rho0_gf.GetValue(Tr, ip);
       }
    }
    rho0DetJ0face_gf.ExchangeFaceNbrData();
@@ -308,7 +301,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata.h0 /= (double) H1.GetOrder(0);
 
    //Compute quadrature quantities
-   UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
+   UpdateDensity(rho0DetJ0_gf, rho_gf);
    UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
    UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
    rho_gf.ExchangeFaceNbrData();
@@ -316,15 +309,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    cs_gf.ExchangeFaceNbrData();
 
    //Compute quadrature quantities
-   // std::cout << " calling " << std::endl;
-   UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
+   UpdateDensity(rho0DetJ0face_gf, rhoface_gf);
    UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
    UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
-   UpdateGlobalMaxRho(globalmax_rho, rhoface_gf);
    rhoface_gf.ExchangeFaceNbrData();
    pface_gf.ExchangeFaceNbrData();
    csface_gf.ExchangeFaceNbrData();
-   viscousface_gf.ExchangeFaceNbrData();
+
+   double rho_max = rhoface_gf.Max();
+   MPI_Allreduce(MPI_IN_PLACE, &rho_max, 1,
+                 MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
@@ -347,9 +341,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv->AddDomainIntegrator(vmi, ess_elem);
 
-   nvmi = new NormalVelocityMassIntegrator(qdata.h0,
-                                           penaltyParameter * C_I,
-                                           perimeter, globalmax_rho);
+   nvmi = new NormalVelocityMassIntegrator(penaltyParameter * C_I,
+                                           perimeter, rho_max);
    nvmi->SetIntRule(&b_ir);
    Mv->AddBdrFaceIntegrator(nvmi);
 
@@ -373,10 +366,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Make a dummy assembly to figure out the sparsity.
    SourceForce.Assemble();
 
-   d_nvmi = new DiffusionNormalVelocityIntegrator(qdata.h0,
-                                                  penaltyParameter * C_I,
-                                                  rhoface_gf, v_gf,
-                                                  pface_gf, csface_gf);
+   d_nvmi = new VelocityPenaltyBLFI(penaltyParameter * C_I,
+                                    rhoface_gf, v_gf, pface_gf, csface_gf);
    d_nvmi->SetIntRule(&b_ir);
    DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
    DiffusionVelocityBoundaryForce.Assemble();
@@ -423,7 +414,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt, const Vector 
 void LagrangianHydroOperator::UpdateLevelSet(const Vector &S, const Vector &S_init){
 
    //Compute quadrature quantities
-   UpdateDensity(rho0DetJ0_gf, *alphaCut, rho_gf);
+   UpdateDensity(rho0DetJ0_gf, rho_gf);
    UpdatePressure(gamma_gf, e_gf, rho_gf, p_gf);
    UpdateSoundSpeed(gamma_gf, e_gf, cs_gf);
    rho_gf.ExchangeFaceNbrData();
@@ -431,17 +422,14 @@ void LagrangianHydroOperator::UpdateLevelSet(const Vector &S, const Vector &S_in
    cs_gf.ExchangeFaceNbrData();
 
    //Compute quadrature quantities
-   UpdateDensity(rho0DetJ0face_gf, *alphaCut, rhoface_gf);
+   UpdateDensity(rho0DetJ0face_gf, rhoface_gf);
    UpdatePressure(gamma_gf, e_gf, rhoface_gf, pface_gf);
    UpdateSoundSpeed(gamma_gf, e_gf, csface_gf);
-   UpdateGlobalMaxRho(globalmax_rho, rhoface_gf);
    rhoface_gf.ExchangeFaceNbrData();
    pface_gf.ExchangeFaceNbrData();
    csface_gf.ExchangeFaceNbrData();
-   viscousface_gf.ExchangeFaceNbrData();
 
    v_gf.ExchangeFaceNbrData();
-
 }
 
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,

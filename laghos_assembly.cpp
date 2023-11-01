@@ -430,9 +430,9 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 }
 
 
-void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteElement &el,
-                                                               FaceElementTransformations &Tr,
-                                                               Vector &elvect)
+void VelocityPenaltyBLFI::AssembleRHSElementVect(const FiniteElement &el,
+                                                 FaceElementTransformations &Tr,
+                                                 Vector &elvect)
 {
    const int nqp_face = IntRule->GetNPoints();
    const int dim = el.GetDim();

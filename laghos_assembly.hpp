@@ -177,16 +177,14 @@ public:
 class NormalVelocityMassIntegrator : public BilinearFormIntegrator
 {
 private:
-   const double h0 ;
    double penaltyParameter;
    double perimeter;
    const double globalmax_rho;
 
 public:
-   NormalVelocityMassIntegrator(const double h0,
-                                double penaltyParameter, double perimeter,
+   NormalVelocityMassIntegrator(double penaltyParameter, double perimeter,
                                 const double globalmax_rho)
-      : h0(h0), penaltyParameter(penaltyParameter),
+      : penaltyParameter(penaltyParameter),
         perimeter(perimeter), globalmax_rho(globalmax_rho) {  }
 
    virtual void AssembleFaceMatrix(const FiniteElement &fe,
@@ -196,10 +194,9 @@ public:
 };
 
 // Velocity RHS boundary integrator.
-class DiffusionNormalVelocityIntegrator : public LinearFormIntegrator
+class VelocityPenaltyBLFI : public LinearFormIntegrator
 {
 private:
-   const double h0 ;
    double penaltyParameter;
    const ParGridFunction &rhoface_gf;
    const ParGridFunction &v_gf;
@@ -207,13 +204,12 @@ private:
    const ParGridFunction &csface_gf;
 
 public:
-   DiffusionNormalVelocityIntegrator(const double h0,
-                                     double penaltyParameter,
-                                     const ParGridFunction &rhoface_gf,
-                                     const ParGridFunction &v_gf,
-                                     const ParGridFunction &pface_gf,
-                                     const ParGridFunction &csface_gf)
-      : h0(h0), penaltyParameter(penaltyParameter),
+   VelocityPenaltyBLFI(double penaltyParameter,
+                       const ParGridFunction &rhoface_gf,
+                       const ParGridFunction &v_gf,
+                       const ParGridFunction &pface_gf,
+                       const ParGridFunction &csface_gf)
+      : penaltyParameter(penaltyParameter),
         rhoface_gf(rhoface_gf), v_gf(v_gf),
         pface_gf(pface_gf), csface_gf(csface_gf) { }
 

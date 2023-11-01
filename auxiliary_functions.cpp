@@ -57,32 +57,28 @@ namespace mfem
       mu = eig_val_data[0];
     }
 
-    void UpdateDensity(const ParGridFunction &rho0DetJ0_gf, const ParGridFunction &alpha, ParGridFunction &rho_gf)
+    void UpdateDensity(const ParGridFunction &rho0DetJ0_gf, ParGridFunction &rho_gf)
     {
-      ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
-      const int NE = p_fespace->GetParMesh()->GetNE();
-      const ParMesh * pmesh = p_fespace->GetParMesh(); 
-      rho_gf = 0.0;
-      // Compute L2 pressure at the quadrature points, element by element.
-      for (int e = 0; e < NE; e++)
-	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  //  std::cout << " nqp " << nqp << std::endl;
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      //	std::cout << " ip.x " << ip.x << " ip.y " << ip.y << " ip.z " << ip.z << std::endl; 
-	      double volumeFraction = alpha.GetValue(Tr, ip);
-	      double rho0DetJ0 = rho0DetJ0_gf.GetValue(Tr, ip);
-	      const double rho = rho0DetJ0 / (Tr.Weight() * volumeFraction);
-	      rho_gf(e * nqp + q) = rho;
-	    }
-	}
+       ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
+       const int NE = p_fespace->GetParMesh()->GetNE();
+       const ParMesh * pmesh = p_fespace->GetParMesh();
+       rho_gf = 0.0;
+       // Compute L2 pressure at the quadrature points, element by element.
+       for (int e = 0; e < NE; e++)
+       {
+          // The points (and their numbering) coincide with the nodes of p.
+          const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
+          const int nqp = ir.GetNPoints();
+
+          ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
+          for (int q = 0; q < nqp; q++)
+          {
+             const IntegrationPoint &ip = ir.IntPoint(q);
+             Tr.SetIntPoint(&ip);
+             const double rho = rho0DetJ0_gf.GetValue(Tr, ip) / Tr.Weight();
+             rho_gf(e * nqp + q) = rho;
+          }
+       }
     }
     
     void UpdatePressure(const ParGridFunction &gamma_gf, const ParGridFunction &e_gf, const ParGridFunction &rho_gf, ParGridFunction &p_gf)
@@ -135,36 +131,6 @@ namespace mfem
 	      cs_gf(e * nqp + q) = sqrt(gamma_val * (gamma_val-1.0) * e_val);
 	    }
 	}
-    }
-
-    void UpdateGlobalMaxRho(double &globalmax_rho, const ParGridFunction &rho_gf)
-    {
-      ParFiniteElementSpace *p_fespace = rho_gf.ParFESpace();
-      const int NE = p_fespace->GetParMesh()->GetNE();
-      const ParMesh * pmesh = p_fespace->GetParMesh();
-      int dim = pmesh->Dimension();
-    
-      double max_rho = 0.0;
-      // Compute L2 pressure at the quadrature points, element by element.
-      for (int e = 0; e < NE; e++)
-	{
-	  // The points (and their numbering) coincide with the nodes of p.
-	  const IntegrationRule &ir = p_fespace->GetFE(e)->GetNodes();
-	  const int nqp = ir.GetNPoints();
-	  
-	  ElementTransformation &Tr = *p_fespace->GetElementTransformation(e);
-	  
-	  for (int q = 0; q < nqp; q++)
-	    {
-	      const IntegrationPoint &ip = ir.IntPoint(q);
-	      Tr.SetIntPoint(&ip);
-	      double rho_vals = rho_gf.GetValue(Tr,ip);
-	      max_rho = std::max(max_rho, rho_vals);
-	      /////
-	    }
-	}
-	  globalmax_rho = 0.0;
-	  MPI_Allreduce(&max_rho, &globalmax_rho, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm());	  
     }
  
     void UpdatePenaltyParameter(double &globalmax_rho, double &globalmax_cs, double &globalmax_viscous_coef, const ParGridFunction &rho_gf, const ParGridFunction &cs_gf, const ParGridFunction &v, const ParGridFunction &Jac0invface_gf, ParGridFunction &viscous_gf,   const double h0, const bool use_viscosity, const bool use_vorticity, const double penaltyParameter)

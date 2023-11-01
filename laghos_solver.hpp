@@ -79,12 +79,10 @@ namespace mfem
       ParGridFunction &pface_gf;
       ParGridFunction &csface_gf;
       ParGridFunction &rhoface_gf;
-      ParGridFunction &viscousface_gf;
       ParGridFunction &rho0DetJ0face_gf;
       ParGridFunction &Jac0invface_gf;
 			    
       IntegrationRules GLIntRules;
-      double &globalmax_rho;
       double &globalmax_cs;
       double &globalmax_viscous_coef;
       
@@ -113,7 +111,6 @@ namespace mfem
       mutable ParLinearForm DiffusionVelocityBoundaryForce;
       mutable ParLinearForm DiffusionEnergyBoundaryForce;
       mutable Vector X, B, one, rhs, e_rhs, b_rhs, be_rhs, X_e, B_e;
-      const double perimeter;
       const double nitscheVersion;
       Array<int> ess_elem;
 
@@ -122,7 +119,7 @@ namespace mfem
       SourceForceIntegrator *sfi;
       
       NormalVelocityMassIntegrator *nvmi;
-      DiffusionNormalVelocityIntegrator *d_nvmi;
+      VelocityPenaltyBLFI *d_nvmi;
       EnergyPenaltyBLFI *de_nvmi;
       WeightedMassIntegrator *mi;
       
@@ -138,8 +135,7 @@ namespace mfem
 
     public:
       LagrangianHydroOperator(const int size, const int order_e, const int order_v,
-			      const int faceIndex, 
-			      double &globalmax_rho,
+               const int faceIndex,
 			      double &globalmax_cs, double &globalmax_viscous_coef,
 			      ParFiniteElementSpace &h1_fes,
 			      ParFiniteElementSpace &l2_fes,
@@ -156,7 +152,6 @@ namespace mfem
 			      ParGridFunction &e_gf,
 			      ParGridFunction &cs_gf,
 			      ParGridFunction &csface_gf,
-			      ParGridFunction &viscousface_gf,
 			      ParGridFunction &rho0DetJ0_gf,
 			      ParGridFunction &rho0DetJ0face_gf,
 			      ParGridFunction &Jac0inv_gf,
