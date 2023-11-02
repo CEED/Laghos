@@ -89,6 +89,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
                          double &volume);
 
 LagrangianHydroOperator::LagrangianHydroOperator(const int size,
+                                                 const int _problem,
                                                  ParFiniteElementSpace &h1,
                                                  ParFiniteElementSpace &l2,
                                                  const Array<int> &ess_tdofs,
@@ -105,6 +106,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  double ftz,
                                                  const int oq) :
    TimeDependentOperator(size),
+   problem(_problem),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
    H1Vsize(H1.GetVSize()),

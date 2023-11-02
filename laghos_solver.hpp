@@ -111,6 +111,8 @@ protected:
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
+   // vdw
+   const int problem; // To be used to determine which EOS to use for ComputeMaterialProperties
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
    const bool use_viscosity, use_vorticity, p_assembly;
@@ -147,23 +149,45 @@ protected:
    mutable Vector X, B, one, rhs, e_rhs;
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];
-
+public:
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
    {
-      for (int v = 0; v < nvalues; v++)
+      if (problem < 8)
       {
-         p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
-         cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
+         for (int v = 0; v < nvalues; v++)
+         {
+            p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
+            cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
+         }
       }
+      else 
+      {
+         // vdw
+         for (int v = 0; v < nvalues; v++)
+         {
+            double a = 1., b = 1.;
+            p[v]  = (gamma[v] - 1.0) * (rho[v] * e[v] + a * rho[v] * rho[v]) / (1. - b * rho[v]) - a * rho[v] * rho[v];
+            if (p[v] != p[v])
+            {
+               std::cout << "Nan encountered in pressure.\n";
+               std::cout << "gamma: " << gamma[v] << ", sie: " << e[v] << ", rho: " << rho[v] << std::endl;
+               // assert(false);
+            }
+
+            double val = gamma[v] * (p[v] + a * rho[v] * rho[v]) / (rho[v] * (1. - b * rho[v]));
+            val -= 2. * a * rho[v];
+            cs[v] = sqrt(val);
+            // std::cout << "vdw p: " << p[v] << " and ss: " << cs[v] << std::endl;
+         }
+      }   
    }
 
    void UpdateQuadratureData(const Vector &S) const;
    void AssembleForceMatrix() const;
-
-public:
    LagrangianHydroOperator(const int size,
+                           const int _problem,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,

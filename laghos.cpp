@@ -47,13 +47,13 @@
 //    INVARIANT DOMAIN-PRESERVING APPROXIMATIONS FOR THE
 //    EULER EQUATIONS WITH TABULATED EQUATION OF STATE
 //    p = 8  --> (6.1)
-//       mpirun -np 8 ./laghos -p 8 -m ../Laglos/data/ref-segment-c0.mesh -dim 1 -tf 0.5 -fa -vis -cfl 0.5 -rs 10
+//       mpirun -np 8 ./laghos -p 8 -m data/ref-segment-c0.mesh -dim 1 -tf 0.5 -fa -vis -cfl 0.5 -rs 10
 //    p = 9  --> (6.4)
-//       mpirun -np 8 ./laghos -p 9 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -tf 1.25 -fa -vis -cfl 0.5 -rs 10 
+//       mpirun -np 8 ./laghos -p 9 -m data/segment-nhalf-1.mesh -dim 1 -tf 1.25 -fa -vis -cfl 0.5 -rs 10 
 //    p = 10 --> (6.5)
-//       mpirun -np 8 ./laghos -p 10 -m ../Laglos/data/segment-nhalf-1.mesh -dim 1 -tf 0.4 -fa -vis -cfl 0.5 -rs 10 
+//       mpirun -np 8 ./laghos -p 10 -m data/segment-nhalf-1.mesh -dim 1 -tf 0.4 -fa -vis -cfl 0.5 -rs 10 
 //    p = 11 --> (6.6)
-//       mpirun -np 8 ./laghos -p 10 -m ../Laglos/data/segment-n1p7-1.mesh -dim 1 -tf 0.005 -fa -vis -cfl 1.3 -rs 10 
+//       mpirun -np 8 ./laghos -p 10 -m data/segment-n1p7-1.mesh -dim 1 -tf 0.005 -fa -vis -cfl 1.3 -rs 10 
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //
@@ -570,6 +570,7 @@ int main(int argc, char *argv[])
    if (impose_visc) { visc = true; }
 
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
+                                                problem, //vdw
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
@@ -577,7 +578,7 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
-   socketstream vis_rho, vis_v, vis_e;
+   socketstream vis_rho, vis_v, vis_e, vis_p, vis_s;
    char vishost[] = "localhost";
    int  visport   = 19916;
 
@@ -594,6 +595,8 @@ int main(int argc, char *argv[])
       vis_rho.precision(8);
       vis_v.precision(8);
       vis_e.precision(8);
+      vis_p.precision(8);
+      vis_s.precision(8);
       int Wx = 0, Wy = 0; // window position
       const int Ww = 350, Wh = 350; // window size
       int offx = Ww+10; // window offsets
@@ -602,12 +605,34 @@ int main(int argc, char *argv[])
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                        "Density", Wx, Wy, Ww, Wh);
       }
-      Wx += offx;
-      hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
-                                    "Velocity", Wx, Wy, Ww, Wh);
-      Wx += offx;
-      hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
-                                    "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      if (problem < 8)
+      {
+         Wx += offx;
+         hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
+                                       "Velocity", Wx, Wy, Ww, Wh);
+         Wx += offx;
+         hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+                                       "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      }
+      else
+      {
+         // vdw cases is pressure and sound speed
+         ParGridFunction press_gf(&L2FESpace), ss_gf(&L2FESpace);
+         ParGridFunction gamma_gf(&L2FESpace);
+         Vector _x(1);
+         _x = 0.;
+         gamma_gf = gamma_func(_x);
+
+         hydro.ComputeMaterialProperties(L2FESpace.GetNDofs(), gamma_gf.GetData(), rho_gf.GetData(), e_gf.GetData(), press_gf.GetData(), ss_gf.GetData());
+
+         Wx += offx;
+         hydrodynamics::VisualizeField(vis_p, vishost, visport, press_gf,
+                                       "Pressure", Wx, Wy, Ww, Wh);
+         Wx += offx;
+         hydrodynamics::VisualizeField(vis_s, vishost, visport, ss_gf,
+                                       "Sound Speed", Wx, Wy, Ww, Wh);
+      }
+      
    }
 
    // Save data for VisIt visualization.
@@ -752,14 +777,37 @@ int main(int argc, char *argv[])
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                              "Density", Wx, Wy, Ww, Wh);
             }
-            Wx += offx;
-            hydrodynamics::VisualizeField(vis_v, vishost, visport,
-                                          v_gf, "Velocity", Wx, Wy, Ww, Wh);
-            Wx += offx;
-            hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
-                                          "Specific Internal Energy",
-                                          Wx, Wy, Ww,Wh);
-            Wx += offx;
+
+            if (problem < 8)
+            {
+               Wx += offx;
+               hydrodynamics::VisualizeField(vis_v, vishost, visport,
+                                             v_gf, "Velocity", Wx, Wy, Ww, Wh);
+               Wx += offx;
+               hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+                                             "Specific Internal Energy",
+                                             Wx, Wy, Ww,Wh);
+               Wx += offx;
+            }
+            else
+            {
+               // vdw cases is pressure and sound speed
+               ParGridFunction press_gf(&L2FESpace), ss_gf(&L2FESpace);
+               ParGridFunction gamma_gf(&L2FESpace);
+               Vector _x(1);
+               _x = 0.;
+               gamma_gf = gamma_func(_x);
+
+               hydro.ComputeMaterialProperties(L2FESpace.GetNDofs(), gamma_gf.GetData(), rho_gf.GetData(), e_gf.GetData(), press_gf.GetData(), ss_gf.GetData());
+
+               Wx += offx;
+               hydrodynamics::VisualizeField(vis_p, vishost, visport, press_gf,
+                                             "Pressure", Wx, Wy, Ww, Wh);
+               Wx += offx;
+               hydrodynamics::VisualizeField(vis_s, vishost, visport, ss_gf,
+                                             "Sound Speed", Wx, Wy, Ww, Wh);
+            }
+            
          }
 
          if (visit)
