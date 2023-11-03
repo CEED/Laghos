@@ -341,7 +341,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv->AddDomainIntegrator(vmi, ess_elem);
 
-   nvmi = new NormalVelocityMassIntegrator(penaltyParameter * C_I,
+   nvmi = new NormalVelocityMassIntegrator(qdata.h0, penaltyParameter * C_I,
                                            perimeter, rho_max);
    nvmi->SetIntRule(&b_ir);
    Mv->AddBdrFaceIntegrator(nvmi);
@@ -366,13 +366,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    // Make a dummy assembly to figure out the sparsity.
    SourceForce.Assemble();
 
-   d_nvmi = new VelocityPenaltyBLFI(penaltyParameter * C_I,
+   d_nvmi = new VelocityPenaltyBLFI(qdata.h0, penaltyParameter * C_I, perimeter,
                                     rhoface_gf, v_gf, pface_gf, csface_gf);
    d_nvmi->SetIntRule(&b_ir);
    DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
    DiffusionVelocityBoundaryForce.Assemble();
 
-   de_nvmi = new EnergyPenaltyBLFI(qdata.h0, penaltyParameter * C_I,
+   de_nvmi = new EnergyPenaltyBLFI(qdata.h0, penaltyParameter * C_I, perimeter,
                                    rhoface_gf, v_gf, pface_gf, csface_gf);
    de_nvmi->SetIntRule(&b_ir);
    DiffusionEnergyBoundaryForce.AddBdrFaceIntegrator(de_nvmi);

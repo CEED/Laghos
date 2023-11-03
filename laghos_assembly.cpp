@@ -395,8 +395,9 @@ void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
 
       ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
       Trans_el1.SetIntPoint(&eip);
-      const double alpha_0 = penaltyParameter * perimeter /
-                             std::pow(Trans_el1.Weight(), 1.0/dim);
+      //      const double alpha_0 = penaltyParameter * perimeter /
+      //                     std::pow(Trans_el1.Weight(), 1.0/dim);
+      const double alpha_0 = penaltyParameter * perimeter / h0;
 
       Vector nor(dim);
       CalcOrtho(Tr.Jacobian(), nor);
@@ -476,7 +477,7 @@ void VelocityPenaltyBLFI::AssembleRHSElementVect(const FiniteElement &el,
 
       double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
 
-      double penaltyVal =  penaltyParameter * density_el1 * cs_el1;
+      double penaltyVal =  penaltyParameter * density_el1 * cs_el1 * perimeter / h0;
 
       el.CalcShape(eip, shape);
       double pressure = pface_gf.GetValue(Trans_el1,eip);
@@ -557,7 +558,7 @@ void EnergyPenaltyBLFI::AssembleRHSElementVect(const FiniteElement &el,
 
       double density_el1 = rhoface_gf.GetValue(Trans_el1,eip);
       double cs_el1 = csface_gf.GetValue(Trans_el1,eip);
-      double penaltyVal = penaltyParameter * density_el1 * cs_el1;
+      double penaltyVal = penaltyParameter * density_el1 * cs_el1 * perimeter / h0;
 
       el.CalcShape(eip, shape);
       double pressure = pface_gf.GetValue(Trans_el1,eip);

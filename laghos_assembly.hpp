@@ -177,14 +177,15 @@ public:
 class NormalVelocityMassIntegrator : public BilinearFormIntegrator
 {
 private:
+   const double h0;
    double penaltyParameter;
    double perimeter;
    const double globalmax_rho;
 
 public:
-   NormalVelocityMassIntegrator(double penaltyParameter, double perimeter,
+   NormalVelocityMassIntegrator(const double h0, double penaltyParameter, double perimeter,
                                 const double globalmax_rho)
-      : penaltyParameter(penaltyParameter),
+      : h0(h0), penaltyParameter(penaltyParameter),
         perimeter(perimeter), globalmax_rho(globalmax_rho) {  }
 
    virtual void AssembleFaceMatrix(const FiniteElement &fe,
@@ -197,19 +198,22 @@ public:
 class VelocityPenaltyBLFI : public LinearFormIntegrator
 {
 private:
+   const double h0;
    double penaltyParameter;
+   double perimeter;
    const ParGridFunction &rhoface_gf;
    const ParGridFunction &v_gf;
    const ParGridFunction &pface_gf;
    const ParGridFunction &csface_gf;
 
 public:
-   VelocityPenaltyBLFI(double penaltyParameter,
+   VelocityPenaltyBLFI(const double h0, double penaltyParameter,
+                       double perimeter,
                        const ParGridFunction &rhoface_gf,
                        const ParGridFunction &v_gf,
                        const ParGridFunction &pface_gf,
                        const ParGridFunction &csface_gf)
-      : penaltyParameter(penaltyParameter),
+      : h0(h0), penaltyParameter(penaltyParameter), perimeter(perimeter),
         rhoface_gf(rhoface_gf), v_gf(v_gf),
         pface_gf(pface_gf), csface_gf(csface_gf) { }
 
@@ -226,8 +230,9 @@ public:
 class EnergyPenaltyBLFI : public LinearFormIntegrator
 {
 private:
-   const double h0 ;
+   const double h0;
    double penaltyParameter;
+   double perimeter;
    const ParGridFunction &rhoface_gf;
    const ParGridFunction &csface_gf;
    const ParGridFunction &v_gf;
@@ -236,11 +241,12 @@ private:
 
 public:
    EnergyPenaltyBLFI(const double h0, double penaltyParameter,
+                     double perimeter,
                      const ParGridFunction &rhoface_gf,
                      const ParGridFunction &v_gf,
                      const ParGridFunction &pface_gf,
                      const ParGridFunction &csface_gf)
-      : h0(h0), penaltyParameter(penaltyParameter),
+      : h0(h0), penaltyParameter(penaltyParameter), perimeter(perimeter),
         rhoface_gf(rhoface_gf), csface_gf(csface_gf), v_gf(v_gf),
         pface_gf(pface_gf), Vnpt_gf(NULL) {  }
 
