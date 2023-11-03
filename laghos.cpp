@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
   bool gfprint = false;
   const char *basename = "results/Laghos";
   double blast_energy = 0.25;
-  double blast_position[] = {0.0, 0.0, 0.0};
+  double blast_position[] = {0.64142136, 0.64142136, 0.0};
   double perimeter = 1.0;
   
   OptionsParser args(argc, argv);
