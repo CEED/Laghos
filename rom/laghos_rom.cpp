@@ -1090,58 +1090,108 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
 
 	if (input.hyperreductionSamplingType == eqp_energy)
 	{
-		if (rank == 0)
+		if (rank == 0 && input.window == 0)
 		{
-			// Increase the energy basis dimension by 1 to accomodate the
-			// addition of the energy identity. 
+            // If first window, increase the energy basis dimension by 1
+            // to accomodate the energy identity. 
+            // No change in the velocity bases dimension.
 			cutoff[2] += 1;
 		}
+        else if (rank == 0 && input.window > 0)
+		{
+			// If not first window, increase the dimension of the velocity 
+            // basis by 1 to accomodate the velocity solution snapshot, 
+            // and the energy basis dimension by 2 to accomodate the energy
+            // identity and energy solution snapshot.
+            // We add the FOM snapshots in the bases so that they are used
+            // in deriving the EQP rule.
+			// Also, the change is made here so that the right basis
+            // dimensions are written in the window parameters file in the
+            // caller's scope.
+			cutoff[1] += 1;
+			cutoff[2] += 2;
+		}
+		
+        MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
+
+        const CAROM::Matrix *snapX = generator_X->getSnapshotMatrix();
+        const CAROM::Matrix *snapV = generator_V->getSnapshotMatrix();
+        const CAROM::Matrix *snapE = generator_E->getSnapshotMatrix();
 
 		const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
 		const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
 
-		MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
-
-		// Truncate the bases.
-		// For the energy basis, the cutoff parameter has already been
-		// increased by 1 to accomodate the energy identity.
-		CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
+		// Form the reduced bases.
+		CAROM::Matrix *tBasisV = new CAROM::Matrix(tH1size, cutoff[1], true);
 		CAROM::Matrix *tBasisE = new CAROM::Matrix(tL2size, cutoff[2], true);
+        
+        if (input.window == 0)
+        {
+            // Get the first cutoff[1] columns of basisV
+            for (int i = 0; i < tH1size; i++)
+                for (int j = 0; j < cutoff[1]; j++)
+                    (*tBasisV)(i, j) = (*basisV)(i, j);
 
-		// Get the first cutoff[2]-1 columns of basisE
-		for (int i = 0; i < tL2size; i++)
-		{
-			for (int j = 0; j < cutoff[2] - 1; j++)
-				(*tBasisE)(i, j) = (*basisE)(i, j);
-		}
+            // Get the first cutoff[2] - 1 columns of basisE
+            for (int i = 0; i < tL2size; i++)
+                for (int j = 0; j < cutoff[2] - 1; j++)
+                    (*tBasisE)(i, j) = (*basisE)(i, j);
 
-		// Form the energy identity and include it as the last basis vector. 
-		Vector unitE(tL2size);
-		unitE = 1.0;
-	
-		for (int i = 0; i < tL2size; i++)
-			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
-		
-		tBasisE->orthogonalize_last();
+            // Add the energy identity as the last E basis column
+            // and reorthonormalize.
+            Vector unitE(tL2size);
+            unitE = 1.0;
+            for (int i = 0; i < tL2size; i++)
+                (*tBasisE)(i, cutoff[2] - 1) = unitE[i];
+            
+            tBasisE->orthogonalize_last();
+        }
+        else if (input.window > 0)
+        {
+            // Get the first cutoff[1] - 1 columns of basisV
+            for (int i = 0; i < tH1size; i++)
+                for (int j = 0; j < cutoff[1] - 1; j++)
+                    (*tBasisV)(i, j) = (*basisV)(i, j);
 
-		SetupEQP_Force(generator_X->getSnapshotMatrix(),
-				generator_V->getSnapshotMatrix(),
-				generator_E->getSnapshotMatrix(),
-				tBasisV, tBasisE, input, sol);
+            // Add the first V snapshot as the last V basis column
+            // and reorthonormalize.
+            // The current window's first snapshot is the same as the
+            // previous window's last snapshot, since we are not using
+            // offset vectors.
+            for (int i = 0; i < tH1size; i++)
+                (*tBasisV)(i, cutoff[1] - 1) = (*snapV)(i, 0);
+            
+            tBasisV->orthogonalize_last();
+            
+            // Get the first cutoff[2] - 2 columns of basisE
+            for (int i = 0; i < tL2size; i++)
+                for (int j = 0; j < cutoff[2] - 2; j++)
+                    (*tBasisE)(i, j) = (*basisE)(i, j);
 
-		delete tBasisV;
-		delete tBasisE;
+            // Add the energy identity as the penultimate E basis column
+            // and reorthonormalize.
+            Vector unitE(tL2size);
+            unitE = 1.0;
+            for (int i = 0; i < tL2size; i++)
+                (*tBasisE)(i, cutoff[2] - 2) = unitE[i];
+            
+            tBasisE->orthogonalize_last(cutoff[2] - 1);
+            
+            // Add the first E snapshot as the last E basis column
+            // and reorthonormalize.
+            // The current window's first snapshot is the same as the
+            // previous window's last snapshot, since we are not using
+            // offset vectors.
+            for (int i = 0; i < tL2size; i++)
+                (*tBasisE)(i, cutoff[2] - 1) = (*snapE)(i, 0);
+            
+            tBasisE->orthogonalize_last();
+        }
 
-		if (rank == 0 && input.window > 0)
-		{
-			// If not first window, increase the dimension of the velocity and
-			// energy bases by 1, to accomodate the future addition of the
-			// lifted solution vector in the online stage.
-			// The change is made here so that the right dimensions are written
-			// in the window parameters file in the caller's scope.
-			cutoff[1] += 1;
-			cutoff[2] += 1;
-		}
+		SetupEQP_Force(snapX, snapV, snapE, tBasisV, tBasisE, input, sol);
+
+        // delete snapX, snapV, snapE;
+		delete tBasisV, tBasisE;
 	}
 
     delete generator_X;
