@@ -1122,7 +1122,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
 		for (int i = 0; i < tL2size; i++)
 			(*tBasisE)(i, cutoff[2]-1) = unitE[i];
 		
-		tBasisE->orthogonalize();
+		tBasisE->orthogonalize_last();
 
 		SetupEQP_Force(generator_X->getSnapshotMatrix(),
 				generator_V->getSnapshotMatrix(),
@@ -2314,7 +2314,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
 			{
 				(*basisE)(i, tmp_rdime) = unitE[i];
 			}
-			basisE->orthogonalize();
+			basisE->orthogonalize_last();
 		}
 		else
 		{
@@ -2342,7 +2342,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
 			{
 				(*basisE)(i, tmp_rdime) = unitE[i];
 			}
-			basisE->orthogonalize();
+			basisE->orthogonalize_last(rdime-1);
 			
 			// The addition of the lifted energy solution vector as the last
 			// column vector takes place later in the main driver "laghos.cpp"
@@ -2540,7 +2540,7 @@ void ROM_Basis::AddLastCol_V(Vector const& f)
 	for (int i = 0; i < tH1size; i++)
 		(*basisV)(i, rdimv-1) = mfH1[i];
 
-	basisV->orthogonalize();
+	basisV->orthogonalize_last();
 }
 
 // f is a full vector, not a true vector
@@ -2556,7 +2556,7 @@ void ROM_Basis::AddLastCol_E(Vector const& f)
 	for (int i = 0; i < tL2size; i++)
 		(*basisE)(i, rdime-1) = mfL2[i];
 
-	basisE->orthogonalize();
+	basisE->orthogonalize_last();
 }
 
 // f is a full vector, not a true vector
