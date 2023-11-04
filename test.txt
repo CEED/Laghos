@@ -1,0 +1,15 @@
+// trapezoid
+srun -N1 -n1 -p pdebug laghos -m data/trapezoid_quad.mesh -p 1 -rs 3 -tf 1.3 -s 7 -penPar 20.0 -per 5 -ok 1 -ot 0 -vs 100000 -print -vis -visit -k trapezoid_2_1/
+// rotated square hole
+srun -N1 -n4 -p pdebug laghos -m data/square_square_hole_rot_coarse.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 20.0 -per 4 -ok 1 -ot 0 -vs 100 -print -vis -visit -k square_square_hole_rot/square_square_hole_rot_1_0/
+// square domain
+srun -N1 -n1 -p pdebug laghos -p 1 -rs 3 -tf 0.8 -s 7 -penPar 20.0 -per 4 -ok 1 -ot 0 -vs 100 -print -vis -visit -k square/square_1_0/
+// circle hole
+srun -N1 -n4 -p pdebug laghos -m data/refined.mesh -p 1 -rs 3 -tf 0.8 -s 7 -penPar 20.0 -per 4 -ok 1 -ot 0 -vs 100 -print -vis -visit -k square_hole/square_hole_1_0/
+// disc
+// blast location (-1,0)
+srun -N1 -n1 -p pdebug laghos -m data/disc-nurbs.mesh -p 1 -rs 3 -tf 4 -s 7 -penPar 16.0 -per 17.78 -ok 2 -ot 1 -vs 100 -print -vis -visit -k disc/disc_2_1/t_4/
+// cube
+srun -N2 -n60 -p pdebug laghos -m data/cube01_hex.mesh -p 1 -rs 3 -tf 0.8 -s 7 -penPar 20.0 -per 12 -ok 3 -ot 2 -vs 10000 -print -vis -visit -k cube/cube_3_2/
+// cube_hole
+srun -N1 -n10 -p pdebug laghos -m data/sphere_hole_V3.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 20.0 -per 12 -ok 1 -ot 0 -vs 1000 -print -vis -visit -k cube_hole/cube_hole_1_0/
