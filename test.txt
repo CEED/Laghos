@@ -12,4 +12,5 @@ srun -N1 -n1 -p pdebug laghos -m data/disc-nurbs.mesh -p 1 -rs 3 -tf 4 -s 7 -pen
 // cube
 srun -N2 -n60 -p pdebug laghos -m data/cube01_hex.mesh -p 1 -rs 3 -tf 0.8 -s 7 -penPar 20.0 -per 12 -ok 3 -ot 2 -vs 10000 -print -vis -visit -k cube/cube_3_2/
 // cube_hole
+// move center (-0.5,-0.5,-0.5)
 srun -N1 -n10 -p pdebug laghos -m data/sphere_hole_V3.msh -p 1 -rs 0 -tf 0.8 -s 7 -penPar 20.0 -per 12 -ok 1 -ot 0 -vs 1000 -print -vis -visit -k cube_hole/cube_hole_1_0/
