@@ -49,7 +49,7 @@ if [ ! -d "astyle" ]; then
         wget -O astyle_3.1.tar.gz https://sourceforge.net/projects/astyle/files/astyle/astyle%203.1/astyle_3.1_macosx.tar.gz/download
         ;;
   esac
-  tar -zxvf astyle_2.05.1.tar.gz
+  tar -zxvf astyle_3.1.tar.gz
   cd astyle/build
   if [ -d "gcc" ]; then
     cd gcc
