@@ -61,6 +61,7 @@ namespace mfem
      
       const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
       const double cfl;
+      const double t_final;
       const bool use_viscosity, use_vorticity;
       const double cg_rel_tol;
       const int cg_max_iter;
@@ -161,7 +162,7 @@ namespace mfem
 			      const bool visc, const bool vort,
 			      const double cgt, const int cgiter, double ftz_tol,
 			      const int order_q, const double penaltyParameter, const double perimeter,
-			      const double nitscheVersion);
+			      const double nitscheVersion, const double t_final);
       ~LagrangianHydroOperator();
 
       // Solve for dx_dt, dv_dt and de_dt.

@@ -117,7 +117,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const int oq,
                                                  const double penaltyParameter,
                                                  const double perimeter,
-                                                 const double nitscheVersion) :
+                                                 const double nitscheVersion,
+						 const double t_final) :
 
    TimeDependentOperator(size),
    H1(h1), L2(l2), P_L2(p_l2_fes), PFace_L2(pface_l2_fes), H1c(H1.GetParMesh(), H1.FEColl(), 1), L2c(L2.GetParMesh(), L2.FEColl(), 1),
@@ -198,7 +199,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    b_rhs(H1Vsize),
    e_rhs(L2Vsize),
    be_rhs(L2Vsize),
-   C_I(0.0)
+   C_I(0.0),
+   t_final(t_final)
 {
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
@@ -319,7 +321,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    double rho_max = rhoface_gf.Max();
    MPI_Allreduce(MPI_IN_PLACE, &rho_max, 1,
                  MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
-
+   double cs_max = csface_gf.Max();
+   MPI_Allreduce(MPI_IN_PLACE, &cs_max, 1,
+                 MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+  
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
@@ -342,7 +347,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv->AddDomainIntegrator(vmi, ess_elem);
 
    nvmi = new NormalVelocityMassIntegrator(qdata.h0, penaltyParameter * C_I,
-                                           perimeter, rho_max);
+                                           perimeter, rho_max, cs_max, t_final,
+					   rhoface_gf);
    nvmi->SetIntRule(&b_ir);
    Mv->AddBdrFaceIntegrator(nvmi);
 
@@ -367,13 +373,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    SourceForce.Assemble();
 
    d_nvmi = new VelocityPenaltyBLFI(qdata.h0, penaltyParameter * C_I, perimeter,
-                                    rhoface_gf, v_gf, pface_gf, csface_gf);
+                                    rhoface_gf, v_gf, pface_gf, csface_gf, t_final);
    d_nvmi->SetIntRule(&b_ir);
    DiffusionVelocityBoundaryForce.AddBdrFaceIntegrator(d_nvmi);
    DiffusionVelocityBoundaryForce.Assemble();
 
    de_nvmi = new EnergyPenaltyBLFI(qdata.h0, penaltyParameter * C_I, perimeter,
-                                   rhoface_gf, v_gf, pface_gf, csface_gf);
+                                   rhoface_gf, v_gf, pface_gf, csface_gf, t_final);
    de_nvmi->SetIntRule(&b_ir);
    DiffusionEnergyBoundaryForce.AddBdrFaceIntegrator(de_nvmi);
    DiffusionEnergyBoundaryForce.Assemble();

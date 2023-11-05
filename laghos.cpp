@@ -416,7 +416,7 @@ int main(int argc, char *argv[])
                                                 mat_gf, p_gf, pface_gf, v_gf, e_gf, cs_gf, csface_gf, rho0DetJ0_gf, rho0DetJ0face_gf, Jac0inv_gf, Jac0invface_gf, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, penaltyParameter, perimeter, nitscheVersion);
+                                                order_q, penaltyParameter, perimeter, nitscheVersion, t_final);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
