@@ -179,15 +179,15 @@ class NormalVelocityMassIntegrator : public BilinearFormIntegrator
 private:
    const double h0;
    const double t_final;
-   double penaltyParameter;
-   double perimeter;
+   const double penaltyParameter;
+   const double perimeter;
    const double globalmax_rho;
    const double globalmax_cs;
    const ParGridFunction &rhoface_gf;
 
 public:
    NormalVelocityMassIntegrator(const double h0, const double t_final,
-				double penaltyParameter, double perimeter,
+				const double penaltyParameter, const double perimeter,
                                 const double globalmax_rho, const double globalmax_cs,
 				const ParGridFunction &rhoface_gf)
       : h0(h0), t_final(t_final), penaltyParameter(penaltyParameter),
@@ -206,8 +206,9 @@ class VelocityPenaltyBLFI : public LinearFormIntegrator
 private:
    const double h0;
    const double t_final;
-   double penaltyParameter;
-   double perimeter;
+   const double penaltyParameter;
+   const double perimeter;
+   const double globalmax_cs;
    const ParGridFunction &rhoface_gf;
    const ParGridFunction &v_gf;
    const ParGridFunction &pface_gf;
@@ -215,13 +216,13 @@ private:
 
 public:
    VelocityPenaltyBLFI(const double h0, double penaltyParameter,
-                       double perimeter,
+                       const double perimeter, const double globalmax_cs,
                        const ParGridFunction &rhoface_gf,
                        const ParGridFunction &v_gf,
                        const ParGridFunction &pface_gf,
                        const ParGridFunction &csface_gf, const double t_final)
       : h0(h0), penaltyParameter(penaltyParameter), perimeter(perimeter),
-        rhoface_gf(rhoface_gf), v_gf(v_gf),
+        globalmax_cs(globalmax_cs), rhoface_gf(rhoface_gf), v_gf(v_gf),
         pface_gf(pface_gf), csface_gf(csface_gf), t_final(t_final) { }
 
    virtual void AssembleRHSElementVect(const FiniteElement &el,
@@ -239,8 +240,9 @@ class EnergyPenaltyBLFI : public LinearFormIntegrator
 private:
    const double h0;
    const double t_final;
-   double penaltyParameter;
-   double perimeter;
+   const double penaltyParameter;
+   const double perimeter;
+   const double globalmax_cs;
    const ParGridFunction &rhoface_gf;
    const ParGridFunction &csface_gf;
    const ParGridFunction &v_gf;
@@ -248,15 +250,15 @@ private:
    const ParGridFunction *Vnpt_gf;
 
 public:
-   EnergyPenaltyBLFI(const double h0, double penaltyParameter,
-                     double perimeter,
+   EnergyPenaltyBLFI(const double h0, const double penaltyParameter,
+                     const double perimeter, const double globalmax_cs, 
                      const ParGridFunction &rhoface_gf,
                      const ParGridFunction &v_gf,
                      const ParGridFunction &pface_gf,
                      const ParGridFunction &csface_gf, const double t_final)
       : h0(h0), penaltyParameter(penaltyParameter), perimeter(perimeter),
-        rhoface_gf(rhoface_gf), csface_gf(csface_gf), v_gf(v_gf),
-        pface_gf(pface_gf), t_final(t_final), Vnpt_gf(NULL) {  }
+        globalmax_cs(globalmax_cs), rhoface_gf(rhoface_gf), v_gf(v_gf),
+	pface_gf(pface_gf), csface_gf(csface_gf), t_final(t_final), Vnpt_gf(NULL) {  }
 
    virtual void AssembleRHSElementVect(const FiniteElement &el,
                                        FaceElementTransformations &Tr,
