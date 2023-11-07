@@ -1058,6 +1058,10 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input, Vector const& sol)
 {
+    CAROM::Matrix Xsnap0(*(generator_X->getSnapshotMatrix()));
+    CAROM::Matrix Vsnap0(*(generator_V->getSnapshotMatrix()));
+    CAROM::Matrix Esnap0(*(generator_E->getSnapshotMatrix()));
+
     if (writeSnapshots)
     {
         if (!useXV) generator_X->writeSnapshot();
@@ -1154,9 +1158,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input, Vector const&
         CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
         CAROM::Matrix *tBasisE = basisE->getFirstNColumns(cutoff[2]);
 
-        SetupEQP_Force(generator_X->getSnapshotMatrix(),
-                       generator_V->getSnapshotMatrix(),
-                       generator_E->getSnapshotMatrix(),
+        SetupEQP_Force(&Xsnap0, &Vsnap0, &Esnap0,
                        tBasisV, tBasisE, input, sol);
 
         delete tBasisV;
