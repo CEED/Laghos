@@ -668,39 +668,28 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     std::set<int> elemOnBdry;
 
-    Array<int> f2be;
+    std::map<int, int> sf2be;
 
     if (rank == 0)
     {
         const int nbe = smesh->GetNBE();
 
+        for (int i=0; i<nbe; ++i)
+            sf2be[smesh->GetBdrElementEdgeIndex(i)] = i;
+
+        Array<int> be_to_face(nbe);
+
         // Initialize all boundary attributes to 4, which will denote the
         // boundary elements of smesh that are interior to pmesh.
         for (int i=0; i<nbe; ++i)
-            smesh->SetBdrAttribute(i, 4);
-
-        f2be = smesh->GetFaceToBdrElMap();
-
-        MFEM_VERIFY(f2be.Size() == smesh->GetNumFaces(), "");
-        MFEM_VERIFY(nbe < smesh->GetNumFaces(), "");
-
-        for (int e=0; e<smesh->GetNE(); ++e)
         {
-            Array<int> faces, ori;
-            if (mesh3D)
-                smesh->GetElementFaces(e, faces, ori);
-            else
-                smesh->GetElementEdges(e, faces, ori);
+            smesh->SetBdrAttribute(i, 4);
+            be_to_face[i] = smesh->GetBdrFace(i);
+            int e = -1;
+            int info = -1;
+            smesh->GetBdrElementAdjacentElement(i, e, info);
 
-            for (auto f : faces)
-            {
-                if (f2be[f] >= 0)
-                {
-                    const int bel = f2be[f];
-                    elemOnBdry.insert(e);
-                    break;
-                }
-            }
+            elemOnBdry.insert(e);
         }
     }
 
@@ -752,7 +741,10 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     vector<int> patt((nfe * (nvf + 1)) * numLocalElems);
 
-    const Array<int> pf2be = pmesh->GetFaceToBdrElMap();
+    const int pnbe = pmesh->GetNBE();
+    std::map<int, int> f2be;
+    for (int i=0; i<pnbe; ++i)
+        f2be[pmesh->GetBdrElementEdgeIndex(i)] = i;
 
     for (int i=0; i<numLocalElems; ++i)
     {
@@ -778,15 +770,23 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
         for (int j=0; j<nfe; ++j)
         {
             const int f = faces[j];
-            const int bel = pf2be[f];
             pmesh->GetFaceVertices(f, fvert);
             MFEM_VERIFY(fvert.Size() == nvf, "");
             for (int k=0; k<nvf; ++k)
                 patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + k] = fvert[k];
 
             // If it is not a boundary element, use attribute -1.
-            const int attr = (bel >= 0) ? pmesh->GetBdrAttribute(bel) : -1;
-            patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = attr;
+            auto search = f2be.find(f);
+            if (search == f2be.end())
+            {
+                patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = -1;
+            }
+            else
+            {
+                const int be = search->second;
+                const int attr = pmesh->GetBdrAttribute(be);
+                patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = attr;
+            }
         }
     }
 
@@ -935,10 +935,11 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
                     }
 
                     MFEM_VERIFY(sfi >= 0, "");
-                    const int bel = f2be[faces[sfi]];
                     // Since the boundary attribute is set, this face must be a
                     // boundary element of smesh.
-                    MFEM_VERIFY(bel >= 0, "");
+                    auto search = sf2be.find(faces[sfi]);
+                    MFEM_VERIFY(search != sf2be.end(), "");
+                    const int bel = search->second;
                     smesh->SetBdrAttribute(bel, attr);
                 }
             }
