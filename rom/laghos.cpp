@@ -700,7 +700,7 @@ int main(int argc, char *argv[])
     romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     if (rom_online)
     {
-        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_1";
+        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_1"; // romS_0 is allowed
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
         VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
@@ -1279,7 +1279,7 @@ int main(int argc, char *argv[])
             basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0)
             {
-                std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
+                std::string romS_outPath = testing_parameter_outputPath + "/ROMsol/romS_0";
                 std::ofstream outfile_romS(romS_outPath.c_str());
                 outfile_romS.precision(16);
                 romS.Print(outfile_romS, 1);
@@ -1287,7 +1287,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            std::string romS_outPath = testing_parameter_outputPath + "/" + "romS" + "_0";
+            std::string romS_outPath = testing_parameter_outputPath + "/ROMsol/romS_0";
             std::ifstream outfile_romS(romS_outPath.c_str());
             romS.Load(outfile_romS, romS.Size());
         }
