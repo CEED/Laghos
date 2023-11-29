@@ -700,7 +700,9 @@ int main(int argc, char *argv[])
     romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     if (rom_online)
     {
-        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_1"; // romS_0 is allowed
+        // Verify the output path is clean
+        // Solution data romS_* should not exist except for the initial data romS_0
+        std::string filename = testing_parameter_outputPath + "/ROMsol/romS_1";
         std::ifstream infile_romS(filename.c_str());
         MFEM_VERIFY(!infile_romS.good(), "ROMsol files already exist.")
         VerifyOfflineParam(dim, dt, romOptions, numWindows, twfile, offlineParam_outputPath, false);
