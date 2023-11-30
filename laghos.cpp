@@ -53,7 +53,7 @@
 //    p = 10 --> (6.5)
 //       mpirun -np 8 ./laghos -p 10 -m data/segment-nhalf-1.mesh -dim 1 -tf 0.4 -fa -vis -cfl 0.5 -rs 10 
 //    p = 11 --> (6.6)
-//       mpirun -np 8 ./laghos -p 10 -m data/segment-n1p7-1.mesh -dim 1 -tf 0.005 -fa -vis -cfl 1.3 -rs 10 
+//       mpirun -np 8 ./laghos -p 11 -m data/segment-n1p7-1.mesh -dim 1 -tf 0.005 -fa -vis -cfl 0.05 -rs 10 
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //
