@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#SBATCH -N 1
+#SBATCH -N 1 -n 8
 #SBATCH -t 1:00:00
-#SBATCH -p pbatch
+#SBATCH -p pdebug
 #SBATCH -o sbatch.log
 #SBATCH --open-mode truncate
 
@@ -533,30 +533,27 @@ do
 							fileName="$(basename "$baselineTestFile")"
 
 							# Skip if not correct file type to compare
-							check_file_type() {
-								if [[ $testtype == "fom" ]]; then
-									if [[ "$fileName" != "basis"*".000000" ]] && [[ "$fileName" != "Sol"*".000000" ]] &&
-									[[ "$fileName" != "sVal"*".000000" ]]; then
-										continue 1
-									fi
-									if [[ "$fileName" == *"norms.000000" ]]; then
-										continue 1
-									fi
-								elif [[ $testtype == "romhr" ]]; then
-									if [[ "$fileName" != "ROMsol" ]]; then
-										continue 1
-									fi
-								elif [[ $testtype == "online" ]]; then
-									if [[ "$fileName" != "ROMsol" ]]; then
-										continue 1
-									fi
-								elif [[ $testtype == "restore" ]]; then
-									if [[ "$fileName" != *"_gf.000000" ]] && [[ "$fileName" != *"norms.000000" ]]; then
-										continue 1
-									fi
+							if [[ $testtype == "fom" ]]; then
+								if [[ "$fileName" != "basis"*".000000" ]] && [[ "$fileName" != "Sol"*".000000" ]] &&
+								[[ "$fileName" != "sVal"*".000000" ]]; then
+									continue 1
 								fi
-							}
-							check_file_type
+								if [[ "$fileName" == *"norms.000000" ]]; then
+									continue 1
+								fi
+							elif [[ $testtype == "romhr" ]]; then
+								if [[ "$fileName" != "ROMsol" ]]; then
+									continue 1
+								fi
+							elif [[ $testtype == "online" ]]; then
+								if [[ "$fileName" != "ROMsol" ]]; then
+									continue 1
+								fi
+							elif [[ $testtype == "restore" ]]; then
+								if [[ "$fileName" != *"_gf.000000" ]] && [[ "$fileName" != *"norms.000000" ]]; then
+									continue 1
+								fi
+							fi
 
 							# Compare last timestep of ROMSol solutions
 							if [[ -d "$baselineTestFile" ]] && [[ "$fileName" == "ROMsol" ]]; then
