@@ -2129,28 +2129,28 @@ int main(int argc, char *argv[])
 						cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
 					}
 
-                    //if (romOptions.hyperreductionSamplingType == eqp_energy)
-                    //{
-                    //    // Recompute and print the energy information after the
-                    //    // change of basis, before any more timestepping takes
-                    //    // place.
-                    //    timeLoopTimer.Stop();
-                    //	basis[romOptions.window]->LiftROMtoFOM(romS, *S);
+                    if (romOptions.hyperreductionSamplingType == eqp_energy)
+                    {
+                        // Recompute and print the energy information after the
+                        // change of basis, before any more timestepping takes
+                        // place.
+                        timeLoopTimer.Stop();
+                        basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
-                    //	double energy_total, energy_diff;
-                    //	energy_total = oper->InternalEnergy(*e_gf) +
-                    //		oper->KineticEnergy(*v_gf);
-                    //	energy_diff	= energy_total - energy_init;
+                        double energy_total, energy_diff;
+                        energy_total = oper->InternalEnergy(*e_gf) +
+                            oper->KineticEnergy(*v_gf);
+                        energy_diff	= energy_total - energy_init;
 
-                    //	if (mpi.Root())
-                    //	{
-                    //		cout << "\tE_tot = " << scientific << setprecision(5)
-                    //			<< energy_total
-                    //			<< ",\tE_diff = " << scientific << setprecision(5)
-                    //			<< energy_diff << endl; 
-                    //	}
-                    //    timeLoopTimer.Start();
-                    //}
+                        if (mpi.Root())
+                        {
+                            cout << "\tE_tot = " << scientific << setprecision(5)
+                                << energy_total
+                                << ",\tE_diff = " << scientific << setprecision(5)
+                                << energy_diff << endl; 
+                        }
+                        timeLoopTimer.Start();
+                    }
 
                     delete romOper[romOptions.window-1];
 
