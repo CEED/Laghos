@@ -2299,7 +2299,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
 	{
 		if (window == 0)
 		{
-			// For the first window, read all rdimv basis vectors normally. 
+			// For the first window, read all rdimv basis vectors normally.
 			basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V +
 					std::to_string(window) + basisIdentifier, tH1size, rdimv);
 		}
@@ -2365,6 +2365,18 @@ void ROM_Basis::ReadSolutionBases(const int window)
 				(*basisE)(i, tmp_rdime) = unitE[i];
 			}
 			basisE->orthogonalize_last();
+
+            std::cout << "Ortho test 1" << "\n";
+            Vector test_ortho(rdime);
+            test_ortho = 0.0;
+
+            for (int j = 0; j < rdime; j++)
+            {
+                for (int i = 0; i < tL2size; i++)
+                    test_ortho[j] += (*basisE)(i, j) * (*basisE)(i, rdime - 1);
+
+                std::cout << test_ortho[j] << "\n";
+            }
 		}
 		else
 		{
@@ -2591,6 +2603,18 @@ void ROM_Basis::AddLastCol_V(Vector const& f)
 		(*basisV)(i, rdimv-1) = mfH1[i];
 
 	basisV->orthogonalize_last();
+
+    std::cout << "Ortho test 2" << "\n";
+    Vector test_ortho(rdimv);
+    test_ortho = 0.0;
+
+    for (int j = 0; j < rdimv; j++)
+    {
+        for (int i = 0; i < tH1size; i++)
+            test_ortho[j] += (*basisV)(i, j) * (*basisV)(i, rdimv - 1);
+
+        std::cout << test_ortho[j] << "\n";
+    }
 }
 
 // f is a full vector, not a true vector
@@ -2607,6 +2631,28 @@ void ROM_Basis::AddLastCol_E(Vector const& f)
 		(*basisE)(i, rdime-1) = mfL2[i];
 
 	basisE->orthogonalize_last();
+
+    std::cout << "Ortho test 3a" << "\n";
+    Vector test_ortho(rdime);
+    test_ortho = 0.0;
+
+    for (int j = 0; j < rdime - 1; j++)
+    {
+        for (int i = 0; i < tL2size; i++)
+            test_ortho[j] += (*basisE)(i, j) * (*basisE)(i, rdime - 2);
+
+        std::cout << test_ortho[j] << "\n";
+    }
+
+    std::cout << "Ortho test 3b" << "\n";
+    test_ortho = 0.0;
+    for (int j = 0; j < rdime; j++)
+    {
+        for (int i = 0; i < tL2size; i++)
+            test_ortho[j] += (*basisE)(i, j) * (*basisE)(i, rdime - 1);
+
+        std::cout << test_ortho[j] << "\n";
+    }
 }
 
 // f is a full vector, not a true vector
