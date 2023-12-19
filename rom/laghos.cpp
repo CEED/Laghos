@@ -2008,6 +2008,8 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
                     }
 
+                    if (fom_data) oper->ResetQuadratureData();
+
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
