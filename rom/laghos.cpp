@@ -2062,6 +2062,8 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
                     }
 
+                    if (fom_data) oper->ResetQuadratureData();
+
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
@@ -2095,6 +2097,7 @@ int main(int argc, char *argv[])
                         onlinePreprocessTimer.Stop();
                         timeLoopTimer.Start();
                     }
+
                     if (romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->ProjectFromPreviousWindow(romOptions, romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
