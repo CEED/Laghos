@@ -589,6 +589,8 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   const double pen_param = 20.0,
+                perimeter = 12.0; // TODO fix this.
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace,
                                                 ess_tdofs, BC_strong,
@@ -596,7 +598,7 @@ int main(int argc, char *argv[])
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, 20.0, 12.0);
+                                                order_q, pen_param, perimeter);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
