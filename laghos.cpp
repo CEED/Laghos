@@ -229,6 +229,12 @@ int main(int argc, char *argv[])
       blast_position[0] = 0.7;
       blast_position[1] = 0.5;
    }
+   if (strcmp(mesh_file, "data/cube_gmsh_19.msh") == 0)
+   {
+      blast_position[0] = -0.5;
+      blast_position[1] = -0.5;
+      blast_position[2] = -0.5;
+   }
 
    // Configure the device from the command line options
    Device backend;
@@ -842,7 +848,7 @@ int main(int argc, char *argv[])
       case 7: steps *= 2;
    }
 
-   hydro.PrintTimingData(Mpi::Root(), steps, fom);
+//   hydro.PrintTimingData(Mpi::Root(), steps, fom);
 
    if (mem_usage)
    {

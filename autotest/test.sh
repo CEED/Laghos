@@ -17,7 +17,7 @@ cd ..
 file="autotest/run_"$((ntask))".out"
 rm -f $file
 
-command="mpirun -np "$((ntask))" laghos -p 1 -s 7 -vs 50 -fa"
+command="time mpirun -np "$((ntask))" laghos -p 1 -s 7 -vs 50 -fa"
 comment="mpirun -np X laghos"
 
 
@@ -63,6 +63,14 @@ echo -e >> $file
 
 # 3D cube.
 params="-m data/cube01_hex.mesh -tf 0.25 -rs 1"
+run_line=$command" "$params
+com_line=$comment" "$params
+echo -e $com_line >> $file
+$run_line >> $file
+echo -e >> $file
+
+# 3D cube with hole.
+params="-m data/cube_gmsh_19.msh -tf 0.0002 -rs 0"
 run_line=$command" "$params
 com_line=$comment" "$params
 echo -e $com_line >> $file

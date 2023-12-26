@@ -80,21 +80,6 @@ Repeating step 577
 Repeating step 578
 step   599,	t = 1.5000,	dt = 0.000836,	|e| = 5.1280144682e+00
 
-CG (H1) total time: 0.8104044760
-CG (H1) rate (megadofs x cg_iterations / second): 34.2393024986
-
-CG (L2) total time: 0.0034025740
-CG (L2) rate (megadofs x cg_iterations / second): 5.8402844435
-
-Forces total time: 0.0450997310
-Forces rate (megadofs x timesteps / second): 6.2238065234
-
-UpdateQuadData total time: 0.1341821530
-UpdateQuadData rate (megaquads x timesteps / second): 2.4134357123
-
-Major kernels total time (seconds): 0.9665720920
-Major kernels total rate (megadofs x time steps / second): 29.3327484154
-
 Energy  diff: 2.56e-09
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.4 -rs 2
@@ -180,21 +165,6 @@ step   550,	t = 0.3861,	dt = 0.000148,	|e| = 1.5740216854e+01
 step   600,	t = 0.3937,	dt = 0.000157,	|e| = 1.5653880319e+01
 Repeating step 613
 step   641,	t = 0.4000,	dt = 0.000081,	|e| = 1.5588910706e+01
-
-CG (H1) total time: 1.3691227860
-CG (H1) rate (megadofs x cg_iterations / second): 87.7755371752
-
-CG (L2) total time: 0.0119968820
-CG (L2) rate (megadofs x cg_iterations / second): 7.0845074579
-
-Forces total time: 0.1376031190
-Forces rate (megadofs x timesteps / second): 8.0295854340
-
-UpdateQuadData total time: 0.4728397010
-UpdateQuadData rate (megaquads x timesteps / second): 2.9279436500
-
-Major kernels total time (seconds): 1.9758756710
-Major kernels total rate (megadofs x time steps / second): 62.0812502529
 
 Energy  diff: 2.39e-11
 
@@ -287,21 +257,6 @@ step   850,	t = 0.7794,	dt = 0.000441,	|e| = 1.0614503933e+01
 Repeating step 882
 step   900,	t = 0.8000,	dt = 0.000206,	|e| = 1.0612158294e+01
 
-CG (H1) total time: 1.7539920820
-CG (H1) rate (megadofs x cg_iterations / second): 34.7234771611
-
-CG (L2) total time: 0.0051643120
-CG (L2) rate (megadofs x cg_iterations / second): 5.7192516641
-
-Forces total time: 0.2709946540
-Forces rate (megadofs x timesteps / second): 3.2697323985
-
-UpdateQuadData total time: 0.4927314770
-UpdateQuadData rate (megaquads x timesteps / second): 2.1860182478
-
-Major kernels total time (seconds): 2.4693193520
-Major kernels total rate (megadofs x time steps / second): 25.4596085148
-
 Energy  diff: 1.23e-11
 
 mpirun -np X laghos -m data/disc-nurbs.mesh -tf 5.0 -rs 2
@@ -365,21 +320,6 @@ Repeating step 106
 step   150,	t = 4.9204,	dt = 0.023550,	|e| = 6.3632879715e-01
 step   154,	t = 5.0000,	dt = 0.008689,	|e| = 6.3356639142e-01
 
-CG (H1) total time: 0.3888873590
-CG (H1) rate (megadofs x cg_iterations / second): 92.7408391282
-
-CG (L2) total time: 0.0035654420
-CG (L2) rate (megadofs x cg_iterations / second): 7.3146611276
-
-Forces total time: 0.0358676950
-Forces rate (megadofs x timesteps / second): 9.0344249888
-
-UpdateQuadData total time: 0.1404389280
-UpdateQuadData rate (megaquads x timesteps / second): 3.0623987674
-
-Major kernels total time (seconds): 0.5642913130
-Major kernels total rate (megadofs x time steps / second): 65.2497445056
-
 Energy  diff: 5.49e-12
 
 mpirun -np X laghos -m data/convex.mesh -tf 0.1 -rs 2
@@ -433,21 +373,6 @@ Repeating step 42
 step    50,	t = 0.0585,	dt = 0.001024,	|e| = 5.1668713215e+01
 Repeating step 65
 step    96,	t = 0.1000,	dt = 0.000179,	|e| = 4.3862262944e+01
-
-CG (H1) total time: 0.1867480800
-CG (H1) rate (megadofs x cg_iterations / second): 90.7483064886
-
-CG (L2) total time: 0.0017315280
-CG (L2) rate (megadofs x cg_iterations / second): 7.2444684695
-
-Forces total time: 0.0194407860
-Forces rate (megadofs x timesteps / second): 8.3881382162
-
-UpdateQuadData total time: 0.0661514630
-UpdateQuadData rate (megaquads x timesteps / second): 3.0804458550
-
-Major kernels total time (seconds): 0.2708007110
-Major kernels total rate (megadofs x time steps / second): 63.9360212020
 
 Energy  diff: 2.61e-12
 
@@ -507,20 +432,56 @@ Repeating step 72
 Repeating step 77
 step    91,	t = 0.2500,	dt = 0.000526,	|e| = 4.3152920230e+01
 
-CG (H1) total time: 0.2802593920
-CG (H1) rate (megadofs x cg_iterations / second): 34.1870683856
-
-CG (L2) total time: 0.0020680030
-CG (L2) rate (megadofs x cg_iterations / second): 6.0038597623
-
-Forces total time: 0.4019293110
-Forces rate (megadofs x timesteps / second): 1.3027315642
-
-UpdateQuadData total time: 0.6963818660
-UpdateQuadData rate (megaquads x timesteps / second): 1.1822479019
-
-Major kernels total time (seconds): 1.3444451610
-Major kernels total rate (megadofs x time steps / second): 8.1283709570
-
 Energy  diff: 1.44e-12
+
+mpirun -np X laghos -m data/cube_gmsh_19.msh -tf 0.0002 -rs 0
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/cube_gmsh_19.msh
+   --refine-serial 0
+   --refine-parallel 0
+   --cartesian-partitioning ''
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.0002
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --full-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --partition 0
+   --device cpu
+   --no-checks
+   --no-mem
+   --no-fom
+   --no-gpu-aware-mpi
+   --dev 0
+Device configuration: cpu
+Memory configuration: host-std
+Number of zones in the serial mesh: 4374
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 1064 1121
+Number of kinematic (position, velocity) dofs: 110922
+Number of specific internal energy dofs: 34992
+step     2,	t = 0.0002,	dt = 0.000079,	|e| = 2.3426708103e+03
+
+Energy  diff: 5.43e-14
 
