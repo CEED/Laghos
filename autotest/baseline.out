@@ -1,0 +1,526 @@
+mpirun -np X laghos -m data/trapezoid_quad.mesh -tf 1.5 -rs 1
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/trapezoid_quad.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --cartesian-partitioning ''
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 1.5
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --full-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --partition 0
+   --device cpu
+   --no-checks
+   --no-mem
+   --no-fom
+   --no-gpu-aware-mpi
+   --dev 0
+Device configuration: cpu
+Memory configuration: host-std
+Number of zones in the serial mesh: 16
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 3 5
+Number of kinematic (position, velocity) dofs: 162
+Number of specific internal energy dofs: 64
+Repeating step 11
+Repeating step 26
+Repeating step 41
+step    50,	t = 0.3704,	dt = 0.005729,	|e| = 7.9356590849e+00
+Repeating step 59
+Repeating step 61
+Repeating step 63
+Repeating step 64
+Repeating step 65
+Repeating step 66
+Repeating step 68
+Repeating step 70
+Repeating step 72
+Repeating step 79
+Repeating step 89
+step   100,	t = 0.5082,	dt = 0.001542,	|e| = 7.1849903144e+00
+step   150,	t = 0.5869,	dt = 0.001636,	|e| = 6.8605869051e+00
+step   200,	t = 0.6687,	dt = 0.001636,	|e| = 6.5796490985e+00
+step   250,	t = 0.7510,	dt = 0.001669,	|e| = 6.3419949788e+00
+step   300,	t = 0.8394,	dt = 0.001880,	|e| = 6.1214363408e+00
+step   350,	t = 0.9419,	dt = 0.002202,	|e| = 5.9002366993e+00
+step   400,	t = 1.0520,	dt = 0.002247,	|e| = 5.6955733646e+00
+step   450,	t = 1.1651,	dt = 0.002384,	|e| = 5.5167267410e+00
+step   500,	t = 1.3071,	dt = 0.003338,	|e| = 5.3299133588e+00
+Repeating step 505
+Repeating step 519
+Repeating step 540
+step   550,	t = 1.4333,	dt = 0.002050,	|e| = 5.1918518846e+00
+Repeating step 553
+Repeating step 576
+Repeating step 577
+Repeating step 577
+Repeating step 578
+step   599,	t = 1.5000,	dt = 0.000836,	|e| = 5.1280144682e+00
+
+CG (H1) total time: 0.8104044760
+CG (H1) rate (megadofs x cg_iterations / second): 34.2393024986
+
+CG (L2) total time: 0.0034025740
+CG (L2) rate (megadofs x cg_iterations / second): 5.8402844435
+
+Forces total time: 0.0450997310
+Forces rate (megadofs x timesteps / second): 6.2238065234
+
+UpdateQuadData total time: 0.1341821530
+UpdateQuadData rate (megaquads x timesteps / second): 2.4134357123
+
+Major kernels total time (seconds): 0.9665720920
+Major kernels total rate (megadofs x time steps / second): 29.3327484154
+
+Energy  diff: 2.56e-09
+
+mpirun -np X laghos -m data/refined.mesh -tf 0.4 -rs 2
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/refined.mesh
+   --refine-serial 2
+   --refine-parallel 0
+   --cartesian-partitioning ''
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.4
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --full-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --partition 0
+   --device cpu
+   --no-checks
+   --no-mem
+   --no-fom
+   --no-gpu-aware-mpi
+   --dev 0
+Device configuration: cpu
+Memory configuration: host-std
+Number of zones in the serial mesh: 64
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 16 16
+Number of kinematic (position, velocity) dofs: 576
+Number of specific internal energy dofs: 256
+step    50,	t = 0.0870,	dt = 0.001779,	|e| = 2.4251235295e+01
+Repeating step 64
+Repeating step 83
+Repeating step 91
+step   100,	t = 0.1601,	dt = 0.001093,	|e| = 2.0424240125e+01
+Repeating step 128
+Repeating step 136
+Repeating step 141
+step   150,	t = 0.2117,	dt = 0.000818,	|e| = 1.8715722763e+01
+Repeating step 166
+Repeating step 175
+step   200,	t = 0.2493,	dt = 0.000827,	|e| = 1.7751066144e+01
+Repeating step 219
+Repeating step 223
+step   250,	t = 0.2845,	dt = 0.000673,	|e| = 1.7066329939e+01
+Repeating step 276
+Repeating step 287
+Repeating step 298
+step   300,	t = 0.3193,	dt = 0.000494,	|e| = 1.6573105801e+01
+Repeating step 318
+Repeating step 322
+step   350,	t = 0.3398,	dt = 0.000357,	|e| = 1.6326887606e+01
+Repeating step 367
+Repeating step 397
+step   400,	t = 0.3556,	dt = 0.000258,	|e| = 1.6131565499e+01
+step   450,	t = 0.3685,	dt = 0.000258,	|e| = 1.5961746334e+01
+Repeating step 453
+Repeating step 487
+Repeating step 495
+Repeating step 498
+step   500,	t = 0.3791,	dt = 0.000161,	|e| = 1.5825105291e+01
+Repeating step 501
+step   550,	t = 0.3861,	dt = 0.000148,	|e| = 1.5740216854e+01
+step   600,	t = 0.3937,	dt = 0.000157,	|e| = 1.5653880319e+01
+Repeating step 613
+step   641,	t = 0.4000,	dt = 0.000081,	|e| = 1.5588910706e+01
+
+CG (H1) total time: 1.3691227860
+CG (H1) rate (megadofs x cg_iterations / second): 87.7755371752
+
+CG (L2) total time: 0.0119968820
+CG (L2) rate (megadofs x cg_iterations / second): 7.0845074579
+
+Forces total time: 0.1376031190
+Forces rate (megadofs x timesteps / second): 8.0295854340
+
+UpdateQuadData total time: 0.4728397010
+UpdateQuadData rate (megaquads x timesteps / second): 2.9279436500
+
+Major kernels total time (seconds): 1.9758756710
+Major kernels total rate (megadofs x time steps / second): 62.0812502529
+
+Energy  diff: 2.39e-11
+
+mpirun -np X laghos -m data/refined.mesh -tf 0.8 -rs 1 -ok 3 -ot 2
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/refined.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --cartesian-partitioning ''
+   --problem 1
+   --order-kinematic 3
+   --order-thermo 2
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.8
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --full-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --partition 0
+   --device cpu
+   --no-checks
+   --no-mem
+   --no-fom
+   --no-gpu-aware-mpi
+   --dev 0
+Device configuration: cpu
+Memory configuration: host-std
+Number of zones in the serial mesh: 16
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 4 4
+Number of kinematic (position, velocity) dofs: 336
+Number of specific internal energy dofs: 144
+step    50,	t = 0.1902,	dt = 0.004435,	|e| = 1.3124098067e+01
+Repeating step 51
+Repeating step 58
+Repeating step 74
+Repeating step 86
+Repeating step 88
+Repeating step 90
+Repeating step 93
+Repeating step 98
+step   100,	t = 0.3422,	dt = 0.001444,	|e| = 1.1153585219e+01
+Repeating step 110
+Repeating step 117
+Repeating step 123
+Repeating step 135
+Repeating step 139
+Repeating step 142
+Repeating step 147
+step   150,	t = 0.3902,	dt = 0.000463,	|e| = 1.0787292121e+01
+step   200,	t = 0.4133,	dt = 0.000463,	|e| = 1.0598946447e+01
+step   250,	t = 0.4365,	dt = 0.000463,	|e| = 1.0439590872e+01
+step   300,	t = 0.4611,	dt = 0.000532,	|e| = 1.0324140035e+01
+step   350,	t = 0.4893,	dt = 0.000587,	|e| = 1.0252490890e+01
+Repeating step 382
+Repeating step 382
+step   400,	t = 0.5186,	dt = 0.000656,	|e| = 1.0237017438e+01
+Repeating step 405
+step   450,	t = 0.5498,	dt = 0.000693,	|e| = 1.0266298395e+01
+step   500,	t = 0.5845,	dt = 0.000693,	|e| = 1.0329364257e+01
+step   550,	t = 0.6191,	dt = 0.000693,	|e| = 1.0404029116e+01
+Repeating step 576
+step   600,	t = 0.6517,	dt = 0.000613,	|e| = 1.0472982985e+01
+Repeating step 635
+Repeating step 636
+step   650,	t = 0.6799,	dt = 0.000479,	|e| = 1.0524538066e+01
+step   700,	t = 0.7057,	dt = 0.000519,	|e| = 1.0562315097e+01
+step   750,	t = 0.7317,	dt = 0.000519,	|e| = 1.0590770048e+01
+Repeating step 797
+step   800,	t = 0.7573,	dt = 0.000441,	|e| = 1.0608296551e+01
+step   850,	t = 0.7794,	dt = 0.000441,	|e| = 1.0614503933e+01
+Repeating step 882
+step   900,	t = 0.8000,	dt = 0.000206,	|e| = 1.0612158294e+01
+
+CG (H1) total time: 1.7539920820
+CG (H1) rate (megadofs x cg_iterations / second): 34.7234771611
+
+CG (L2) total time: 0.0051643120
+CG (L2) rate (megadofs x cg_iterations / second): 5.7192516641
+
+Forces total time: 0.2709946540
+Forces rate (megadofs x timesteps / second): 3.2697323985
+
+UpdateQuadData total time: 0.4927314770
+UpdateQuadData rate (megaquads x timesteps / second): 2.1860182478
+
+Major kernels total time (seconds): 2.4693193520
+Major kernels total rate (megadofs x time steps / second): 25.4596085148
+
+Energy  diff: 1.23e-11
+
+mpirun -np X laghos -m data/disc-nurbs.mesh -tf 5.0 -rs 2
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/disc-nurbs.mesh
+   --refine-serial 2
+   --refine-parallel 0
+   --cartesian-partitioning ''
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 5
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --full-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --partition 0
+   --device cpu
+   --no-checks
+   --no-mem
+   --no-fom
+   --no-gpu-aware-mpi
+   --dev 0
+Device configuration: cpu
+Memory configuration: host-std
+Number of zones in the serial mesh: 80
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 20 20
+Number of kinematic (position, velocity) dofs: 674
+Number of specific internal energy dofs: 320
+Repeating step 3
+Repeating step 5
+Repeating step 10
+Repeating step 48
+Repeating step 49
+step    50,	t = 2.2836,	dt = 0.034191,	|e| = 8.0841244798e-01
+Repeating step 51
+step   100,	t = 3.7890,	dt = 0.033384,	|e| = 6.8577525144e-01
+Repeating step 104
+Repeating step 105
+Repeating step 106
+step   150,	t = 4.9204,	dt = 0.023550,	|e| = 6.3632879715e-01
+step   154,	t = 5.0000,	dt = 0.008689,	|e| = 6.3356639142e-01
+
+CG (H1) total time: 0.3888873590
+CG (H1) rate (megadofs x cg_iterations / second): 92.7408391282
+
+CG (L2) total time: 0.0035654420
+CG (L2) rate (megadofs x cg_iterations / second): 7.3146611276
+
+Forces total time: 0.0358676950
+Forces rate (megadofs x timesteps / second): 9.0344249888
+
+UpdateQuadData total time: 0.1404389280
+UpdateQuadData rate (megaquads x timesteps / second): 3.0623987674
+
+Major kernels total time (seconds): 0.5642913130
+Major kernels total rate (megadofs x time steps / second): 65.2497445056
+
+Energy  diff: 5.49e-12
+
+mpirun -np X laghos -m data/convex.mesh -tf 0.1 -rs 2
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/convex.mesh
+   --refine-serial 2
+   --refine-parallel 0
+   --cartesian-partitioning ''
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.1
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --full-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --partition 0
+   --device cpu
+   --no-checks
+   --no-mem
+   --no-fom
+   --no-gpu-aware-mpi
+   --dev 0
+Device configuration: cpu
+Memory configuration: host-std
+Number of zones in the serial mesh: 64
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 16 16
+Number of kinematic (position, velocity) dofs: 576
+Number of specific internal energy dofs: 256
+Repeating step 42
+step    50,	t = 0.0585,	dt = 0.001024,	|e| = 5.1668713215e+01
+Repeating step 65
+step    96,	t = 0.1000,	dt = 0.000179,	|e| = 4.3862262944e+01
+
+CG (H1) total time: 0.1867480800
+CG (H1) rate (megadofs x cg_iterations / second): 90.7483064886
+
+CG (L2) total time: 0.0017315280
+CG (L2) rate (megadofs x cg_iterations / second): 7.2444684695
+
+Forces total time: 0.0194407860
+Forces rate (megadofs x timesteps / second): 8.3881382162
+
+UpdateQuadData total time: 0.0661514630
+UpdateQuadData rate (megaquads x timesteps / second): 3.0804458550
+
+Major kernels total time (seconds): 0.2708007110
+Major kernels total rate (megadofs x time steps / second): 63.9360212020
+
+Energy  diff: 2.61e-12
+
+mpirun -np X laghos -m data/cube01_hex.mesh -tf 0.25 -rs 1
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --dimension 3
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --cartesian-partitioning ''
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --order-intrule -1
+   --ode-solver 7
+   --t-final 0.25
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --full-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 50
+   --no-visit
+   --no-print
+   --outputfilename results/Laghos
+   --partition 0
+   --device cpu
+   --no-checks
+   --no-mem
+   --no-fom
+   --no-gpu-aware-mpi
+   --dev 0
+Device configuration: cpu
+Memory configuration: host-std
+Number of zones in the serial mesh: 64
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 16 16
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+Repeating step 33
+Repeating step 34
+Repeating step 35
+Repeating step 50
+step    50,	t = 0.1720,	dt = 0.002192,	|e| = 4.9859113418e+01
+Repeating step 72
+Repeating step 77
+step    91,	t = 0.2500,	dt = 0.000526,	|e| = 4.3152920230e+01
+
+CG (H1) total time: 0.2802593920
+CG (H1) rate (megadofs x cg_iterations / second): 34.1870683856
+
+CG (L2) total time: 0.0020680030
+CG (L2) rate (megadofs x cg_iterations / second): 6.0038597623
+
+Forces total time: 0.4019293110
+Forces rate (megadofs x timesteps / second): 1.3027315642
+
+UpdateQuadData total time: 0.6963818660
+UpdateQuadData rate (megaquads x timesteps / second): 1.1822479019
+
+Major kernels total time (seconds): 1.3444451610
+Major kernels total rate (megadofs x time steps / second): 8.1283709570
+
+Energy  diff: 1.44e-12
+

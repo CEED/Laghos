@@ -58,6 +58,25 @@
 // -m data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
+//
+// Wall BC tests:
+// * penPar is the penalty Parameter
+// * per is the perimeter of the bounding box of the domain
+// 2D square:
+// mpirun -np 4 laghos -m data/square01_quad.mesh -p 1 -rs 3 -tf 0.8 -s 7 -fa -vs 20 -vis
+// 2D trapezoid:
+// mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -fa -vs 20 -vis
+// 2D circular hole:
+// mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -fa -vs 20 -vis
+// 2D disc (inside):
+// mpirun -np 4 laghos -m data/disc-nurbs.mesh -p 1 -rs 3 -tf 10 -s 7 -fa -vs 20 -vis
+// 2D disc (outside):
+// mpirun -np 4 laghos -m data/convex.mesh -p 1 -rs 3 -tf 0.1 -s 7 -fa -vs 20 -vis
+// 3D cube:
+// mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -fa -vs 20 -vis
+// 3D spherical hole:
+// mpirun -np 4 laghos -m data/cube_gmsh_19.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
+
 
 #include <fstream>
 #include <sys/time.h>
@@ -200,6 +219,16 @@ int main(int argc, char *argv[])
       return 1;
    }
    if (Mpi::Root()) { args.PrintOptions(cout); }
+
+   if (strcmp(mesh_file, "data/disc-nurbs.mesh") == 0)
+   {
+      blast_position[0] = - sqrt(8.0);
+   }
+   if (strcmp(mesh_file, "data/convex.mesh") == 0)
+   {
+      blast_position[0] = 0.7;
+      blast_position[1] = 0.5;
+   }
 
    // Configure the device from the command line options
    Device backend;
@@ -417,6 +446,8 @@ int main(int argc, char *argv[])
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs, ess_vdofs;
+   const bool BC_strong = false;
+   if (BC_strong)
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
       for (int d = 0; d < pmesh->Dimension(); d++)
@@ -553,12 +584,13 @@ int main(int argc, char *argv[])
    if (impose_visc) { visc = true; }
 
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
-                                                H1FESpace, L2FESpace, ess_tdofs,
+                                                H1FESpace, L2FESpace,
+                                                ess_tdofs, BC_strong,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q);
+                                                order_q, 20.0, 12.0);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

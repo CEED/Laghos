@@ -40,12 +40,18 @@ struct QuadratureData
    // It must be recomputed in every time step.
    DenseTensor stressJinvT;
 
+   // Quadrature data for the boundary force;
+   DenseTensor be_force_data;
+   // Quadrature data for the boundary mass matrix;
+   DenseTensor be_mass_data;
+
    // Quadrature data used for full/partial assembly of the mass matrices.
    // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
    // quadrature point. Note the at any other time, we can compute
    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
    // conservation.
    Vector rho0DetJ0w;
+   Vector rho0DetJ0_be;
 
    // Initial length scale. This represents a notion of local mesh size.
    // We assume that all initial zones have similar size.
@@ -55,12 +61,51 @@ struct QuadratureData
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
 
-   QuadratureData(int dim, int NE, int quads_per_el)
+   QuadratureData(int dim, int NE, int quads_per_el, int NBE, int quads_per_be)
       : Jac0inv(dim, dim, NE * quads_per_el),
         stressJinvT(NE * quads_per_el, dim, dim),
-        rho0DetJ0w(NE * quads_per_el) { }
+        be_force_data(NBE, quads_per_be, dim),
+        be_mass_data(dim, dim, NBE * quads_per_be),
+        rho0DetJ0w(NE * quads_per_el),
+        rho0DetJ0_be(NBE * quads_per_be) { }
 };
 
+class BdrForceCoefficient : public VectorCoefficient
+{
+private:
+   const QuadratureData &qdata;
+
+public:
+   BdrForceCoefficient(const QuadratureData &qd)
+      : VectorCoefficient(qd.Jac0inv.SizeI()), qdata(qd) { }
+
+   void Eval(Vector &V, ElementTransformation &Tr_f,
+             const IntegrationPoint &ip_f) override
+   {
+     for (int d = 0; d < vdim; d++)
+     {
+        V(d) = qdata.be_force_data(Tr_f.ElementNo, ip_f.index, d);
+     }
+   }
+};
+
+class BdrMassCoefficient : public MatrixCoefficient
+{
+private:
+   const QuadratureData &qdata;
+   const int nqp_per_face;
+
+public:
+   BdrMassCoefficient(const QuadratureData &qd)
+      : MatrixCoefficient(qd.Jac0inv.SizeI()),
+        qdata(qd), nqp_per_face(qdata.be_force_data.SizeJ()) { }
+
+   void Eval(DenseMatrix &K, ElementTransformation &Tr_f,
+             const IntegrationPoint &ip) override
+   {
+      K.Set(1.0, qdata.be_mass_data(Tr_f.ElementNo * nqp_per_face + ip.index));
+   }
+};
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.

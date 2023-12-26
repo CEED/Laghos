@@ -92,6 +92,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
                                                  ParFiniteElementSpace &l2,
                                                  const Array<int> &ess_tdofs,
+                                                 bool bcs,
                                                  Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
                                                  ParGridFunction &gamma_gf,
@@ -103,7 +104,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
-                                                 const int oq) :
+                                                 const int oq,
+                                                 double bc_penalty,
+                                                 double perimeter) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -116,8 +119,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets(4),
    x_gf(&H1),
    ess_tdofs(ess_tdofs),
+   BC_strong(bcs),
    dim(pmesh->Dimension()),
-   NE(pmesh->GetNE()),
+   NE(pmesh->GetNE()), NBE(pmesh->GetNBE()),
    l2dofs_cnt(L2.GetFE(0)->GetDof()),
    h1dofs_cnt(H1.GetFE(0)->GetDof()),
    source_type(source), cfl(cfl),
@@ -131,11 +135,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   b_ir(IntRules.Get(pmesh->GetBdrElementBaseGeometry(0),
+                     3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
-   qdata(dim, NE, ir.GetNPoints()),
+   qdata(dim, NE, ir.GetNPoints(), NBE, b_ir.GetNPoints()),
+   bdr_force_coeff(qdata), bdr_mass_coeff(qdata),
    qdata_is_current(false),
    forcemat_is_assembled(false),
-   Force(&L2, &H1),
+   Force(&L2, &H1), Force_be(&L2, &H1),
+   wall_bc_penalty(bc_penalty), C_I(0.0),
+   rho0_max(rho0_gf.Max()), perimeter(perimeter),
    ForcePA(nullptr), VMassPA(nullptr), EMassPA(nullptr),
    VMassPA_Jprec(nullptr),
    CG_VMass(H1.GetParMesh()->GetComm()),
@@ -156,6 +165,30 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[3] = block_offsets[2] + L2Vsize;
    one.UseDevice(true);
    one = 1.0;
+
+   const int order_v = H1.GetElementOrder(0);
+   switch (pmesh->GetElementBaseGeometry(0))
+   {
+      case Geometry::TRIANGLE:
+      case Geometry::TETRAHEDRON:
+      {
+         C_I = (order_v+1)*(order_v+dim)/dim;
+         break;
+      }
+      case Geometry::SQUARE:
+      case Geometry::CUBE:
+      {
+         C_I = order_v*order_v;
+         break;
+      }
+      default: MFEM_ABORT("Unknown zone type!");
+   }
+
+   rho0_max = rho0_gf.Max();
+   MPI_Allreduce(MPI_IN_PLACE, &rho0_max, 1,
+                 MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+
+   UpdateBdrQuadratureData();
 
    if (p_assembly)
    {
@@ -203,6 +236,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       // Standard assembly for the velocity mass matrix.
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
       Mv.AddDomainIntegrator(vmi);
+
+      if (BC_strong == false)
+      {
+         auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
+         nvmi->SetIntRule(&b_ir);
+         Mv.AddBdrFaceIntegrator(nvmi);
+      }
+
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
    }
@@ -234,6 +275,21 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          }
       }
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
+
+      for (int be = 0; be < NBE; be++)
+      {
+         int b_nqp = b_ir.GetNPoints();
+         auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
+         if (b_face_tr == nullptr) { continue; }
+         for (int q = 0; q < b_nqp; q++)
+         {
+            const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+            b_face_tr->SetAllIntPoints(&ip_f);
+            ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+            qdata.rho0DetJ0_be(be * b_nqp + q) =
+                  tr_el.Weight() * rho0_gf.GetValue(tr_el);
+         }
+      }
    }
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
@@ -246,7 +302,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       case Geometry::TETRAHEDRON: qdata.h0 = pow(6.0 * Volume / Ne, 1./3.); break;
       default: MFEM_ABORT("Unknown zone type!");
    }
-   qdata.h0 /= (double) H1.GetOrder(0);
+   qdata.h0 /= (double) H1.GetOrder(0); 
 
    if (p_assembly)
    {
@@ -277,6 +333,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       // Make a dummy assembly to figure out the sparsity.
       Force.Assemble(0);
       Force.Finalize(0);
+
+      auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
+      vpb->SetIntRule(&b_ir);
+      Force_be.AddBdrFaceIntegrator(vpb);
+      // Make a dummy assembly to figure out the sparsity.
+      Force_be.Assemble(0);
+      Force_be.Finalize(0);
    }
 }
 
@@ -318,6 +381,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 {
    UpdateQuadratureData(S);
    AssembleForceMatrix();
+
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
    ParGridFunction dv;
@@ -380,6 +444,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    {
       timer.sw_force.Start();
       Force.Mult(one, rhs);
+      if (BC_strong == false) { Force_be.AddMult(one, rhs); }
       timer.sw_force.Stop();
       rhs.Neg();
 
@@ -401,6 +466,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       cg.SetRelTol(cg_rel_tol);
       cg.SetAbsTol(0.0);
       cg.SetMaxIter(cg_max_iter);
+      IterativeSolver::PrintLevel print_level;
+      print_level.Summary();
       cg.SetPrintLevel(-1);
       timer.sw_cgH1.Start();
       cg.Mult(B, X);
@@ -414,7 +481,6 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
                                           Vector &dS_dt) const
 {
    UpdateQuadratureData(S);
-   AssembleForceMatrix();
 
    // The monolithic BlockVector stores the unknown fields as follows:
    // (Position, Velocity, Specific Internal Energy).
@@ -455,7 +521,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    {
       timer.sw_force.Start();
       Force.MultTranspose(v, e_rhs);
+      if (BC_strong == false) { Force_be.AddMultTranspose(v, e_rhs); }
       timer.sw_force.Stop();
+
       if (e_source) { e_rhs += *e_source; }
       Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
       for (int e = 0; e < NE; e++)
@@ -624,6 +692,12 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &gf) const
 double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
 {
    double glob_ke = 0.0, kinetic_energy = 0.0;
+
+   // This should be turned into a kernel so that it could be displayed in pa
+   double loc_ke = 0.5 * Mv_spmat_copy.InnerProduct(v, v);
+   MPI_Allreduce(&loc_ke, &glob_ke, 1, MPI_DOUBLE, MPI_SUM,
+                 H1.GetParMesh()->GetComm());
+   return glob_ke;
 
    if (H1.GetNE() > 0) // UsesTensorBasis does not handle empty local mesh
    {
@@ -916,6 +990,96 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    delete [] Jpr_b;
    timer.sw_qdata.Stop();
    timer.quad_tstep += NE;
+
+   // Boundary integrals data.
+   int nqp_be = b_ir.GetNPoints();
+   for (int be = 0; be < NBE; be++)
+   {
+      auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
+      if (b_face_tr == nullptr) { continue; }
+
+      for (int q = 0; q < nqp_be; q++)
+      {
+         const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+         b_face_tr->SetAllIntPoints(&ip_f);
+         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+         const int z_id = tr_el.ElementNo;
+
+         double en  = fmax(0.0, e.GetValue(tr_el));
+         double rho = qdata.rho0DetJ0_be(be * nqp_be + q) / tr_el.Weight();
+         double p   = (gamma_gf(z_id) - 1.0) * rho * en;
+         double cs  = sqrt(gamma_gf(z_id) * (gamma_gf(z_id) - 1.0) * en);
+
+         double penalty_force = wall_bc_penalty * C_I * rho * cs;
+
+         Vector nor(dim);
+         CalcOrtho(b_face_tr->Jacobian(), nor);
+         double nor_norm = sqrt(nor * nor);
+
+         Vector tn(nor);
+         tn /= nor_norm;
+
+         Vector vShape;
+         v.GetVectorValue(tr_el, tr_el.GetIntPoint(), vShape);
+         double vDotn = 0.0;
+         for (int d = 0; d < dim; d++)
+         {
+            vDotn += vShape(d) * nor(d) / nor_norm;
+         }
+
+         DenseMatrix stress(dim);
+         stress = 0.0;
+         for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
+         Vector weightedNormalStress(dim);
+         stress.Mult(tn, weightedNormalStress);
+
+         for (int d = 0; d < dim; d++)
+         {
+            qdata.be_force_data(be, q, d) =
+                  ip_f.weight * nor_norm *
+                  (vDotn * tn(d) * penalty_force - weightedNormalStress(d));
+         }
+      }
+   }
+}
+
+void LagrangianHydroOperator::UpdateBdrQuadratureData() const
+{
+   // Boundary mass term data.
+   int nqp_be = b_ir.GetNPoints();
+   for (int be = 0; be < NBE; be++)
+   {
+      auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
+      if (b_face_tr == nullptr) { continue; }
+
+      for (int q = 0; q < nqp_be; q++)
+      {
+         const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+         b_face_tr->SetAllIntPoints(&ip_f);
+         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+
+         double penalty_mass  = wall_bc_penalty * C_I * perimeter /
+                                std::pow(tr_el.Weight(), 1.0/dim);
+         penalty_mass *= rho0_max * perimeter;
+
+         Vector nor(dim);
+         CalcOrtho(b_face_tr->Jacobian(), nor);
+         double nor_norm = sqrt(nor * nor);
+
+         Vector tn(nor);
+         tn /= nor_norm;
+
+         for (int dx = 0; dx < dim; dx++)
+         {
+            for (int dy = 0; dy < dim; dy++)
+            {
+               qdata.be_mass_data(dx, dy, be * nqp_be + q) =
+                     ip_f.weight * nor_norm *
+                     tn(dx) * tn(dy) * penalty_mass;
+            }
+         }
+      }
+   }
 }
 
 /// Trace of a square matrix
@@ -1338,10 +1502,15 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 void LagrangianHydroOperator::AssembleForceMatrix() const
 {
    if (forcemat_is_assembled || p_assembly) { return; }
+
    Force = 0.0;
+   Force_be = 0.0;
+
    timer.sw_force.Start();
    Force.Assemble();
+   if (BC_strong == false) { Force_be.Assemble(); }
    timer.sw_force.Stop();
+
    forcemat_is_assembled = true;
 }
 

@@ -111,7 +111,9 @@ protected:
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
-   const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
+   bool BC_strong;
+
+   const int dim, NE, NBE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
    const bool use_viscosity, use_vorticity, p_assembly;
    const double cg_rel_tol;
@@ -123,17 +125,27 @@ protected:
    mutable ParBilinearForm Mv;
    SparseMatrix Mv_spmat_copy;
    DenseTensor Me, Me_inv;
+
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
+   const IntegrationRule &b_ir;
+
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
+   BdrForceCoefficient bdr_force_coeff;
+   BdrMassCoefficient  bdr_mass_coeff;
    mutable bool qdata_is_current, forcemat_is_assembled;
+
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force;
+   mutable MixedBilinearForm Force, Force_be;
+
+   double wall_bc_penalty, C_I;
+   double rho0_max, perimeter;
+
    // Same as above, but done through partial assembly.
    ForcePAOperator *ForcePA;
    // Mass matrices done through partial assembly:
@@ -160,13 +172,14 @@ protected:
    }
 
    void UpdateQuadratureData(const Vector &S) const;
+   void UpdateBdrQuadratureData() const;
    void AssembleForceMatrix() const;
 
 public:
    LagrangianHydroOperator(const int size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
-                           const Array<int> &ess_tdofs,
+                           const Array<int> &ess_tdofs, bool bcs,
                            Coefficient &rho0_coeff,
                            ParGridFunction &rho0_gf,
                            ParGridFunction &gamma_gf,
@@ -174,7 +187,8 @@ public:
                            const double cfl,
                            const bool visc, const bool vort, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q);
+                           const int order_q,
+                           double bc_penalty, double perimeter);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
