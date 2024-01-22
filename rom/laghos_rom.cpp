@@ -1144,7 +1144,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             for (int i = 0; i < tL2size; i++)
                 (*tBasisE)(i, cutoff[2] - 1) = unitE[i];
 
-            tBasisE->orthogonalize_last();
+            tBasisE->orthogonalize_last(-1, true);
         }
         else if (input.window > 0)
         {
@@ -1161,7 +1161,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             for (int i = 0; i < tH1size; i++)
                 (*tBasisV)(i, cutoff[1] - 1) = Vsnap0(i, 0);
 
-            tBasisV->orthogonalize_last();
+            tBasisV->orthogonalize_last(-1, true);
 
             // Get the first cutoff[2] - 2 columns of basisE
             for (int i = 0; i < tL2size; i++)
@@ -1175,7 +1175,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             for (int i = 0; i < tL2size; i++)
                 (*tBasisE)(i, cutoff[2] - 2) = unitE[i];
 
-            tBasisE->orthogonalize_last(cutoff[2] - 1);
+            tBasisE->orthogonalize_last(cutoff[2] - 1, true);
 
             // Add the first E snapshot as the last E basis column
             // and reorthonormalize.
@@ -1185,7 +1185,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             for (int i = 0; i < tL2size; i++)
                 (*tBasisE)(i, cutoff[2] - 1) = Esnap0(i, 0);
 
-            tBasisE->orthogonalize_last();
+            tBasisE->orthogonalize_last(-1, true);
         }
 
         SetupEQP_Force(&Xsnap0, &Vsnap0, &Esnap0,
@@ -2364,7 +2364,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
 			{
 				(*basisE)(i, tmp_rdime) = unitE[i];
 			}
-			basisE->orthogonalize_last();
+			basisE->orthogonalize_last(-1, true);
 
             std::cout << "Ortho test 1" << "\n";
             Vector test_ortho(rdime);
@@ -2404,7 +2404,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
 			{
 				(*basisE)(i, tmp_rdime) = unitE[i];
 			}
-			basisE->orthogonalize_last(rdime-1);
+			basisE->orthogonalize_last(rdime-1, true);
 			
 			// The addition of the lifted energy solution vector as the last
 			// column vector takes place later in the main driver "laghos.cpp"
@@ -2602,7 +2602,7 @@ void ROM_Basis::AddLastCol_V(Vector const& f)
 	for (int i = 0; i < tH1size; i++)
 		(*basisV)(i, rdimv-1) = mfH1[i];
 
-	basisV->orthogonalize_last();
+	basisV->orthogonalize_last(-1, true);
 
     std::cout << "Ortho test 2" << "\n";
     Vector test_ortho(rdimv);
@@ -2630,7 +2630,7 @@ void ROM_Basis::AddLastCol_E(Vector const& f)
 	for (int i = 0; i < tL2size; i++)
 		(*basisE)(i, rdime-1) = mfL2[i];
 
-	basisE->orthogonalize_last();
+	basisE->orthogonalize_last(-1, true);
 
     std::cout << "Ortho test 3a" << "\n";
     Vector test_ortho(rdime);
