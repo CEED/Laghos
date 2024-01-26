@@ -425,6 +425,7 @@ void WriteSolutionNNLS(std::vector<int> const& indices, std::vector<double> cons
     outfile.close();
 }
 
+// TODO: remove!
 void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
                                     const CAROM::Matrix* snapV,
                                     const CAROM::Matrix* snapE,
@@ -483,9 +484,7 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
         if (equationE)
         {
             for (int i=0; i<tL2size; ++i)
-            {
                 e_i[i] = (*basisE)(i,j);
-            }
 
             input.FOMoper->MultMeInv(e_i, g_i);
 
@@ -495,9 +494,7 @@ void ROM_Sampler::SetupEQP_Force_Eq(const CAROM::Matrix* snapX,
         else
         {
             for (int i=0; i<tH1size; ++i)
-            {
                 v_i[i] = (*basisV)(i,j);
-            }
 
             gfH1.SetFromTrueDofs(v_i);
             input.FOMoper->MultMvInv(gfH1, gf2H1);
@@ -656,7 +653,6 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
                                        const ParMesh *pmesh, ParMesh *smesh)
 {
     const int dim = pmesh->SpaceDimension();
-    const bool mesh3D = (pmesh->Dimension() == 3);
 
     // First, find the elements of smesh touching its boundary. These elements may
     // or may not be on the boundary of pmesh. All interior elements of smesh are
@@ -668,28 +664,36 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     std::set<int> elemOnBdry;
 
-    std::map<int, int> sf2be;
+    Array<int> f2be;
 
     if (rank == 0)
     {
         const int nbe = smesh->GetNBE();
 
-        for (int i=0; i<nbe; ++i)
-            sf2be[smesh->GetBdrElementEdgeIndex(i)] = i;
-
-        Array<int> be_to_face(nbe);
-
         // Initialize all boundary attributes to 4, which will denote the
         // boundary elements of smesh that are interior to pmesh.
         for (int i=0; i<nbe; ++i)
-        {
             smesh->SetBdrAttribute(i, 4);
-            be_to_face[i] = smesh->GetBdrFace(i);
-            int e = -1;
-            int info = -1;
-            smesh->GetBdrElementAdjacentElement(i, e, info);
 
-            elemOnBdry.insert(e);
+        f2be = smesh->GetFaceToBdrElMap();
+
+        MFEM_VERIFY(f2be.Size() == smesh->GetNumFaces(), "");
+        MFEM_VERIFY(nbe < smesh->GetNumFaces(), "");
+
+        for (int e=0; e<smesh->GetNE(); ++e)
+        {
+            Array<int> faces, ori;
+            // TODO: is this the right function in 2D?
+            smesh->GetElementFaces(e, faces, ori);
+            for (auto f : faces)
+            {
+                if (f2be[f] >= 0)
+                {
+                    const int bel = f2be[f];
+                    elemOnBdry.insert(e);
+                    break;
+                }
+            }
         }
     }
 
@@ -714,12 +718,7 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     Array<int> vert, faces, ori;
     pmesh->GetElementVertices(0, vert);  // Just getting number of vertices.
-
-    if (mesh3D)
-        pmesh->GetElementFaces(0, faces, ori);  // Just getting number of faces.
-    else
-        pmesh->GetElementEdges(0, faces, ori);  // Just getting number of faces.
-
+    pmesh->GetElementFaces(0, faces, ori);  // Just getting number of faces.
     const int nve = vert.Size();  // Number of vertices per element, assumed constant.
     const int nfe = faces.Size();  // Number of faces per element, assumed constant.
     pmesh->GetFaceVertices(0, vert);  // Just getting number of vertices.
@@ -741,10 +740,7 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     vector<int> patt((nfe * (nvf + 1)) * numLocalElems);
 
-    const int pnbe = pmesh->GetNBE();
-    std::map<int, int> f2be;
-    for (int i=0; i<pnbe; ++i)
-        f2be[pmesh->GetBdrElementEdgeIndex(i)] = i;
+    const Array<int> pf2be = pmesh->GetFaceToBdrElMap();
 
     for (int i=0; i<numLocalElems; ++i)
     {
@@ -761,32 +757,21 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
         }
 
         Array<int> fvert;
-        if (mesh3D)
-            pmesh->GetElementFaces(e, faces, ori);
-        else
-            pmesh->GetElementEdges(e, faces, ori);
-
+        // TODO: is this the right function in 2D?
+        pmesh->GetElementFaces(e, faces, ori);
         MFEM_VERIFY(faces.Size() == nfe, "");
         for (int j=0; j<nfe; ++j)
         {
             const int f = faces[j];
+            const int bel = pf2be[f];
             pmesh->GetFaceVertices(f, fvert);
             MFEM_VERIFY(fvert.Size() == nvf, "");
             for (int k=0; k<nvf; ++k)
                 patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + k] = fvert[k];
 
             // If it is not a boundary element, use attribute -1.
-            auto search = f2be.find(f);
-            if (search == f2be.end())
-            {
-                patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = -1;
-            }
-            else
-            {
-                const int be = search->second;
-                const int attr = pmesh->GetBdrAttribute(be);
-                patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = attr;
-            }
+            const int attr = (bel >= 0) ? pmesh->GetBdrAttribute(bel) : -1;
+            patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = attr;
         }
     }
 
@@ -898,11 +883,8 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
                 continue;  // Skip elements not on smesh boundary
             }
 
-            if (mesh3D)
-                smesh->GetElementFaces(selem, faces, ori);
-            else
-                smesh->GetElementEdges(selem, faces, ori);
-
+            // TODO: is this the right function in 2D?
+            smesh->GetElementFaces(selem, faces, ori);
             MFEM_VERIFY(faces.Size() == nfe, "");
 
             // Now counts[p] == nfe * (nvf + 1) * allNumLocalElems[p]
@@ -935,11 +917,10 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
                     }
 
                     MFEM_VERIFY(sfi >= 0, "");
+                    const int bel = f2be[faces[sfi]];
                     // Since the boundary attribute is set, this face must be a
                     // boundary element of smesh.
-                    auto search = sf2be.find(faces[sfi]);
-                    MFEM_VERIFY(search != sf2be.end(), "");
-                    const int bel = search->second;
+                    MFEM_VERIFY(bel >= 0, "");
                     smesh->SetBdrAttribute(bel, attr);
                 }
             }
@@ -1036,9 +1017,13 @@ void WriteSampleMeshEQP(ROM_Options const& input, std::set<int> const& elems)
     }
 }
 
-void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
-                                 const CAROM::Matrix* basisV, const CAROM::Matrix* basisE,
-                                 ROM_Options const& input, Vector const& sol)
+// TODO: remove this!
+void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
+                                 const CAROM::Matrix* snapV,
+                                 const CAROM::Matrix* snapE,
+                                 const CAROM::Matrix* basisV,
+                                 const CAROM::Matrix* basisE,
+                                 ROM_Options const& input)
 {
     MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
@@ -1051,18 +1036,11 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix
     SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false, elems);
     SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true, elems);
 
-    // Call this to call UpdateQuadratureData and restore the FOM state.
-    input.FOMoper->GetTimeStepEstimate(sol);
-
     WriteSampleMeshEQP(input, elems);
 }
 
-void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input, Vector const& sol)
+void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 {
-    CAROM::Matrix Xsnap0(*(generator_X->getSnapshotMatrix()));
-    CAROM::Matrix Vsnap0(*(generator_V->getSnapshotMatrix()));
-    CAROM::Matrix Esnap0(*(generator_E->getSnapshotMatrix()));
-
     if (writeSnapshots)
     {
         if (!useXV) generator_X->writeSnapshot();
@@ -1146,24 +1124,6 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input, Vector const&
         MFEM_VERIFY(finalNumSamples == generator_E->getTemporalBasis()->numRows(), "bug");
         MFEM_VERIFY(finalNumSamples == generator_Fv->getTemporalBasis()->numRows(), "bug");
         MFEM_VERIFY(finalNumSamples == generator_Fe->getTemporalBasis()->numRows() + VTos, "bug");
-    }
-
-    if (input.hyperreductionSamplingType == eqp)
-    {
-        const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
-        const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
-
-        MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
-
-        // Truncate the bases.
-        CAROM::Matrix *tBasisV = basisV->getFirstNColumns(cutoff[1]);
-        CAROM::Matrix *tBasisE = basisE->getFirstNColumns(cutoff[2]);
-
-        SetupEQP_Force(&Xsnap0, &Vsnap0, &Esnap0,
-                       tBasisV, tBasisE, input, sol);
-
-        delete tBasisV;
-        delete tBasisE;
     }
 
     delete generator_X;
@@ -1325,7 +1285,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             writeNum(rdime, basename + "/" + "rdime" + "_" + to_string(input.window));
         }
     }
-    else if (rank == 0 && !spaceTime && input.hyperreductionSamplingType != eqp)  // TODO: read/write this for spaceTime case?
+    else if (rank == 0 && !spaceTime)  // TODO: read/write this for spaceTime case?
     {
         readNum(rdimx, basename + "/" + "rdimx" + "_" + to_string(input.window));
         readNum(rdimv, basename + "/" + "rdimv" + "_" + to_string(input.window));
@@ -1350,7 +1310,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
-    if (use_sample_mesh && input.hyperreductionSamplingType != eqp)
+    if (use_sample_mesh)
     {
         if (rank == 0)
         {
@@ -1488,7 +1448,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         if (rank == 0) cout << "start preprocessing hyper-reduction\n";
         StopWatch preprocessHyperreductionTimer;
         preprocessHyperreductionTimer.Start();
-        SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window, timesteps);
+        SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window, timesteps, input);
         preprocessHyperreductionTimer.Stop();
         if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: "
                                 << preprocessHyperreductionTimer.RealTime() << " sec\n";
@@ -1827,15 +1787,510 @@ void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
+void LoadParametricSnapshots(const int nsets, const std::string *basename,
+                             const std::string& varName,
+                             const int window,
+                             std::vector<const CAROM::Matrix*> & snapshots)
+{
+    for (int paramID = 0; paramID < nsets; ++paramID)
+    {
+        std::string snapshot_filename = *basename + "/mparam" +
+                                        std::to_string(paramID) + "_var" + varName +
+                                        std::to_string(window) + "_snapshot";
+
+        // TODO: who deletes mat?
+        CAROM::Matrix* mat = new CAROM::Matrix();
+        mat->read(snapshot_filename);
+
+        snapshots.push_back(mat);
+    }
+}
+
+void ExtractMatrixElementRowsAndWrite(std::set<int> const& elems,
+                                      const ParFiniteElementSpace *fespace,
+                                      CAROM::Matrix const& Wmat,
+                                      std::string filename)
+{
+    bool negdof = false;
+    const int ncol = Wmat.numColumns();
+
+    std::vector<int> elemDofs;
+    Array<int> vdofs;
+    int ndof = 0;
+    for (auto e : elems)
+    {
+        fespace->GetElementVDofs(e, vdofs);
+        if (ndof == 0)
+        {
+            ndof = vdofs.Size();
+        }
+        else
+        {
+            MFEM_VERIFY(ndof == vdofs.Size(), "");
+        }
+
+        for (auto dof : vdofs)
+        {
+            elemDofs.push_back(dof < 0 ? -1-dof : dof);
+            if (dof < 0) negdof = true;
+        }
+    }
+
+    MFEM_VERIFY(ndof * elems.size() == elemDofs.size(), "");
+    MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
+
+    CAROM::Matrix W_elems(elemDofs.size(), ncol, true);
+
+    for (int j=0; j<ncol; ++j)
+    {
+        for (int i=0; i<elemDofs.size(); ++i)
+        {
+            W_elems(i,j) = Wmat(elemDofs[i],j);
+        }
+    }
+
+    W_elems.write(filename);
+}
+
+void ROM_Basis::SetStateFromTrueDOFs(Vector const& x, Vector const& v,
+                                     Vector const& e, Vector & S)
+{
+    MFEM_VERIFY(S.Size() == 2*H1size + L2size, "");
+    MFEM_VERIFY(x.Size() == tH1size, "");
+    MFEM_VERIFY(v.Size() == tH1size, "");
+    MFEM_VERIFY(e.Size() == tL2size, "");
+
+    // Set X component of S
+    mfH1 = x;
+    if (offsetInit)
+    {
+        for (int i=0; i<tH1size; ++i)
+        {
+            mfH1[i] += (*initX)(i);
+        }
+    }
+
+    gfH1->SetFromTrueDofs(mfH1);
+
+    for (int i=0; i<H1size; ++i)
+    {
+        S[i] = (*gfH1)[i];
+    }
+
+    // Set V component of S
+    mfH1 = v;
+    if (offsetInit)
+    {
+        for (int i=0; i<tH1size; ++i)
+        {
+            mfH1[i] += (*initV)(i);
+        }
+    }
+
+    gfH1->SetFromTrueDofs(mfH1);
+
+    for (int i=0; i<H1size; ++i)
+    {
+        S[H1size + i] = (*gfH1)[i];
+    }
+
+    // Set E component of S
+    mfL2 = e;
+    if (offsetInit)
+    {
+        for (int i=0; i<tL2size; ++i)
+        {
+            mfL2[i] += (*initE)(i);
+        }
+    }
+
+    gfL2->SetFromTrueDofs(mfL2);
+
+    for (int i=0; i<L2size; ++i)
+    {
+        S[(2 * H1size) + i] = (*gfL2)[i];
+    }
+}
+
+void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
+                               std::vector<const CAROM::Matrix*> snapV,
+                               std::vector<const CAROM::Matrix*> snapE,
+                               const CAROM::Matrix* basisV,
+                               const CAROM::Matrix* basisE,
+                               ROM_Options const& input, std::set<int> & elems)
+{
+    MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
+    MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
+
+    for (auto snap : snapX)
+    {
+        MFEM_VERIFY(snap->numRows() == input.H1FESpace->GetTrueVSize(), "");
+    }
+
+    for (auto snap : snapV)
+    {
+        MFEM_VERIFY(snap->numRows() == input.H1FESpace->GetTrueVSize(), "");
+    }
+
+    for (auto snap : snapE)
+    {
+        MFEM_VERIFY(snap->numRows() == input.L2FESpace->GetTrueVSize(), "");
+    }
+
+    cout << "WINDOW " << input.window << endl;
+    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false, elems);
+    SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true, elems);
+
+    //WriteSampleMeshEQP(input, elems);
+
+    // Write elems to file
+    std::ofstream outfile("run/nnlsElems" + std::to_string(input.window) + "_"
+                          + std::to_string(input.rank));
+
+    for (auto e : elems)
+        outfile << e << endl;
+    outfile.close();
+
+    // Construct Wmat and write out rows corresponding to elements in elems to file.
+    const int tsize_H1 = input.H1FESpace->GetTrueVSize();
+    const int tsize_L2 = input.L2FESpace->GetTrueVSize();
+
+    CAROM::Matrix Wmat(H1size, rdimv, true);
+    CAROM::Matrix Wmat_E(L2size, rdime, true);
+
+    // Compute Wmat_E
+    Vector vj(tsize_H1);
+    Vector Mvj(H1size);
+    for (int j=0; j<rdimv; ++j)
+    {
+        GetBasisVectorV(false, j, vj);
+        gfH1->SetFromTrueDofs(vj);
+        input.FOMoper->MultMvInv(*gfH1, Mvj);
+
+        for (int i=0; i<H1size; ++i)
+            Wmat(i,j) = Mvj[i];
+    }
+
+    // Compute Wmat_E
+    vj.SetSize(tsize_L2);
+    Mvj.SetSize(L2size);
+    for (int j=0; j<rdime; ++j)
+    {
+        GetBasisVectorE(false, j, vj);
+        gfL2->SetFromTrueDofs(vj);
+        input.FOMoper->MultMeInv(*gfL2, Mvj);
+
+        for (int i=0; i<L2size; ++i)
+            Wmat_E(i,j) = Mvj[i];
+    }
+
+    ExtractMatrixElementRowsAndWrite(elems, input.H1FESpace, Wmat,
+                                     *input.basename + "/WelemsV" +
+                                     std::to_string(input.window));
+
+    ExtractMatrixElementRowsAndWrite(elems, input.L2FESpace, Wmat_E,
+                                     *input.basename + "/WelemsE" +
+                                     std::to_string(input.window));
+}
+
+void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
+                                  std::vector<const CAROM::Matrix*> snapV,
+                                  std::vector<const CAROM::Matrix*> snapE,
+                                  const CAROM::Matrix* basisV,
+                                  const CAROM::Matrix* basisE,
+                                  ROM_Options const& input,
+                                  bool equationE,
+                                  std::set<int> & elems)
+{
+    const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
+    const int nqe = ir0->GetNPoints();
+    const int ne = input.H1FESpace->GetNE();
+    const int NQ = ne * nqe;
+    const int NB = equationE ? basisE->numColumns() : basisV->numColumns();
+
+    const int nsets = input.numOfflineParameters;
+    MFEM_VERIFY(nsets == snapX.size() && nsets == snapV.size() &&
+                nsets == snapE.size() && nsets > 0, "");
+
+    Array<int> numSnapVar(3);
+    std::vector<Array<int>> allNumSnapVar(3);
+    for (int i=0; i<3; ++i)
+        allNumSnapVar[i].SetSize(nsets);
+
+    Array<int> allnsnap(nsets);
+
+    for (int i=0; i<nsets; ++i)
+    {
+        allNumSnapVar[0][i] = snapX[i]->numColumns();
+        allNumSnapVar[1][i] = snapV[i]->numColumns();
+        allNumSnapVar[2][i] = snapE[i]->numColumns();
+
+        // TODO: is there a better way?
+        allnsnap[i] = allNumSnapVar[0][i];
+        for (int j=1; j<3; ++j)
+        {
+            allnsnap[i] = std::max(allnsnap[i], allNumSnapVar[j][i]);
+        }
+    }
+
+    for (int i=0; i<3; ++i)
+        numSnapVar[i] = allNumSnapVar[i].Sum();
+
+    const int nsnap = numSnapVar.Max();
+
+    std::vector<Array<int>> numSkipped(3);
+    for (int i=0; i<3; ++i)
+    {
+        numSkipped[i].SetSize(nsets);
+
+        for (int j=0; j<nsets; ++j)
+        {
+            numSkipped[i][j] = allnsnap[j] - allNumSnapVar[i][j];
+        }
+
+        MFEM_VERIFY(numSkipped[i].Max() <= 1, "");
+    }
+
+    Vector r(nqe);
+
+    // Compute G of size (NB * (nsnap+1)) x NQ, storing its transpose Gt.
+    CAROM::Matrix Gt(NQ, NB * (nsnap+1), true);
+    cout << "NNLS using " << NB << " basis dim for equation E " << equationE
+         << " and " << nsnap << " snapshots" << endl;
+
+    // For 0 <= j < NB, 0 <= i <= nsnap, 0 <= e < ne, 0 <= m < nqe,
+    // G(j + (i*NB), (e*nqe) + m)
+    // is the coefficient of e_j^T M_e^{-1} F(v_i,e_i,x_i)^T v_i at point m of
+    // element e, with respect to the integration rule weight at that point,
+    // where the "exact" quadrature solution is ir0->GetWeights().
+
+    Vector v_i(tH1size);
+    Vector x_i(tH1size);
+    Vector e_i(tL2size);
+    Vector g_i(tL2size);
+
+    Vector w_j_e, v_i_e, v_j_e;
+
+    Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
+    Vector S_v(S, input.H1FESpace->GetVSize(), input.H1FESpace->GetVSize());  // Subvector
+
+    MFEM_VERIFY(tH1size == basisV->numRows(), "");
+    MFEM_VERIFY(tL2size == basisE->numRows(), "");
+    CAROM::Matrix W(equationE ? L2size : H1size, NB, true);
+
+    ParGridFunction gf2H1(*gfH1);
+
+    for (int j=0; j<NB; ++j)
+    {
+        if (equationE)
+        {
+            for (int i=0; i<tL2size; ++i)
+                e_i[i] = (*basisE)(i,j);
+
+            input.FOMoper->MultMeInv(e_i, g_i);
+
+            for (int i=0; i<tL2size; ++i)
+                W(i,j) = g_i[i];
+        }
+        else
+        {
+            for (int i=0; i<tH1size; ++i)
+                v_i[i] = (*basisV)(i,j);
+
+            gfH1->SetFromTrueDofs(v_i);
+            input.FOMoper->MultMvInv(*gfH1, gf2H1);
+
+            for (int i=0; i<H1size; ++i)
+                W(i,j) = gf2H1[i];
+        }
+    }
+
+    Array<double> const& w_el = ir0->GetWeights();
+    MFEM_VERIFY(w_el.Size() == nqe, "");
+
+    int oss = 0;
+    for (int s=-1; s<nsets; ++s)
+    {
+        const int nsnap_s = (s == -1) ? 1 : allnsnap[s];
+        for (int i=0; i<nsnap_s; ++i)
+        {
+            if (s == -1)  // Use the initial state as the first snapshot.
+            {
+                v_i = 0.0;
+                x_i = 0.0;
+                e_i = 0.0;
+            }
+            else
+            {
+                if (i == 0 && numSkipped[0][s] == 1)
+                {
+                    x_i = 0.0;
+                }
+                else
+                {
+                    for (int j = 0; j < tH1size; ++j)
+                        x_i[j] = (*snapX[s])(j, i - numSkipped[0][s]);
+                }
+
+                if (i == 0 && numSkipped[1][s] == 1)
+                    v_i = 0.0;
+                else
+                {
+                    for (int j = 0; j < tH1size; ++j)
+                        v_i[j] = (*snapV[s])(j, i - numSkipped[1][s]);
+                }
+
+                if (i == 0 && numSkipped[2][s] == 1)
+                    e_i = 0.0;
+                else
+                {
+                    for (int j = 0; j < tL2size; ++j)
+                    {
+                        e_i[j] = (*snapE[s])(j, i - numSkipped[2][s]);
+                    }
+                }
+            }
+
+            SetStateFromTrueDOFs(x_i, v_i, e_i, S);
+
+            // NOTE: after SetStateFromTrueDOFs, gfH1 is the V-component of S
+            input.FOMoper->ResetQuadratureData();
+            input.FOMoper->GetTimeStepEstimate(S);  // Call UpdateQuadratureData
+            input.FOMoper->ResetQuadratureData();
+
+            for (int j=0; j<NB; ++j)
+            {
+                if (equationE)
+                {
+                    for (int k = 0; k < basisE->numRows(); ++k)
+                    {
+                        mfL2[k] = W(k, j);
+                    }
+
+                    gfL2->SetFromTrueDofs(mfL2);
+                    *gfH1 = S_v;
+                }
+                else
+                {
+                    for (int k = 0; k < H1size; ++k) (*gfH1)[k] = W(k, j);
+                }
+
+                for (int e=0; e<ne; ++e)
+                {
+                    if (equationE)
+                    {
+                        gfL2->GetElementDofValues(e, w_j_e);
+                        gfH1->GetElementDofValues(e, v_i_e);
+
+                        ComputeElementRowOfG_E(ir0, input.FOMoper->GetQuadData(),
+                                               w_j_e, v_i_e,
+                                               *input.H1FESpace->GetFE(e),
+                                               *input.L2FESpace->GetFE(e), e, r);
+                    }
+                    else
+                    {
+                        gfH1->GetElementDofValues(e, v_j_e);
+                        ComputeElementRowOfG_V(ir0, input.FOMoper->GetQuadData(),
+                                               v_j_e, *input.H1FESpace->GetFE(e),
+                                               *input.L2FESpace->GetFE(e), e, r);
+                    }
+
+                    for (int m=0; m<nqe; ++m)
+                    {
+                        Gt((e*nqe) + m, j + ((oss + i)*NB)) = r[m];
+                    }
+                }  // e
+            }  // j
+        }  // i
+
+        oss += nsnap_s;
+    }  // s
+
+    // Rescale every Gt column (NNLS equation) by its max absolute value.
+    // It seems to help the NNLS solver significantly.
+    Gt.rescale_cols_max();
+
+    CAROM::Vector w(ne * nqe, true);
+    for (int i=0; i<ne; ++i)
+    {
+        for (int j=0; j<nqe; ++j)
+            w((i*nqe) + j) = w_el[j];
+    }
+
+    CAROM::Vector sol(ne * nqe, true);
+    SolveNNLS(input.rank, input.tolNNLS, input.maxNNLSnnz, w, Gt, sol);
+
+    std::vector<double> solnnz;
+    std::vector<int> indices;
+    ExtractNonzeros(sol, indices, solnnz);
+
+    int prev = -1;
+    for (auto i : indices)
+    {
+        const int elem = i / nqe;
+        if (elem != prev)
+        {
+            elems.insert(elem);
+            prev = elem;
+        }
+    }
+
+    const std::string varName = equationE ? "E" : "V";
+    WriteSolutionNNLS(indices, solnnz, "run/nnls" + varName +
+                      std::to_string(input.window) + "_" + std::to_string(input.rank));
+}
+
 void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
                                     ParFiniteElementSpace *L2FESpace,
                                     Array<int>& nH1, const int window,
-                                    const std::vector<double> *timesteps)
+                                    const std::vector<double> *timesteps,
+                                    ROM_Options const& input)
 {
     ParMesh *pmesh = H1FESpace->GetParMesh();
 
     const int fomH1size = H1FESpace->GlobalTrueVSize();
     const int fomL2size = L2FESpace->GlobalTrueVSize();
+
+    vector<int> num_sample_dofs_per_procE(nprocs);
+
+    std::set<int> elemsEQP;
+    if (hyperreductionSamplingType == eqp)
+    {
+        std::vector<const CAROM::Matrix*> parametricSnapshotsX,
+            parametricSnapshotsV, parametricSnapshotsE;
+
+        LoadParametricSnapshots(input.numOfflineParameters, input.basename, "X",
+                                input.window, parametricSnapshotsX);
+        LoadParametricSnapshots(input.numOfflineParameters, input.basename, "V",
+                                input.window, parametricSnapshotsV);
+        LoadParametricSnapshots(input.numOfflineParameters, input.basename, "E",
+                                input.window, parametricSnapshotsE);
+
+        SetupEQP_Force(parametricSnapshotsX, parametricSnapshotsV, parametricSnapshotsE,
+                       basisV, basisE, input, elemsEQP);
+
+        numSamplesV = 0;
+
+        CAROM::Matrix* BXtBV = GetBXtBV();  // TODO: eliminate this function?
+        BXtBV->write("run/BXtBV" + std::to_string(input.window));
+        delete BXtBV;
+
+        CAROM::Vector* BXtV0 = basisX->transposeMult(*initV);
+        BXtV0->write(testing_parameter_basename + "/ROMoffset" +
+                     input.basisIdentifier + "/BXt_initV" + std::to_string(input.window));
+        delete BXtV0;
+
+        numSamplesE = elemsEQP.size();  // Local number of samples
+        MPI_Allgather(&numSamplesE, 1, MPI_INT, num_sample_dofs_per_procE.data(),
+                      1, MPI_INT, comm);
+
+        // Set the global number of samples
+        numSamplesE = 0;
+        for (auto ns : num_sample_dofs_per_procE)
+            numSamplesE += ns;
+
+        MFEM_VERIFY(numSamplesE < fomL2size, "");
+    }
 
     numSamplesX = 0;
     vector<int> sample_dofs_X(numSamplesX);
@@ -1845,11 +2300,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
-    BsinvV = spaceTime ? NULL : new CAROM::Matrix(numSamplesV, rdimfv, false);
+    BsinvV = spaceTime || hyperreductionSamplingType == eqp ? NULL :
+             new CAROM::Matrix(numSamplesV, rdimfv, false);
 
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
-    vector<int> num_sample_dofs_per_procE(nprocs);
     BsinvE = spaceTime ? NULL : new CAROM::Matrix(numSamplesE, rdimfe, false);
 
     if (rank == 0)
@@ -2029,7 +2484,37 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
             MFEM_VERIFY(PiEtransPiFe->numRows() == rdime && PiEtransPiFe->numColumns() == rdimfe, "");
         }
     }
-    else // not spaceTime
+    else if (hyperreductionSamplingType == eqp)
+    {
+        // Artificially set 1 DOF per element as a sample in the L2 space for E.
+        vector<int> localSamples(num_sample_dofs_per_procE[rank]);
+
+        int cnt = 0;
+        for (auto e : elemsEQP)
+        {
+            Array<int> dofs;
+            L2FESpace->GetElementDofs(e, dofs);
+            //sample_dofs_E[cnt] = dofs[0];
+            localSamples[cnt] = dofs[0];
+            cnt++;
+        }
+
+        MFEM_VERIFY(cnt == num_sample_dofs_per_procE[rank], "");
+        vector<int> offsets(nprocs);
+        offsets[0] = 0;
+        for (int i=1; i<nprocs; ++i)
+            offsets[i] = offsets[i-1] + num_sample_dofs_per_procE[i-1];
+
+        MPI_Allgatherv(localSamples.data(), num_sample_dofs_per_procE[rank],
+                       MPI_INT, sample_dofs_E.data(),
+                       num_sample_dofs_per_procE.data(),
+                       offsets.data(), MPI_INT, MPI_COMM_WORLD);
+
+        // No H1 samples for V
+        for (int i=0; i<nprocs; ++i)
+            num_sample_dofs_per_procV[i] = 0;
+    }
+    else // not spaceTime and not EQP
     {
         if (hyperreductionSamplingType == qdeim)
         {
@@ -2128,7 +2613,16 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         size_L2_sp = sp_L2_space->GetTrueVSize();
 
         sample_pmesh = smm->GetSampleMesh();
-        SetBdryAttrForVelocity_Cartesian(sample_pmesh);
+        if (hyperreductionSamplingType == eqp)
+        {
+            MFEM_VERIFY(sample_pmesh->GetNE() == elemsEQP.size(),
+                        "TODO: this is only valid in serial!");
+            MapBoundaryAttributesToSampleMesh(rank, nprocs, elemsEQP,
+                                              num_sample_dofs_per_procE,
+                                              pmesh, sample_pmesh);
+        }
+        else
+            SetBdryAttrForVelocity_Cartesian(sample_pmesh);
 
         BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
         BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -2139,7 +2633,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         spE = new CAROM::Vector(size_L2_sp, false);
 
         sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
-        sV = new CAROM::Vector(numSamplesV, false);
+        sV = numSamplesV == 0 ? NULL : new CAROM::Vector(numSamplesV, false);
         sE = new CAROM::Vector(numSamplesE, false);
 
         BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
@@ -2150,6 +2644,9 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     smm->GatherDistributedMatrixRows("X", *basisX, rdimx, *BXsp);
     smm->GatherDistributedMatrixRows("V", *basisV, rdimv, *BVsp);
     smm->GatherDistributedMatrixRows("E", *basisE, rdime, *BEsp);
+
+    if (hyperreductionSamplingType == eqp)
+        return;
 
     smm->GatherDistributedMatrixRows("Fv", *basisFv, rdimfv, *BFvsp);
     smm->GatherDistributedMatrixRows("Fe", *basisFe, rdimfe, *BFesp);
@@ -2702,6 +3199,21 @@ void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
         u[osrom + i] = (*rE2)(i);
 }
 
+void MapSampleMeshEQP(const int nqe, std::map<int,int> & elem2smesh,
+                      //std::vector<int> const& elems,
+                      const CAROM::SampleDOFSelector *s,  // TODO: remove?
+                      std::vector<int> & p)
+{
+    for (int i=0; i<p.size(); ++i)
+    {
+        const int elem = p[i] / nqe;
+        const int q = p[i] - (elem * nqe);
+
+        const int sampleElem = elem2smesh[elem];
+        p[i] = (sampleElem * nqe) + q;
+    }
+}
+
 ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            Coefficient& rho_coeff, FunctionCoefficient& mat_coeff,
                            const int order_e, const int source,
@@ -2712,7 +3224,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
       spaceTimeMethod(input.spaceTimeMethod), hyperreductionSamplingType(input.hyperreductionSamplingType),
-      use_sample_mesh(input.use_sample_mesh), H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace)
+      use_sample_mesh(input.use_sample_mesh), H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace),
+      window(input.window)
 {
     if (use_sample_mesh && rank == 0)
     {
@@ -2750,7 +3263,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         // boundary are enforced due to the fact that BVsp is defined as a submatrix of
         // basisV, which has boundary conditions applied in the full-order discretization.
 
-        //cout << "Sample mesh bdr att max " << spmesh->bdr_attributes.Max() << endl;
+        cout << "Sample mesh bdr att max " << spmesh->bdr_attributes.Max() << endl;
 
         // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
         // that the boundaries are straight.
@@ -2791,7 +3304,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                 visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                H1fec->GetBasisType(), noMsolve, noMsolve);
+                H1fec->GetBasisType(), noMsolve, noMsolve,
+                hyperreductionSamplingType == eqp);
 
         if (input.spaceTimeMethod != no_space_time)
         {
@@ -2824,6 +3338,23 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 
         ReadSolutionNNLS(input, "run/nnlsV", eqpI, eqpW);
         ReadSolutionNNLS(input, "run/nnlsE", eqpI_E, eqpW_E);
+
+        std::vector<int> elems;
+        ReadElementsNNLS(input, "run/nnlsElems", elems);
+
+        BXtV0 = new CAROM::Vector(basis->GetDimX(), false);
+        BXtV0->read("run/ROMoffset" + input.basisIdentifier +
+                    "/BXt_initV" + std::to_string(input.window));
+
+        std::map<int,int> elem2smesh;
+        for (int i=0; i<elems.size(); ++i)
+            elem2smesh[elems[i]] = i;
+
+        const IntegrationRule *ir0 = operSP->GetIntegrationRule();
+        const int nqe = ir0->GetNPoints();
+
+        MapSampleMeshEQP(nqe, elem2smesh, basis->sampleSelector, eqpI);
+        MapSampleMeshEQP(nqe, elem2smesh, basis->sampleSelector, eqpI_E);
     }
 }
 
@@ -2846,6 +3377,26 @@ void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
         split_line(line, words);
         indices.push_back(std::stoi(words[0]));
         weights.push_back(std::stod(words[1]));
+    }
+}
+
+void ROM_Operator::ReadElementsNNLS(ROM_Options const& input, string basename,
+                                    std::vector<int> & elems)
+{
+    cout << "ROM_Operator reading EQP elements for window " << input.window << endl;
+
+    MFEM_VERIFY(elems.size() == 0, "");
+
+    const string filename = basename + std::to_string(input.window) + "_" +
+                            std::to_string(input.rank);
+    std::ifstream infile(filename);
+    MFEM_VERIFY(infile.is_open(), "NNLS solution file does not exist.");
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        std::vector<std::string> words;
+        split_line(line, words);
+        elems.push_back(std::stoi(words[0]));
     }
 }
 
@@ -2995,7 +3546,7 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
 {
     // Save files in subdirectory "hyperreduce_basename"
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "testing_parameter_basename"
-    // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
+    // If sample mesh is parameter independent (Sedov Blast), it is usual "basename"
 
     std::string outfile_string = hyperreduce_basename + "/sample_pmesh_" + to_string(window);
     std::ofstream outfile_spmesh(outfile_string.c_str());
@@ -3013,14 +3564,19 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     writeNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
 
     if (spaceTimeMethod == gnat_lspg) BsinvX->write(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
-    BsinvV->write(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
+
+    if (BsinvV) BsinvV->write(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->write(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
     BXsp->write(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->write(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->write(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
 
-    BFvsp->write(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
-    BFesp->write(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+
+    if (hyperreductionSamplingType != eqp)
+    {
+        BFvsp->write(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
+        BFesp->write(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+    }
 
     spX->write(hyperreduce_basename + "/" + "spX" + "_" + to_string(window));
     spV->write(hyperreduce_basename + "/" + "spV" + "_" + to_string(window));
@@ -3063,7 +3619,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
 
     // Load files in subdirectory "hyperreduce_basename"
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "testing_parameter_basename"
-    // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
+    // If sample mesh is parameter independent (Sedov Blast), it is usual "basename"
 
     std::string infile_string = hyperreduce_basename + "/sample_pmesh_" + to_string(window);
     std::ifstream infile_spmesh(infile_string.c_str());
@@ -3084,7 +3640,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     const int ntsamp = spaceTime ? timeSamples.size() : 1;
 
     BsinvX = NULL;
-    BsinvV = new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false);
+    BsinvV = numSamplesV == 0 ? NULL : new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false);
     BsinvE = new CAROM::Matrix(ntsamp * numSamplesE, rdimfe, false);
 
     BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
@@ -3096,7 +3652,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     spE = new CAROM::Vector(size_L2_sp, false);
 
     sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
-    sV = new CAROM::Vector(numSamplesV, false);
+    sV = numSamplesV == 0 ? NULL : new CAROM::Vector(numSamplesV, false);
     sE = new CAROM::Vector(numSamplesE, false);
 
     if (spaceTimeMethod == gnat_lspg)
@@ -3105,17 +3661,21 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
         BsinvX->read(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
     }
 
-    BsinvV->read(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
+    if (BsinvV)
+        BsinvV->read(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->read(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
 
     BXsp->read(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->read(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->read(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
 
-    BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
-    BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
-    BFvsp->read(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
-    BFesp->read(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+    if (hyperreductionSamplingType != eqp)
+    {
+        BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
+        BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
+        BFvsp->read(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
+        BFesp->read(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+    }
 
     spX->read(hyperreduce_basename + "/" + "spX" + "_" + to_string(window));
     spV->read(hyperreduce_basename + "/" + "spV" + "_" + to_string(window));
@@ -3266,11 +3826,6 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 {
     MFEM_VERIFY(x.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(x.Size() == y.Size(), "");
-
-    if (hyperreduce && hyperreductionSamplingType == eqp)
-    {
-        operFOM->SetRomOperator(this);
-    }
 
     if (use_sample_mesh)
     {
@@ -4519,6 +5074,7 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
         }
         eprev = -1;
 
+        // TODO: eliminate the following code, since W_elems is just read from file?
         bool negdof = false;
 
         std::vector<int> elemDofs;
@@ -4544,14 +5100,10 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
         MFEM_VERIFY(nvdof * elements.size() == elemDofs.size(), "");
         MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
 
-        W_elems.SetSize(elemDofs.size(), rdim);
-        for (int j=0; j<rdim; ++j)
-        {
-            for (int i=0; i<elemDofs.size(); ++i)
-            {
-                W_elems(i,j) = (*Wmat)(elemDofs[i],j);
-            }
-        }
+        // TODO: get the basename "run" and window from ROM_Options?
+        //W_elems.read(*input.basename + "/WelemsV" + std::to_string(input.window));
+        W_elems.read("run/WelemsV" + std::to_string(window));
+        MFEM_VERIFY(W_elems.numRows() == elemDofs.size() && W_elems.numColumns() == rdim, "");
     }
 
     int elemIndex = -1;
@@ -4634,6 +5186,165 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res) const
                   MPI_COMM_WORLD);
 }
 
+void ROM_Operator::ForceIntegratorEQP_SP() const
+{
+    const IntegrationRule *ir = operSP->GetIntegrationRule();
+    const int rdim = basis->GetDimV();
+    MFEM_VERIFY(eqpI.size() == eqpW.size(), "");
+    eqpFv.SetSize(rdim);
+
+    const int nqe = ir->GetWeights().Size();
+
+    DenseMatrix vshape, loc_force;
+    Vector shape, unitE, rhs;
+
+    Array<int> vdofs;
+
+    Vector v_e;
+
+    eqpFv = 0.0;
+
+    int eprev = -1;
+    int dof = 0;
+    int spaceDim = 0;
+
+    const hydrodynamics::QuadratureData & quad_data = operSP->GetQuadData();
+
+    // TODO: optimize by storing some intermediate computations.
+
+    const FiniteElement *test_fe = nullptr;
+    const FiniteElement *trial_fe = nullptr;
+
+    if (!eqp_init)
+    {
+        eqp_init = true;
+
+        std::vector<int> elements;
+        for (int i=0; i<eqpW.size(); ++i)
+        {
+            const int e = eqpI[i] / nqe;  // Element index
+            if (e != eprev)
+            {
+                elements.push_back(e);
+                eprev = e;
+            }
+        }
+        eprev = -1;
+
+        bool negdof = false;
+
+        std::vector<int> elemDofs;
+        for (auto e : elements)
+        {
+            H1FESpaceSP->GetElementVDofs(e, vdofs);
+            if (nvdof == 0)
+            {
+                nvdof = vdofs.Size();
+            }
+            else
+            {
+                MFEM_VERIFY(nvdof == vdofs.Size(), "");
+            }
+
+            for (auto dof : vdofs)
+            {
+                elemDofs.push_back(dof < 0 ? -1-dof : dof);
+                if (dof < 0) negdof = true;
+            }
+        }
+
+        MFEM_VERIFY(nvdof * elements.size() == elemDofs.size(), "");
+        MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
+
+        // TODO: get the basename "run" from ROM_Options?
+        //W_elems.read(*input.basename + "/WelemsV" + std::to_string(input.window));
+        W_elems.read("run/WelemsV" + std::to_string(window));
+        MFEM_VERIFY(W_elems.numRows() >= elemDofs.size() && W_elems.numColumns() == rdim, "");
+    }
+
+    int elemIndex = -1;
+
+    for (int i=0; i<eqpW.size(); ++i)
+    {
+        const int e = eqpI[i] / nqe;  // Element index
+        // Local (element) index of the quadrature point
+        const int qpi = eqpI[i] - (e*nqe);
+        const IntegrationPoint &ip = ir->IntPoint(qpi);
+
+        if (e != eprev)  // Update element transformation
+        {
+            elemIndex++;
+
+            test_fe = H1FESpaceSP->GetFE(e);
+            trial_fe = L2FESpaceSP->GetFE(e);
+
+            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), ""); // TODO: remove this sanity check
+
+            eprev = e;
+        }
+
+        // Integrate at the current point
+
+        // NOTE: quad_data is updated at the FOM level by LagrangianHydroOperator::UpdateQuadratureData.
+        // NOTE: quad_data includes ip.weight as a factor in quad_data.stressJinvT, so we divide it out here.
+        // TODO: reduce this UpdateQuadratureData function to the EQP points.
+
+        const int h1dofs_cnt = test_fe->GetDof();
+        const int dim = trial_fe->GetDim();
+
+        const int l2dofs_cnt = trial_fe->GetDof();
+
+        vshape.SetSize(h1dofs_cnt, dim);
+        loc_force.SetSize(h1dofs_cnt, dim);
+
+        shape.SetSize(l2dofs_cnt);
+
+        // Form stress:grad_shape at the current point.
+        test_fe->CalcDShape(ip, vshape);
+        for (int k = 0; k < h1dofs_cnt; k++)
+        {
+            for (int vd = 0; vd < dim; vd++) // Velocity components.
+            {
+                loc_force(k, vd) = 0.0;
+                for (int gd = 0; gd < dim; gd++) // Gradient components.
+                {
+                    loc_force(k, vd) +=
+                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
+                }
+            }
+        }
+
+        loc_force *= eqpW[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
+
+        trial_fe->CalcShape(ip, shape);
+
+        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+
+        unitE.SetSize(shape.Size());
+        unitE = 1.0;
+
+        rhs.SetSize(h1dofs_cnt * dim);
+
+        v_e.SetSize(rhs.Size());
+
+        //const int eos = elemIndex * nvdof;
+        const int eos = e * nvdof;
+        for (int j=0; j<rdim; ++j)
+        {
+            for (int k=0; k<nvdof; ++k)
+                v_e[k] = W_elems(eos + k, j);
+
+            // Compute the inner product, on this element, with the j-th W vector.
+            eqpFv[j] += (v_e * Vloc_force) * (shape * unitE);
+        }  // Loop (j) over V basis vectors
+    } // Loop (i) over EQP points
+
+    MPI_Allreduce(MPI_IN_PLACE, eqpFv.GetData(), eqpFv.Size(), MPI_DOUBLE, MPI_SUM,
+                  MPI_COMM_WORLD);
+
+    eqpFv.Neg();  // Matching LagrangianHydroOperator::SolveVelocity
+}
+
 void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
 {
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
@@ -4714,10 +5425,10 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
         MFEM_VERIFY(nedof * elements.size() == elemDofs.size(), "");
         MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
 
-        W_E_elems.SetSize(elemDofs.size(), rdim);
-        for (int j=0; j<rdim; ++j)
-            for (int i=0; i<elemDofs.size(); ++i)
-                W_E_elems(i,j) = (*Wmat_E)(elemDofs[i],j);
+        // TODO: get the basename "run" from ROM_Options?
+        //W_E_elems.read(*input.basename + "/WelemsE" + std::to_string(input.window));
+        W_E_elems.read("run/WelemsE" + std::to_string(window));
+        MFEM_VERIFY(W_E_elems.numRows() == elemDofs.size() && W_E_elems.numColumns() == rdim, "");
     }
 
     int elemIndex = -1;
@@ -4802,6 +5513,175 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
                   MPI_COMM_WORLD);
 }
 
+void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
+{
+    const IntegrationRule *ir = operSP->GetIntegrationRule();
+    const int rdim = basis->GetDimE();
+    MFEM_VERIFY(eqpI_E.size() == eqpW_E.size(), "");
+    eqpFe.SetSize(rdim);
+
+    const int nqe = ir->GetWeights().Size();
+
+    DenseMatrix vshape, loc_force;
+    Vector shape, rhs;
+
+    Array<int> vdofs, edofs;
+
+    Vector v_e, w_e;
+
+    eqpFe = 0.0;
+
+    int eprev = -1;
+    int dof = 0;
+    int spaceDim = 0;
+
+    const hydrodynamics::QuadratureData & quad_data = operSP->GetQuadData();
+
+    // TODO: optimize by storing some intermediate computations.
+
+    const FiniteElement *test_fe = nullptr;
+    const FiniteElement *trial_fe = nullptr;
+
+    if (!eqp_init_E)
+    {
+        eqp_init_E = true;
+
+        std::vector<int> elements;
+        for (int i=0; i<eqpW_E.size(); ++i)
+        {
+            const int e = eqpI_E[i] / nqe;  // Element index
+            if (e != eprev)
+            {
+                elements.push_back(e);
+                eprev = e;
+            }
+        }
+        eprev = -1;
+
+        bool negdof = false;
+
+        std::vector<int> elemDofs;
+        for (auto e : elements)
+        {
+            H1FESpaceSP->GetElementVDofs(e, vdofs);
+            if (nvdof == 0)
+            {
+                nvdof = vdofs.Size();
+            }
+            else
+            {
+                MFEM_VERIFY(nvdof == vdofs.Size(), "");
+            }
+
+            L2FESpaceSP->GetElementVDofs(e, edofs);
+            if (nedof == 0)
+            {
+                nedof = edofs.Size();
+            }
+            else
+            {
+                MFEM_VERIFY(nedof == edofs.Size(), "");
+            }
+
+            for (auto dof : edofs)
+            {
+                elemDofs.push_back(dof < 0 ? -1-dof : dof);
+                if (dof < 0) negdof = true;
+            }
+        }
+
+        MFEM_VERIFY(nedof * elements.size() == elemDofs.size(), "");
+        MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
+
+        // TODO: get the basename "run" from ROM_Options?
+        //W_E_elems.read(*input.basename + "/WelemsE" + std::to_string(input.window));
+        W_E_elems.read("run/WelemsE" + std::to_string(window));
+        MFEM_VERIFY(W_E_elems.numRows() >= elemDofs.size() && W_E_elems.numColumns() == rdim, "");
+    }
+
+    int elemIndex = -1;
+
+    for (int i=0; i<eqpW_E.size(); ++i)
+    {
+        const int e = eqpI_E[i] / nqe;  // Element index
+        // Local (element) index of the quadrature point
+        const int qpi = eqpI_E[i] - (e*nqe);
+        const IntegrationPoint &ip = ir->IntPoint(qpi);
+
+        if (e != eprev)  // Update element transformation
+        {
+            elemIndex++;
+
+            test_fe = H1FESpaceSP->GetFE(e);
+            trial_fe = L2FESpaceSP->GetFE(e);
+
+            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), ""); // TODO: remove this sanity check
+
+            H1FESpaceSP->GetElementVDofs(e, vdofs);
+            MFEM_VERIFY(nvdof == vdofs.Size(), ""); // TODO: remove this sanity check
+
+            v.GetSubVector(vdofs, v_e);
+
+            eprev = e;
+        }
+
+        // Integrate at the current point
+
+        // NOTE: quad_data is updated at the FOM level by LagrangianHydroOperator::UpdateQuadratureData.
+        // NOTE: quad_data includes ip.weight as a factor in quad_data.stressJinvT, so we divide it out here.
+        // TODO: reduce this UpdateQuadratureData function to the EQP points.
+
+        const int h1dofs_cnt = test_fe->GetDof();
+        const int dim = trial_fe->GetDim();
+
+        const int l2dofs_cnt = trial_fe->GetDof();
+
+        vshape.SetSize(h1dofs_cnt, dim);
+        loc_force.SetSize(h1dofs_cnt, dim);
+
+        shape.SetSize(l2dofs_cnt);
+
+        // Form stress:grad_shape at the current point.
+        test_fe->CalcDShape(ip, vshape);
+        for (int k = 0; k < h1dofs_cnt; k++)
+        {
+            for (int vd = 0; vd < dim; vd++) // Velocity components.
+            {
+                loc_force(k, vd) = 0.0;
+                for (int gd = 0; gd < dim; gd++) // Gradient components.
+                {
+                    loc_force(k, vd) +=
+                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
+                }
+            }
+        }
+
+        loc_force *= eqpW_E[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
+
+        trial_fe->CalcShape(ip, shape);
+
+        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
+
+        rhs.SetSize(h1dofs_cnt * dim);
+
+        w_e.SetSize(nedof);
+
+        //const int eos = elemIndex * nedof;
+        const int eos = e * nedof;
+        for (int j=0; j<rdim; ++j)
+        {
+            for (int k=0; k<nedof; ++k)
+                w_e[k] = W_E_elems(eos + k, j);
+
+            // Compute the inner product, on this element, with the j-th W vector.
+            eqpFe[j] += (v_e * Vloc_force) * (shape * w_e);
+        }  // Loop (j) over V basis vectors
+    } // Loop (i) over EQP points
+
+    MPI_Allreduce(MPI_IN_PLACE, eqpFe.GetData(), eqpFe.Size(), MPI_DOUBLE, MPI_SUM,
+                  MPI_COMM_WORLD);
+}
+
 void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs) const
 {
     Vector res(basis->GetDimV());
@@ -4823,7 +5703,6 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
-
     if (!use_sample_mesh || rank == 0)
     {
         if (use_sample_mesh)
@@ -4833,12 +5712,19 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
         if (hyperreduce && hyperreductionSamplingType == eqp)
         {
-            operFOM->SetRomOperator(this);
+            //operFOM->SetRomOperator(this);
+            operSP->SetRomOperator(this);
         }
+
+        const bool sample_mesh_proj = use_sample_mesh && hyperreductionSamplingType != eqp;
+        const bool eqp_proj = use_sample_mesh && hyperreductionSamplingType == eqp;
 
         const int Vsize = use_sample_mesh ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
         const int Esize = basis->SolutionSizeL2SP();
         Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
+
+        CAROM::Vector spV(Vsize, false);
+        CAROM::Vector spE(Esize, false);
 
         // The monolithic BlockVector stores the unknown fields as follows:
         // (Position, Velocity, Specific Internal Energy).
@@ -4847,6 +5733,23 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
         dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
         dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+
+        const int rXsize = basis->GetDimX();
+        const int rVsize = basis->GetDimV();
+        const int rEsize = basis->GetDimE();
+        MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+
+        Vector rS0(S);
+        Vector rV(rVsize), rdS_dt(S.Size());
+        Vector rdv_dt, rv0, rdx_dt, rde_dt;
+        rv0.SetDataAndSize(rS0.GetData() + rXsize, rVsize);
+        rde_dt.SetDataAndSize(rdS_dt.GetData() + rXsize + rVsize, rEsize);
+        rdv_dt.SetDataAndSize(rdS_dt.GetData() + rXsize, rVsize);
+        rdx_dt.SetDataAndSize(rdS_dt.GetData(), rXsize);
+
+        rdS_dt = 0.0;
+
+        //Sx.SetDataAndSize(S.GetData(), basis->GetDimX());
 
         // In each sub-step:
         // - Update the global state Vector S.
@@ -4858,38 +5761,109 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S is S0.
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        //if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        if (sample_mesh_proj) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        else if (eqp_proj)
+        {
+            CAROM::Vector dv_dt_libROM(dv_dt.GetData(), dv_dt.Size(), false, false);
+            //BVsp->transposeMult(dv_dt_libROM, *rV);
+
+            rdv_dt = eqpFv;
+            // Lift eqpFv to sample mesh space.
+
+            CAROM::Vector eqpFv_libROM(eqpFv.GetData(), eqpFv.Size(), false, false);
+            basis->GetBVsp()->mult(eqpFv_libROM, spV);  // multPlus could be useful
+            dv_dt_libROM += spV;
+        }
 
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
+        if (eqp_proj) add(rv0, 0.5 * dt, rdv_dt, rV);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        //if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        if (sample_mesh_proj) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
+
+        if (eqp_proj)
+        {
+            CAROM::Vector de_dt_libROM(de_dt.GetData(), de_dt.Size(), false, false);
+
+            rde_dt = eqpFe;
+            // Lift eqpFe to sample mesh space.
+
+            CAROM::Vector eqpFe_libROM(eqpFe.GetData(), eqpFe.Size(), false, false);
+            basis->GetBEsp()->mult(eqpFe_libROM, spE);  // multPlus could be useful
+            de_dt_libROM += spE;
+        }
+
+        if (eqp_proj)
+        {
+            rdx_dt = rV;
+        }
 
         // -- 2.
         // S = S0 + 0.5 * dt * dS_dt;
         add(S0, 0.5 * dt, dS_dt, fx);
+        if (eqp_proj) add(rS0, 0.5 * dt, rdS_dt, S);
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        //if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        if (sample_mesh_proj) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+
+        if (eqp_proj)
+        {
+            CAROM::Vector dv_dt_libROM(dv_dt.GetData(), dv_dt.Size(), false, false);
+            //BVsp->transposeMult(dv_dt_libROM, *rV);
+
+            rdv_dt = eqpFv;
+            // Lift eqpFv to sample mesh space.
+
+            CAROM::Vector eqpFv_libROM(eqpFv.GetData(), eqpFv.Size(), false, false);
+            basis->GetBVsp()->mult(eqpFv_libROM, spV);  // multPlus could be useful
+            dv_dt_libROM += spV;
+        }
+
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
+        if (eqp_proj) add(rv0, 0.5 * dt, rdv_dt, rV);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        //if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        if (sample_mesh_proj) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
+
+        if (eqp_proj)
+        {
+            CAROM::Vector de_dt_libROM(de_dt.GetData(), de_dt.Size(), false, false);
+
+            rde_dt = eqpFe;
+            // Lift eqpFe to sample mesh space.
+
+            CAROM::Vector eqpFe_libROM(eqpFe.GetData(), eqpFe.Size(), false, false);
+            basis->GetBEsp()->mult(eqpFe_libROM, spE);  // multPlus could be useful
+            de_dt_libROM += spE;
+        }
+
+        if (eqp_proj)
+        {
+            rdx_dt = rV;
+        }
 
         // -- 3.
         // S = S0 + dt * dS_dt.
         add(S0, dt, dS_dt, fx);
+        if (eqp_proj) add(rS0, dt, rdS_dt, S);
         hydro_oper->ResetQuadratureData();
 
         MFEM_VERIFY(!useReducedM, "TODO");
 
-        if (use_sample_mesh)
-            basis->RestrictFromSampleMesh(fx, S, false);
-        else
-            basis->ProjectFOMtoROM(fx, S);
+        if (hyperreductionSamplingType != eqp)
+        {
+            if (use_sample_mesh)
+                basis->RestrictFromSampleMesh(fx, S, false);
+            else
+                basis->ProjectFOMtoROM(fx, S);
+        }
     }
 
     if (use_sample_mesh)
@@ -4897,5 +5871,117 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
 
+    t += dt;
+}
+
+void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *oper,
+                           Vector const& S, Vector &dS) const
+{
+    MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");
+    MFEM_VERIFY(dS.Size() == basis->SolutionSize(), "");
+
+    // TODO: allocate all this data just once in the class.
+
+    basis->LiftToSampleMesh(S, fx);
+
+    oper->ResetQuadratureData();
+    oper->SetTime(t);
+    oper->Mult(fx, fy);  // fy is not computed and not used in the EQP case.
+
+    const int rXsize = basis->GetDimX();
+    const int rVsize = basis->GetDimV();
+    const int rEsize = basis->GetDimE();
+    MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+
+    Vector rdv_dt, rdx_dt, rde_dt, rSv;
+
+    rSv.SetDataAndSize(S.GetData() + rXsize, rVsize);
+
+    rdx_dt.SetDataAndSize(dS.GetData(), rXsize);
+    rdv_dt.SetDataAndSize(dS.GetData() + rXsize, rVsize);
+    rde_dt.SetDataAndSize(dS.GetData() + rXsize + rVsize, rEsize);
+
+    CAROM::Vector a(rSv.GetData(), rSv.Size(), false, false);
+    CAROM::Vector b(rdx_dt.GetData(), rdx_dt.Size(), false, false);
+    BXtBV->mult(a, b);
+
+    b += *BXtV0;
+
+    rdv_dt = eqpFv;
+    rde_dt = eqpFe;
+}
+
+void ROM_Operator::StepRK4(Vector &S, double &t, double &dt) const
+{
+    MFEM_VERIFY(rank == 0 && hyperreductionSamplingType == eqp && use_sample_mesh,
+                "StepRK4 needs more general support");
+
+    MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
+
+    const bool eqp_proj = use_sample_mesh && hyperreductionSamplingType == eqp;
+
+    hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
+
+    if (hyperreduce && hyperreductionSamplingType == eqp)
+    {
+        hydro_oper->SetRomOperator(this);
+    }
+
+    // TODO: this should be only in the EQP case.
+    // TODO: move this to ROM_Operator constructor? See where BXtV0 is read.
+    if (!BXtBV)
+    {
+        BXtBV = new CAROM::Matrix(basis->GetDimX(), basis->GetDimV(), false);
+        BXtBV->read("run/BXtBV" + std::to_string(window));
+    }
+
+    Vector dS_dt(fx.Size()), S0(fx);
+
+    const int Vsize = basis->SolutionSizeH1SP();
+    const int Esize = basis->SolutionSizeL2SP();
+
+    CAROM::Vector spV(Vsize, false);
+    CAROM::Vector spE(Esize, false);
+
+    // The monolithic BlockVector stores the unknown fields as follows:
+    // (Position, Velocity, Specific Internal Energy).
+    Vector dv_dt, v0, dx_dt, de_dt;
+    v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
+    de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
+    dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
+    dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+
+    const int rXsize = basis->GetDimX();
+    const int rVsize = basis->GetDimV();
+    const int rEsize = basis->GetDimE();
+    MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+
+    Vector rS0(S);
+    Vector rV(rVsize), rdS_dt(S.Size());
+    Vector rdv_dt, rv0, rdx_dt, rde_dt;
+    rv0.SetDataAndSize(rS0.GetData() + rXsize, rVsize);
+    rde_dt.SetDataAndSize(rdS_dt.GetData() + rXsize + rVsize, rEsize);
+    rdv_dt.SetDataAndSize(rdS_dt.GetData() + rXsize, rVsize);
+    rdx_dt.SetDataAndSize(rdS_dt.GetData(), rXsize);
+
+    rdS_dt = 0.0;
+
+    Vector k(S.Size()), y(S.Size()), z(S.Size());
+
+    EQPmult(t, hydro_oper, S, k); // k1
+
+    add(S, dt/2.0, k, y);
+    add(S, dt/6.0, k, z);
+
+    EQPmult(t + dt/2.0, hydro_oper, y, k); // k2
+    add(S, dt/2.0, k, y);
+    z.Add(dt/3.0, k);
+
+    EQPmult(t + dt/2.0, hydro_oper, y, k); // k3
+    add(S, dt, k, y);
+    z.Add(dt/3.0, k);
+
+    EQPmult(t + dt, hydro_oper, y, k); // k4
+    add(z, dt/6.0, k, S);
     t += dt;
 }

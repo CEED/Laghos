@@ -399,8 +399,7 @@ int main(int argc, char *argv[])
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
-    romOptions.use_sample_mesh = romOptions.hyperreduce && (romOptions.hyperreductionSamplingType != eqp);
-    MFEM_VERIFY(!(romOptions.SNS) || (romOptions.hyperreductionSamplingType != eqp), "Using SNS with EQP is prohibited");
+    romOptions.use_sample_mesh = romOptions.hyperreduce;
 
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
@@ -1125,6 +1124,7 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
         err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
+
         if (romOptions.parameterID != -1 && romOptions.offsetType == interpolateOffset && myid == 0)
         {
             ofstream basisIdFile;
@@ -1879,7 +1879,7 @@ int main(int argc, char *argv[])
 
                         if (samplerLast->MaxNumSamples() >= windowNumSamples + windowOverlapSamples || last_step)
                         {
-                            samplerLast->Finalize(cutoff, romOptions, *S);
+                            samplerLast->Finalize(cutoff, romOptions);
                             if (last_step)
                             {
                                 // Let samplerLast define the final window, discarding the sampler window.
@@ -1924,7 +1924,7 @@ int main(int argc, char *argv[])
                         }
                         else
                         {
-                            sampler->Finalize(cutoff, romOptions, *S);
+                            sampler->Finalize(cutoff, romOptions);
                         }
                         if (myid == 0 && romOptions.parameterID == -1) {
                             outfile_twp << windowEndpoint << ", " << cutoff[0] << ", " << cutoff[1] << ", " << cutoff[2];
@@ -2008,8 +2008,6 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
                     }
 
-                    if (fom_data) oper->ResetQuadratureData();
-
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
@@ -2043,7 +2041,6 @@ int main(int argc, char *argv[])
                     if (!romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->ProjectFOMtoROM(*S, romS);
-                        //romS = 0.0;  // TODO: remove this hack, which sets to loaded init state for the window.
                     }
                     if (myid == 0)
                     {
@@ -2067,6 +2064,7 @@ int main(int argc, char *argv[])
                         }
                     }
 
+                    //romOper[romOptions.window]->UpdateSampleMeshNodes(romS);  // TODO?
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
             }
@@ -2219,9 +2217,9 @@ int main(int argc, char *argv[])
         else
         {
             if (samplerLast)
-                samplerLast->Finalize(cutoff, romOptions, *S);
+                samplerLast->Finalize(cutoff, romOptions);
             else if (sampler)
-                sampler->Finalize(cutoff, romOptions, *S);
+                sampler->Finalize(cutoff, romOptions);
         }
         basisConstructionTimer.Stop();
 

@@ -263,6 +263,8 @@ struct ROM_Options
 
     // snapshot sampling frequency (sample every sampfreq timestep)
     int sampfreq = 1;
+
+    int numOfflineParameters = 1;  // TODO: input
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
@@ -490,7 +492,7 @@ public:
 
         // TODO: update the following comment, since there should now be a maximum of 1 time interval now.
         const int max_model_dim_est = int(input.t_final/input.initial_dt + 0.5) + 100;  // Note that this is a rough estimate which may be exceeded, resulting in multiple libROM basis time intervals.
-        const int max_model_dim = (input.max_dim > 0) ? input.max_dim + 1 : max_model_dim_est;
+        const int max_model_dim = (input.max_dim > 0) ? input.max_dim : max_model_dim_est;
 
         std::cout << rank << ": max_model_dim " << max_model_dim << std::endl;
 
@@ -630,7 +632,7 @@ public:
 
     void SampleSolution(const double t, const double dt, const double pd, Vector const& S);
 
-    void Finalize(Array<int> &cutoff, ROM_Options& input, Vector const& sol);
+    void Finalize(Array<int> &cutoff, ROM_Options& input);
 
     int MaxNumSamples()
     {
@@ -823,8 +825,7 @@ private:
 
     void SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV,
                         const CAROM::Matrix* snapE, const CAROM::Matrix* basisV,
-                        const CAROM::Matrix* basisE, ROM_Options const& input,
-                        Vector const& sol);
+                        const CAROM::Matrix* basisE, ROM_Options const& input);
 
     void SetupEQP_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV,
                            const CAROM::Matrix* snapE, const CAROM::Matrix* basisV,
@@ -947,6 +948,10 @@ public:
 
     CAROM::Matrix *GetBEsp() {
         return BEsp;
+    }
+
+    CAROM::Matrix *GetBXtBV() {
+        return basisX->transposeMult(basisV);
     }
 
     void ComputeReducedMatrices(bool sns1);
@@ -1080,7 +1085,8 @@ protected:
     void SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
                              ParFiniteElementSpace *L2FESpace,
                              Array<int>& nH1, const int window,
-                             const std::vector<double> *timesteps);
+                             const std::vector<double> *timesteps,
+                             ROM_Options const& input);
 
     std::vector<int> paramID_list;
     std::vector<double> coeff_list;
@@ -1094,6 +1100,26 @@ private:
                                            const int rdim) const;
 
     void SampleMeshAddInitialState(Vector &usp) const;
+
+    void SetStateFromTrueDOFs(Vector const& x, Vector const& v,
+                              Vector const& e, Vector & S);
+
+    void SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
+                        std::vector<const CAROM::Matrix*> snapV,
+                        std::vector<const CAROM::Matrix*> snapE,
+                        const CAROM::Matrix* basisV,
+                        const CAROM::Matrix* basisE,
+                        ROM_Options const& input,
+                        std::set<int> & elems);
+
+    void SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
+                           std::vector<const CAROM::Matrix*> snapV,
+                           std::vector<const CAROM::Matrix*> snapE,
+                           const CAROM::Matrix* basisV,
+                           const CAROM::Matrix* basisE,
+                           ROM_Options const& input,
+                           bool equationE,
+                           std::set<int> & elems);
 
     // Space-time data
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
@@ -1221,6 +1247,7 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
+    void StepRK4(Vector &S, double &t, double &dt) const;
 
     void ApplyHyperreduction(Vector &S);
     void PostprocessHyperreduction(Vector &S, bool keep_data=false);
@@ -1238,11 +1265,14 @@ public:
     void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
     void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
 
+    void ForceIntegratorEQP_SP() const;
+    void ForceIntegratorEQP_E_SP(Vector const& v) const;
+
     void InitEQP() const;
 
     ~ROM_Operator()
     {
-        operFOM->ResetEQP();
+        if (operFOM) operFOM->ResetEQP();
 
         delete mat_gf_coeff;
         delete mat_gf;
@@ -1313,6 +1343,12 @@ private:
                           std::vector<int> & indices,
                           std::vector<double> & weights);
 
+    void ReadElementsNNLS(ROM_Options const& input, string basename,
+                          std::vector<int> & elems);
+
+    void EQPmult(double t, hydrodynamics::LagrangianHydroOperator *oper,
+                 Vector const& S, Vector &dS) const;
+
     // Data for EQP
     std::vector<int> eqpI, eqpI_E;
     std::vector<double> eqpW, eqpW_E;
@@ -1322,13 +1358,20 @@ private:
     mutable int nvdof = 0;
     mutable int nedof = 0;
 
-    mutable DenseMatrix W_elems, W_E_elems;
+    mutable CAROM::Matrix W_elems, W_E_elems;
 
     CAROM::Matrix* Wmat = 0;
     CAROM::Matrix* Wmat_E = 0;
 
+    mutable CAROM::Matrix* BXtBV = 0;
+    mutable CAROM::Vector* BXtV0 = 0;
+
     ParFiniteElementSpace *H1spaceFOM = nullptr; // FOM H1 FEM space
     ParFiniteElementSpace *L2spaceFOM = nullptr; // FOM L2 FEM space
+
+    mutable Vector eqpFv, eqpFe;
+
+    int window = 0;
 };
 
 CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,

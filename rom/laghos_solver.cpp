@@ -239,8 +239,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
     dx.MakeRef(&H1FESpace, dS_dt, 0);
     dx = v;
 
-    if (use_eqp && !eqp_init_points) rom_op->InitEQP();
-
     SolveVelocity(S, dS_dt);
     SolveEnergy(S, v, dS_dt);
 
@@ -279,7 +277,8 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
 
         if (use_eqp)
         {
-            rom_op->ForceIntegratorEQP_FOM(rhs);
+            rom_op->ForceIntegratorEQP_SP();
+            rhs = 0.0;  // Computed by EQP in ROM_Operator
         }
         else
         {
@@ -410,12 +409,14 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
         timer.sw_force.Start();
         if (use_eqp)
         {
-            rom_op->ForceIntegratorEQP_E_FOM(v, e_rhs);
+            rom_op->ForceIntegratorEQP_E_SP(v);
+            e_rhs = 0.0;  // Computed by EQP in ROM_Operator
         }
         else
         {
             ForcePA.MultTranspose(v, e_rhs);
         }
+
         timer.sw_force.Stop();
 
         if (e_source) {
