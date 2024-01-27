@@ -232,18 +232,6 @@ void DMD_Sampler::Finalize(ROM_Options& input)
     finalized = true;
 }
 
-void WriteElements(std::set<int> const& elems, const string filename)
-{
-    std::ofstream outfile(filename);
-
-    for (auto elem : elems)
-    {
-        outfile << elem << "\n";
-    }
-
-    outfile.close();
-}
-
 // The input pmesh is the parallel, distributed FOM mesh with boundary attributes
 // to be copied to smesh. The sample mesh smesh is parallel but not distributed.
 // That is, smesh is entirely on the root process. The indices of elements in
@@ -2426,6 +2414,40 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                 H1fec->GetBasisType(), noMsolve, noMsolve,
                 hyperreductionSamplingType == eqp);
 
+        {
+            // StepRK4 data
+            rk4_dS_dt.SetSize(basis->SolutionSize());
+            rk4_S0.SetSize(basis->SolutionSize());
+
+            const int Vsize = basis->SolutionSizeH1SP();
+            const int Esize = basis->SolutionSizeL2SP();
+
+            rk4_spV.setSize(Vsize);
+            rk4_spE.setSize(Esize);
+
+            rk4_v0.SetDataAndSize(rk4_S0.GetData() + Vsize, Vsize);
+            rk4_de_dt.SetDataAndSize(rk4_dS_dt.GetData() + (2*Vsize), Esize);
+            rk4_dv_dt.SetDataAndSize(rk4_dS_dt.GetData() + Vsize, Vsize);
+            rk4_dx_dt.SetDataAndSize(rk4_dS_dt.GetData(), Vsize);
+
+            const int rXsize = basis->GetDimX();
+            const int rVsize = basis->GetDimV();
+            const int rEsize = basis->GetDimE();
+            MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+
+            rk4_rS0.SetSize(basis->SolutionSize());
+            rk4_rV.SetSize(rVsize);
+            rk4_rdS_dt.SetSize(rk4_rS0.Size());
+            rk4_rv0.SetDataAndSize(rk4_rS0.GetData() + rXsize, rVsize);
+            rk4_rde_dt.SetDataAndSize(rk4_rdS_dt.GetData() + rXsize + rVsize, rEsize);
+            rk4_rdv_dt.SetDataAndSize(rk4_rdS_dt.GetData() + rXsize, rVsize);
+            rk4_rdx_dt.SetDataAndSize(rk4_rdS_dt.GetData(), rXsize);
+
+            rk4_k.SetSize(rk4_S0.Size());
+            rk4_y.SetSize(rk4_S0.Size());
+            rk4_z.SetSize(rk4_S0.Size());
+        }
+
         if (input.spaceTimeMethod != no_space_time)
         {
             ST_ode_solver = new RK4Solver; // TODO: allow for other types of solvers
@@ -2465,6 +2487,9 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         BXtV0->read("run/ROMoffset" + input.basisIdentifier +
                     "/BXt_initV" + std::to_string(input.window));
 
+        BXtBV = new CAROM::Matrix(basis->GetDimX(), basis->GetDimV(), false);
+        BXtBV->read("run/BXtBV" + std::to_string(window));
+
         std::map<int,int> elem2smesh;
         for (int i=0; i<elems.size(); ++i)
             elem2smesh[elems[i]] = i;
@@ -2474,7 +2499,113 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 
         MapSampleMeshEQP(nqe, elem2smesh, basis->sampleSelector, eqpI);
         MapSampleMeshEQP(nqe, elem2smesh, basis->sampleSelector, eqpI_E);
+
+        // TODO: get the basename "run" from ROM_Options?
+        W_elems.read("run/WelemsV" + std::to_string(window));
+        W_E_elems.read("run/WelemsE" + std::to_string(window));
+
+        // Setup data for ForceIntegratorEQP_SP and ForceIntegratorEQP_E_SP
+        Setup_ForceIntegratorEQP_SP(nqe);
+        Setup_ForceIntegratorEQP_E_SP(nqe);
     }
+}
+
+void ROM_Operator::Setup_ForceIntegratorEQP_SP(int nqe)
+{
+    // TODO: is any of this even used?
+    int eprev = -1;
+    Array<int> vdofs, edofs;
+
+    std::vector<int> elements;
+    for (int i=0; i<eqpW.size(); ++i)
+    {
+        const int e = eqpI[i] / nqe;  // Element index
+        if (e != eprev)
+        {
+            elements.push_back(e);
+            eprev = e;
+        }
+    }
+    eprev = -1;
+
+    bool negdof = false;
+
+    std::vector<int> elemDofs;
+    for (auto e : elements)
+    {
+        H1FESpaceSP->GetElementVDofs(e, vdofs);
+        if (nvdof == 0)
+        {
+            nvdof = vdofs.Size();
+        }
+        else
+        {
+            MFEM_VERIFY(nvdof == vdofs.Size(), "");
+        }
+
+        for (auto dof : vdofs)
+        {
+            elemDofs.push_back(dof < 0 ? -1-dof : dof);
+            if (dof < 0) negdof = true;
+        }
+    }
+
+    MFEM_VERIFY(nvdof * elements.size() == elemDofs.size(), "");
+    MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
+}
+
+void ROM_Operator::Setup_ForceIntegratorEQP_E_SP(int nqe)
+{
+    // TODO: is any of this even used?
+    int eprev = -1;
+    Array<int> vdofs, edofs;
+
+    std::vector<int> elements;
+    for (int i=0; i<eqpW_E.size(); ++i)
+    {
+        const int e = eqpI_E[i] / nqe;  // Element index
+        if (e != eprev)
+        {
+            elements.push_back(e);
+            eprev = e;
+        }
+    }
+    eprev = -1;
+
+    bool negdof = false;
+
+    std::vector<int> elemDofs;
+    for (auto e : elements)
+    {
+        H1FESpaceSP->GetElementVDofs(e, vdofs);
+        if (nvdof == 0)
+        {
+            nvdof = vdofs.Size();
+        }
+        else
+        {
+            MFEM_VERIFY(nvdof == vdofs.Size(), "");
+        }
+
+        L2FESpaceSP->GetElementVDofs(e, edofs);
+        if (nedof == 0)
+        {
+            nedof = edofs.Size();
+        }
+        else
+        {
+            MFEM_VERIFY(nedof == edofs.Size(), "");
+        }
+
+        for (auto dof : edofs)
+        {
+            elemDofs.push_back(dof < 0 ? -1-dof : dof);
+            if (dof < 0) negdof = true;
+        }
+    }
+
+    MFEM_VERIFY(nedof * elements.size() == elemDofs.size(), "");
+    MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
 }
 
 void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
@@ -4318,7 +4449,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     t += dt;
 }
 
-void ROM_Operator::StepRK4(Vector &S, double &t, double &dt) const
+void ROM_Operator::StepRK4(Vector &S, double &t, double &dt)
 {
     MFEM_VERIFY(rank == 0 && hyperreductionSamplingType == eqp && use_sample_mesh,
                 "StepRK4 needs more general support");
@@ -4334,61 +4465,25 @@ void ROM_Operator::StepRK4(Vector &S, double &t, double &dt) const
         hydro_oper->SetRomOperator(this);
     }
 
-    // TODO: this should be only in the EQP case.
-    // TODO: move this to ROM_Operator constructor? See where BXtV0 is read.
-    if (!BXtBV)
-    {
-        BXtBV = new CAROM::Matrix(basis->GetDimX(), basis->GetDimV(), false);
-        BXtBV->read("run/BXtBV" + std::to_string(window));
-    }
+    rk4_S0 = fx;
 
-    Vector dS_dt(fx.Size()), S0(fx);
+    rk4_rS0 = S;
+    rk4_rdS_dt = 0.0;
 
-    const int Vsize = basis->SolutionSizeH1SP();
-    const int Esize = basis->SolutionSizeL2SP();
+    EQPmult(t, hydro_oper, S, rk4_k); // k1
 
-    CAROM::Vector spV(Vsize, false);
-    CAROM::Vector spE(Esize, false);
+    add(S, dt/2.0, rk4_k, rk4_y);
+    add(S, dt/6.0, rk4_k, rk4_z);
 
-    // The monolithic BlockVector stores the unknown fields as follows:
-    // (Position, Velocity, Specific Internal Energy).
-    Vector dv_dt, v0, dx_dt, de_dt;
-    v0.SetDataAndSize(S0.GetData() + Vsize, Vsize);
-    de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
-    dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
-    dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+    EQPmult(t + dt/2.0, hydro_oper, rk4_y, rk4_k); // k2
+    add(S, dt/2.0, rk4_k, rk4_y);
+    rk4_z.Add(dt/3.0, rk4_k);
 
-    const int rXsize = basis->GetDimX();
-    const int rVsize = basis->GetDimV();
-    const int rEsize = basis->GetDimE();
-    MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+    EQPmult(t + dt/2.0, hydro_oper, rk4_y, rk4_k); // k3
+    add(S, dt, rk4_k, rk4_y);
+    rk4_z.Add(dt/3.0, rk4_k);
 
-    Vector rS0(S);
-    Vector rV(rVsize), rdS_dt(S.Size());
-    Vector rdv_dt, rv0, rdx_dt, rde_dt;
-    rv0.SetDataAndSize(rS0.GetData() + rXsize, rVsize);
-    rde_dt.SetDataAndSize(rdS_dt.GetData() + rXsize + rVsize, rEsize);
-    rdv_dt.SetDataAndSize(rdS_dt.GetData() + rXsize, rVsize);
-    rdx_dt.SetDataAndSize(rdS_dt.GetData(), rXsize);
-
-    rdS_dt = 0.0;
-
-    Vector k(S.Size()), y(S.Size()), z(S.Size());
-
-    EQPmult(t, hydro_oper, S, k); // k1
-
-    add(S, dt/2.0, k, y);
-    add(S, dt/6.0, k, z);
-
-    EQPmult(t + dt/2.0, hydro_oper, y, k); // k2
-    add(S, dt/2.0, k, y);
-    z.Add(dt/3.0, k);
-
-    EQPmult(t + dt/2.0, hydro_oper, y, k); // k3
-    add(S, dt, k, y);
-    z.Add(dt/3.0, k);
-
-    EQPmult(t + dt, hydro_oper, y, k); // k4
-    add(z, dt/6.0, k, S);
+    EQPmult(t + dt, hydro_oper, rk4_y, rk4_k); // k4
+    add(rk4_z, dt/6.0, rk4_k, S);
     t += dt;
 }

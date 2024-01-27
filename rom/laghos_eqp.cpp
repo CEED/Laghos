@@ -576,6 +576,7 @@ void ROM_Operator::InitEQP() const
 
 void ROM_Operator::ForceIntegratorEQP(Vector & res) const
 {
+    MFEM_ABORT("REMOVE");
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimV();
     MFEM_VERIFY(eqpI.size() == eqpW.size(), "");
@@ -760,53 +761,6 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
     const FiniteElement *test_fe = nullptr;
     const FiniteElement *trial_fe = nullptr;
 
-    if (!eqp_init)
-    {
-        eqp_init = true;
-
-        std::vector<int> elements;
-        for (int i=0; i<eqpW.size(); ++i)
-        {
-            const int e = eqpI[i] / nqe;  // Element index
-            if (e != eprev)
-            {
-                elements.push_back(e);
-                eprev = e;
-            }
-        }
-        eprev = -1;
-
-        bool negdof = false;
-
-        std::vector<int> elemDofs;
-        for (auto e : elements)
-        {
-            H1FESpaceSP->GetElementVDofs(e, vdofs);
-            if (nvdof == 0)
-            {
-                nvdof = vdofs.Size();
-            }
-            else
-            {
-                MFEM_VERIFY(nvdof == vdofs.Size(), "");
-            }
-
-            for (auto dof : vdofs)
-            {
-                elemDofs.push_back(dof < 0 ? -1-dof : dof);
-                if (dof < 0) negdof = true;
-            }
-        }
-
-        MFEM_VERIFY(nvdof * elements.size() == elemDofs.size(), "");
-        MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
-
-        // TODO: get the basename "run" from ROM_Options?
-        //W_elems.read(*input.basename + "/WelemsV" + std::to_string(input.window));
-        W_elems.read("run/WelemsV" + std::to_string(window));
-        MFEM_VERIFY(W_elems.numRows() >= elemDofs.size() && W_elems.numColumns() == rdim, "");
-    }
-
     int elemIndex = -1;
 
     for (int i=0; i<eqpW.size(); ++i)
@@ -892,6 +846,8 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
 
 void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
 {
+    MFEM_ABORT("REMOVE");
+
     const IntegrationRule *ir = operFOM->GetIntegrationRule();
     const int rdim = basis->GetDimE();
     MFEM_VERIFY(eqpI_E.size() == eqpW_E.size(), "");
@@ -1087,63 +1043,6 @@ void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
     const FiniteElement *test_fe = nullptr;
     const FiniteElement *trial_fe = nullptr;
 
-    if (!eqp_init_E)
-    {
-        eqp_init_E = true;
-
-        std::vector<int> elements;
-        for (int i=0; i<eqpW_E.size(); ++i)
-        {
-            const int e = eqpI_E[i] / nqe;  // Element index
-            if (e != eprev)
-            {
-                elements.push_back(e);
-                eprev = e;
-            }
-        }
-        eprev = -1;
-
-        bool negdof = false;
-
-        std::vector<int> elemDofs;
-        for (auto e : elements)
-        {
-            H1FESpaceSP->GetElementVDofs(e, vdofs);
-            if (nvdof == 0)
-            {
-                nvdof = vdofs.Size();
-            }
-            else
-            {
-                MFEM_VERIFY(nvdof == vdofs.Size(), "");
-            }
-
-            L2FESpaceSP->GetElementVDofs(e, edofs);
-            if (nedof == 0)
-            {
-                nedof = edofs.Size();
-            }
-            else
-            {
-                MFEM_VERIFY(nedof == edofs.Size(), "");
-            }
-
-            for (auto dof : edofs)
-            {
-                elemDofs.push_back(dof < 0 ? -1-dof : dof);
-                if (dof < 0) negdof = true;
-            }
-        }
-
-        MFEM_VERIFY(nedof * elements.size() == elemDofs.size(), "");
-        MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
-
-        // TODO: get the basename "run" from ROM_Options?
-        //W_E_elems.read(*input.basename + "/WelemsE" + std::to_string(input.window));
-        W_E_elems.read("run/WelemsE" + std::to_string(window));
-        MFEM_VERIFY(W_E_elems.numRows() >= elemDofs.size() && W_E_elems.numColumns() == rdim, "");
-    }
-
     int elemIndex = -1;
 
     for (int i=0; i<eqpW_E.size(); ++i)
@@ -1227,6 +1126,7 @@ void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
                   MPI_COMM_WORLD);
 }
 
+// TODO: remove
 void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs) const
 {
     Vector res(basis->GetDimV());
@@ -1235,6 +1135,7 @@ void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs) const
     basis->LiftROMtoFOM_dVdt(res, rhs);
 }
 
+// TODO: remove
 void ROM_Operator::ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const
 {
     Vector res(basis->GetDimE());

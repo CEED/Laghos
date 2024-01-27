@@ -2012,14 +2012,15 @@ int main(int argc, char *argv[])
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
 
+                    timeLoopTimer.Stop();
                     SetWindowParameters(twparam, romOptions);
                     if (romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->ProjectFromPreviousWindow(romOptions, romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
                     }
 
+                    //timeLoopTimer.Stop();
                     delete basis[romOptions.window-1];
-                    timeLoopTimer.Stop();
 
                     if (!romOptions.use_sample_mesh)
                     {
@@ -2036,7 +2037,7 @@ int main(int argc, char *argv[])
                     {
                         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     }
-                    timeLoopTimer.Start();
+                    //timeLoopTimer.Start();
 
                     if (!romOptions.use_sample_mesh)
                     {
@@ -2047,7 +2048,9 @@ int main(int argc, char *argv[])
                         cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
                     }
 
+                    // TODO: move the deletes after the time loop?
                     delete romOper[romOptions.window-1];
+                    timeLoopTimer.Start();
 
                     if (romOptions.use_sample_mesh)
                     {

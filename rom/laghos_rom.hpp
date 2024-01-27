@@ -1238,7 +1238,7 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
-    void StepRK4(Vector &S, double &t, double &dt) const;
+    void StepRK4(Vector &S, double &t, double &dt);
 
     void ApplyHyperreduction(Vector &S);
     void PostprocessHyperreduction(Vector &S, bool keep_data=false);
@@ -1363,6 +1363,15 @@ private:
     mutable Vector eqpFv, eqpFe;
 
     int window = 0;
+
+    void Setup_ForceIntegratorEQP_SP(int nqe);
+    void Setup_ForceIntegratorEQP_E_SP(int nqe);
+
+    // StepRK4 data
+    Vector rk4_dS_dt, rk4_S0, rk4_dv_dt, rk4_v0, rk4_dx_dt, rk4_de_dt, rk4_rS0,
+           rk4_rV, rk4_rdS_dt, rk4_rdv_dt, rk4_rv0, rk4_rdx_dt, rk4_rde_dt, rk4_k,
+           rk4_y, rk4_z;
+    CAROM::Vector rk4_spV, rk4_spE;
 };
 
 CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,
