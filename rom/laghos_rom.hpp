@@ -1273,6 +1273,7 @@ public:
         delete mat_fec;
         delete spmesh;
         delete xsp_gf;
+        delete operSP;
     }
 
 private:

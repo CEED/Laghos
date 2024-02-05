@@ -570,8 +570,8 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
 
 void ROM_Operator::InitEQP() const
 {
-    operFOM->SetPointsEQP(eqpI);
-    operFOM->SetPointsEQP(eqpI_E);
+    operSP->SetPointsEQP(eqpI);
+    operSP->SetPointsEQP(eqpI_E);
 }
 
 void ROM_Operator::ForceIntegratorEQP(Vector & res) const

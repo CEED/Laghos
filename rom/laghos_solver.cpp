@@ -239,6 +239,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
     dx.MakeRef(&H1FESpace, dS_dt, 0);
     dx = v;
 
+    if (use_eqp && !eqp_init_points) rom_op->InitEQP();
+
     SolveVelocity(S, dS_dt);
     SolveEnergy(S, v, dS_dt);
 
