@@ -421,23 +421,83 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
 {
     CAROM::NNLSSolver nnls(nnls_tol, 0, maxNNLSnnz, 2);
 
-    CAROM::Vector rhs_ub(Gt.numColumns(), false);
-    // G.mult(w, rhs_ub);  // rhs = Gw
-    // rhs = Gw. Note that by using Gt and multTranspose, we do parallel communication.
-    Gt.transposeMult(w, rhs_ub);
+    // rhs = Gw.
+    // Note that by using Gt and multTranspose, we do parallel communication.
+    CAROM::Vector rhs_Gw(Gt.numColumns(), false);
+    Gt.transposeMult(w, rhs_Gw);
 
-    CAROM::Vector rhs_lb(rhs_ub);
-    CAROM::Vector rhs_Gw(rhs_ub);
-
-    const double delta = 1.0e-11;
-    for (int i=0; i<rhs_ub.dim(); ++i)
+    if (true)
     {
-        rhs_lb(i) -= delta;
-        rhs_ub(i) += delta;
-    }
+        // Compute Q^T of the LQ factorization of G.
+        CAROM::Matrix* Qt_ptr;
+        Qt_ptr = Gt.qr_factorize();
 
-    //nnls.normalize_constraints(Gt, rhs_lb, rhs_ub);
-    nnls.solve_parallel_with_scalapack(Gt, rhs_lb, rhs_ub, sol);
+        CAROM::Matrix Qt(Qt_ptr->getData(), Qt_ptr->numRows(),
+                         Qt_ptr->numColumns(), Qt_ptr->distributed(),
+                         false);
+
+        // Compute L of the factorization; L is lower triangular.
+        // G = L * Q --> L = G * Q^T
+        CAROM::Matrix L(Qt.numColumns(), Qt.numColumns(), false);
+        Gt.transposeMult(Qt, L);
+
+        // Compute the RHS vector.
+        CAROM::Vector rhs_ub(Qt.numColumns(), false);
+        Qt.transposeMult(w, rhs_ub);
+
+        // Compute the new RHS tolerance values.
+        const double delta = 1.0e-11;
+        CAROM::Vector delta_new(rhs_ub.dim(), false);
+        for (int i = 0; i < delta_new.dim(); ++i)
+        {
+            double denominator = (i + 1) * std::abs(L.item(i, i));
+            if (std::abs(denominator) < delta)
+                delta_new(i) = 1.0;
+            else
+                delta_new(i) = delta / denominator;
+
+            for (int j = i + 1; j < delta_new.dim(); ++j)
+            {
+                denominator = (j + 1) * std::abs(L.item(j, i));
+
+                double temp;
+                if (std::abs(denominator) < delta)
+                    temp = 1.0;
+                else
+                    temp = delta / denominator;
+
+                if (temp < delta_new(i))
+                    delta_new(i) = temp;
+            }
+        }
+
+        // Compute the upper and lower bound RHS vectors.
+        CAROM::Vector rhs_lb(rhs_ub);
+        for (int i = 0; i < rhs_ub.dim(); ++i)
+        {
+            rhs_lb(i) -= delta_new(i);
+            rhs_ub(i) += delta_new(i);
+        }
+
+        // Call the NNLS solver.
+        nnls.solve_parallel_with_scalapack(Qt, rhs_lb, rhs_ub, sol);
+
+        delete Qt_ptr;
+    }
+    else
+    {
+        CAROM::Vector rhs_ub(rhs_Gw);
+        CAROM::Vector rhs_lb(rhs_Gw);
+
+        const double delta = 1.0e-11;
+        for (int i=0; i<rhs_ub.dim(); ++i)
+        {
+            rhs_lb(i) -= delta;
+            rhs_ub(i) += delta;
+        }
+        //nnls.normalize_constraints(Gt, rhs_lb, rhs_ub);
+        nnls.solve_parallel_with_scalapack(Gt, rhs_lb, rhs_ub, sol);
+    }
 
     int nnz = 0;
     for (int i=0; i<sol.dim(); ++i)
@@ -465,8 +525,10 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
 
     res -= rhs_Gw;
     const double relNorm = res.norm() / std::max(normGsol, normRHS);
-    cout << rank << ": relative residual norm for NNLS solution of Gs = Gw: " <<
-         relNorm << endl;
+    cout << rank << ": absolute residual norm for NNLS solution of Gs = Gw: "
+        << res.norm() << endl;
+    cout << rank << ": relative residual norm for NNLS solution of Gs = Gw: "
+        << relNorm << endl;
 }
 
 void WriteSolutionNNLS(CAROM::Vector const& sol, const string filename)
@@ -2365,18 +2427,6 @@ void ROM_Basis::ReadSolutionBases(const int window)
 				(*basisE)(i, tmp_rdime) = unitE[i];
 			}
 			basisE->orthogonalize_last(-1, true);
-
-            std::cout << "Ortho test 1" << "\n";
-            Vector test_ortho(rdime);
-            test_ortho = 0.0;
-
-            for (int j = 0; j < rdime; j++)
-            {
-                for (int i = 0; i < tL2size; i++)
-                    test_ortho[j] += (*basisE)(i, j) * (*basisE)(i, rdime - 1);
-
-                std::cout << test_ortho[j] << "\n";
-            }
 		}
 		else
 		{
@@ -2603,18 +2653,6 @@ void ROM_Basis::AddLastCol_V(Vector const& f)
 		(*basisV)(i, rdimv-1) = mfH1[i];
 
 	basisV->orthogonalize_last(-1, true);
-
-    std::cout << "Ortho test 2" << "\n";
-    Vector test_ortho(rdimv);
-    test_ortho = 0.0;
-
-    for (int j = 0; j < rdimv; j++)
-    {
-        for (int i = 0; i < tH1size; i++)
-            test_ortho[j] += (*basisV)(i, j) * (*basisV)(i, rdimv - 1);
-
-        std::cout << test_ortho[j] << "\n";
-    }
 }
 
 // f is a full vector, not a true vector
@@ -2631,28 +2669,6 @@ void ROM_Basis::AddLastCol_E(Vector const& f)
 		(*basisE)(i, rdime-1) = mfL2[i];
 
 	basisE->orthogonalize_last(-1, true);
-
-    std::cout << "Ortho test 3a" << "\n";
-    Vector test_ortho(rdime);
-    test_ortho = 0.0;
-
-    for (int j = 0; j < rdime - 1; j++)
-    {
-        for (int i = 0; i < tL2size; i++)
-            test_ortho[j] += (*basisE)(i, j) * (*basisE)(i, rdime - 2);
-
-        std::cout << test_ortho[j] << "\n";
-    }
-
-    std::cout << "Ortho test 3b" << "\n";
-    test_ortho = 0.0;
-    for (int j = 0; j < rdime; j++)
-    {
-        for (int i = 0; i < tL2size; i++)
-            test_ortho[j] += (*basisE)(i, j) * (*basisE)(i, rdime - 1);
-
-        std::cout << test_ortho[j] << "\n";
-    }
 }
 
 // f is a full vector, not a true vector
