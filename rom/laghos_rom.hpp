@@ -260,6 +260,7 @@ struct ROM_Options
 
     int maxNNLSnnz = 0; // max number of NNLS solution nonzeros
     double tolNNLS = 1.0e-14; // NNLS solver error tolerance
+    bool skipNNLS = false;
 
     // snapshot sampling frequency (sample every sampfreq timestep)
     int sampfreq = 1;

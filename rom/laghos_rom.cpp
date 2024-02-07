@@ -1367,6 +1367,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         std::vector<const CAROM::Matrix*> parametricSnapshotsX,
             parametricSnapshotsV, parametricSnapshotsE;
 
+        if (input.skipNNLS) return;
+
         LoadParametricSnapshots(input.numOfflineParameters, input.basename, "X",
                                 input.window, parametricSnapshotsX);
         LoadParametricSnapshots(input.numOfflineParameters, input.basename, "V",

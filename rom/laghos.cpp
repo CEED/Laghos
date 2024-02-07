@@ -162,6 +162,8 @@ int main(int argc, char *argv[])
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
+    int nnlsWindow0 = -1;
+    int nnlsWindow1 = -1;
 
     OptionsParser args(argc, argv);
     args.AddOption(&mesh_file, "-m", "--mesh",
@@ -347,6 +349,10 @@ int main(int argc, char *argv[])
                    "NNLS solver error tolerance.");
     args.AddOption(&romOptions.sampfreq, "-sampfreq", "--samp-freq",
                    "Snapshot sampling frequency.");
+    args.AddOption(&nnlsWindow0, "-nnlsw0", "--nnls-window0",
+                   "First window for NNLS setup.");
+    args.AddOption(&nnlsWindow1, "-nnlsw1", "--nnls-window1",
+                   "Last window for NNLS setup.");
 
     args.Parse();
     if (!args.Good())
@@ -1238,10 +1244,15 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
         if (usingWindows)
         {
+            if (nnlsWindow1 == -1) nnlsWindow1 = numWindows;
+
             // Construct the ROM_Basis for each window.
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
+                romOptions.skipNNLS = (romOptions.window < nnlsWindow0 ||
+                                       romOptions.window > nnlsWindow1);
+
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
                 if (!romOptions.hyperreduce_prep)
                 {
@@ -1261,20 +1272,24 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (!romOptions.use_sample_mesh)
+        if (!romOptions.use_sample_mesh && nnlsWindow0 <= 0)
         {
             basis[0]->Init(romOptions, *S);
         }
 
         if (romOptions.hyperreduce_prep)
         {
-            if (myid == 0)
+            const bool skipW0 = 0 < nnlsWindow0;
+            if (myid == 0 && !skipW0)
             {
                 cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
             for (int curr_window = 1; curr_window < numWindows; curr_window++)
             {
+                const bool skipW = (curr_window < nnlsWindow0 || curr_window > nnlsWindow1);
+                if (skipW) continue;
+
                 basis[curr_window]->Init(romOptions, *S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
@@ -1348,6 +1363,10 @@ int main(int argc, char *argv[])
                     WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
                 }
             }
+
+            onlinePreprocessTimer.Stop();
+            cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
+
             return 0;
         }
 
