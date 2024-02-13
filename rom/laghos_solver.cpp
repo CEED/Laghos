@@ -832,12 +832,22 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                 // Energy values at quadrature point.
                 L2FESpace.GetElementDofs(z_id, L2dofs);
                 e.GetSubVector(L2dofs, e_loc);
-                evaluator.GetL2Values(e_loc, e_vals);
 
                 // All reference->physical Jacobians at the quadrature points.
                 H1FESpace.GetElementVDofs(z_id, H1dofs);
                 x.GetSubVector(H1dofs, vector_vals);
-                evaluator.GetVectorGrad(vecvalMat, Jpr_b[z]);
+
+                if (using_eqp)
+                {
+                    Array<int> qp(eqp_ptid.data() + eqp_offset[b], nqp_z);
+                    evaluator.GetSomeL2Values(e_loc, qp, e_vals);
+                    evaluator.GetSomeVectorGrad(vecvalMat, qp, Jpr_b[z]);
+                }
+                else
+                {
+                    evaluator.GetL2Values(e_loc, e_vals);
+                    evaluator.GetVectorGrad(vecvalMat, Jpr_b[z]);
+                }
             }
             else {
                 e.GetValues(z_id, integ_rule, e_vals);
