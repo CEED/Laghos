@@ -890,7 +890,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                 // All reference->physical Jacobians at the quadrature points.
                 H1FESpace.GetElementVDofs(z_id, H1dofs);
                 v.GetSubVector(H1dofs, vector_vals);
-                evaluator.GetVectorGrad(vecvalMat, grad_v_ref);
+                if (using_eqp)
+                {
+                    Array<int> qp(eqp_ptid.data() + eqp_offset[b], nqp_z);
+                    evaluator.GetSomeVectorGrad(vecvalMat, qp, grad_v_ref);
+                }
+                else
+                    evaluator.GetVectorGrad(vecvalMat, grad_v_ref);
             }
 
             for (int q = 0; q < nqp_z; q++)

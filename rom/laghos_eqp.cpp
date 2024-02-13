@@ -742,11 +742,9 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
     const int nqe = ir->GetWeights().Size();
 
     DenseMatrix vshape, loc_force;
-    Vector shape, unitE, rhs;
+    Vector shape;
 
     Array<int> vdofs;
-
-    Vector v_e;
 
     eqpFv = 0.0;
 
@@ -795,6 +793,7 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
 
         vshape.SetSize(h1dofs_cnt, dim);
         loc_force.SetSize(h1dofs_cnt, dim);
+        double *force_data = loc_force.Data();
 
         shape.SetSize(l2dofs_cnt);
 
@@ -808,7 +807,7 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
                 for (int gd = 0; gd < dim; gd++) // Gradient components.
                 {
                     loc_force(k, vd) +=
-                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
+                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k, gd);
                 }
             }
         }
@@ -816,25 +815,19 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
         loc_force *= eqpW[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
 
         trial_fe->CalcShape(ip, shape);
+        const double ip_e = shape.Sum();
 
-        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
-
-        unitE.SetSize(shape.Size());
-        unitE = 1.0;
-
-        rhs.SetSize(h1dofs_cnt * dim);
-
-        v_e.SetSize(rhs.Size());
-
-        //const int eos = elemIndex * nvdof;
         const int eos = e * nvdof;
         for (int j=0; j<rdim; ++j)
         {
+            double ip_f = 0.0;
             for (int k=0; k<nvdof; ++k)
-                v_e[k] = W_elems(eos + k, j);
+            {
+                ip_f += W_elems(eos + k, j) * force_data[k];
+            }
 
             // Compute the inner product, on this element, with the j-th W vector.
-            eqpFv[j] += (v_e * Vloc_force) * (shape * unitE);
+            eqpFv[j] += ip_f * ip_e;
         }  // Loop (j) over V basis vectors
     } // Loop (i) over EQP points
 
