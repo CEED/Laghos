@@ -42,13 +42,13 @@ Device configuration: cpu
 Memory configuration: host-std
 Number of zones in the serial mesh: 16
 Non-Cartesian partitioning through METIS will be used.
-Zones min/max: 3 5
+Zones min/max: 4 4
 Number of kinematic (position, velocity) dofs: 162
 Number of specific internal energy dofs: 64
 Repeating step 11
 Repeating step 26
 Repeating step 41
-step    50,	t = 0.3704,	dt = 0.005729,	|e| = 7.9356590849e+00
+step    50,	t = 0.3704,	dt = 0.005729,	|e| = 7.9356590770e+00
 Repeating step 59
 Repeating step 61
 Repeating step 63
@@ -60,27 +60,27 @@ Repeating step 70
 Repeating step 72
 Repeating step 79
 Repeating step 89
-step   100,	t = 0.5082,	dt = 0.001542,	|e| = 7.1849903144e+00
-step   150,	t = 0.5869,	dt = 0.001636,	|e| = 6.8605869051e+00
-step   200,	t = 0.6687,	dt = 0.001636,	|e| = 6.5796490985e+00
-step   250,	t = 0.7510,	dt = 0.001669,	|e| = 6.3419949788e+00
-step   300,	t = 0.8394,	dt = 0.001880,	|e| = 6.1214363408e+00
-step   350,	t = 0.9419,	dt = 0.002202,	|e| = 5.9002366993e+00
-step   400,	t = 1.0520,	dt = 0.002247,	|e| = 5.6955733646e+00
-step   450,	t = 1.1651,	dt = 0.002384,	|e| = 5.5167267410e+00
-step   500,	t = 1.3071,	dt = 0.003338,	|e| = 5.3299133588e+00
-Repeating step 505
-Repeating step 519
+step   100,	t = 0.5082,	dt = 0.001542,	|e| = 7.1849903106e+00
+step   150,	t = 0.5869,	dt = 0.001636,	|e| = 6.8605869032e+00
+step   200,	t = 0.6687,	dt = 0.001636,	|e| = 6.5796481625e+00
+step   250,	t = 0.7509,	dt = 0.001669,	|e| = 6.3421719397e+00
+step   300,	t = 0.8395,	dt = 0.001880,	|e| = 6.1212469230e+00
+step   350,	t = 0.9421,	dt = 0.002202,	|e| = 5.8998111212e+00
+step   400,	t = 1.0523,	dt = 0.002202,	|e| = 5.6952978991e+00
+step   450,	t = 1.1633,	dt = 0.002384,	|e| = 5.5193782288e+00
+step   500,	t = 1.3043,	dt = 0.003338,	|e| = 5.3332508435e+00
+Repeating step 506
+Repeating step 520
 Repeating step 540
-step   550,	t = 1.4333,	dt = 0.002050,	|e| = 5.1918518846e+00
-Repeating step 553
-Repeating step 576
-Repeating step 577
+step   550,	t = 1.4315,	dt = 0.002050,	|e| = 5.1937367367e+00
+Repeating step 554
 Repeating step 577
 Repeating step 578
-step   599,	t = 1.5000,	dt = 0.000836,	|e| = 5.1280144682e+00
+Repeating step 578
+Repeating step 579
+step   600,	t = 1.5000,	dt = 0.000646,	|e| = 5.1280262407e+00
 
-Energy  diff: 2.56e-09
+Energy  diff: 3.58e-09
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.4 -rs 2
 
@@ -133,40 +133,42 @@ step    50,	t = 0.0870,	dt = 0.001779,	|e| = 2.4251235295e+01
 Repeating step 64
 Repeating step 83
 Repeating step 91
-step   100,	t = 0.1601,	dt = 0.001093,	|e| = 2.0424240125e+01
+step   100,	t = 0.1601,	dt = 0.001093,	|e| = 2.0424240126e+01
 Repeating step 128
 Repeating step 136
 Repeating step 141
-step   150,	t = 0.2117,	dt = 0.000818,	|e| = 1.8715722763e+01
+step   150,	t = 0.2117,	dt = 0.000818,	|e| = 1.8715722764e+01
 Repeating step 166
 Repeating step 175
-step   200,	t = 0.2493,	dt = 0.000827,	|e| = 1.7751066144e+01
-Repeating step 219
-Repeating step 223
-step   250,	t = 0.2845,	dt = 0.000673,	|e| = 1.7066329939e+01
-Repeating step 276
-Repeating step 287
-Repeating step 298
-step   300,	t = 0.3193,	dt = 0.000494,	|e| = 1.6573105801e+01
-Repeating step 318
-Repeating step 322
-step   350,	t = 0.3398,	dt = 0.000357,	|e| = 1.6326887606e+01
-Repeating step 367
-Repeating step 397
-step   400,	t = 0.3556,	dt = 0.000258,	|e| = 1.6131565499e+01
-step   450,	t = 0.3685,	dt = 0.000258,	|e| = 1.5961746334e+01
-Repeating step 453
-Repeating step 487
-Repeating step 495
-Repeating step 498
-step   500,	t = 0.3791,	dt = 0.000161,	|e| = 1.5825105291e+01
-Repeating step 501
-step   550,	t = 0.3861,	dt = 0.000148,	|e| = 1.5740216854e+01
-step   600,	t = 0.3937,	dt = 0.000157,	|e| = 1.5653880319e+01
-Repeating step 613
-step   641,	t = 0.4000,	dt = 0.000081,	|e| = 1.5588910706e+01
+step   200,	t = 0.2493,	dt = 0.000827,	|e| = 1.7751065253e+01
+Repeating step 222
+Repeating step 224
+Repeating step 231
+step   250,	t = 0.2841,	dt = 0.000644,	|e| = 1.7073792865e+01
+Repeating step 279
+Repeating step 290
+step   300,	t = 0.3188,	dt = 0.000568,	|e| = 1.6579554966e+01
+Repeating step 301
+Repeating step 320
+Repeating step 325
+step   350,	t = 0.3391,	dt = 0.000349,	|e| = 1.6334815125e+01
+Repeating step 371
+step   400,	t = 0.3549,	dt = 0.000296,	|e| = 1.6139946838e+01
+Repeating step 408
+Repeating step 409
+step   450,	t = 0.3675,	dt = 0.000246,	|e| = 1.5975283862e+01
+Repeating step 467
+Repeating step 474
+Repeating step 488
+step   500,	t = 0.3775,	dt = 0.000192,	|e| = 1.5844560481e+01
+Repeating step 505
+Repeating step 544
+step   550,	t = 0.3861,	dt = 0.000165,	|e| = 1.5739754640e+01
+Repeating step 559
+step   600,	t = 0.3936,	dt = 0.000146,	|e| = 1.5655162761e+01
+step   644,	t = 0.4000,	dt = 0.000103,	|e| = 1.5589352982e+01
 
-Energy  diff: 2.39e-11
+Energy  diff: 4.10e-11
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.8 -rs 1 -ok 3 -ot 2
 
@@ -215,7 +217,7 @@ Non-Cartesian partitioning through METIS will be used.
 Zones min/max: 4 4
 Number of kinematic (position, velocity) dofs: 336
 Number of specific internal energy dofs: 144
-step    50,	t = 0.1902,	dt = 0.004435,	|e| = 1.3124098067e+01
+step    50,	t = 0.1902,	dt = 0.004435,	|e| = 1.3124098064e+01
 Repeating step 51
 Repeating step 58
 Repeating step 74
@@ -224,7 +226,7 @@ Repeating step 88
 Repeating step 90
 Repeating step 93
 Repeating step 98
-step   100,	t = 0.3422,	dt = 0.001444,	|e| = 1.1153585219e+01
+step   100,	t = 0.3422,	dt = 0.001444,	|e| = 1.1153585280e+01
 Repeating step 110
 Repeating step 117
 Repeating step 123
@@ -232,32 +234,33 @@ Repeating step 135
 Repeating step 139
 Repeating step 142
 Repeating step 147
-step   150,	t = 0.3902,	dt = 0.000463,	|e| = 1.0787292121e+01
-step   200,	t = 0.4133,	dt = 0.000463,	|e| = 1.0598946447e+01
-step   250,	t = 0.4365,	dt = 0.000463,	|e| = 1.0439590872e+01
-step   300,	t = 0.4611,	dt = 0.000532,	|e| = 1.0324140035e+01
-step   350,	t = 0.4893,	dt = 0.000587,	|e| = 1.0252490890e+01
+step   150,	t = 0.3902,	dt = 0.000463,	|e| = 1.0787292133e+01
+step   200,	t = 0.4133,	dt = 0.000463,	|e| = 1.0598946420e+01
+step   250,	t = 0.4365,	dt = 0.000463,	|e| = 1.0439590795e+01
+step   300,	t = 0.4611,	dt = 0.000532,	|e| = 1.0324139882e+01
+step   350,	t = 0.4893,	dt = 0.000587,	|e| = 1.0252490626e+01
 Repeating step 382
 Repeating step 382
-step   400,	t = 0.5186,	dt = 0.000656,	|e| = 1.0237017438e+01
+step   400,	t = 0.5186,	dt = 0.000656,	|e| = 1.0237017103e+01
 Repeating step 405
-step   450,	t = 0.5498,	dt = 0.000693,	|e| = 1.0266298395e+01
-step   500,	t = 0.5845,	dt = 0.000693,	|e| = 1.0329364257e+01
-step   550,	t = 0.6191,	dt = 0.000693,	|e| = 1.0404029116e+01
+step   450,	t = 0.5498,	dt = 0.000693,	|e| = 1.0266298090e+01
+step   500,	t = 0.5845,	dt = 0.000693,	|e| = 1.0329364000e+01
+step   550,	t = 0.6191,	dt = 0.000693,	|e| = 1.0404028934e+01
 Repeating step 576
-step   600,	t = 0.6517,	dt = 0.000613,	|e| = 1.0472982985e+01
-Repeating step 635
+step   600,	t = 0.6517,	dt = 0.000613,	|e| = 1.0472982881e+01
+Repeating step 634
 Repeating step 636
-step   650,	t = 0.6799,	dt = 0.000479,	|e| = 1.0524538066e+01
-step   700,	t = 0.7057,	dt = 0.000519,	|e| = 1.0562315097e+01
-step   750,	t = 0.7317,	dt = 0.000519,	|e| = 1.0590770048e+01
+step   650,	t = 0.6798,	dt = 0.000470,	|e| = 1.0524370187e+01
+step   700,	t = 0.7055,	dt = 0.000519,	|e| = 1.0561922273e+01
+step   750,	t = 0.7314,	dt = 0.000519,	|e| = 1.0590491041e+01
 Repeating step 797
-step   800,	t = 0.7573,	dt = 0.000441,	|e| = 1.0608296551e+01
-step   850,	t = 0.7794,	dt = 0.000441,	|e| = 1.0614503933e+01
-Repeating step 882
-step   900,	t = 0.8000,	dt = 0.000206,	|e| = 1.0612158294e+01
+step   800,	t = 0.7570,	dt = 0.000441,	|e| = 1.0608131942e+01
+step   850,	t = 0.7791,	dt = 0.000441,	|e| = 1.0614454249e+01
+Repeating step 883
+step   900,	t = 0.8000,	dt = 0.000375,	|e| = 1.0612142441e+01
+step   901,	t = 0.8000,	dt = 0.000049,	|e| = 1.0612128297e+01
 
-Energy  diff: 1.23e-11
+Energy  diff: 1.81e-11
 
 mpirun -np X laghos -m data/disc-nurbs.mesh -tf 5.0 -rs 2
 
@@ -311,16 +314,16 @@ Repeating step 5
 Repeating step 10
 Repeating step 48
 Repeating step 49
-step    50,	t = 2.2836,	dt = 0.034191,	|e| = 8.0841244798e-01
+step    50,	t = 2.2836,	dt = 0.034191,	|e| = 8.0841244800e-01
 Repeating step 51
-step   100,	t = 3.7890,	dt = 0.033384,	|e| = 6.8577525144e-01
+step   100,	t = 3.7890,	dt = 0.033384,	|e| = 6.8577525148e-01
 Repeating step 104
 Repeating step 105
 Repeating step 106
-step   150,	t = 4.9204,	dt = 0.023550,	|e| = 6.3632879715e-01
-step   154,	t = 5.0000,	dt = 0.008689,	|e| = 6.3356639142e-01
+step   150,	t = 4.9204,	dt = 0.023550,	|e| = 6.3632879721e-01
+step   154,	t = 5.0000,	dt = 0.008689,	|e| = 6.3356639148e-01
 
-Energy  diff: 5.49e-12
+Energy  diff: 6.48e-12
 
 mpirun -np X laghos -m data/convex.mesh -tf 0.1 -rs 2
 
@@ -374,7 +377,7 @@ step    50,	t = 0.0585,	dt = 0.001024,	|e| = 5.1668713215e+01
 Repeating step 65
 step    96,	t = 0.1000,	dt = 0.000179,	|e| = 4.3862262944e+01
 
-Energy  diff: 2.61e-12
+Energy  diff: 1.69e-13
 
 mpirun -np X laghos -m data/cube01_hex.mesh -tf 0.25 -rs 1
 
@@ -432,7 +435,7 @@ Repeating step 72
 Repeating step 77
 step    91,	t = 0.2500,	dt = 0.000526,	|e| = 4.3152920230e+01
 
-Energy  diff: 1.44e-12
+Energy  diff: 3.08e-12
 
 mpirun -np X laghos -m data/cube_gmsh_19.msh -tf 0.0002 -rs 0
 
@@ -478,10 +481,10 @@ Device configuration: cpu
 Memory configuration: host-std
 Number of zones in the serial mesh: 4374
 Non-Cartesian partitioning through METIS will be used.
-Zones min/max: 1064 1121
+Zones min/max: 1062 1126
 Number of kinematic (position, velocity) dofs: 110922
 Number of specific internal energy dofs: 34992
 step     2,	t = 0.0002,	dt = 0.000079,	|e| = 2.3426708103e+03
 
-Energy  diff: 5.43e-14
+Energy  diff: 3.63e-14
 
