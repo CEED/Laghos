@@ -159,6 +159,18 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    rhs_c_gf(&H1c),
    dvc_gf(&H1c)
 {
+//   H1.ExchangeFaceNbrData();
+//   int n_bdr = 0;
+//   for (int be = 0; be < NBE; be++)
+//   {
+//      auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
+//      if (b_face_tr == nullptr) { continue; }
+//      n_bdr++;
+//   }
+//   std::cout << NBE << " " << n_bdr << " "
+//             << H1.GetNFbyType(FaceType::Boundary) << std::endl;
+//   MFEM_ABORT("faces");
+
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
    block_offsets[2] = block_offsets[1] + H1Vsize;
