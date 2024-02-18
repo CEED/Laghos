@@ -81,6 +81,7 @@ Repeating step 579
 step   600,	t = 1.5000,	dt = 0.000646,	|e| = 5.1280262407e+00
 
 Energy  diff: 3.58e-09
+Moment  diff: 4.25e-01
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.4 -rs 2
 
@@ -169,6 +170,7 @@ step   600,	t = 0.3936,	dt = 0.000146,	|e| = 1.5655162761e+01
 step   644,	t = 0.4000,	dt = 0.000103,	|e| = 1.5589352982e+01
 
 Energy  diff: 4.10e-11
+Moment  diff: 2.72e-01
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.8 -rs 1 -ok 3 -ot 2
 
@@ -261,6 +263,7 @@ step   900,	t = 0.8000,	dt = 0.000375,	|e| = 1.0612142441e+01
 step   901,	t = 0.8000,	dt = 0.000049,	|e| = 1.0612128297e+01
 
 Energy  diff: 1.81e-11
+Moment  diff: 4.82e-01
 
 mpirun -np X laghos -m data/disc-nurbs.mesh -tf 5.0 -rs 2
 
@@ -324,6 +327,7 @@ step   150,	t = 4.9204,	dt = 0.023550,	|e| = 6.3632879721e-01
 step   154,	t = 5.0000,	dt = 0.008689,	|e| = 6.3356639148e-01
 
 Energy  diff: 6.48e-12
+Moment  diff: 1.12e+00
 
 mpirun -np X laghos -m data/convex.mesh -tf 0.1 -rs 2
 
@@ -378,6 +382,7 @@ Repeating step 65
 step    96,	t = 0.1000,	dt = 0.000179,	|e| = 4.3862262944e+01
 
 Energy  diff: 1.69e-13
+Moment  diff: 1.97e-02
 
 mpirun -np X laghos -m data/cube01_hex.mesh -tf 0.25 -rs 1
 
@@ -436,6 +441,7 @@ Repeating step 77
 step    91,	t = 0.2500,	dt = 0.000526,	|e| = 4.3152920230e+01
 
 Energy  diff: 3.08e-12
+Moment  diff: 2.46e-01
 
 mpirun -np X laghos -m data/cube_gmsh_19.msh -tf 0.0002 -rs 0
 
@@ -487,4 +493,5 @@ Number of specific internal energy dofs: 34992
 step     2,	t = 0.0002,	dt = 0.000079,	|e| = 2.3426708103e+03
 
 Energy  diff: 3.63e-14
+Moment  diff: 1.00e-03
 

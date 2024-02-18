@@ -249,6 +249,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
       Mv.AddDomainIntegrator(vmi);
 
+      Mv.BilinearForm::operator=(0.0);
+
       if (BC_strong == false)
       {
          auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
@@ -735,6 +737,16 @@ double LagrangianHydroOperator::KineticEnergy(const ParGridFunction &v) const
                  H1.GetParMesh()->GetComm());
 
    return 0.5*glob_ke;
+}
+
+double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
+{
+   Vector one(Mv_spmat_copy.Height());
+   one = 1.0;
+   double momentum = Mv_spmat_copy.InnerProduct(one, v);
+
+   MPI_Allreduce(MPI_IN_PLACE, &momentum, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());
+   return momentum;
 }
 
 void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,

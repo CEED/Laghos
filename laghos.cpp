@@ -608,6 +608,7 @@ int main(int argc, char *argv[])
    if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
+   const double momentum_in = hydro.Momentum(v_gf);
 
    if (visualization)
    {
@@ -861,11 +862,14 @@ int main(int argc, char *argv[])
 
    const double energy_final = hydro.InternalEnergy(e_gf) +
                                hydro.KineticEnergy(v_gf);
+   const double momentum_out = hydro.Momentum(v_gf);
    if (Mpi::Root())
    {
       cout << endl;
       cout << "Energy  diff: " << std::scientific << std::setprecision(2)
            << fabs(energy_init - energy_final) << endl;
+      cout << "Moment  diff: " << std::scientific << std::setprecision(2)
+           << fabs(momentum_in - momentum_out) << endl;
       if (mem_usage)
       {
          cout << "Maximum memory resident set size: "
