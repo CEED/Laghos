@@ -171,6 +171,9 @@ step   644,	t = 0.4000,	dt = 0.000103,	|e| = 1.5589352982e+01
 
 Energy  diff: 4.10e-11
 Moment  diff: 2.72e-01
+-- Points per face: 7
+-- Perimeter error: 2.68e-03
+-- Position error:  1.73e-03
 
 mpirun -np X laghos -m data/refined.mesh -tf 0.8 -rs 1 -ok 3 -ot 2
 
@@ -264,6 +267,9 @@ step   901,	t = 0.8000,	dt = 0.000049,	|e| = 1.0612128297e+01
 
 Energy  diff: 1.81e-11
 Moment  diff: 4.82e-01
+-- Points per face: 7
+-- Perimeter error: 1.40e-03
+-- Position error:  1.93e-03
 
 mpirun -np X laghos -m data/disc-nurbs.mesh -tf 5.0 -rs 2
 
@@ -490,8 +496,8 @@ Non-Cartesian partitioning through METIS will be used.
 Zones min/max: 1062 1126
 Number of kinematic (position, velocity) dofs: 110922
 Number of specific internal energy dofs: 34992
-step     2,	t = 0.0002,	dt = 0.000079,	|e| = 2.3426708103e+03
+step     1,	t = 0.0002,	dt = 0.000204,	|e| = nan
 
-Energy  diff: 3.63e-14
-Moment  diff: 1.00e-03
+Energy  diff: nan
+Moment  diff: 0.00e+00
 

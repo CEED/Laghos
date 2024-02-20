@@ -62,6 +62,8 @@
 // Wall BC tests:
 // * penPar is the penalty Parameter
 // * per is the perimeter of the bounding box of the domain
+// TG 2D (rates):
+// mpirun -np 4 laghos -m data/square01_quad.mesh -p 0 -rs 3 -tf 0.5 -s 4 -fa -vs 20 -vis
 // 2D square:
 // mpirun -np 4 laghos -m data/square01_quad.mesh -p 1 -rs 3 -tf 0.8 -s 7 -fa -vs 20 -vis
 // 2D trapezoid:
@@ -75,7 +77,7 @@
 // 3D cube:
 // mpirun -np 4 laghos -m data/cube01_hex.mesh -p 1 -rs 1 -tf 0.8 -s 7 -fa -vs 20 -vis
 // 3D spherical hole:
-// mpirun -np 4 laghos -m data/cube_gmsh_19.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
+// mpirun -np 4 laghos -m data/sphere_hole_V4.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
 
 
 #include <fstream>
@@ -229,7 +231,7 @@ int main(int argc, char *argv[])
       blast_position[0] = 0.7;
       blast_position[1] = 0.5;
    }
-   if (strcmp(mesh_file, "data/cube_gmsh_19.msh") == 0)
+   if (strcmp(mesh_file, "data/sphere_hole_V4.msh") == 0)
    {
       blast_position[0] = -0.5;
       blast_position[1] = -0.5;
@@ -389,6 +391,7 @@ int main(int argc, char *argv[])
          {
             cout << "Unknown partition type: " << partition_type << '\n';
          }
+         delete[] nxyz;
          delete mesh;
          MPI_Finalize();
          return 3;
@@ -783,7 +786,6 @@ int main(int argc, char *argv[])
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
                                           Wx, Wy, Ww,Wh);
-            Wx += offx;
          }
 
          if (visit)
@@ -874,6 +876,104 @@ int main(int argc, char *argv[])
       {
          cout << "Maximum memory resident set size: "
               << mmax << "/" << msum << " MB" << endl;
+      }
+   }
+
+   // Position errors w.r.t. a perfect circle.
+   pmesh->ExchangeFaceNbrData();
+   if (strcmp(mesh_file, "data/refined.mesh") == 0)
+   {
+      auto ir = IntRules.Get(Geometry::SEGMENT, 12);
+
+      double perim = 0.0, pos_error = 0.0;
+      for (int i = 0; i < pmesh->GetNBE(); i++)
+      {
+         auto Tr = pmesh->GetBdrFaceTransformations(i);
+         if (Tr == NULL) { continue; }
+
+         auto ip_c = Geometries.GetCenter(Geometry::SEGMENT);
+         Vector pos(dim);
+         Tr->Transform(ip_c, pos);
+         if (!(pos(0) > 0.2 && pos(0) < 0.8 &&
+               pos(1) > 0.2 && pos(1) < 0.8)) { continue; }
+
+         for (int p = 0; p < ir.GetNPoints(); p++)
+         {
+            const IntegrationPoint &ip = ir.IntPoint(p);
+            Tr->SetAllIntPoints(&ip);
+            Vector vals;
+            x_gf.GetVectorValue(*Tr, ip, vals);
+            double err = sqrt((vals(0) - 0.5) * (vals(0) - 0.5) +
+                              (vals(1) - 0.5) * (vals(1) - 0.5));
+            err = fabs(err - 0.2);
+
+            Vector nor(2);
+            CalcOrtho(Tr->Jacobian(), nor);
+
+            double w = ip.weight * nor.Norml2();
+            perim     += w;
+            pos_error += w * err;
+         }
+      }
+
+      MPI_Allreduce(MPI_IN_PLACE, &perim, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+      MPI_Allreduce(MPI_IN_PLACE, &pos_error, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+
+      if (Mpi::Root())
+      {
+         cout << "-- Points per face: " << ir.GetNPoints() << endl;
+         cout << "-- Perimeter error: " << fabs(perim - 2 * M_PI * 0.2) << endl
+              << "-- Position error:  " << pos_error << endl;
+      }
+   }
+
+   // Position errors w.r.t. a perfect sphere.
+   pmesh->ExchangeFaceNbrData();
+   if (strcmp(mesh_file, "data/sphere_hole_V4.msh") == 0)
+   {
+      auto ir = IntRules.Get(Geometry::SQUARE, 12);
+
+      double perim = 0.0, pos_error = 0.0;
+      for (int i = 0; i < pmesh->GetNBE(); i++)
+      {
+         auto Tr = pmesh->GetBdrFaceTransformations(i);
+         if (Tr == NULL) { continue; }
+
+         auto ip_c = Geometries.GetCenter(Geometry::SQUARE);
+         Vector pos(dim);
+         Tr->Transform(ip_c, pos);
+         if (!(pos(0) > -0.3 && pos(0) < 0.3 &&
+               pos(1) > -0.3 && pos(1) < 0.3 &&
+               pos(2) > -0.3 && pos(2) < 0.3)) { continue; }
+
+         for (int p = 0; p < ir.GetNPoints(); p++)
+         {
+            const IntegrationPoint &ip = ir.IntPoint(p);
+            Tr->SetAllIntPoints(&ip);
+            Vector vals;
+            x_gf.GetVectorValue(*Tr, ip, vals);
+            double err = sqrt((vals(0) - 0.0) * (vals(0) - 0.0) +
+                              (vals(1) - 0.0) * (vals(1) - 0.0) +
+                              (vals(2) - 0.0) * (vals(2) - 0.0));
+            err = fabs(err - 0.2);
+
+            Vector nor(3);
+            CalcOrtho(Tr->Jacobian(), nor);
+
+            double w = ip.weight * nor.Norml2();
+            perim     += w;
+            pos_error += w * err;
+         }
+      }
+
+      MPI_Allreduce(MPI_IN_PLACE, &perim, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+      MPI_Allreduce(MPI_IN_PLACE, &pos_error, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+
+      if (Mpi::Root())
+      {
+         cout << "-- Points per face: " << ir.GetNPoints() << endl;
+         cout << "-- Perimeter error: " << fabs(perim - 4 * M_PI * 0.04) << endl
+              << "-- Position error:  " << pos_error << endl;
       }
    }
 
