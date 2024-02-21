@@ -1318,7 +1318,10 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
                             Vector &dt_est, DenseTensor &stressJinvT);
    static std::unordered_map<int, fQKernel> qupdate =
    {
-      {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>}, {0x28,&QKernel<2,8>},
+      // 2D.
+      {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>},
+      {0x28,&QKernel<2,8>}, {0x2A,&QKernel<2,10>},
+      // 3D.
       {0x34,&QKernel<3,4>}, {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
    };
    if (!qupdate[id])
