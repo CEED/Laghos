@@ -178,8 +178,11 @@ void VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
     std::getline(opin, line);
     split_line(line, words);
 
-    MFEM_VERIFY(std::stoi(words[2]) == romOptions.useOffset, "-romos option does not match record.");
-    MFEM_VERIFY(std::stoi(words[3]) == romOptions.offsetType, "-romostype option does not match record.");
+    if (romOptions.hyperreductionSamplingType != eqp_energy)
+    {
+        MFEM_VERIFY(std::stoi(words[2]) == romOptions.useOffset, "-romos option does not match record.");
+        MFEM_VERIFY(std::stoi(words[3]) == romOptions.offsetType, "-romostype option does not match record.");
+    }
     MFEM_VERIFY(std::stoi(words[4]) == romOptions.SNS, "-romsns option does not match record.");
 
     if (rom_offline)

@@ -441,6 +441,22 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
         CAROM::Matrix L(Qt.numColumns(), Qt.numColumns(), false);
         Gt.transposeMult(Qt, L);
 
+        // Check for nearly linearly dependent Q rows.
+        // This is achieved by checking the magnitude of the diagonal
+        // values of L.
+        std::vector<int> row_ind;
+        for (int i = 0; i < L.numRows(); ++i)
+        {
+            if (std::abs(L.item(i, i)) < 1e-12)
+            {
+                row_ind.push_back(i);
+                std::cout << i << ", ";
+            }
+        }
+        std::cout << "\n";
+        std::cout << "Found " << row_ind.size() << " / " <<
+            L.numRows() << " nearly linearly dependent constraints.\n";
+
         // Compute the RHS vector.
         CAROM::Vector rhs_ub(Qt.numColumns(), false);
         Qt.transposeMult(w, rhs_ub);
@@ -1017,7 +1033,7 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
 								 const CAROM::Matrix* basisV,
 								 const CAROM::Matrix* basisE,
 								 ROM_Options const& input,
-                                 Vector const& sol)
+                                 BlockVector const& sol)
 {
     MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
     MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
@@ -1043,7 +1059,7 @@ void ROM_Sampler::SetupEQP_Force(const CAROM::Matrix* snapX,
 }
 
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
-        Vector const& sol)
+        BlockVector const& sol)
 {
     CAROM::Matrix Xsnap0(*(generator_X->getSnapshotMatrix()));
     CAROM::Matrix Vsnap0(*(generator_V->getSnapshotMatrix()));
@@ -1156,100 +1172,135 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
 
     if (input.hyperreductionSamplingType == eqp_energy)
     {
-        if (rank == 0 && input.window == 0)
+        if (rank == 0)
         {
-            // If first window, increase the energy basis dimension by 1
-            // to accomodate the energy identity. 
-            // No change in the velocity bases dimension.
-            cutoff[2] += 1;
-        }
-        else if (rank == 0 && input.window > 0)
-        {
-            // If not first window, increase the dimension of the velocity
-            // basis by 1 to accomodate the velocity solution snapshot,
-            // and the energy basis dimension by 2 to accomodate the energy
-            // identity and energy solution snapshot.
-            // We add the FOM snapshots in the bases so that they are used
-            // in deriving the EQP rule.
-            // Also, the change is made here so that the right basis
-            // dimensions are written in the window parameters file in the
-            // caller's scope.
-            cutoff[1] += 1;
-            cutoff[2] += 2;
+            // Increase the X basis dimension by 1 to accomodate the
+            // addition of the lifted X solution in the online stage
+            // (the X basis is not needed for the EQP rule calculation).
+            cutoff[0] += 1;
+
+            // Increase the V basis dimension by 1 to accomodate the
+            // V offset vector.
+            // The V offset vector is added to the basis only if it
+            // has nonzero norm.
+            if ( !(input.window == 0 && initV->norm() < 1e-15) )
+            {
+                cutoff[1] += 1;
+            }
+
+            // Increase the E basis dimension by 2 to accomodate the
+            // E identity and E offset vector.
+            // The E offset vector is added to the basis only if it
+            // has nonzero norm.
+            if (input.window == 0 && initE->norm() < 1e-15)
+            {
+                cutoff[2] += 1;
+            }
+            else
+            {
+                cutoff[2] += 2;
+            }
+
+            // Offsets are used only in the offline stage, to aid in the
+            // efficient derivation of reduced bases and EQP rule
+            // construction.
+            // Once the reduced bases are derived, the offsets are added
+            // as the last basis column.
+            // In the online stage, the appropriate lifted solution vectors
+            // are instead added to the reduced bases and the simulation
+            // is run without the use of offset vectors.
+
+            // The changes are made here so that the right basis dimensions
+            // are written in the window parameters file in the caller's
+            // scope.
         }
 
         MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
 
-        const CAROM::Matrix *basisV = generator_V->getSpatialBasis();
-        const CAROM::Matrix *basisE = generator_E->getSpatialBasis();
+        // Get the bases resulting from the SVDs.
+        CAROM::Matrix const* basisV = generator_V->getSpatialBasis();
+        CAROM::Matrix const* basisE = generator_E->getSpatialBasis();
 
-        // Form the reduced bases.
-        CAROM::Matrix *tBasisV = new CAROM::Matrix(tH1size, cutoff[1], true);
-        CAROM::Matrix *tBasisE = new CAROM::Matrix(tL2size, cutoff[2], true);
+        CAROM::Matrix* tBasisV = nullptr;
+        CAROM::Matrix* tBasisE = nullptr;
 
-        if (input.window == 0)
+        // V basis construction.
+        if (input.window == 0 && initV->norm() < 1e-15)
         {
-            // Get the first cutoff[1] columns of basisV
-            for (int i = 0; i < tH1size; i++)
-                for (int j = 0; j < cutoff[1]; j++)
+            // Get the first cutoff[1] columns of basisV.
+            tBasisV = basisV->getFirstNColumns(cutoff[1]);
+        }
+        else
+        {
+            tBasisV = new CAROM::Matrix(tH1size, cutoff[1], true);
+
+            // Get the first cutoff[1] - 1 columns of basisV.
+            for (int i = 0; i < tH1size; ++i)
+            {
+                for (int j = 0; j < cutoff[1] - 1; ++j)
+                {
                     (*tBasisV)(i, j) = (*basisV)(i, j);
+                }
+            }
+            // Add the V offset vector as the last V basis column
+            // and reorthonormalize.
+            for (int i = 0; i < tH1size; ++i)
+            {
+                (*tBasisV)(i, cutoff[1] - 1) = (*initV)(i);
+            }
+            tBasisV->orthogonalize_last(-1, true);
+        }
 
-            // Get the first cutoff[2] - 1 columns of basisE
-            for (int i = 0; i < tL2size; i++)
-                for (int j = 0; j < cutoff[2] - 1; j++)
+        // E basis construction.
+        if (input.window == 0 && initE->norm() < 1e-15)
+        {
+            tBasisE = new CAROM::Matrix(tL2size, cutoff[2], true);
+
+            // Get the first cutoff[2] - 1 columns of basisE.
+            for (int i = 0; i < tL2size; ++i)
+            {
+                for (int j = 0; j < cutoff[2] - 1; ++j)
+                {
                     (*tBasisE)(i, j) = (*basisE)(i, j);
-
+                }
+            }
             // Add the energy identity as the last E basis column
             // and reorthonormalize.
-            Vector unitE(tL2size);
-            unitE = 1.0;
-            for (int i = 0; i < tL2size; i++)
-                (*tBasisE)(i, cutoff[2] - 1) = unitE[i];
-
+            for (int i = 0; i < tL2size; ++i)
+            {
+                (*tBasisE)(i, cutoff[2] - 1) = 1.0;
+            }
             tBasisE->orthogonalize_last(-1, true);
         }
-        else if (input.window > 0)
+        else
         {
-            // Get the first cutoff[1] - 1 columns of basisV
-            for (int i = 0; i < tH1size; i++)
-                for (int j = 0; j < cutoff[1] - 1; j++)
-                    (*tBasisV)(i, j) = (*basisV)(i, j);
+            tBasisE = new CAROM::Matrix(tL2size, cutoff[2], true);
 
-            // Add the first V snapshot as the last V basis column
-            // and reorthonormalize.
-            // The current window's first snapshot is the same as the
-            // previous window's last snapshot, since we are not using
-            // offset vectors.
-            for (int i = 0; i < tH1size; i++)
-                (*tBasisV)(i, cutoff[1] - 1) = Vsnap0(i, 0);
-
-            tBasisV->orthogonalize_last(-1, true);
-
-            // Get the first cutoff[2] - 2 columns of basisE
-            for (int i = 0; i < tL2size; i++)
-                for (int j = 0; j < cutoff[2] - 2; j++)
+            // Get the first cutoff[2] - 2 columns of basisE.
+            for (int i = 0; i < tL2size; ++i)
+            {
+                for (int j = 0; j < cutoff[2] - 2; ++j)
+                {
                     (*tBasisE)(i, j) = (*basisE)(i, j);
-
+                }
+            }
             // Add the energy identity as the penultimate E basis column
             // and reorthonormalize.
-            Vector unitE(tL2size);
-            unitE = 1.0;
-            for (int i = 0; i < tL2size; i++)
-                (*tBasisE)(i, cutoff[2] - 2) = unitE[i];
-
+            for (int i = 0; i < tL2size; ++i)
+            {
+                (*tBasisE)(i, cutoff[2] - 2) = 1.0;
+            }
             tBasisE->orthogonalize_last(cutoff[2] - 1, true);
 
-            // Add the first E snapshot as the last E basis column
+            // Add the E offset vector as the last E basis column
             // and reorthonormalize.
-            // The current window's first snapshot is the same as the
-            // previous window's last snapshot, since we are not using
-            // offset vectors.
-            for (int i = 0; i < tL2size; i++)
-                (*tBasisE)(i, cutoff[2] - 1) = Esnap0(i, 0);
-
+            for (int i = 0; i < tL2size; ++i)
+            {
+                (*tBasisE)(i, cutoff[2] - 1) = (*initE)(i);
+            }
             tBasisE->orthogonalize_last(-1, true);
         }
-
+        
         SetupEQP_Force(&Xsnap0, &Vsnap0, &Esnap0,
             tBasisV, tBasisE, input, sol);
 
@@ -1342,8 +1393,10 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
     return S;
 }
 
-ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFactorX, const double sFactorV,
-                     const std::vector<double> *timesteps)
+ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
+        const double sFactorX, const double sFactorV,
+        const std::vector<double> *timesteps,
+        BlockVector const* S)
     : comm(comm_), rdimx(input.dimX), rdimv(input.dimV), rdime(input.dimE), rdimfv(input.dimFv), rdimfe(input.dimFe),
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
@@ -1402,42 +1455,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         mfH1.SetSize(tH1size);
         mfL2.SetSize(tL2size);
 
-		// This code block is used to set the sizes of the basis matrices
-		// correctly, before the reading of the actual data takes place
-		// within ReadSolutionBases following right after.
-		// In this way, once the basis data has been read, the matrices
-		// can be extended by adding the required column vectors.
-		if (hyperreductionSamplingType == eqp_energy)
-		{
-			if (input.window == 0)
-			{
-				// For the first window, only the energy basis need be extended.
-
-				// The energy basis is extended by adding the energy identity.
-				// Dimension rdime has already been increased by 1 in the
-				// offline stage
-				basisE = new CAROM::Matrix(tL2size, rdime, true);
-			}
-			else
-			{
-				// For any window other than the first, both energy and
-				// velocity bases need be extended.
-
-				// The velocity basis is extended by adding the current lifted
-				// velocity solution vector.
-				// Dimension rdimv has already been increased by 1 in the
-				// offline stage.
-				basisV = new CAROM::Matrix(tH1size, rdimv, true);
-				
-				// The energy basis is extended by adding the energy identity
-				// and the current lifted energy solution vector.
-				// Dimension rdime has already been increased by 2 in the
-				// offline stage.
-				basisE = new CAROM::Matrix(tL2size, rdime, true);
-			}
-		}
-
-        ReadSolutionBases(input.window);
+        ReadSolutionBases(input.window, S);
 
         if (spaceTime)
         {
@@ -2354,41 +2372,62 @@ int ROM_Basis::SolutionSizeFOM() const
     return (2*H1size) + L2size;  // full size, not true DOF size
 }
 
-void ROM_Basis::ReadSolutionBases(const int window)
+void ROM_Basis::ReadSolutionBases(const int window, BlockVector const* S)
 {
 	// Velocity basis formation.
 	if (hyperreductionSamplingType == eqp_energy)
 	{
-		if (window == 0)
-		{
-			// For the first window, read all rdimv basis vectors normally.
-			basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V +
-					std::to_string(window) + basisIdentifier, tH1size, rdimv);
-		}
-		else
-		{
-			// For any window other than the first, read the first rdimv-1
-			// basis vectors, since rdimv has been increased by 1 to accomodate
-			// the addition of the lifted velocity solution vector.
-			int tmp_rdimv = rdimv - 1;
-			CAROM::Matrix *tmp_basisV = 0;
-			
-			tmp_basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V +
-				std::to_string(window) + basisIdentifier, tH1size, tmp_rdimv);
+        if (window == 0)
+        {
+            // TODO: use S to check the initial condition norm directly,
+            // rather than reading the stored file.
+            initV = new CAROM::Vector(tH1size, true);
+            std::string path_init = testing_parameter_basename +
+                "/ROMoffset" + basisIdentifier + "/init";
+            cout << "Reading: " << path_init << endl;
+            initV->read(path_init + "V0");
 
-			for (int i = 0; i < tH1size; i++)
-			{
-				for (int j = 0; j < tmp_rdimv; j++)
-					(*basisV)(i, j) = (*tmp_basisV)(i, j);
-			}
-			delete tmp_basisV;
-			
-			// The addition of the lifted velocity solution vector as the last
-			// column vector takes place later in the main driver "laghos.cpp"
-			// at the time of the window change, because the current solution
-			// vector S must be known.
-		}
-	}
+            if (initV->norm() < 1e-15)
+            {
+                extendFirstWindowV = false; // true by default
+            }
+            //delete initV; // gets deleted by ROM_Basis destructor
+        }
+        if (window == 0 && !extendFirstWindowV)
+        {
+            // The V basis is not extended.
+            basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V +
+                    std::to_string(window) + basisIdentifier,
+                    tH1size, rdimv);
+        }
+        else
+        {
+            // The V basis is extended by adding the current lifted
+            // V solution vector.
+            // Dimension rdimv has already been set accordingly
+            // in the offline stage.
+            basisV = new CAROM::Matrix(tH1size, rdimv, true);
+
+            // Read the first (rdimv - 1) basis vectors.
+            int tmp_rdimv = rdimv - 1;
+            CAROM::Matrix* tmp_basisV = nullptr;
+
+            tmp_basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V +
+                    std::to_string(window) + basisIdentifier,
+                    tH1size, tmp_rdimv);
+
+            // Add them to the V basis.
+            for (int i = 0; i < tH1size; i++)
+            {
+                for (int j = 0; j < tmp_rdimv; j++)
+                    (*basisV)(i, j) = (*tmp_basisV)(i, j);
+            }
+            delete tmp_basisV;
+
+            // Add the lifted V solution as the last basis vector.
+            AddLastCol_V(*S);
+        }
+    }
 	else
 	{
 		if (!useVX)
@@ -2399,80 +2438,135 @@ void ROM_Basis::ReadSolutionBases(const int window)
 	}
 
 	// Energy basis formation.
-	if (hyperreductionSamplingType == eqp_energy)
-	{
-		if (window == 0)
-		{
-			// For the first window, read the first rdime-1 basis vectors,
-			// since rdime has been increased by 1 to accomodate the addition
-			// of the energy identity.
-			int tmp_rdime = rdime - 1;
-			CAROM::Matrix *tmp_basisE = 0;
+    if (hyperreductionSamplingType == eqp_energy)
+    {
+        if (window == 0)
+        {
+            // TODO: use S to check the initial condition norm directly,
+            // rather than reading the stored file.
+            initE = new CAROM::Vector(tL2size, true);
+            std::string path_init = testing_parameter_basename +
+                "/ROMoffset" + basisIdentifier + "/init";
+            cout << "Reading: " << path_init << endl;
+            initE->read(path_init + "E0");
 
-			tmp_basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
-				std::to_string(window) + basisIdentifier, tL2size, tmp_rdime);
-			
-			for (int i = 0; i < tL2size; i++)
-			{
-				for (int j = 0; j < tmp_rdime; j++)
-					(*basisE)(i, j) = (*tmp_basisE)(i, j);
-			}
-			delete tmp_basisE;
-		
-			// Add the energy identity as the last column vector.
-			Vector unitE(tL2size);
-			unitE = 1.0;
-			for (int i = 0; i < tL2size; i++)
-			{
-				(*basisE)(i, tmp_rdime) = unitE[i];
-			}
-			basisE->orthogonalize_last(-1, true);
-		}
-		else
-		{
-			// For any window other than the first, read the first rdime-2
-			// basis vectors, since rdime has been increased by 2 to accomodate
-			// the addition of the energy identity and the lifted energy
-			// solution vector.
-			int tmp_rdime = rdime - 2;
-			CAROM::Matrix *tmp_basisE = 0;
+            if (initE->norm() < 1e-15)
+            {
+                extendFirstWindowE = false; // true by default
+            }
+            //delete initE; // gets deleted by ROM_Basis destructor
+        }
+        if (window == 0 && !extendFirstWindowE)
+        {
+            // The E basis is extended by adding the E identity.
+            // Dimension rdime has already been set accordingly
+            // in the offline stage.
+            basisE = new CAROM::Matrix(tL2size, rdime, true);
 
-			tmp_basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
-				std::to_string(window) + basisIdentifier, tL2size, tmp_rdime);
-			
-			for (int i = 0; i < tL2size; i++)
-			{
-				for (int j = 0; j < tmp_rdime; j++)
-					(*basisE)(i, j) = (*tmp_basisE)(i, j);
-			}
-			delete tmp_basisE;
-			
-			// Add the energy identity as the penultimate column vector.
-			Vector unitE(tL2size);
-			unitE = 1.0;
-			for (int i = 0; i < tL2size; i++)
-			{
-				(*basisE)(i, tmp_rdime) = unitE[i];
-			}
-			basisE->orthogonalize_last(rdime-1, true);
-			
-			// The addition of the lifted energy solution vector as the last
-			// column vector takes place later in the main driver "laghos.cpp"
-			// at the time of the window change, because the current solution
-			// vector S must be known.
-		}
-	}
+            // Read the first (rdime - 1) basis vectors.
+            int tmp_rdime = rdime - 1;
+            CAROM::Matrix* tmp_basisE = nullptr;
+
+            tmp_basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
+                    std::to_string(window) + basisIdentifier, tL2size,
+                    tmp_rdime);
+
+            // Add them to the E basis.
+            for (int i = 0; i < tL2size; i++)
+            {
+                for (int j = 0; j < tmp_rdime; j++)
+                    (*basisE)(i, j) = (*tmp_basisE)(i, j);
+            }
+            delete tmp_basisE;
+
+            // Add the E identity as the last column vector.
+            for (int i = 0; i < tL2size; i++)
+            {
+                (*basisE)(i, tmp_rdime) = 1.0;
+            }
+            basisE->orthogonalize_last(-1, true);
+        }
+        else
+        {
+            // The E basis is extended by adding the E identity and the
+            // current lifted E solution vector.
+            // Dimension rdime has already been set accordingly
+            // in the offline stage.
+            basisE = new CAROM::Matrix(tL2size, rdime, true);
+
+            // Read the first (rdime - 2) basis vectors.
+            int tmp_rdime = rdime - 2;
+            CAROM::Matrix* tmp_basisE = nullptr;
+
+            tmp_basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
+                    std::to_string(window) + basisIdentifier, tL2size,
+                    tmp_rdime);
+
+            // Add them to the E basis.
+            for (int i = 0; i < tL2size; i++)
+            {
+                for (int j = 0; j < tmp_rdime; j++)
+                    (*basisE)(i, j) = (*tmp_basisE)(i, j);
+            }
+            delete tmp_basisE;
+
+            // Add the E identity as the penultimate column vector.
+            for (int i = 0; i < tL2size; i++)
+            {
+                (*basisE)(i, tmp_rdime) = 1.0;
+            }
+            basisE->orthogonalize_last(rdime-1, true);
+
+            // Add the lifted E solution as the last basis vector.
+            AddLastCol_E(*S);
+        }
+    }
 	else
 	{
 		basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
 			std::to_string(window) + basisIdentifier, tL2size, rdime);
 	}
 			
+    // Position basis formation.
+    if (hyperreductionSamplingType == eqp_energy)
+    {
+        // The X basis is extended by adding the current lifted
+        // X solution vector.
+        // Dimension rdimx has already been set accordingly
+        // in the offline stage.
+        basisX = new CAROM::Matrix(tH1size, rdimx, true);
 
-    if (useXV)
-        basisX = basisV;
+        // Read the first (rdimx - 1) basis vectors.
+        int tmp_rdimx = rdimx - 1;
+        CAROM::Matrix* tmp_basisX = nullptr;
+
+        tmp_basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X +
+                std::to_string(window) + basisIdentifier, tH1size, tmp_rdimx);
+
+        for (int i = 0; i < tH1size; i++)
+        {
+            for (int j = 0; j < tmp_rdimx; j++)
+            {
+                (*basisX)(i, j) = (*tmp_basisX)(i, j);
+            }
+        }
+        delete tmp_basisX;
+
+        // Add the lifted X solution as the last basis vector.
+        AddLastCol_X(*S);
+    }
     else
-        basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X + std::to_string(window) + basisIdentifier, tH1size, rdimx);
+    {
+        if (useXV)
+        {
+            basisX = basisV;
+        }
+        else
+        {
+            basisX = ReadBasisROM(rank, basename + "/" + ROMBasisName::X +
+                    std::to_string(window) + basisIdentifier, tH1size, rdimx);
+        }
+    }
 
     if (useVX)
         basisV = basisX;
@@ -2640,7 +2734,23 @@ void ROM_Basis::ProjectFOMtoROM_V(Vector const& f, Vector & r, const bool timeDe
 }
 
 // f is a full vector, not a true vector
-void ROM_Basis::AddLastCol_V(Vector const& f)
+void ROM_Basis::AddLastCol_X(BlockVector const& f)
+{
+    MFEM_VERIFY(f.Size() == (2*H1size) + L2size, "");
+
+    for (int i = 0; i < H1size; ++i)
+        (*gfH1)(i) = f[i];
+
+    gfH1->GetTrueDofs(mfH1);
+
+	for (int i = 0; i < tH1size; ++i)
+		(*basisX)(i, rdimx-1) = mfH1[i];
+
+	basisX->orthogonalize_last(-1, true);
+}
+
+// f is a full vector, not a true vector
+void ROM_Basis::AddLastCol_V(BlockVector const& f)
 {
     MFEM_VERIFY(f.Size() == (2*H1size) + L2size, "");
 
@@ -2656,7 +2766,7 @@ void ROM_Basis::AddLastCol_V(Vector const& f)
 }
 
 // f is a full vector, not a true vector
-void ROM_Basis::AddLastCol_E(Vector const& f)
+void ROM_Basis::AddLastCol_E(BlockVector const& f)
 {
     MFEM_VERIFY(f.Size() == (2*H1size) + L2size, "");
 
@@ -4984,13 +5094,16 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 		}
     } // Loop (i) over EQP points
 
-	if (energy_conserve)
-	{
-		// Multiply by the reduced Mv inverse
-		Vector res_tmp = res;
-
-		invMvROM.Mult(res_tmp, res); 
-	}
+    if (energy_conserve)
+    {
+        // Multiply by the reduced Mv inverse
+        Vector res_tmp(res.Size());
+        for (int i = 0; i < res.Size(); ++i)
+        {
+            res_tmp[i] = res[i];
+        }
+        invMvROM.Mult(res_tmp, res);
+    }
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
@@ -5171,16 +5284,16 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
 		}
     } // Loop (i) over EQP points
 
-	if (energy_conserve)
-	{
-		// Multiply by the reduced Me inverse
-
-		// TODO: does that copy the data of res to res_tmp, or is it just
-		// a reference?
-		Vector res_tmp = res;
-
-		invMeROM.Mult(res_tmp, res); 
-	}
+    if (energy_conserve)
+    {
+        // Multiply by the reduced Me inverse
+        Vector res_tmp(res.Size());
+        for (int i = 0; i < res.Size(); ++i)
+        {
+            res_tmp[i] = res[i];
+        }
+        invMeROM.Mult(res_tmp, res);
+    }
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);

@@ -632,7 +632,7 @@ public:
 
     void SampleSolution(const double t, const double dt, const double pd, Vector const& S);
 
-    void Finalize(Array<int> &cutoff, ROM_Options& input, Vector const& sol);
+    void Finalize(Array<int> &cutoff, ROM_Options& input, BlockVector const& sol);
 
     int MaxNumSamples()
     {
@@ -827,7 +827,7 @@ private:
 
     void SetupEQP_Force(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
                         const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input,
-                        Vector const& sol);
+                        BlockVector const& sol);
 
     void SetupEQP_Force_Eq(const CAROM::Matrix* snapX, const CAROM::Matrix* snapV, const CAROM::Matrix* snapE,
                            const CAROM::Matrix* basisV, const CAROM::Matrix* basisE, ROM_Options const& input,
@@ -844,13 +844,14 @@ class ROM_Basis
 public:
     ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
               const double sFactorX=1.0, const double sFactorV=1.0,
-              const std::vector<double> *timesteps=NULL);
+              const std::vector<double> *timesteps=NULL,
+              BlockVector const* S = nullptr);
 
     ~ROM_Basis();
 
     void Init(ROM_Options const& input, Vector const& S);
 
-    void ReadSolutionBases(const int window);
+    void ReadSolutionBases(const int window, BlockVector const* S = nullptr);
     void ReadTemporalBases(const int window);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
@@ -859,8 +860,9 @@ public:
     void ProjectFOMtoROM_V(Vector const& f, Vector & r,
                            const bool timeDerivative=false);
 
-	void AddLastCol_V(Vector const& f);
-	void AddLastCol_E(Vector const& f);
+	void AddLastCol_X(BlockVector const& f);
+	void AddLastCol_V(BlockVector const& f);
+	void AddLastCol_E(BlockVector const& f);
 
     void LiftROMtoFOM(Vector const& r, Vector & f);
     void LiftROMtoFOM_dVdt(Vector const& r, Vector & f);
@@ -991,6 +993,11 @@ private:
     const bool useXV;  // If true, use V basis for X-X0.
     const bool useVX;  // If true, use X-X0 for V.
     const bool mergeXV;  // If true, merge bases for X-X0 and V.
+
+    // Those two flags are checked when extending the reduced V & E bases
+    // in the CEQP hyperreduction case.
+    bool extendFirstWindowV = true;
+    bool extendFirstWindowE = true;
 
     int H1size;
     int L2size;

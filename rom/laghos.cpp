@@ -1262,13 +1262,14 @@ int main(int argc, char *argv[])
             else
             {
                 // Construct the ROM basis and operator only for the first
-                // window; the ones for the next windows will be constructed
-                // at the time of each window change, because the current
-                // vector S is needed for their construction.
-                // In particular, forming the bases and reduced inverse mass
-                // matrices requires knoweldege of vector S.
+                // window.
+                // Those for the next windows will be constructed at the
+                // time of each window change, because the current solution
+                // vector S must be known.
                 SetWindowParameters(twparam, romOptions);
-                basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
+                basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD,
+                        sFactorX, sFactorV, &timesteps, S);
+
                 if (!romOptions.hyperreduce_prep)
                 {
                     romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
@@ -1278,7 +1279,8 @@ int main(int argc, char *argv[])
         }
         else
         {
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD,
+                    sFactorX, sFactorV, &timesteps, S);
             if (!romOptions.hyperreduce_prep)
             {
                 romOper[0] = new ROM_Operator(romOptions, basis[0], rho_coeff, mat_coeff, order_e, source, visc, vort, cfl, p_assembly,
@@ -1475,7 +1477,8 @@ int main(int argc, char *argv[])
                 SetWindowParameters(twparam, romOptions);
             }
 
-            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
+            basis[0] = new ROM_Basis(romOptions, MPI_COMM_WORLD,
+                    sFactorX, sFactorV, nullptr, S);
             basis[0]->Init(romOptions, *S);
 
             if (romOptions.mergeXV)
@@ -1537,15 +1540,8 @@ int main(int argc, char *argv[])
                     basis[romOptions.window-1]->LiftROMtoFOM(romS, *S);
                     delete basis[romOptions.window-1];
                     
-                    basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
-                   
-                    if (romOptions.hyperreductionSamplingType == eqp_energy)
-                    {
-                        // Add the last lifted solution vector as the last
-                        // column in the bases.
-                        basis[romOptions.window]->AddLastCol_V(*S);
-                        basis[romOptions.window]->AddLastCol_E(*S);
-                    }
+                    basis[romOptions.window] = new ROM_Basis(romOptions,
+                            MPI_COMM_WORLD, sFactorX, sFactorV, nullptr, S);
                     basis[romOptions.window]->Init(romOptions, *S);
 
                     if (romOptions.mergeXV)
@@ -2075,19 +2071,10 @@ int main(int argc, char *argv[])
                         onlinePreprocessTimer.Start();
                        
                         // Form the ROM basis and operator for the new window.
-                        basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV, &timesteps);
-                        
-                        onlinePreprocessTimer.Stop();
-                        timeLoopTimer.Start();
-                        
-                        // Add the last lifted solution vector as the last
-                        // column in the bases.
-                        basis[romOptions.window]->AddLastCol_V(*S);
-                        basis[romOptions.window]->AddLastCol_E(*S);
-                        
-                        timeLoopTimer.Stop();
-                        onlinePreprocessTimer.Start();
-                       
+                        basis[romOptions.window] = new ROM_Basis(romOptions,
+                                MPI_COMM_WORLD, sFactorX, sFactorV,
+                                &timesteps, S);
+
                         if (!romOptions.hyperreduce_prep)
                         {
                             romOper[romOptions.window] = new ROM_Operator(romOptions, basis[romOptions.window], rho_coeff, mat_coeff, 
