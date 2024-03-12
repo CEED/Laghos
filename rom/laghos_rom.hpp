@@ -275,7 +275,7 @@ public:
           X(tH1size), dXdt(tH1size), V(tH1size), dVdt(tH1size), E(tL2size), dEdt(tL2size),
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper),
-          parameterID(input.parameterID), basename(*input.basename), 
+          parameterID(input.parameterID), basename(*input.basename),
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos)
     {
         SetStateVariables(S_init);
