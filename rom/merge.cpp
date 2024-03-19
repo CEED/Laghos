@@ -87,7 +87,7 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
         int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
         int num_cols = col_ub - col_lb + 1;
         std::cout << num_cols << " columns read. Columns " << col_lb - 1 << " to " << col_ub - 1 << std::endl;
-        const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(0.0, col_lb, col_ub);
+        const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
         MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
 
@@ -113,7 +113,7 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
             {
                 tmp[i] = (offsetInit) ? mat->item(i,j) - mat->item(i,0) : mat->item(i,j);
             }
-            window_basis_generator->takeSample(tmp.GetData(), 0.0, 1.0);
+            window_basis_generator->takeSample(tmp.GetData());
         }
 
         if (eqp)  // Write snapshots to be used in the EQP system
@@ -183,7 +183,7 @@ void GetSnapshotDim(const int id, const std::string& basename, const std::string
     std::string filename = basename + "/param" + std::to_string(id) + "_var" + varName + std::to_string(window) + basisIdentifier + "_snapshot";
 
     CAROM::BasisReader reader(filename);
-    const CAROM::Matrix *S = reader.getSnapshotMatrix(0.0);
+    const CAROM::Matrix *S = reader.getSnapshotMatrix();
     varDim = S->numRows();
     numSnapshots = S->numColumns();
 }
