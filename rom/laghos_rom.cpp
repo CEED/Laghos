@@ -82,12 +82,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 Xdiff[i] = X[i] - (*initX)(i);
             }
 
-            addSample = generator_X->takeSample(Xdiff.GetData(), t, dt);
+            addSample = generator_X->takeSample(Xdiff.GetData());
             generator_X->computeNextSampleTime(Xdiff.GetData(), dXdt.GetData(), t);
         }
         else
         {
-            addSample = generator_X->takeSample(X.GetData(), t, dt);
+            addSample = generator_X->takeSample(X.GetData());
             generator_X->computeNextSampleTime(X.GetData(), dXdt.GetData(), t);
         }
 
@@ -121,12 +121,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                     Xdiff[i] = V[i] - (*initV)(i);
                 }
 
-                addSample = generator_V->takeSample(Xdiff.GetData(), t, dt);
+                addSample = generator_V->takeSample(Xdiff.GetData());
                 generator_V->computeNextSampleTime(Xdiff.GetData(), dVdt.GetData(), t);
             }
             else
             {
-                addSample = generator_V->takeSample(V.GetData(), t, dt);
+                addSample = generator_V->takeSample(V.GetData());
                 generator_V->computeNextSampleTime(V.GetData(), dVdt.GetData(), t);
             }
 
@@ -143,7 +143,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 gfH1[i] = dSdt[H1size + i];  // Fv
 
             gfH1.GetTrueDofs(Xdiff);
-            bool addSampleF = generator_Fv->takeSample(Xdiff.GetData(), t, dt);
+            bool addSampleF = generator_Fv->takeSample(Xdiff.GetData());
 
             if (writeSnapshots && addSampleF)
             {
@@ -170,12 +170,12 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 Ediff[i] = E[i] - (*initE)(i);
             }
 
-            addSample = generator_E->takeSample(Ediff.GetData(), t, dt);
+            addSample = generator_E->takeSample(Ediff.GetData());
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
         }
         else
         {
-            addSample = generator_E->takeSample(E.GetData(), t, dt);
+            addSample = generator_E->takeSample(E.GetData());
             generator_E->computeNextSampleTime(E.GetData(), dEdt.GetData(), t);
         }
 
@@ -191,7 +191,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
                 gfL2[i] = dSdt[(2*H1size) + i];  // Fe
 
             gfL2.GetTrueDofs(Ediff);
-            addSampleF = generator_Fe->takeSample(Ediff.GetData(), t, dt);
+            addSampleF = generator_Fe->takeSample(Ediff.GetData());
 
             if (writeSnapshots && addSampleF)
             {
@@ -1280,11 +1280,11 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     CAROM::Matrix *basis;
     if (dim == -1)
     {
-        basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0);
+        basis = (CAROM::Matrix*) reader.getSpatialBasis();
     }
     else
     {
-        basis = (CAROM::Matrix*) reader.getSpatialBasis(0.0, dim);
+        basis = (CAROM::Matrix*) reader.getSpatialBasis(dim);
     }
 
     MFEM_VERIFY(basis->numRows() == vectorSize, "");
@@ -2359,7 +2359,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
             ej(j) = 1.0;
             basisX->mult(ej, CBej);
 
-            const bool addSample = generator_XV.takeSample(Bej.GetData(), 0.0, 1.0);  // artificial time and timestep
+            const bool addSample = generator_XV.takeSample(Bej.GetData());
             MFEM_VERIFY(addSample, "Sample not added");
 
             ej(j) = 0.0;
@@ -2373,7 +2373,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
             ej(j) = 1.0;
             basisV->mult(ej, CBej);
 
-            const bool addSample = generator_XV.takeSample(Bej.GetData(), 0.0, 1.0);  // artificial time and timestep
+            const bool addSample = generator_XV.takeSample(Bej.GetData());
             MFEM_VERIFY(addSample, "Sample not added");
 
             ej(j) = 0.0;
