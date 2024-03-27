@@ -15,6 +15,7 @@
 
 using namespace mfem;
 
+//#define EQP_NO_Minv  // Use EQP formulation without mass matrix inverse
 
 //#define STXV  // TODO: remove this?
 
@@ -73,6 +74,7 @@ enum HyperreductionSamplingType
     gnat,       // Default, GNAT
     qdeim,      // QDEIM
     sopt,       // S-OPT
+    eqp         // EQP
 };
 
 static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
@@ -81,7 +83,8 @@ static HyperreductionSamplingType getHyperreductionSamplingType(const char* samp
     {
         {"gnat", gnat},
         {"qdeim", qdeim},
-        {"sopt", sopt}
+        {"sopt", sopt},
+        {"eqp", eqp}
     };
     auto iter = SamplingTypeMap.find(sampling_type);
     MFEM_VERIFY(iter != std::end(SamplingTypeMap), "Invalid input for hyperreduction sampling type");
@@ -158,6 +161,7 @@ static localROMIndicator getlocalROMIndicator(const char* indicatorType)
 struct ROM_Options
 {
     int rank = 0;  // MPI rank
+    int nprocs = 0;  // Number of MPI processes
     ParFiniteElementSpace *H1FESpace = NULL; // FOM H1 FEM space
     ParFiniteElementSpace *L2FESpace = NULL; // FOM L2 FEM space
 
@@ -239,6 +243,7 @@ struct ROM_Options
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
+    bool use_sample_mesh = false; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
     bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     offsetStyle offsetType = useInitialState; // type of offset in time windows
@@ -253,6 +258,15 @@ struct ROM_Options
     SpaceTimeMethod spaceTimeMethod = no_space_time;
 
     bool VTos = false;
+
+    int maxNNLSnnz = 0; // max number of NNLS solution nonzeros
+    double tolNNLS = 1.0e-14; // NNLS solver error tolerance
+    bool skipNNLS = false;
+
+    // snapshot sampling frequency (sample every sampfreq timestep)
+    int sampfreq = 1;
+
+    int numOfflineParameters = 1;  // TODO: input
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
@@ -473,7 +487,8 @@ public:
           gfH1(input.H1FESpace), gfL2(input.L2FESpace), offsetInit(input.useOffset), energyFraction(input.energyFraction),
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
-          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time)
+          useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time),
+          rhsBasis(input.hyperreductionSamplingType != eqp)
     {
         const int window = input.window;
 
@@ -535,7 +550,7 @@ public:
             !staticSVD,
             staticSVD ? BasisFileName(basename, VariableName::E, window, parameterID, input.basisIdentifier) : basename + "/" + ROMBasisName::E + std::to_string(window) + input.basisIdentifier);
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             if (input.randomizedSVD)
             {
@@ -666,6 +681,7 @@ private:
     ParGridFunction gfH1, gfL2;
 
     const bool sns;
+    const bool rhsBasis;
 
     const bool Voffset;
     const bool useXV;
@@ -722,6 +738,65 @@ private:
         }
     }
 
+    void SetStateFromTrueDOFs(Vector const& x, Vector const& v, Vector const& e, Vector & S)
+    {
+        MFEM_VERIFY(S.Size() == 2*H1size + L2size, "");
+        MFEM_VERIFY(x.Size() == tH1size, "");
+        MFEM_VERIFY(v.Size() == tH1size, "");
+        MFEM_VERIFY(e.Size() == tL2size, "");
+
+        // Set X component of S
+        Xdiff = x;
+        if (offsetInit)
+        {
+            for (int i=0; i<tH1size; ++i)
+            {
+                Xdiff[i] += (*initX)(i);
+            }
+        }
+
+        gfH1.SetFromTrueDofs(Xdiff);
+
+        for (int i=0; i<H1size; ++i)
+        {
+            S[i] = gfH1[i];
+        }
+
+        // Set V component of S
+        Xdiff = v;
+        if (offsetInit)
+        {
+            for (int i=0; i<tH1size; ++i)
+            {
+                Xdiff[i] += (*initV)(i);
+            }
+        }
+
+        gfH1.SetFromTrueDofs(Xdiff);
+
+        for (int i=0; i<H1size; ++i)
+        {
+            S[H1size + i] = gfH1[i];
+        }
+
+        // Set E component of S
+        Ediff = e;
+        if (offsetInit)
+        {
+            for (int i=0; i<tL2size; ++i)
+            {
+                Ediff[i] += (*initE)(i);
+            }
+        }
+
+        gfL2.SetFromTrueDofs(Ediff);
+
+        for (int i=0; i<L2size; ++i)
+        {
+            S[(2 * H1size) + i] = gfL2[i];
+        }
+    }
+
     std::string BasisFileName(const std::string basename, VariableName v, const int window, const int parameter, const std::string basisIdentifier)
     {
         std::string fileName, path;
@@ -760,53 +835,7 @@ public:
               const double sFactorX=1.0, const double sFactorV=1.0,
               const std::vector<double> *timesteps=NULL);
 
-    ~ROM_Basis()
-    {
-        delete rX;
-        delete rV;
-        delete rE;
-        delete rX2;
-        delete rV2;
-        delete rE2;
-        delete basisX;
-        if (!useXV && !useVX && !mergeXV) delete basisV;
-        delete basisE;
-        delete basisFv;
-        delete basisFe;
-        delete spX;
-        delete spV;
-        delete spE;
-        delete sX;
-        delete sV;
-        delete sE;
-        delete BXsp;
-        delete BVsp;
-        delete BEsp;
-        delete BFvsp;
-        delete BFesp;
-        delete BsinvX;
-        delete BsinvV;
-        delete BsinvE;
-        delete BX0;
-        delete initX;
-        delete initV;
-        delete initE;
-        delete initXsp;
-        delete initVsp;
-        delete initEsp;
-        delete BXXinv;
-        delete BVVinv;
-        delete BEEinv;
-        delete smm;
-        delete sampleSelector;
-        if (!hyperreduce)
-        {
-            delete fH1;
-            delete fL2;
-            delete gfH1;
-            delete gfL2;
-        }
-    }
+    ~ROM_Basis();
 
     void Init(ROM_Options const& input, Vector const& S);
 
@@ -815,7 +844,13 @@ public:
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
+
+    void ProjectFOMtoROM_V(Vector const& f, Vector & r,
+                           const bool timeDerivative=false);
+
     void LiftROMtoFOM(Vector const& r, Vector & f);
+    void LiftROMtoFOM_dVdt(Vector const& r, Vector & f);
+    void LiftROMtoFOM_dEdt(Vector const& r, Vector & f);
 
     ParMesh *GetSampleMesh() {
         return sample_pmesh;
@@ -835,6 +870,10 @@ public:
 
     int SolutionSizeH1FOM() const {
         return H1size;
+    }
+
+    int SolutionSizeL2FOM() const {
+        return L2size;
     }
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
@@ -904,6 +943,10 @@ public:
         return BEsp;
     }
 
+    CAROM::Matrix *GetBXtBV() {
+        return basisX->transposeMult(basisV);
+    }
+
     void ComputeReducedMatrices(bool sns1);
 
     void SetSpaceTimeInitialGuess(ROM_Options const& input);  // TODO: private function?
@@ -927,6 +970,7 @@ public:
 private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
+    const bool use_sample_mesh; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
     const bool offsetInit;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
@@ -958,7 +1002,7 @@ private:
 
     CAROM::Vector *fH1, *fL2;
 
-    Vector mfH1, mfL2;
+    mutable Vector mfH1, mfL2;
 
     ParGridFunction* gfH1;
     ParGridFunction* gfL2;
@@ -1031,8 +1075,11 @@ protected:
 
     double energyFraction_X;
 
-    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
-                             const std::vector<double> *timesteps);
+    void SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
+                             ParFiniteElementSpace *L2FESpace,
+                             Array<int>& nH1, const int window,
+                             const std::vector<double> *timesteps,
+                             ROM_Options const& input);
 
     std::vector<int> paramID_list;
     std::vector<double> coeff_list;
@@ -1046,6 +1093,26 @@ private:
                                            const int rdim) const;
 
     void SampleMeshAddInitialState(Vector &usp) const;
+
+    void SetStateFromTrueDOFs(Vector const& x, Vector const& v,
+                              Vector const& e, Vector & S);
+
+    void SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
+                        std::vector<const CAROM::Matrix*> snapV,
+                        std::vector<const CAROM::Matrix*> snapE,
+                        const CAROM::Matrix* basisV,
+                        const CAROM::Matrix* basisE,
+                        ROM_Options const& input,
+                        std::set<int> & elems);
+
+    void SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
+                           std::vector<const CAROM::Matrix*> snapV,
+                           std::vector<const CAROM::Matrix*> snapE,
+                           const CAROM::Matrix* basisV,
+                           const CAROM::Matrix* basisE,
+                           ROM_Options const& input,
+                           bool equationE,
+                           std::set<int> & elems);
 
     // Space-time data
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
@@ -1159,7 +1226,7 @@ public:
 
     void UpdateSampleMeshNodes(Vector const& romSol);
     double GetTimeStepEstimateSP() const {
-        if (!hyperreduce) return 0.0;
+        if (!use_sample_mesh) return 0.0;
 
         if (rank == 0)
         {
@@ -1173,6 +1240,7 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
+    void StepRK4(Vector &S, double &t, double &dt);
 
     void ApplyHyperreduction(Vector &S);
     void PostprocessHyperreduction(Vector &S, bool keep_data=false);
@@ -1184,8 +1252,21 @@ public:
     void SolveSpaceTime(Vector &S);
     void SolveSpaceTimeGN(Vector &S);
 
+    void ForceIntegratorEQP_FOM(Vector & rhs) const;
+    void ForceIntegratorEQP(Vector & res) const;
+
+    void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
+    void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
+
+    void ForceIntegratorEQP_SP() const;
+    void ForceIntegratorEQP_E_SP(Vector const& v) const;
+
+    void InitEQP() const;
+
     ~ROM_Operator()
     {
+        if (operFOM) operFOM->ResetEQP();
+
         delete mat_gf_coeff;
         delete mat_gf;
         delete L2FESpaceSP;
@@ -1194,6 +1275,7 @@ public:
         delete mat_fec;
         delete spmesh;
         delete xsp_gf;
+        delete operSP;
     }
 
 private:
@@ -1212,6 +1294,8 @@ private:
     mutable Vector fx, fy;
 
     const bool hyperreduce;
+    HyperreductionSamplingType hyperreductionSamplingType = gnat;
+    bool use_sample_mesh = false; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;
@@ -1248,6 +1332,49 @@ private:
     const bool GaussNewton = true; // TODO: eliminate this
 
     void UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data);
+
+    void ReadSolutionNNLS(ROM_Options const& input, string basename,
+                          std::vector<int> & indices,
+                          std::vector<double> & weights);
+
+    void ReadElementsNNLS(ROM_Options const& input, string basename,
+                          std::vector<int> & elems);
+
+    void EQPmult(double t, hydrodynamics::LagrangianHydroOperator *oper,
+                 Vector const& S, Vector &dS) const;
+
+    // Data for EQP
+    std::vector<int> eqpI, eqpI_E;
+    std::vector<double> eqpW, eqpW_E;
+
+    mutable bool eqp_init = false;
+    mutable bool eqp_init_E = false;
+    mutable int nvdof = 0;
+    mutable int nedof = 0;
+
+    mutable CAROM::Matrix W_elems, W_E_elems;
+
+    CAROM::Matrix* Wmat = 0;
+    CAROM::Matrix* Wmat_E = 0;
+
+    mutable CAROM::Matrix* BXtBV = 0;
+    mutable CAROM::Vector* BXtV0 = 0;
+
+    ParFiniteElementSpace *H1spaceFOM = nullptr; // FOM H1 FEM space
+    ParFiniteElementSpace *L2spaceFOM = nullptr; // FOM L2 FEM space
+
+    mutable Vector eqpFv, eqpFe;
+
+    int window = 0;
+
+    void Setup_ForceIntegratorEQP_SP(int nqe);
+    void Setup_ForceIntegratorEQP_E_SP(int nqe);
+
+    // StepRK4 data
+    Vector rk4_dS_dt, rk4_S0, rk4_dv_dt, rk4_v0, rk4_dx_dt, rk4_de_dt, rk4_rS0,
+           rk4_rV, rk4_rdS_dt, rk4_rdv_dt, rk4_rv0, rk4_rdx_dt, rk4_rde_dt, rk4_k,
+           rk4_y, rk4_z;
+    CAROM::Vector rk4_spV, rk4_spE;
 };
 
 CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,

@@ -82,9 +82,14 @@ public:
         : dim(h1fes.GetMesh()->Dimension()), H1FESpace(h1fes), tensors1D(t1D) { }
 
     void GetL2Values(const Vector &vecL2, Vector &vecQP) const;
+    void GetSomeL2Values(const Vector &vecL2, const Array<int> &qp,
+                         Vector &vecQ) const;
+
     // The input vec is an H1 function with dim components, over a zone.
     // The output is J_ij = d(vec_i) / d(x_j) with ij = 1 .. dim.
     void GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const;
+    void GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &qp,
+                           DenseTensor &J) const;
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each

@@ -162,6 +162,8 @@ int main(int argc, char *argv[])
     Array<double> twep;
     Array2D<int> twparam;
     ROM_Options romOptions;
+    int nnlsWindow0 = -1;
+    int nnlsWindow1 = -1;
 
     OptionsParser args(argc, argv);
     args.AddOption(&mesh_file, "-m", "--mesh",
@@ -341,6 +343,17 @@ int main(int argc, char *argv[])
                    "Enable or disable merging of X-X0 and V bases.");
     args.AddOption(&hyperreductionSamplingType, "-hrsamptype", "--hrsamplingtype",
                    "Sampling type for the hyperreduction.");
+    args.AddOption(&romOptions.maxNNLSnnz, "-maxnnls", "--max-nnls",
+                   "Maximum number of nonzeros in NNLS solution.");
+    args.AddOption(&romOptions.tolNNLS, "-tolnnls", "--tol-nnls",
+                   "NNLS solver error tolerance.");
+    args.AddOption(&romOptions.sampfreq, "-sampfreq", "--samp-freq",
+                   "Snapshot sampling frequency.");
+    args.AddOption(&nnlsWindow0, "-nnlsw0", "--nnls-window0",
+                   "First window for NNLS setup.");
+    args.AddOption(&nnlsWindow1, "-nnlsw1", "--nnls-window1",
+                   "Last window for NNLS setup.");
+
     args.Parse();
     if (!args.Good())
     {
@@ -392,10 +405,12 @@ int main(int argc, char *argv[])
     romOptions.basisIdentifier = std::string(basisIdentifier);
 
     romOptions.hyperreductionSamplingType = getHyperreductionSamplingType(hyperreductionSamplingType);
+    romOptions.use_sample_mesh = romOptions.hyperreduce;
+
     romOptions.spaceTimeMethod = getSpaceTimeMethod(spaceTimeMethod);
     const bool spaceTime = (romOptions.spaceTimeMethod != no_space_time);
 
-    const bool fom_data = spaceTime || !(rom_online && romOptions.hyperreduce);  // Whether to construct FOM data structures
+    const bool fom_data = spaceTime || !(rom_online && romOptions.use_sample_mesh);  // Whether to construct FOM data structures
 
     static std::map<std::string, NormType> localmap;
     localmap["l2"] = l2norm;
@@ -423,8 +438,8 @@ int main(int argc, char *argv[])
         parameterPointGreedySampler = BuildROMDatabase(romOptions, t_final, myid, outputPath, rom_offline, rom_online, rom_restore, usingWindows, rom_calc_error_indicator, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, rom_read_greedy_twparam, greedyParam, greedyErrorIndicatorType, greedySamplingType);
 
         rom_calc_rel_error = rom_calc_rel_error_local || rom_calc_rel_error_nonlocal;
-        rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal && (rom_restore || (rom_online && !romOptions.hyperreduce));
-        rom_calc_rel_error_local_completed = rom_calc_rel_error_local && (rom_restore || (rom_online && !romOptions.hyperreduce));
+        rom_calc_rel_error_nonlocal_completed = rom_calc_rel_error_nonlocal && (rom_restore || (rom_online && !romOptions.use_sample_mesh));
+        rom_calc_rel_error_local_completed = rom_calc_rel_error_local && (rom_restore || (rom_online && !romOptions.use_sample_mesh));
         greedy_write_solution = rom_offline || rom_calc_rel_error_nonlocal_completed;
 
         if (rom_offline)
@@ -994,10 +1009,14 @@ int main(int argc, char *argv[])
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
     {
+        const bool noMassSolve = rom_online && (romOptions.hyperreductionSamplingType == eqp);
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
-                                           ess_tdofs, *rho, source, cfl, mat_gf_coeff,
-                                           visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                                           H1FEC.GetBasisType());
+                                           ess_tdofs, *rho, source, cfl,
+                                           mat_gf_coeff, visc, vort, p_assembly,
+                                           cg_tol, cg_max_iter, ftz_tol,
+                                           H1FEC.GetBasisType(), noMassSolve,
+                                           noMassSolve,
+                                           rom_online && (romOptions.hyperreductionSamplingType == eqp));
     }
 
     socketstream* vis_rho = NULL;
@@ -1077,6 +1096,7 @@ int main(int argc, char *argv[])
     }
 
     romOptions.rank = myid;
+    romOptions.nprocs = nprocs;
     romOptions.H1FESpace = H1FESpace;
     romOptions.L2FESpace = L2FESpace;
     romOptions.window = 0;
@@ -1112,6 +1132,7 @@ int main(int argc, char *argv[])
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
         err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
+
         if (romOptions.parameterID != -1 && romOptions.offsetType == interpolateOffset && myid == 0)
         {
             ofstream basisIdFile;
@@ -1161,6 +1182,10 @@ int main(int argc, char *argv[])
             sampler->SampleSolution(0, 0, (problem == 7) ? 0.0 : -1.0, *S);
         }
         samplerTimer.Stop();
+
+        if (myid == 0)
+            cout << "Sampling every " << romOptions.sampfreq <<
+                 " timestep(s)." << endl;
     }
 
     if (outputTimes)
@@ -1221,10 +1246,15 @@ int main(int argc, char *argv[])
         if (dtc > 0.0) dt = dtc;
         if (usingWindows)
         {
+            if (nnlsWindow1 == -1) nnlsWindow1 = numWindows;
+
             // Construct the ROM_Basis for each window.
             for (romOptions.window = numWindows-1; romOptions.window >= 0; --romOptions.window)
             {
                 SetWindowParameters(twparam, romOptions);
+                romOptions.skipNNLS = (romOptions.window < nnlsWindow0 ||
+                                       romOptions.window > nnlsWindow1);
+
                 basis[romOptions.window] = new ROM_Basis(romOptions, MPI_COMM_WORLD, sFactorX, sFactorV);
                 if (!romOptions.hyperreduce_prep)
                 {
@@ -1244,20 +1274,24 @@ int main(int argc, char *argv[])
             }
         }
 
-        if (!romOptions.hyperreduce)
+        if (!romOptions.use_sample_mesh && nnlsWindow0 <= 0)
         {
             basis[0]->Init(romOptions, *S);
         }
 
         if (romOptions.hyperreduce_prep)
         {
-            if (myid == 0)
+            const bool skipW0 = 0 < nnlsWindow0;
+            if (myid == 0 && !skipW0)
             {
                 cout << "Writing SP files for window: 0" << endl;
                 basis[0]->writeSP(romOptions, 0);
             }
             for (int curr_window = 1; curr_window < numWindows; curr_window++)
             {
+                const bool skipW = (curr_window < nnlsWindow0 || curr_window > nnlsWindow1);
+                if (skipW) continue;
+
                 basis[curr_window]->Init(romOptions, *S);
                 basis[curr_window]->computeWindowProjection(*basis[curr_window - 1], romOptions, curr_window);
                 if (myid == 0)
@@ -1276,7 +1310,7 @@ int main(int argc, char *argv[])
 
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
 
-        if (!romOptions.hyperreduce)
+        if (!romOptions.use_sample_mesh)
         {
             basis[0]->ProjectFOMtoROM(*S, romS);
             if (romOptions.hyperreduce_prep && myid == 0)
@@ -1303,13 +1337,14 @@ int main(int argc, char *argv[])
 
         if (rom_online && problem == 7 && romOptions.indicatorType == penetrationDistance)
         {
-            if (!romOptions.hyperreduce)
+            if (!romOptions.use_sample_mesh)
             {
                 int pd2_tdof = (pd2_vdof >= 0) ? H1FESpace->GetLocalTDofNumber(pd2_vdof) : -1;
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
-            if (!romOptions.hyperreduce_prep)
+            //if (!romOptions.hyperreduce_prep)
+            if (romOptions.use_sample_mesh)
             {
                 std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
                 ReadPDweight(pd_weight, pd_weight_outputPath);
@@ -1330,6 +1365,10 @@ int main(int argc, char *argv[])
                     WriteGreedyPhase(rom_offline, rom_online, rom_restore, rom_calc_rel_error_nonlocal, rom_calc_rel_error_local, romOptions, outputPath + "/greedy_algorithm_stage.txt");
                 }
             }
+
+            onlinePreprocessTimer.Stop();
+            cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
+
             return 0;
         }
 
@@ -1561,7 +1600,7 @@ int main(int argc, char *argv[])
             outfile_tw_steps.open(testing_parameter_outputPath + "/tw_steps");
         }
         timeLoopTimer.Start();
-        if (romOptions.hyperreduce)
+        if (romOptions.use_sample_mesh)
         {
             romOper[0]->ApplyHyperreduction(romS);
         }
@@ -1592,7 +1631,7 @@ int main(int argc, char *argv[])
                 last_step = true;
             }
 
-            if (!rom_online || !romOptions.hyperreduce) *S_old = *S;
+            if (!rom_online || !romOptions.use_sample_mesh) *S_old = *S;
             t_old = t;
             if (fom_data)
             {
@@ -1630,7 +1669,7 @@ int main(int argc, char *argv[])
                 std::string filename = testing_parameter_outputPath + "/ROMsol/romS_" + std::to_string(ti);
                 std::ofstream outfile_romS(filename.c_str());
                 outfile_romS.precision(16);
-                if (romOptions.hyperreduce && romOptions.GramSchmidt)
+                if (romOptions.use_sample_mesh && romOptions.GramSchmidt)
                 {
                     Vector romCoord(romS);
                     romOper[romOptions.window]->PostprocessHyperreduction(romCoord, true);
@@ -1642,7 +1681,7 @@ int main(int argc, char *argv[])
                 }
                 outfile_romS.close();
 
-                if (!romOptions.hyperreduce)
+                if (!romOptions.use_sample_mesh)
                 {
                     basis[romOptions.window]->LiftROMtoFOM(romS, *S);
 
@@ -1676,7 +1715,7 @@ int main(int argc, char *argv[])
             const double last_dt = dt;
 
             // Adaptive time step control.
-            const double dt_est = romOptions.hyperreduce ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
+            const double dt_est = romOptions.use_sample_mesh ? romOper[romOptions.window]->GetTimeStepEstimateSP() : oper->GetTimeStepEstimate(*S);
 
             if (dt_est < dt)
             {
@@ -1701,7 +1740,7 @@ int main(int argc, char *argv[])
                     MFEM_ABORT("The time step crashed!");
                 }
                 t = t_old;
-                if (!rom_online || !romOptions.hyperreduce) *S = *S_old;
+                if (!rom_online || !romOptions.use_sample_mesh) *S = *S_old;
                 if (rom_online) romS = romS_old;
                 if (fom_data)
                 {
@@ -1795,7 +1834,8 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    sampler->SampleSolution(t, last_dt, real_pd, *S);
+                    if (unique_steps % romOptions.sampfreq == 0)
+                        sampler->SampleSolution(t, last_dt, real_pd, *S);
                 }
 
                 bool endWindow = false;
@@ -1984,7 +2024,7 @@ int main(int argc, char *argv[])
                     if (myid == 0)
                         cout << "ROM online basis change for window " << romOptions.window << " at t " << t << ", dt " << dt << endl;
 
-                    if (romOptions.hyperreduce)
+                    if (romOptions.use_sample_mesh)
                     {
                         romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
                     }
@@ -1993,8 +2033,9 @@ int main(int argc, char *argv[])
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
 
+                    //timeLoopTimer.Stop();
                     SetWindowParameters(twparam, romOptions);
-                    if (romOptions.hyperreduce)
+                    if (romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->ProjectFromPreviousWindow(romOptions, romS, romOptions.window, rdimxprev, rdimvprev, rdimeprev);
                     }
@@ -2002,7 +2043,7 @@ int main(int argc, char *argv[])
                     delete basis[romOptions.window-1];
                     timeLoopTimer.Stop();
 
-                    if (!romOptions.hyperreduce)
+                    if (!romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->Init(romOptions, *S);
                     }
@@ -2013,13 +2054,13 @@ int main(int argc, char *argv[])
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
                     }
 
-                    if (!romOptions.hyperreduce)
+                    if (!romOptions.use_sample_mesh)
                     {
                         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
                     }
                     timeLoopTimer.Start();
 
-                    if (!romOptions.hyperreduce)
+                    if (!romOptions.use_sample_mesh)
                     {
                         basis[romOptions.window]->ProjectFOMtoROM(*S, romS);
                     }
@@ -2028,9 +2069,11 @@ int main(int argc, char *argv[])
                         cout << "Window " << romOptions.window << ": initial romS norm " << romS.Norml2() << endl;
                     }
 
+                    // TODO: move the deletes after the time loop?
                     delete romOper[romOptions.window-1];
+                    //timeLoopTimer.Start();
 
-                    if (romOptions.hyperreduce)
+                    if (romOptions.use_sample_mesh)
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
                     }
@@ -2045,6 +2088,7 @@ int main(int argc, char *argv[])
                         }
                     }
 
+                    //romOper[romOptions.window]->UpdateSampleMeshNodes(romS);  // TODO?
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
             }
@@ -2079,6 +2123,22 @@ int main(int argc, char *argv[])
                              << ",\tdt = " << setw(5) << setprecision(6) << dt
                              << ",\t|e| = " << setprecision(10)
                              << sqrt(tot_norm) << endl;
+                    }
+
+                    if (romOptions.hyperreductionSamplingType == eqp)
+                    {
+                        double energy_total, energy_diff;
+                        energy_total = oper->InternalEnergy(*e_gf) +
+                                       oper->KineticEnergy(*v_gf);
+                        energy_diff	= energy_total - energy_init;
+
+                        if (mpi.Root())
+                        {
+                            cout << "\tE_tot = " << scientific << setprecision(5)
+                                 << energy_total
+                                 << ",\tE_diff = " << scientific << setprecision(5)
+                                 << energy_diff << endl;
+                        }
                     }
 
                     // Make sure all ranks have sent their 'v' solution before initiating
@@ -2155,7 +2215,7 @@ int main(int argc, char *argv[])
         outfile_tw_steps.close();
     }
 
-    if (romOptions.hyperreduce)
+    if (romOptions.use_sample_mesh)
     {
         if (romOptions.GramSchmidt && !spaceTime)
         {
@@ -2328,7 +2388,7 @@ int main(int argc, char *argv[])
             }
             errorIndicatorComputed = true;
         }
-        else if ((rom_online && !romOptions.hyperreduce) || (rom_restore) ||
+        else if ((rom_online && !romOptions.use_sample_mesh) || (rom_restore) ||
                  (rom_offline && rom_calc_error_indicator && romOptions.greedyErrorIndicatorType == fom))
         {
             if (rom_online)
@@ -2458,8 +2518,12 @@ int main(int argc, char *argv[])
         if (mpi.Root())
         {
             cout << endl;
-            cout << "Energy diff: " << scientific << setprecision(2)
-                 << fabs(energy_init - energy_final) << endl;
+            cout << "Initial energy: " << scientific << setprecision(5)
+                 << energy_init << endl;
+            cout << "Energy diff: " << scientific << setprecision(5)
+                 << energy_final - energy_init << endl;
+            cout << "Rel. energy diff: " << scientific << setprecision(5)
+                 << (energy_final - energy_init) / energy_init << endl;
         }
 
         PrintParGridFunction(myid, testing_parameter_outputPath + "/x_gf" + romOptions.basisIdentifier, x_gf);
