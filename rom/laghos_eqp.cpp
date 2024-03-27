@@ -286,17 +286,23 @@ void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
     CAROM::Matrix Wmat(H1size, rdimv, true);
     CAROM::Matrix Wmat_E(L2size, rdime, true);
 
-    // Compute Wmat_E
+    // Compute Wmat
     Vector vj(tsize_H1);
     Vector Mvj(H1size);
     for (int j=0; j<rdimv; ++j)
     {
         GetBasisVectorV(false, j, vj);
         gfH1->SetFromTrueDofs(vj);
+
+#ifdef EQP_NO_Minv
+        for (int i=0; i<H1size; ++i)
+            Wmat(i,j) = (*gfH1)[i];
+#else
         input.FOMoper->MultMvInv(*gfH1, Mvj);
 
         for (int i=0; i<H1size; ++i)
             Wmat(i,j) = Mvj[i];
+#endif
     }
 
     // Compute Wmat_E
@@ -306,10 +312,15 @@ void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
     {
         GetBasisVectorE(false, j, vj);
         gfL2->SetFromTrueDofs(vj);
+#ifdef EQP_NO_Minv
+        for (int i=0; i<L2size; ++i)
+            Wmat_E(i,j) = (*gfL2)[i];
+#else
         input.FOMoper->MultMeInv(*gfL2, Mvj);
 
         for (int i=0; i<L2size; ++i)
             Wmat_E(i,j) = Mvj[i];
+#endif
     }
 
     ExtractMatrixElementRowsAndWrite(elems, input.H1FESpace, Wmat,
@@ -415,10 +426,15 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
             for (int i=0; i<tL2size; ++i)
                 e_i[i] = (*basisE)(i,j);
 
+#ifdef EQP_NO_Minv
+            for (int i=0; i<tL2size; ++i)
+                W(i,j) = e_i[i];  // TODO: just set to basisE?
+#else
             input.FOMoper->MultMeInv(e_i, g_i);
 
             for (int i=0; i<tL2size; ++i)
                 W(i,j) = g_i[i];
+#endif
         }
         else
         {
@@ -426,10 +442,15 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
                 v_i[i] = (*basisV)(i,j);
 
             gfH1->SetFromTrueDofs(v_i);
+#ifdef EQP_NO_Minv
+            for (int i=0; i<H1size; ++i)
+                W(i,j) = (*gfH1)[i];
+#else
             input.FOMoper->MultMvInv(*gfH1, gf2H1);
 
             for (int i=0; i<H1size; ++i)
                 W(i,j) = gf2H1[i];
+#endif
         }
     }
 
@@ -835,6 +856,12 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
                   MPI_COMM_WORLD);
 
     eqpFv.Neg();  // Matching LagrangianHydroOperator::SolveVelocity
+
+#ifdef EQP_NO_Minv
+    Vector invMvF(rdim);
+    invMvROM.Mult(eqpFv, invMvF);
+    eqpFv = invMvF;
+#endif
 }
 
 void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
@@ -1117,6 +1144,12 @@ void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
 
     MPI_Allreduce(MPI_IN_PLACE, eqpFe.GetData(), eqpFe.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
+
+#ifdef EQP_NO_Minv
+    Vector invMvE(rdim);
+    invMeROM.Mult(eqpFe, invMvE);
+    eqpFe = invMvE;
+#endif
 }
 
 // TODO: remove

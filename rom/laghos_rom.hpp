@@ -15,6 +15,7 @@
 
 using namespace mfem;
 
+//#define EQP_NO_Minv  // Use EQP formulation without mass matrix inverse
 
 //#define STXV  // TODO: remove this?
 
