@@ -55,11 +55,12 @@ static void display_banner(std::ostream&);
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
-   MPI_Session mpi(argc, argv);
-   const int myid = mpi.WorldRank();
+   Mpi::Init();
+   int myid = Mpi::WorldRank();
+   Hypre::Init();
 
    // Print the banner.
-   if (mpi.Root()) { display_banner(cout); }
+   if (Mpi::Root()) { display_banner(cout); }
 
    // Parse command-line options.
    problem = 1;
@@ -132,10 +133,10 @@ int main(int argc, char *argv[])
    args.Parse();
    if (!args.Good())
    {
-      if (mpi.Root()) { args.PrintUsage(cout); }
+      if (Mpi::Root()) { args.PrintUsage(cout); }
       return 1;
    }
-   if (mpi.Root()) { args.PrintOptions(cout); }
+   if (Mpi::Root()) { args.PrintOptions(cout); }
 
    // On all processors, use the default builtin 1D/2D/3D mesh or read the
    // serial one given on the command line.
@@ -182,7 +183,7 @@ int main(int argc, char *argv[])
    // Refine the mesh in serial to increase the resolution.
    for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
    const int mesh_NE = mesh->GetNE();
-   if (mpi.Root())
+   if (Mpi::Root())
    {
       cout << "Number of zones in the serial mesh: " << mesh_NE << endl;
    }
@@ -248,7 +249,7 @@ int main(int argc, char *argv[])
 
    const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
    const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
-   if (mpi.Root())
+   if (Mpi::Root())
    {
       cout << "Number of kinematic (position, velocity) dofs: "
            << glob_size_h1 << endl;
@@ -428,7 +429,7 @@ int main(int argc, char *argv[])
          t = t_old;
          S = S_old;
          hydro.ResetQuadratureData();
-         if (mpi.Root()) { cout << "Repeating step " << ti << endl; }
+         if (Mpi::Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
@@ -445,7 +446,7 @@ int main(int argc, char *argv[])
          MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
          // const double internal_energy = hydro.InternalEnergy(e_gf);
          // const double kinetic_energy = hydro.KineticEnergy(v_gf);
-         if (mpi.Root())
+         if (Mpi::Root())
          {
             const double sqrt_norm = sqrt(norm);
 
@@ -539,7 +540,7 @@ int main(int argc, char *argv[])
 
    const double energy_final = hydro.InternalEnergy(e_gf) +
                                hydro.KineticEnergy(v_gf);
-   if (mpi.Root())
+   if (Mpi::Root())
    {
       cout << endl;
       cout << "Energy  diff: " << std::scientific << std::setprecision(2)
@@ -553,7 +554,7 @@ int main(int argc, char *argv[])
       const double error_max = v_gf.ComputeMaxError(v_coeff),
                    error_l1  = v_gf.ComputeL1Error(v_coeff),
                    error_l2  = v_gf.ComputeL2Error(v_coeff);
-      if (mpi.Root())
+      if (Mpi::Root())
       {
          cout << "L_inf  error: " << error_max << endl
               << "L_1    error: " << error_l1 << endl
