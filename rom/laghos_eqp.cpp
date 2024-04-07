@@ -9,23 +9,103 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
 {
     CAROM::NNLSSolver nnls(nnls_tol, 0, maxNNLSnnz, 2);
 
-    CAROM::Vector rhs_ub(Gt.numColumns(), false);
     // G.mult(w, rhs_ub);  // rhs = Gw
     // rhs = Gw. Note that by using Gt and multTranspose, we do parallel communication.
-    Gt.transposeMult(w, rhs_ub);
 
-    CAROM::Vector rhs_lb(rhs_ub);
-    CAROM::Vector rhs_Gw(rhs_ub);
+    CAROM::Vector rhs_Gw(Gt.numColumns(), false);
+    Gt.transposeMult(w, rhs_Gw);
 
-    const double delta = 1.0e-11;
-    for (int i=0; i<rhs_ub.dim(); ++i)
+    bool useLQ = false;  // TODO: input
+    if (useLQ)
     {
-        rhs_lb(i) -= delta;
-        rhs_ub(i) += delta;
-    }
 
-    //nnls.normalize_constraints(Gt, rhs_lb, rhs_ub);
-    nnls.solve_parallel_with_scalapack(Gt, rhs_lb, rhs_ub, sol);
+        // Compute Q^T of the LQ factorization of G.
+        CAROM::Matrix* Qt_ptr;
+        Qt_ptr = Gt.qr_factorize();
+
+        CAROM::Matrix Qt(Qt_ptr->getData(), Qt_ptr->numRows(),
+                         Qt_ptr->numColumns(), Qt_ptr->distributed(),
+                         false);
+
+        // Compute L of the factorization; L is lower triangular.
+        // G = L * Q --> L = G * Q^T
+        CAROM::Matrix L(Qt.numColumns(), Qt.numColumns(), false);
+        Gt.transposeMult(Qt, L);
+
+        // Check for nearly linearly dependent Q rows.
+        // This is achieved by checking the magnitude of the diagonal
+        // values of L.
+        std::vector<int> row_ind;
+        for (int i = 0; i < L.numRows(); ++i)
+        {
+            if (std::abs(L.item(i, i)) < 1e-12)
+            {
+                row_ind.push_back(i);
+                std::cout << i << ", ";
+            }
+        }
+
+        cout << "\nFound " << row_ind.size() << " / " << L.numRows()
+             << " nearly linearly dependent constraints.\n";
+
+        // Compute the RHS vector.
+        CAROM::Vector rhs_ub(Qt.numColumns(), false);
+        Qt.transposeMult(w, rhs_ub);
+
+        // Compute the new RHS tolerance values.
+        const double delta = 1.0e-11;
+        CAROM::Vector delta_new(rhs_ub.dim(), false);
+        for (int i = 0; i < delta_new.dim(); ++i)
+        {
+            double denominator = (i + 1) * std::abs(L.item(i, i));
+            if (std::abs(denominator) < delta)
+                delta_new(i) = 1.0;
+            else
+                delta_new(i) = delta / denominator;
+
+            for (int j = i + 1; j < delta_new.dim(); ++j)
+            {
+                denominator = (j + 1) * std::abs(L.item(j, i));
+
+                double temp;
+                if (std::abs(denominator) < delta)
+                    temp = 1.0;
+                else
+                    temp = delta / denominator;
+
+                if (temp < delta_new(i))
+                    delta_new(i) = temp;
+            }
+        }
+
+        // Compute the upper and lower bound RHS vectors.
+        CAROM::Vector rhs_lb(rhs_ub);
+        for (int i = 0; i < rhs_ub.dim(); ++i)
+        {
+            rhs_lb(i) -= delta_new(i);
+            rhs_ub(i) += delta_new(i);
+        }
+
+        // Call the NNLS solver.
+        nnls.solve_parallel_with_scalapack(Qt, rhs_lb, rhs_ub, sol);
+
+        delete Qt_ptr;
+    }
+    else
+    {
+        CAROM::Vector rhs_ub(rhs_Gw);
+        CAROM::Vector rhs_lb(rhs_Gw);
+
+        const double delta = 1.0e-11;
+        for (int i=0; i<rhs_ub.dim(); ++i)
+        {
+            rhs_lb(i) -= delta;
+            rhs_ub(i) += delta;
+        }
+
+        //nnls.normalize_constraints(Gt, rhs_lb, rhs_ub);
+        nnls.solve_parallel_with_scalapack(Gt, rhs_lb, rhs_ub, sol);
+    }
 
     int nnz = 0;
     for (int i=0; i<sol.dim(); ++i)
