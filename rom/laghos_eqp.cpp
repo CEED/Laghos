@@ -154,16 +154,16 @@ void WriteSolutionNNLS(std::vector<int> const& indices, std::vector<double> cons
 }
 
 void ExtractNonzeros(CAROM::Vector const& v, std::vector<int> & indices,
-                     std::vector<double> & nnz)
+                     std::vector<double> & nz)
 {
-    nnz.clear();
+    nz.clear();
     indices.clear();
     for (int i=0; i<v.dim(); ++i)
     {
         if (v(i) != 0.0)
         {
             indices.push_back(i);
-            nnz.push_back(v(i));
+            nz.push_back(v(i));
         }
     }
 }
@@ -171,7 +171,7 @@ void ExtractNonzeros(CAROM::Vector const& v, std::vector<int> & indices,
 void ExtractMatrixElementRowsAndWrite(std::set<int> const& elems,
                                       const ParFiniteElementSpace *fespace,
                                       CAROM::Matrix const& Wmat,
-                                      std::string filename)
+                                      std::string filename, int rank, int nprocs)
 {
     bool negdof = false;
     const int ncol = Wmat.numColumns();
@@ -201,17 +201,34 @@ void ExtractMatrixElementRowsAndWrite(std::set<int> const& elems,
     MFEM_VERIFY(ndof * elems.size() == elemDofs.size(), "");
     MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
 
-    CAROM::Matrix W_elems(elemDofs.size(), ncol, true);
+    CAROM::Matrix W_elems;
 
-    for (int j=0; j<ncol; ++j)
+    if (elemDofs.size() > 0)
     {
-        for (int i=0; i<elemDofs.size(); ++i)
+        W_elems.setSize(elemDofs.size(), ncol);
+
+        for (int j=0; j<ncol; ++j)
         {
-            W_elems(i,j) = Wmat(elemDofs[i],j);
+            for (int i=0; i<elemDofs.size(); ++i)
+            {
+                W_elems(i,j) = Wmat(elemDofs[i],j);
+            }
         }
     }
 
-    W_elems.write(filename);
+    // Gather all entries of W_elems to root.
+    const int numEntries = elemDofs.size() > 0 ?
+                           W_elems.numRows() * W_elems.numColumns() : 0;
+
+    vector<double> allData;
+    Double_Gatherv(numEntries, numEntries > 0 ? W_elems.getData() : nullptr,
+                   0, rank, nprocs, MPI_COMM_WORLD, allData);
+
+    if (rank == 0)
+    {
+        CAROM::Matrix allW_elems(allData.data(), allData.size() / ncol, ncol, false, false);
+        allW_elems.write(filename);
+    }
 }
 
 // This function is based on ForceIntegrator::AssembleElementMatrix2.
@@ -351,13 +368,51 @@ void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
 
     //WriteSampleMeshEQP(input, elems);
 
-    // Write elems to file
-    std::ofstream outfile("run/nnlsElems" + std::to_string(input.window) + "_"
-                          + std::to_string(input.rank));
+    // For the parallel case, gather local elems and construct global elems.
+    std::vector<int> globalElems;
+    {
+        const int localNumElems = elems.size();
 
-    for (auto e : elems)
-        outfile << e << endl;
-    outfile.close();
+        std::vector<int> counts(nprocs);
+        std::vector<int> offsets(nprocs);
+
+        MPI_Gather(&localNumElems, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        offsets[0] = 0;
+        for (int i=1; i<nprocs; ++i)
+            offsets[i] = offsets[i-1] + counts[i-1];
+
+        std::vector<int> localElems(elems.begin(), elems.end());
+        Int_Gatherv(localNumElems, localNumElems > 0 ? localElems.data() : nullptr,
+                    0, rank, nprocs, MPI_COMM_WORLD, globalElems);
+
+        const int ne = input.H1FESpace->GetNE();
+        std::vector<int> allne(nprocs);
+        MPI_Gather(&ne, 1, MPI_INT, allne.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        if (rank == 0)
+        {
+            int os = 0;
+            for (int i=1; i<nprocs; ++i)
+            {
+                os += allne[i-1];
+                for (int j=offsets[i]; j<offsets[i] + counts[i]; ++j)
+                {
+                    globalElems[j] += os;
+                }
+            }
+        }
+    }
+
+    // Write elems to file
+    if (rank == 0)
+    {
+        std::ofstream outfile("run/nnlsElems" + std::to_string(input.window));
+
+        for (auto e : globalElems)
+            outfile << e << endl;
+        outfile.close();
+    }
 
     // Construct Wmat and write out rows corresponding to elements in elems to file.
     const int tsize_H1 = input.H1FESpace->GetTrueVSize();
@@ -405,11 +460,13 @@ void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
 
     ExtractMatrixElementRowsAndWrite(elems, input.H1FESpace, Wmat,
                                      *input.basename + "/WelemsV" +
-                                     std::to_string(input.window));
+                                     std::to_string(input.window),
+                                     input.rank, input.nprocs);
 
     ExtractMatrixElementRowsAndWrite(elems, input.L2FESpace, Wmat_E,
                                      *input.basename + "/WelemsE" +
-                                     std::to_string(input.window));
+                                     std::to_string(input.window),
+                                     input.rank, input.nprocs);
 }
 
 void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
@@ -649,9 +706,9 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
     CAROM::Vector sol(ne * nqe, true);
     SolveNNLS(input.rank, input.tolNNLS, input.maxNNLSnnz, w, Gt, sol);
 
-    std::vector<double> solnnz;
+    std::vector<double> solnz; // Solution nonzeros
     std::vector<int> indices;
-    ExtractNonzeros(sol, indices, solnnz);
+    ExtractNonzeros(sol, indices, solnz);
 
     int prev = -1;
     for (auto i : indices)
@@ -664,9 +721,43 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
         }
     }
 
-    const std::string varName = equationE ? "E" : "V";
-    WriteSolutionNNLS(indices, solnnz, "run/nnls" + varName +
-                      std::to_string(input.window) + "_" + std::to_string(input.rank));
+    // For the parallel case, convert local indices to global on root.
+    std::vector<int> allne(nprocs);
+    MPI_Gather(&ne, 1, MPI_INT, allne.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    std::vector<int> globalIndices;
+    std::vector<double> globalSol;
+
+    const int localNumIndices = indices.size();
+
+    Int_Gatherv(localNumIndices, indices.data(), 0, rank, nprocs, MPI_COMM_WORLD, globalIndices);
+    Double_Gatherv(localNumIndices, solnz.data(), 0, rank, nprocs, MPI_COMM_WORLD, globalSol);
+
+    std::vector<int> counts(nprocs);
+    std::vector<int> offsets(nprocs);
+
+    MPI_Gather(&localNumIndices, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    offsets[0] = 0;
+    for (int i=1; i<nprocs; ++i)
+        offsets[i] = offsets[i-1] + counts[i-1];
+
+    if (rank == 0)
+    {
+        int os = 0;
+        for (int i=1; i<nprocs; ++i)
+        {
+            os += allne[i-1] * nqe;
+            for (int j=offsets[i]; j<offsets[i] + counts[i]; ++j)
+            {
+                globalIndices[j] += os;
+            }
+        }
+
+        const std::string varName = equationE ? "E" : "V";
+        WriteSolutionNNLS(globalIndices, globalSol, "run/nnls" + varName +
+                          std::to_string(input.window));
+    }
 }
 
 void ROM_Operator::InitEQP() const

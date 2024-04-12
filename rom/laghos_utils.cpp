@@ -865,3 +865,37 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
     cout << rank << ": " << name << " DIFF norm " << sqrt(diffglob2) << endl;
     cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
 }
+
+void Int_Gatherv(int n, int *data, int root, int rank, int nprocs,
+                 MPI_Comm comm, vector<int> &g)
+{
+    std::vector<int> counts(nprocs);
+    std::vector<int> offsets(nprocs);
+    MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, comm);
+
+    offsets[0] = 0;
+    for (int i=1; i<nprocs; ++i)
+        offsets[i] = offsets[i-1] + counts[i-1];
+
+    if (rank == 0) g.resize(offsets[nprocs-1] + counts[nprocs-1]);
+
+    MPI_Gatherv(data, n, MPI_INT, g.data(), counts.data(), offsets.data(),
+                MPI_INT, 0, comm);
+}
+
+void Double_Gatherv(int n, double *data, int root, int rank, int nprocs,
+                    MPI_Comm comm, vector<double> &g)
+{
+    std::vector<int> counts(nprocs);
+    std::vector<int> offsets(nprocs);
+    MPI_Gather(&n, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, comm);
+
+    offsets[0] = 0;
+    for (int i=1; i<nprocs; ++i)
+        offsets[i] = offsets[i-1] + counts[i-1];
+
+    if (rank == 0) g.resize(offsets[nprocs-1] + counts[nprocs-1]);
+
+    MPI_Gatherv(data, n, MPI_DOUBLE, g.data(), counts.data(), offsets.data(),
+                MPI_DOUBLE, 0, comm);
+}

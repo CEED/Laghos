@@ -60,4 +60,10 @@ void readVec(vector<int> &v, std::string file_name);
 // count the number of lines in a file
 int countNumLines(std::string file_name);
 
+void Int_Gatherv(int n, int *data, int root, int rank, int nprocs,
+                 MPI_Comm comm, vector<int> &g);
+
+void Double_Gatherv(int n, double *data, int root, int rank, int nprocs,
+                    MPI_Comm comm, vector<double> &g);
+
 #endif // MFEM_LAGHOS_UTILS

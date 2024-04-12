@@ -366,7 +366,7 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     vector<double> allpcrd;
     if (rank == 0) allpcrd.resize(offsets[nprocs-1] + counts[nprocs-1]);
-    MPI_Gatherv(pcrd.data(), counts[rank], MPI_DOUBLE, allpcrd.data(), counts.data(),
+    MPI_Gatherv(pcrd.data(), pcrd.size(), MPI_DOUBLE, allpcrd.data(), counts.data(),
                 offsets.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     // Also gather vertex indices on the corresponding elements.
@@ -378,7 +378,7 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     vector<int> allpvid;
     if (rank == 0) allpvid.resize(allpcrd.size() / dim);
-    MPI_Gatherv(pvid.data(), counts[rank], MPI_INT, allpvid.data(), counts.data(),
+    MPI_Gatherv(pvid.data(), pvid.size(), MPI_INT, allpvid.data(), counts.data(),
                 offsets.data(), MPI_INT, 0, MPI_COMM_WORLD);
 
     // Use the element vertex coordinate data in allpcrd and index data in allpvid
@@ -447,7 +447,7 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
     vector<int> allpatt;
     if (rank == 0) allpatt.resize(offsets[nprocs-1] + counts[nprocs-1]);
-    MPI_Gatherv(patt.data(), counts[rank], MPI_INT, allpatt.data(), counts.data(),
+    MPI_Gatherv(patt.data(), patt.size(), MPI_INT, allpatt.data(), counts.data(),
                 offsets.data(), MPI_INT, 0, MPI_COMM_WORLD);
 
     // The rest of this function is only for the root process, involving smesh
@@ -1723,15 +1723,18 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         size_L2_sp = sp_L2_space->GetTrueVSize();
 
         sample_pmesh = smm->GetSampleMesh();
-        if (hyperreductionSamplingType == eqp)
-        {
-            MFEM_VERIFY(sample_pmesh->GetNE() == elemsEQP.size(),
-                        "TODO: this is only valid in serial!");
-            MapBoundaryAttributesToSampleMesh(rank, nprocs, elemsEQP,
-                                              num_sample_dofs_per_procE,
-                                              pmesh, sample_pmesh);
-        }
-        else
+    }
+
+    if (hyperreductionSamplingType == eqp)
+    {
+        MapBoundaryAttributesToSampleMesh(rank, nprocs, elemsEQP,
+                                          num_sample_dofs_per_procE,
+                                          pmesh, sample_pmesh);
+    }
+
+    if (rank == 0)
+    {
+        if (hyperreductionSamplingType != eqp)
             SetBdryAttrForVelocity_Cartesian(sample_pmesh);
 
         BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
@@ -2618,8 +2621,8 @@ void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
 
     MFEM_VERIFY(indices.size() == 0 && weights.size() == 0, "");
 
-    const string filename = basename + std::to_string(input.window) + "_" +
-                            std::to_string(input.rank);
+    const string filename = basename + std::to_string(input.window);
+
     std::ifstream infile(filename);
     MFEM_VERIFY(infile.is_open(), "NNLS solution file does not exist.");
     std::string line;
@@ -2639,10 +2642,10 @@ void ROM_Operator::ReadElementsNNLS(ROM_Options const& input, string basename,
 
     MFEM_VERIFY(elems.size() == 0, "");
 
-    const string filename = basename + std::to_string(input.window) + "_" +
-                            std::to_string(input.rank);
+    const string filename = basename + std::to_string(input.window);
+
     std::ifstream infile(filename);
-    MFEM_VERIFY(infile.is_open(), "NNLS solution file does not exist.");
+    MFEM_VERIFY(infile.is_open(), "NNLS elements file does not exist.");
     std::string line;
     while (std::getline(infile, line))
     {
