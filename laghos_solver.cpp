@@ -29,55 +29,50 @@ namespace hydrodynamics
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
-                    int x, int y, int w, int h, bool vec)
+                    int x, int y, int w, int h, bool ls)
 {
-   gf.HostRead();
    ParMesh &pmesh = *gf.ParFESpace()->GetParMesh();
-   MPI_Comm comm = pmesh.GetComm();
 
-   int num_procs, myid;
-   MPI_Comm_size(comm, &num_procs);
-   MPI_Comm_rank(comm, &myid);
+   int myid;
+   MPI_Comm_rank(pmesh.GetComm(), &myid);
 
    bool newly_opened = false;
-   int connection_failed;
 
-   do
+   if (myid == 0)
    {
-      if (myid == 0)
+      if (!sock.is_open() || !sock)
       {
-         if (!sock.is_open() || !sock)
-         {
-            sock.open(vishost, visport);
-            sock.precision(8);
-            newly_opened = true;
-         }
-         sock << "solution\n";
+         sock.open(vishost, visport);
+         sock.precision(8);
+         newly_opened = true;
       }
-
-      pmesh.PrintAsOne(sock);
-      gf.SaveAsOne(sock);
-
-      if (myid == 0 && newly_opened)
-      {
-         const char* keys = (gf.FESpace()->GetMesh()->Dimension() == 2)
-                            ? "mAcRjl" : "mmaaAcl";
-
-         sock << "window_title '" << title << "'\n"
-              << "window_geometry "
-              << x << " " << y << " " << w << " " << h << "\n"
-              << "keys " << keys;
-         if ( vec ) { sock << "vvv"; }
-         sock << std::endl;
-      }
-
-      if (myid == 0)
-      {
-         connection_failed = !sock && !newly_opened;
-      }
-      MPI_Bcast(&connection_failed, 1, MPI_INT, 0, comm);
+      sock << "solution\n";
    }
-   while (connection_failed);
+
+   pmesh.PrintAsOne(sock);
+   gf.SaveAsOne(sock);
+
+   if (myid == 0 && newly_opened)
+   {
+      const char* keys = (gf.FESpace()->GetMesh()->Dimension() == 2)
+                             ? "mAcRjl" : "mmaaAcl";
+
+      sock << "window_title '" << title << "'\n"
+           << "window_geometry "
+           << x << " " << y << " " << w << " " << h << "\n";
+      if (!ls) { sock << "keys " << keys; }
+      if (ls)
+      {
+         sock << "keys " << "mmRj\n";
+         sock << "levellines 0 0 1";
+      }
+      sock << std::endl;
+   }
+
+   if (myid == 0 && newly_opened == false && ls)
+   {
+      sock << "levellines 0 0 1";
+   }
 }
 
 LagrangianHydroOperator::LagrangianHydroOperator(const int size,
@@ -94,7 +89,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
-                                                 const int oq) :
+                                                 const int oq,
+                                                 MaterialData &m_data) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -117,6 +113,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   cut_ir_1(NE), cut_ir_2(NE),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints()),
    qdata_is_current(false),
@@ -126,7 +123,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    B(H1c.GetTrueVSize()),
    one(L2Vsize),
    rhs(H1Vsize),
-   e_rhs(L2Vsize)
+   e_rhs(L2Vsize),
+   mat_data(m_data)
 {
    block_offsets[0] = 0;
    block_offsets[1] = block_offsets[0] + H1Vsize;
@@ -134,10 +132,38 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets[3] = block_offsets[2] + L2Vsize;
    one = 1.0;
 
+   // Create all cut integration rules.
+   IsoparametricTransformation Tr;
+   GridFunctionCoefficient ls_coeff_mat1(&mat_data.level_set);
+   ProductCoefficient ls_coeff_mat2(-1.0, ls_coeff_mat1);
+   MomentFittingIntRules mf_ir_1(2, ls_coeff_mat1, 2),
+                         mf_ir_2(2, ls_coeff_mat1, 2);
+   for (int e = 0; e < NE; e++)
+   {
+      const int attr = pmesh->GetAttribute(e);
+      if (attr == 10 || attr == 20)
+      {
+         cut_ir_1[e] = &ir;
+         cut_ir_2[e] = &ir;
+      }
+      else if (attr == 15)
+      {
+         pmesh->GetElementTransformation(e, &Tr);
+         cut_ir_1[e] = new IntegrationRule;
+         cut_ir_2[e] = new IntegrationRule;
+         mf_ir_1.GetVolumeIntegrationRule
+                 (Tr, *const_cast<IntegrationRule *>(cut_ir_1[e]));
+         mf_ir_2.GetVolumeIntegrationRule
+                 (Tr, *const_cast<IntegrationRule *>(cut_ir_2[e]));
+      }
+      else { MFEM_ABORT("Wrong element attribute!"); }
+   }
+
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
    MassIntegrator mi(rho0_coeff, &ir);
+   CutMassIntegrator cmi_1(rho0_coeff, cut_ir_1), cmi_2(rho0_coeff, cut_ir_2);
    for (int e = 0; e < NE; e++)
    {
       DenseMatrixInverse inv(&Me(e));
@@ -146,9 +172,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       mi.AssembleElementMatrix(fe, Tr, Me(e));
       inv.Factor();
       inv.GetInverseMatrix(Me_inv(e));
+
+      // cmi_1.AssembleElementMatrix(fe, Tr, Me(e));
+      // cmi_2.AssembleElementMatrix(fe, Tr, Me(e));
    }
    // Standard assembly for the velocity mass matrix.
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
+   auto cut_vmi_1 = new CutVectorMassIntegrator(rho0_coeff, cut_ir_1),
+        cut_vmi_2 = new CutVectorMassIntegrator(rho0_coeff, cut_ir_2);
+   // Mv.AddDomainIntegrator(cut_vmi_1);
+   // Mv.AddDomainIntegrator(cut_vmi_2);
    Mv.AddDomainIntegrator(vmi);
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
@@ -159,10 +192,11 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    double Volume, vol = 0.0;
 
    const int NQ = ir.GetNPoints();
-   Vector rho_vals(NQ);
+   Vector rho1_vals(NQ), rho2_vals(NQ);
    for (int e = 0; e < NE; e++)
    {
-      rho0_gf.GetValues(e, ir, rho_vals);
+      rho0_gf.GetValues(e, ir, rho1_vals);
+      rho0_gf.GetValues(e, ir, rho2_vals);
       ElementTransformation &Tr = *H1.GetElementTransformation(e);
       for (int q = 0; q < NQ; q++)
       {
@@ -170,8 +204,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          Tr.SetIntPoint(&ip);
          DenseMatrixInverse Jinv(Tr.Jacobian());
          Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-         const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
-         qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
+         qdata.rho0DetJ0w_1(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
+                                        rho1_vals(q);
+         qdata.rho0DetJ0w_2(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
+                                        rho2_vals(q);
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
@@ -325,7 +361,8 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
    qdata.dt_est = std::numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
+void LagrangianHydroOperator::ComputeDensity(int mat_id,
+                                             ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
@@ -333,7 +370,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
-   DensityIntegrator di(qdata);
+   DensityIntegrator di(mat_id, qdata);
    di.SetIntRule(&ir);
    for (int e = 0; e < NE; e++)
    {
@@ -446,7 +483,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const int idx = z * nqp + q;
             // Assuming piecewise constant gamma that moves with the mesh.
             gamma_b[idx] = gamma_gf(z_id);
-            rho_b[idx] = qdata.rho0DetJ0w(z_id*nqp + q) / detJ / ip.weight;
+            rho_b[idx] = qdata.rho0DetJ0w_1(z_id*nqp + q) / detJ / ip.weight;
             e_b[idx] = fmax(0.0, e_vals(q));
          }
          ++z_id;

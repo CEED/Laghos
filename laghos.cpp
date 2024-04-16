@@ -40,9 +40,15 @@
 using std::cout;
 using std::endl;
 using namespace mfem;
+using namespace hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
+
+char vishost[] = "localhost";
+int  visport   = 19916;
+const int ws   = 250; // window size
+socketstream vis_LS, vis_mat, vis_rho_1, vis_rho_2, vis_v, vis_e_1, vis_e_2;
 
 // Forward declarations.
 double e0(const Vector &);
@@ -50,6 +56,9 @@ double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
+void visualize(MaterialData &mat_data,
+               ParGridFunction &rho_1, ParGridFunction &rho_2,
+               ParGridFunction &v, ParGridFunction &materials);
 static void display_banner(std::ostream&);
 
 int main(int argc, char *argv[])
@@ -270,6 +279,31 @@ int main(int argc, char *argv[])
    offset[3] = offset[2] + Vsize_l2;
    BlockVector S(offset);
 
+   // Material-dependent data.
+   MaterialData mat_data;
+   ParFiniteElementSpace pfes_LS(pmesh, &H1FEC);
+   L2_FECollection mat_fec(0, pmesh->Dimension());
+   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
+   mat_data.level_set.SetSpace(&pfes_LS);
+   mat_data.rho0_1.SetSpace(&L2FESpace);
+   mat_data.rho0_2.SetSpace(&L2FESpace);
+   mat_data.e_1.SetSpace(&L2FESpace);
+   mat_data.e_2.SetSpace(&L2FESpace);
+
+   // Initialize the interface function.
+   hydrodynamics::InterfaceCoeff coeff_ls_0(problem, *pmesh);
+   mat_data.level_set.ProjectCoefficient(coeff_ls_0);
+
+   // Mark materials.
+   ElementMarker marker(mat_data.level_set, mat_fes);
+   int zone_id_10, zone_id_15 = -1, zone_id_20;
+   for (int e = 0; e < NE; e++)
+   {
+      int mat_id = marker.GetMaterialID(e);
+      pmesh->SetAttribute(e, mat_id);
+      marker.mat_attr(e) = pmesh->GetAttribute(e);
+   }
+
    // Define GridFunction objects for the position, velocity and specific
    // internal energy. There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
@@ -313,11 +347,15 @@ int main(int argc, char *argv[])
       l2_e.ProjectCoefficient(e_coeff);
    }
    e_gf.ProjectGridFunction(l2_e);
+   mat_data.e_1.ProjectGridFunction(l2_e);
+   mat_data.e_2.ProjectGridFunction(l2_e);
+
+   // Material-specific initialization.
+   if (problem == 0)  { hydrodynamics::InitTG2Mat(mat_data); }
+   else { MFEM_ABORT("only problem 0 is implemented for cutting!"); }
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on function that's constant on the moving mesh.
-   L2_FECollection mat_fec(0, pmesh->Dimension());
-   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
    FunctionCoefficient mat_coeff(gamma_func);
    mat_gf.ProjectCoefficient(mat_coeff);
@@ -329,7 +367,7 @@ int main(int argc, char *argv[])
       case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
-      case 3: visc = true; S.HostRead(); break;
+      case 3: visc = true; break;
       case 4: visc = false; break;
       case 5: visc = true; break;
       case 6: visc = true; break;
@@ -338,52 +376,68 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   // GridFunctionCoefficient ls_coeff(&mat_data.level_set);
+   // MomentFittingIntRules mf_ir(2, ls_coeff, 2);
+   // double pos = 0.0;
+   // IsoparametricTransformation Tr;
+   // for (int e = 0; e < NE; e++)
+   // {
+   //    int attr = pmesh->GetAttribute(e);
+   //    if (attr == 15)
+   //    {
+   //       cout << e << endl;
+   //       pmesh->GetElementTransformation(e, &Tr);
+   //       IntegrationRule mom_ir;
+   //       mf_ir.GetVolumeIntegrationRule(Tr, mom_ir);
+   //       for (int q = 0; q < mom_ir.GetNPoints(); q++)
+   //       {
+   //          cout << mom_ir.IntPoint(q).x << " " << mom_ir.IntPoint(q).y << " "
+   //               << mom_ir.IntPoint(q).weight << endl;
+   //          Tr.SetIntPoint(&mom_ir.IntPoint(q));
+   //          pos += mom_ir.IntPoint(q).weight * Tr.Weight();
+   //       }
+   //    }
+   //    if (attr == 20)
+   //    {
+   //       pos += pmesh->GetElementVolume(e);
+   //    }
+   // }
+   // cout << pos << endl;
+   // cout << 1.0 - M_PI * 0.3 * 0.3 << endl;
+
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q);
+                                                order_q, mat_data);
 
-   socketstream vis_rho, vis_v, vis_e;
-   char vishost[] = "localhost";
-   int  visport   = 19916;
-
-   ParGridFunction rho_gf;
-   if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
+   ParGridFunction rho_gf_1, rho_gf_2;
+   if (visualization || visit)
+   {
+      hydro.ComputeDensity(1, rho_gf_1);
+      hydro.ComputeDensity(2, rho_gf_2);
+   }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
 
    if (visualization)
    {
-      // Make sure all MPI ranks have sent their 'v' solution before initiating
-      // another set of GLVis connections (one from each rank):
-      MPI_Barrier(pmesh->GetComm());
-      vis_rho.precision(8);
+      vis_rho_1.precision(8);
+      vis_rho_2.precision(8);
       vis_v.precision(8);
-      vis_e.precision(8);
-      int Wx = 0, Wy = 0; // window position
-      const int Ww = 350, Wh = 350; // window size
-      int offx = Ww+10; // window offsets
-      if (problem != 0 && problem != 4)
-      {
-         hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
-                                       "Density", Wx, Wy, Ww, Wh);
-      }
-      Wx += offx;
-      hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
-                                    "Velocity", Wx, Wy, Ww, Wh);
-      Wx += offx;
-      hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
-                                    "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      vis_e_1.precision(8);
+      vis_e_2.precision(8);
+      vis_LS.precision(8);
+      visualize(mat_data, rho_gf_1, rho_gf_2, v_gf, marker.mat_attr);
    }
 
    // Save data for VisIt visualization.
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {
-      visit_dc.RegisterField("Density",  &rho_gf);
+      visit_dc.RegisterField("Density",  &rho_gf_1);
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
       visit_dc.SetCycle(0);
@@ -470,25 +524,14 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh->GetComm());
 
-         if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
+         if (visualization || visit || gfprint)
+         {
+            hydro.ComputeDensity(1, rho_gf_1);
+            hydro.ComputeDensity(2, rho_gf_2);
+         }
          if (visualization)
          {
-            int Wx = 0, Wy = 0; // window position
-            int Ww = 350, Wh = 350; // window size
-            int offx = Ww+10; // window offsets
-            if (problem != 0 && problem != 4)
-            {
-               hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
-                                             "Density", Wx, Wy, Ww, Wh);
-            }
-            Wx += offx;
-            hydrodynamics::VisualizeField(vis_v, vishost, visport,
-                                          v_gf, "Velocity", Wx, Wy, Ww, Wh);
-            Wx += offx;
-            hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
-                                          "Specific Internal Energy",
-                                          Wx, Wy, Ww,Wh);
-            Wx += offx;
+            visualize(mat_data, rho_gf_1, rho_gf_2, v_gf, marker.mat_attr);
          }
 
          if (visit)
@@ -513,7 +556,7 @@ int main(int argc, char *argv[])
 
             std::ofstream rho_ofs(rho_name.str().c_str());
             rho_ofs.precision(8);
-            rho_gf.SaveAsOne(rho_ofs);
+            rho_gf_1.SaveAsOne(rho_ofs);
             rho_ofs.close();
 
             std::ofstream v_ofs(v_name.str().c_str());
@@ -527,15 +570,6 @@ int main(int argc, char *argv[])
             e_ofs.close();
          }
       }
-   }
-
-   switch (ode_solver_type)
-   {
-      case 2: steps *= 2; break;
-      case 3: steps *= 3; break;
-      case 4: steps *= 4; break;
-      case 6: steps *= 6; break;
-      case 7: steps *= 2;
    }
 
    const double energy_final = hydro.InternalEnergy(e_gf) +
@@ -564,8 +598,13 @@ int main(int argc, char *argv[])
 
    if (visualization)
    {
+      vis_LS.close();
+      vis_mat.close();
+      vis_rho_1.close();
+      vis_rho_2.close();
       vis_v.close();
-      vis_e.close();
+      vis_e_1.close();
+      vis_e_2.close();
    }
 
    // Free the used memory.
@@ -753,6 +792,43 @@ double e0(const Vector &x)
       }
       default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
    }
+}
+
+void visualize(MaterialData &mat_data,
+               ParGridFunction &rho_1, ParGridFunction &rho_2,
+               ParGridFunction &v, ParGridFunction &materials)
+{
+   MPI_Barrier(v.ParFESpace()->GetComm());
+   const double vert = ws / 7;
+
+   int wy = 70;
+   hydrodynamics::VisualizeField(vis_LS, vishost, visport,
+                                 mat_data.level_set, "Interface",
+                                 0, wy, ws, ws, true);
+   hydrodynamics::VisualizeField(vis_mat, vishost, visport,
+                                 materials, "Materials",
+                                 ws, wy, ws, ws);
+
+   wy += ws + vert;
+   hydrodynamics::VisualizeField(vis_v, vishost, visport,
+                                 v, "Velocity",
+                                 0, wy, ws, ws);
+
+   wy += ws + vert;
+   hydrodynamics::VisualizeField(vis_rho_1, vishost, visport,
+                                 rho_1, "Density 1",
+                                 0, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_e_1, vishost, visport,
+                                 mat_data.e_1, "Spec Internal Energy 1",
+                                 ws, wy, ws, ws);
+
+   wy += ws + vert;
+   hydrodynamics::VisualizeField(vis_rho_2, vishost, visport,
+                                 rho_2, "Density 2",
+                                 0, wy, ws, ws);
+   hydrodynamics::VisualizeField(vis_e_2, vishost, visport,
+                                 mat_data.e_2, "Spec Internal Energy 2",
+                                 ws, wy, ws, ws);
 }
 
 static void display_banner(std::ostream &os)

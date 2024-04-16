@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "laghos_cut.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -34,7 +35,7 @@ namespace hydrodynamics
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400,
-                    bool vec = false);
+                    bool ls = false);
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
@@ -65,6 +66,7 @@ protected:
    DenseTensor Me, Me_inv;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
+   Array<const IntegrationRule *> cut_ir_1, cut_ir_2;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
@@ -75,6 +77,8 @@ protected:
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
    mutable Vector X, B, one, rhs, e_rhs;
+
+   MaterialData &mat_data;
 
    virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
                                           const double rho[], const double e[],
@@ -102,7 +106,7 @@ public:
                            const double cfl,
                            const bool visc, const bool vort,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q);
+                           const int order_q, MaterialData &m_data);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -119,7 +123,7 @@ public:
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho) const;
+   void ComputeDensity(int mat_id, ParGridFunction &rho) const;
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
 
