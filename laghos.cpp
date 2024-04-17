@@ -337,6 +337,10 @@ int main(int argc, char *argv[])
          unit = static_cast<int>(floor(pow(num_tasks / 20, 1.0 / 3) + 1e-2));
          nxyz[0] = 5 * unit; nxyz[1] = 2 * unit; nxyz[2] = 2 * unit;
          break;
+      case 543: // 3D.
+         unit = static_cast<int>(floor(pow(num_tasks / 60, 1.0 / 3) + 1e-2));
+         nxyz[0] = 5 * unit; nxyz[1] = 4 * unit; nxyz[2] = 3 * unit;
+         break;
       case 911: // 3D.
          unit = static_cast<int>(floor(pow(num_tasks / 9, 1.0 / 3) + 1e-2));
          nxyz[0] = 9 * unit; nxyz[1] = unit; nxyz[2] = unit;
