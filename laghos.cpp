@@ -272,11 +272,12 @@ int main(int argc, char *argv[])
    // - 2 -> specific internal energy
    const int Vsize_l2 = L2FESpace.GetVSize();
    const int Vsize_h1 = H1FESpace.GetVSize();
-   Array<int> offset(4);
+   Array<int> offset(5);
    offset[0] = 0;
    offset[1] = offset[0] + Vsize_h1;
    offset[2] = offset[1] + Vsize_h1;
    offset[3] = offset[2] + Vsize_l2;
+   offset[4] = offset[3] + Vsize_l2;
    BlockVector S(offset);
 
    // Material-dependent data.
@@ -308,10 +309,11 @@ int main(int argc, char *argv[])
    // internal energy. There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   ParGridFunction x_gf, v_gf, e_gf;
+   ParGridFunction x_gf, v_gf;
    x_gf.MakeRef(&H1FESpace, S, offset[0]);
    v_gf.MakeRef(&H1FESpace, S, offset[1]);
-   e_gf.MakeRef(&L2FESpace, S, offset[2]);
+   mat_data.e_1.MakeRef(&L2FESpace, S, offset[2]);
+   mat_data.e_2.MakeRef(&L2FESpace, S, offset[3]);
 
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
@@ -346,7 +348,6 @@ int main(int argc, char *argv[])
       FunctionCoefficient e_coeff(e0);
       l2_e.ProjectCoefficient(e_coeff);
    }
-   e_gf.ProjectGridFunction(l2_e);
    mat_data.e_1.ProjectGridFunction(l2_e);
    mat_data.e_2.ProjectGridFunction(l2_e);
 
@@ -419,7 +420,7 @@ int main(int argc, char *argv[])
       hydro.ComputeDensity(1, rho_gf_1);
       hydro.ComputeDensity(2, rho_gf_2);
    }
-   const double energy_init = hydro.InternalEnergy(e_gf) +
+   const double energy_init = hydro.InternalEnergy(mat_data.e_1, mat_data.e_2) +
                               hydro.KineticEnergy(v_gf);
 
    if (visualization)
@@ -437,9 +438,11 @@ int main(int argc, char *argv[])
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {
-      visit_dc.RegisterField("Density",  &rho_gf_1);
+      visit_dc.RegisterField("Density 1",  &rho_gf_1);
+      visit_dc.RegisterField("Density 2",  &rho_gf_2);
       visit_dc.RegisterField("Velocity", &v_gf);
-      visit_dc.RegisterField("Specific Internal Energy", &e_gf);
+      visit_dc.RegisterField("Specific Internal Energy 1", &mat_data.e_1);
+      visit_dc.RegisterField("Specific Internal Energy 2", &mat_data.e_2);
       visit_dc.SetCycle(0);
       visit_dc.SetTime(0.0);
       visit_dc.Save();
@@ -496,7 +499,8 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double lnorm = e_gf * e_gf, norm;
+         double lnorm = mat_data.e_1 * mat_data.e_1 +
+                        mat_data.e_2 * mat_data.e_2, norm;
          MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
          // const double internal_energy = hydro.InternalEnergy(e_gf);
          // const double kinetic_energy = hydro.KineticEnergy(v_gf);
@@ -566,13 +570,14 @@ int main(int argc, char *argv[])
 
             std::ofstream e_ofs(e_name.str().c_str());
             e_ofs.precision(8);
-            e_gf.SaveAsOne(e_ofs);
+            mat_data.e_1.SaveAsOne(e_ofs);
             e_ofs.close();
          }
       }
    }
 
-   const double energy_final = hydro.InternalEnergy(e_gf) +
+   const double energy_final = hydro.InternalEnergy(mat_data.e_1,
+                                                    mat_data.e_2) +
                                hydro.KineticEnergy(v_gf);
    if (Mpi::Root())
    {

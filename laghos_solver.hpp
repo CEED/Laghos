@@ -63,7 +63,7 @@ protected:
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
    SparseMatrix Mv_spmat_copy;
-   DenseTensor Me, Me_inv;
+   DenseTensor Me_1, Me_2, Me_inv_1, Me_inv_2;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
    Array<const IntegrationRule *> cut_ir_1, cut_ir_2;
@@ -71,25 +71,14 @@ protected:
    // These values are recomputed at each time step.
    const int Q1D;
    mutable QuadratureData qdata;
-   mutable bool qdata_is_current, forcemat_is_assembled;
+   mutable bool qdata_is_current;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force;
+   mutable MixedBilinearForm Force_1, Force_2;
    mutable Vector X, B, one, rhs, e_rhs;
 
    MaterialData &mat_data;
-
-   virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
-                                          const double rho[], const double e[],
-                                          double p[], double cs[]) const
-   {
-      for (int v = 0; v < nvalues; v++)
-      {
-         p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
-         cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
-      }
-   }
 
    void UpdateQuadratureData(const Vector &S) const;
    void AssembleForceMatrix() const;
@@ -124,7 +113,8 @@ public:
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    void ComputeDensity(int mat_id, ParGridFunction &rho) const;
-   double InternalEnergy(const ParGridFunction &e) const;
+   double InternalEnergy(const ParGridFunction &e_1,
+                         const ParGridFunction &e_2) const;
    double KineticEnergy(const ParGridFunction &v) const;
 
    int GetH1VSize() const { return H1.GetVSize(); }
