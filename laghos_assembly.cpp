@@ -38,8 +38,8 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    {
       fe.CalcShape(IntRule->IntPoint(q), shape);
       // Note that rhoDetJ = rho0DetJ0.
-      if (mat_id == 1) { shape *= qdata.rho0DetJ0w_1(Tr.ElementNo*nqp + q); }
-      else             { shape *= qdata.rho0DetJ0w_2(Tr.ElementNo*nqp + q); }
+      if (mat_id == 1) { shape *= qdata.rho0DetJ0w_1[Tr.ElementNo](q); }
+      else             { shape *= qdata.rho0DetJ0w_2[Tr.ElementNo](q); }
       elvect += shape;
    }
 }

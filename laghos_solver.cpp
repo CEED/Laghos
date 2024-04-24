@@ -135,8 +135,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    IsoparametricTransformation Tr;
    GridFunctionCoefficient ls_coeff_mat1(&mat_data.level_set);
    ProductCoefficient ls_coeff_mat2(-1.0, ls_coeff_mat1);
-   MomentFittingIntRules mf_ir_1(2, ls_coeff_mat1, 2),
-                         mf_ir_2(2, ls_coeff_mat1, 2);
+   MomentFittingIntRules mf_ir_1(3, ls_coeff_mat1, 2),
+                         mf_ir_2(3, ls_coeff_mat1, 2);
    for (int e = 0; e < NE; e++)
    {
       const int attr = pmesh->GetAttribute(e);
@@ -218,10 +218,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          Tr.SetIntPoint(&ip);
          DenseMatrixInverse Jinv(Tr.Jacobian());
          Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-         qdata.rho0DetJ0w_1(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                        rho1_vals(q);
-         qdata.rho0DetJ0w_2(e*NQ + q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                        rho2_vals(q);
+         qdata.rho0DetJ0w_1[e](q) = ir.IntPoint(q).weight * Tr.Weight() *
+                                    rho1_vals(q);
+         qdata.rho0DetJ0w_2[e](q) = ir.IntPoint(q).weight * Tr.Weight() *
+                                    rho2_vals(q);
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
@@ -490,7 +490,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    for (int k = 1; k <= 2; k++)
    {
-      Vector &r0DJ_k       = (k == 1) ? qdata.rho0DetJ0w_1 : qdata.rho0DetJ0w_2;
+      std::vector<Vector> &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1
+                                             : qdata.rho0DetJ0w_2;
       double gamma_k       = (k == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
       ParGridFunction &e_k = (k == 1) ? e_1 : e_2;
       DenseTensor &stressJinvT_k = (k == 1) ? qdata.stressJinvT_1
@@ -523,7 +524,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const double detJ = Jpr.Det();
 
             // Assuming piecewise constant gamma that moves with the mesh.
-            const double rho    = r0DJ_k(e*nqp + q) / detJ / ip.weight;
+            const double rho    = r0DJ_k[q](q) / detJ / ip.weight;
             const double energy = fmax(0.0, e_vals(q));
             double p            = (gamma_k - 1.0) * rho * energy;
             double sound_speed  = sqrt(gamma_k * (gamma_k - 1.0) * energy);
