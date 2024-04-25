@@ -66,7 +66,7 @@ protected:
    DenseTensor Me_1, Me_2, Me_inv_1, Me_inv_2;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
-   Array<const IntegrationRule *> cut_ir_1, cut_ir_2;
+   mutable Array<const IntegrationRule *> cut_ir_1, cut_ir_2;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;

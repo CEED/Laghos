@@ -135,12 +135,13 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    IsoparametricTransformation Tr;
    GridFunctionCoefficient ls_coeff_mat1(&mat_data.level_set);
    ProductCoefficient ls_coeff_mat2(-1.0, ls_coeff_mat1);
-   MomentFittingIntRules mf_ir_1(3, ls_coeff_mat1, 2),
-                         mf_ir_2(3, ls_coeff_mat1, 2);
+   const int cut_ir_order = 3;
+   MomentFittingIntRules mf_ir_1(cut_ir_order, ls_coeff_mat1, 2),
+                         mf_ir_2(cut_ir_order, ls_coeff_mat2, 2);
    for (int e = 0; e < NE; e++)
    {
       const int attr = pmesh->GetAttribute(e);
-      if (attr == 10 || attr == 20)
+      if (attr == 10 || attr == 20 || attr == 15)
       {
          cut_ir_1[e] = &ir;
          cut_ir_2[e] = &ir;
@@ -205,23 +206,23 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    int Ne, ne = NE;
    double Volume, vol = 0.0;
 
-   const int NQ = ir.GetNPoints();
-   Vector rho1_vals(NQ), rho2_vals(NQ);
    for (int e = 0; e < NE; e++)
    {
-      rho0_gf.GetValues(e, ir, rho1_vals);
-      rho0_gf.GetValues(e, ir, rho2_vals);
+      const int nqp = cut_ir_1[e]->GetNPoints();
+      Vector rho1_vals(nqp), rho2_vals(nqp);
+
+      rho0_gf.GetValues(e, *cut_ir_1[e], rho1_vals);
+      rho0_gf.GetValues(e, *cut_ir_2[e], rho2_vals);
       ElementTransformation &Tr = *H1.GetElementTransformation(e);
-      for (int q = 0; q < NQ; q++)
+      for (int q = 0; q < nqp; q++)
       {
-         const IntegrationPoint &ip = ir.IntPoint(q);
-         Tr.SetIntPoint(&ip);
+         const IntegrationPoint &ip_1 = cut_ir_1[e]->IntPoint(q);
+         const IntegrationPoint &ip_2 = cut_ir_2[e]->IntPoint(q);
+         Tr.SetIntPoint(&ip_1);
          DenseMatrixInverse Jinv(Tr.Jacobian());
-         Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-         qdata.rho0DetJ0w_1[e](q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                    rho1_vals(q);
-         qdata.rho0DetJ0w_2[e](q) = ir.IntPoint(q).weight * Tr.Weight() *
-                                    rho2_vals(q);
+         Jinv.GetInverseMatrix(qdata.Jac0inv(e*nqp + q));
+         qdata.rho0DetJ0w_1[e](q) = ip_1.weight * Tr.Weight() * rho1_vals(q);
+         qdata.rho0DetJ0w_2[e](q) = ip_2.weight * Tr.Weight() * rho2_vals(q);
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
@@ -414,18 +415,34 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
    Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
-   MassIntegrator mi(&ir);
+   MassIntegrator mi;
    DensityIntegrator di(mat_id, qdata);
-   di.SetIntRule(&ir);
    for (int e = 0; e < NE; e++)
    {
+      L2.GetElementDofs(e, dofs);
+      if (mat_id == 1 && pmesh->GetAttribute(e) != 20)
+      {
+         mi.SetIntRule(cut_ir_1[e]);
+         di.SetIntRule(cut_ir_1[e]);
+      }
+      else if (mat_id == 2 && pmesh->GetAttribute(e) != 10)
+      {
+         mi.SetIntRule(cut_ir_2[e]);
+         di.SetIntRule(cut_ir_2[e]);
+      }
+      else
+      {
+         rho_z = 0.0;
+         rho.SetSubVector(dofs, rho_z);
+         continue;
+      }
+
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
       di.AssembleRHSElementVect(fe, eltr, rhs);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
       inv.Mult(rhs, rho_z);
-      L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
 }
@@ -478,7 +495,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    qdata_is_current = true;
 
-   const int nqp = ir.GetNPoints();
+   const int nqp = cut_ir_1[0]->GetNPoints();
    ParGridFunction x, v, e_1, e_2;
    Vector* sptr = const_cast<Vector*>(&S);
    x.MakeRef(&H1, *sptr, 0);
@@ -490,12 +507,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    for (int k = 1; k <= 2; k++)
    {
+      Array<const IntegrationRule *> &ir_k = (k == 1) ? cut_ir_1 : cut_ir_2;
       std::vector<Vector> &r0DJ_k = (k == 1) ? qdata.rho0DetJ0w_1
                                              : qdata.rho0DetJ0w_2;
-      double gamma_k       = (k == 1) ? mat_data.gamma_1 : mat_data.gamma_2;
-      ParGridFunction &e_k = (k == 1) ? e_1 : e_2;
-      DenseTensor &stressJinvT_k = (k == 1) ? qdata.stressJinvT_1
-                                            : qdata.stressJinvT_2;
+      double gamma_k              = (k == 1) ? mat_data.gamma_1
+                                             : mat_data.gamma_2;
+      ParGridFunction &e_k        = (k == 1) ? e_1 : e_2;
+      DenseTensor &stressJinvT_k  = (k == 1) ? qdata.stressJinvT_1
+                                             : qdata.stressJinvT_2;
       for (int e = 0; e < NE; e++)
       {
          const int attr = pmesh->GetAttribute(e);
@@ -518,13 +537,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          e_k.GetValues(e, ir, e_vals);
          for (int q = 0; q < nqp; q++)
          {
-            const IntegrationPoint &ip = ir.IntPoint(q);
+            const IntegrationPoint &ip = ir_k[e]->IntPoint(q);
             T->SetIntPoint(&ip);
             const DenseMatrix Jpr(T->Jacobian());
             const double detJ = Jpr.Det();
 
             // Assuming piecewise constant gamma that moves with the mesh.
-            const double rho    = r0DJ_k[q](q) / detJ / ip.weight;
+            const double rho    = r0DJ_k[e](q) / detJ / ip.weight;
             const double energy = fmax(0.0, e_vals(q));
             double p            = (gamma_k - 1.0) * rho * energy;
             double sound_speed  = sqrt(gamma_k * (gamma_k - 1.0) * energy);
