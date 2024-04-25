@@ -63,6 +63,10 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#ifdef USE_CALIPER
+#include <caliper/cali.h>
+#include <adiak.hpp>
+#endif
 
 using std::cout;
 using std::endl;
@@ -210,6 +214,17 @@ int main(int argc, char *argv[])
       return 1;
    }
    if (Mpi::Root()) { args.PrintOptions(cout); }
+
+#ifdef USE_CALIPER
+   cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
+   CALI_CXX_MARK_FUNCTION;
+
+   MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
+   void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
+   adiak::init(adiak_mpi_comm_ptr);
+   adiak::launchdate();
+   adiak::jobsize();
+#endif
 
    // Configure the device from the command line options
    Device backend;
@@ -662,8 +677,17 @@ int main(int argc, char *argv[])
    //      }
    //      cout << endl;
    //   }
-   for (int ti = 1; !last_step; ti++)
+   //
+
+#ifdef USE_CALIPER
+   CALI_CXX_MARK_LOOP_BEGIN(mainloop_annotation, "timestep loop");
+#endif
+   int ti = 1;
+   for (; !last_step; ti++)
    {
+#ifdef USE_CALIPER
+      CALI_CXX_MARK_LOOP_ITERATION(mainloop_annotation, static_cast<int>(ti));
+#endif
       if (t + dt >= t_final)
       {
          dt = t_final - t;
@@ -824,6 +848,11 @@ int main(int argc, char *argv[])
          Checks(ti, e_norm, checks);
       }
    }
+#ifdef USE_CALIPER
+  CALI_CXX_MARK_LOOP_END(mainloop_annotation);
+  adiak::value("steps", ti);
+#endif
+
    MFEM_VERIFY(!check || checks == 2, "Check error!");
 
    switch (ode_solver_type)
@@ -878,6 +907,10 @@ int main(int argc, char *argv[])
       vis_v.close();
       vis_e.close();
    }
+
+#ifdef USE_CALIPER
+   adiak::fini();
+#endif
 
    // Free the used memory.
    delete ode_solver;

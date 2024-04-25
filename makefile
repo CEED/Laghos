@@ -72,6 +72,30 @@ ifeq ($(wildcard $(CONFIG_MK)),)
 endif
 TEST_MK = $(MFEM_TEST_MK)
 
+# Caliper install directory
+CALIPER_DIR ?= ../caliper
+ifeq ($(wildcard $(CALIPER_DIR)),)
+   CALIPER_INCLUDE :=
+   CALIPER_LIBS :=
+   CALIPER_FLAGS :=
+else
+   CALIPER_INCLUDE := -I $(CALIPER_DIR)/include
+   CALIPER_LIBS := -L $(CALIPER_DIR)/lib64 -lcaliper
+   CALIPER_FLAGS := -DUSE_CALIPER
+endif
+
+# Only configure Adiak if Caliper is enabled
+ifneq ($(CALIPER_FLAGS),)
+  ADIAK_DIR ?= ../adiak
+  ifeq ($(wildcard $(ADIAK_DIR)),)
+     ADIAK_INCLUDE :=
+     ADIAK_LIBS :=
+  else
+     ADIAK_INCLUDE := -I $(ADIAK_DIR)/include
+     ADIAK_LIBS := -L $(ADIAK_DIR)/lib -ladiak
+  endif
+endif
+
 # Use the compiler used by MFEM. Get the compiler and the options for compiling
 # and linking from MFEM's config.mk. (Skip this if the target does not require
 # building.)
@@ -88,13 +112,13 @@ endif
 
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
-CXXFLAGS = $(MFEM_CXXFLAGS)
+CXXFLAGS = $(MFEM_CXXFLAGS) $(CALIPER_INCLUDE) $(CALIPER_FLAGS) $(ADIAK_INCLUDE)
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
 # Extra include dir, needed for now to include headers like "general/forall.hpp"
 EXTRA_INC_DIR = $(or $(wildcard $(MFEM_DIR)/include/mfem),$(MFEM_DIR))
 CCC = $(strip $(CXX) $(LAGHOS_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)))
 
-LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS)
+LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS) $(CALIPER_LIBS) $(ADIAK_LIBS)
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 
 SOURCE_FILES = $(sort $(wildcard *.cpp))
