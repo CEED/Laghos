@@ -36,7 +36,7 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
    // 0 - vertical
    // 1 - diagonal
    // 2 - circle
-   const int mode_TG = 2;
+   const int mode_TG = 0;
 
    switch (problem)
    {
@@ -67,6 +67,25 @@ double InterfaceCoeff::Eval(ElementTransformation &T,
          return tanh(rad - 0.3);
       }
       else { MFEM_ABORT("wrong TG mode"); return 0.0; }
+   }
+   case 2:
+   {
+      // Sod - the 1D domain length is 1.
+      const double dx = 1.0 / glob_NE;
+      return x(0) - (0.5 + 0.5*dx);
+   }
+   case 3:
+   {
+      // The domain volume for the 3point is 21 in 2D, and 63 in 3D.
+      double dx;
+      if (dim == 2) { dx = sqrt(21.0 / glob_NE); }
+      else          { dx =  pow(63.0 / glob_NE, 1.0/3.0); }
+
+      // The middle of the element before x = 1.
+      // The middle of the element above y = 1.5.
+      if (x(0) < 1.0 - 0.5 * dx) { return -1.0; }
+      if (x(1) > 1.5 + 0.5 * dx) { return -1.0; }
+      return 1.0;
    }
    default: MFEM_ABORT("error"); return 0.0;
    }
@@ -137,6 +156,99 @@ void InitTG2Mat(MaterialData &mat_data)
          for (int i = 0; i < ndofs; i++)
          {
             mat_data.rho0_2(e*ndofs + i) = 1.0;
+         }
+      }
+   }
+}
+
+void InitSod2Mat(MaterialData &mat_data)
+{
+   ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
+   const int NE    = pfes.GetNE();
+   const int ndofs = mat_data.e_1.Size() / NE;
+   double r, g, p;
+
+   mat_data.rho0_1  = 0.0;
+   mat_data.e_1     = 0.0;
+   mat_data.rho0_2  = 0.0;
+   mat_data.e_2     = 0.0;
+   for (int e = 0; e < NE; e++)
+   {
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
+
+      if (attr == 10 || attr == 15)
+      {
+         // Left material (high pressure).
+         r = 1.0, g = 2.0, p = 2.0;
+         mat_data.gamma_1 = g;
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.rho0_1(e*ndofs + i) = r;
+            mat_data.e_1(e*ndofs + i)    = p / r / (g - 1.0);
+         }
+      }
+
+      if (attr == 15 || attr == 20)
+      {
+         // Right material (low pressure).
+         r = 0.125; g = 1.4; p = 0.1;
+         mat_data.gamma_2 = g;
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.rho0_2(e*ndofs + i) = r;
+            mat_data.e_2(e*ndofs + i)    = p / r / (g - 1.0);
+         }
+      }
+   }
+}
+
+void InitTriPoint2Mat(MaterialData &mat_data)
+{
+   ParFiniteElementSpace &pfes = *mat_data.e_1.ParFESpace();
+   const int NE    = pfes.GetNE();
+   const int ndofs = mat_data.e_1.Size() / NE;
+   const int dim  = pfes.GetMesh()->Dimension();
+   double r, p;
+
+   mat_data.gamma_1 = 1.5;
+   mat_data.gamma_2 = 1.4;
+   mat_data.rho0_1  = 0.0;
+   mat_data.e_1     = 0.0;
+   mat_data.rho0_2  = 0.0;
+   mat_data.e_2     = 0.0;
+   for (int e = 0; e < NE; e++)
+   {
+      const int attr = pfes.GetParMesh()->GetAttribute(e);
+      Vector center(dim);
+      pfes.GetParMesh()->GetElementCenter(e, center);
+      const double x = center(0),
+          z = (dim == 3) ? center(2) : 0.0;
+
+      if (attr == 10 || attr == 15)
+      {
+         // Left/Top material.
+         r = 1.0; p = 1.0;
+         if (x > 1.0)
+         {
+            p = 0.1;
+            if (z < 1.5) { r = 0.125; }
+         }
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.rho0_1(e*ndofs + i) = r;
+            mat_data.e_1(e*ndofs + i)    = p / r / (mat_data.gamma_1 - 1.0);
+         }
+      }
+
+      if (attr == 15 || attr == 20)
+      {
+         // Right/Bottom material.
+         r = 1.0; p = 0.1;
+         if (z > 1.5) { r = 0.125; }
+         for (int i = 0; i < ndofs; i++)
+         {
+            mat_data.rho0_2(e*ndofs + i) = r;
+            mat_data.e_2(e*ndofs + i)    = p / r / (mat_data.gamma_2 - 1.0);
          }
       }
    }

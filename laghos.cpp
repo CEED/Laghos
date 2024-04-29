@@ -352,7 +352,9 @@ int main(int argc, char *argv[])
    mat_data.e_2.ProjectGridFunction(l2_e);
 
    // Material-specific initialization.
-   if (problem == 0)  { hydrodynamics::InitTG2Mat(mat_data); }
+   if (problem == 0)      { hydrodynamics::InitTG2Mat(mat_data); }
+   else if (problem == 2) { hydrodynamics::InitSod2Mat(mat_data); }
+   else if (problem == 3) { hydrodynamics::InitTriPoint2Mat(mat_data); }
    else { MFEM_ABORT("only problem 0 is implemented for cutting!"); }
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The

@@ -113,9 +113,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Me_inv_1(l2dofs_cnt, l2dofs_cnt, NE), Me_inv_2(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   full_ir(nullptr),
    cut_ir_1(NE), cut_ir_2(NE),
-   Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
-   qdata(dim, NE, ir.GetNPoints()),
+   qdata(),
    qdata_is_current(false),
    Force_1(&L2, &H1), Force_2(&L2, &H1),
    X(H1c.GetTrueVSize()),
@@ -133,36 +133,43 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    // Create all cut integration rules.
    IsoparametricTransformation Tr;
-   GridFunctionCoefficient ls_coeff_mat1(&mat_data.level_set);
-   ProductCoefficient ls_coeff_mat2(-1.0, ls_coeff_mat1);
+   GridFunctionCoefficient ls_coeff(&mat_data.level_set);
+   ProductCoefficient ls_coeff_mat1(-1.0, ls_coeff);
+   ProductCoefficient ls_coeff_mat2( 1.0, ls_coeff);
    const int cut_ir_order = 3;
    MomentFittingIntRules mf_ir_1(cut_ir_order, ls_coeff_mat1, 2),
                          mf_ir_2(cut_ir_order, ls_coeff_mat2, 2);
    for (int e = 0; e < NE; e++)
    {
       const int attr = pmesh->GetAttribute(e);
-      if (attr == 10 || attr == 20 || attr == 15)
+      pmesh->GetElementTransformation(e, &Tr);
+      cut_ir_1[e] = nullptr;
+      cut_ir_2[e] = nullptr;
+      if (attr == 10 || attr == 15)
       {
-         cut_ir_1[e] = &ir;
-         cut_ir_2[e] = &ir;
-      }
-      else if (attr == 15)
-      {
-         pmesh->GetElementTransformation(e, &Tr);
          cut_ir_1[e] = new IntegrationRule;
-         cut_ir_2[e] = new IntegrationRule;
          mf_ir_1.GetVolumeIntegrationRule
-                 (Tr, *const_cast<IntegrationRule *>(cut_ir_1[e]));
-         mf_ir_2.GetVolumeIntegrationRule
-                 (Tr, *const_cast<IntegrationRule *>(cut_ir_2[e]));
+             (Tr, *const_cast<IntegrationRule *>(cut_ir_1[e]));
+
+         if (full_ir == nullptr && attr == 10)
+         {
+            full_ir = new IntegrationRule;
+            mf_ir_1.GetVolumeIntegrationRule
+                (Tr, *const_cast<IntegrationRule *>(full_ir));
+         }
       }
-      else { MFEM_ABORT("Wrong element attribute!"); }
+      if (attr == 15 || attr == 20)
+      {
+         cut_ir_2[e] = new IntegrationRule;
+         mf_ir_2.GetVolumeIntegrationRule
+             (Tr, *const_cast<IntegrationRule *>(cut_ir_2[e]));
+      }
    }
 
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
-   MassIntegrator mi_1(rho0_coeff, &ir), mi_2(rho0_coeff, &ir);
+   //MassIntegrator mi_1(rho0_coeff, &ir), mi_2(rho0_coeff, &ir);
    CutMassIntegrator cmi_1(rho0_coeff, cut_ir_1), cmi_2(rho0_coeff, cut_ir_2);
    for (int e = 0; e < NE; e++)
    {
@@ -174,7 +181,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       if (attr == 10 || attr == 15)
       {
          DenseMatrixInverse inv(&Me_1(e));
-         mi_1.AssembleElementMatrix(fe, Tr, Me_1(e));
+         //mi_1.AssembleElementMatrix(fe, Tr, Me_1(e));
+         cmi_1.AssembleElementMatrix(fe, Tr, Me_1(e));
          inv.Factor();
          inv.GetInverseMatrix(Me_inv_1(e));
       }
@@ -183,52 +191,74 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       if (attr == 15 || attr == 20)
       {
          DenseMatrixInverse inv(&Me_2(e));
-         mi_2.AssembleElementMatrix(fe, Tr, Me_2(e));
+         //mi_2.AssembleElementMatrix(fe, Tr, Me_2(e));
+         cmi_2.AssembleElementMatrix(fe, Tr, Me_2(e));
          inv.Factor();
          inv.GetInverseMatrix(Me_inv_2(e));
       }
-
-      // cmi_1.AssembleElementMatrix(fe, Tr, Me(e));
-      // cmi_2.AssembleElementMatrix(fe, Tr, Me(e));
    }
    // Standard assembly for the velocity mass matrix.
-   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
+   //VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    auto cut_vmi_1 = new CutVectorMassIntegrator(rho0_coeff, cut_ir_1),
         cut_vmi_2 = new CutVectorMassIntegrator(rho0_coeff, cut_ir_2);
-   // Mv.AddDomainIntegrator(cut_vmi_1);
-   // Mv.AddDomainIntegrator(cut_vmi_2);
-   Mv.AddDomainIntegrator(vmi);
+   Mv.AddDomainIntegrator(cut_vmi_1);
+   Mv.AddDomainIntegrator(cut_vmi_2);
+   //Mv.AddDomainIntegrator(vmi);
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
-   int Ne, ne = NE;
    double Volume, vol = 0.0;
 
+   const int nqp = (cut_ir_1[0]) ? cut_ir_1[0]->GetNPoints()
+                                 : cut_ir_2[0]->GetNPoints();
+   qdata.SetSizes(dim, NE, nqp);
    for (int e = 0; e < NE; e++)
    {
-      const int nqp = cut_ir_1[e]->GetNPoints();
-      Vector rho1_vals(nqp), rho2_vals(nqp);
-
-      rho0_gf.GetValues(e, *cut_ir_1[e], rho1_vals);
-      rho0_gf.GetValues(e, *cut_ir_2[e], rho2_vals);
       ElementTransformation &Tr = *H1.GetElementTransformation(e);
+      const IntegrationRule *ir_e = (cut_ir_1[e]) ? cut_ir_1[e] : cut_ir_2[e];
       for (int q = 0; q < nqp; q++)
       {
-         const IntegrationPoint &ip_1 = cut_ir_1[e]->IntPoint(q);
-         const IntegrationPoint &ip_2 = cut_ir_2[e]->IntPoint(q);
-         Tr.SetIntPoint(&ip_1);
+         const IntegrationPoint &ip = ir_e->IntPoint(q);
+         Tr.SetIntPoint(&ip);
          DenseMatrixInverse Jinv(Tr.Jacobian());
          Jinv.GetInverseMatrix(qdata.Jac0inv(e*nqp + q));
-         qdata.rho0DetJ0w_1[e](q) = ip_1.weight * Tr.Weight() * rho1_vals(q);
-         qdata.rho0DetJ0w_2[e](q) = ip_2.weight * Tr.Weight() * rho2_vals(q);
+      }
+   }
+   for (int e = 0; e < NE; e++)
+   {
+      ElementTransformation &Tr = *H1.GetElementTransformation(e);
+      qdata.rho0DetJ0w_1[e] = 0.0;
+      qdata.rho0DetJ0w_2[e] = 0.0;
+      if (cut_ir_1[e])
+      {
+         Vector rho1_vals(nqp);
+         mat_data.rho0_1.GetValues(e, *cut_ir_1[e], rho1_vals);
+         for (int q = 0; q < nqp; q++)
+         {
+            const IntegrationPoint &ip_1 = cut_ir_1[e]->IntPoint(q);
+            Tr.SetIntPoint(&ip_1);
+            qdata.rho0DetJ0w_1[e](q) = Tr.Weight() * rho1_vals(q);
+         }
+      }
+      if (cut_ir_2[e])
+      {
+         Vector rho2_vals(nqp);
+         mat_data.rho0_2.GetValues(e, *cut_ir_2[e], rho2_vals);
+         for (int q = 0; q < nqp; q++)
+         {
+            const IntegrationPoint &ip_2 = cut_ir_2[e]->IntPoint(q);
+            Tr.SetIntPoint(&ip_2);
+            qdata.rho0DetJ0w_2[e](q) = Tr.Weight() * rho2_vals(q);
+         }
       }
    }
    for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
 
+   int Ne;
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-   MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
+   MPI_Allreduce(&NE, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
    switch (pmesh->GetElementBaseGeometry(0))
    {
       case Geometry::SEGMENT: qdata.h0 = Volume / Ne; break;
@@ -243,8 +273,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    ForceIntegrator *fi_1, *fi_2;
    fi_1 = new ForceIntegrator(qdata.stressJinvT_1);
    fi_2 = new ForceIntegrator(qdata.stressJinvT_2);
-   fi_1->SetIntRule(&ir);
-   fi_2->SetIntRule(&ir);
+   const IntegrationRule *ir_0 = (cut_ir_1[0]) ? cut_ir_1[0] : cut_ir_2[0];
+   fi_1->SetIntRule(ir_0);
+   fi_2->SetIntRule(ir_0);
    Force_1.AddDomainIntegrator(fi_1);
    Force_2.AddDomainIntegrator(fi_2);
    // Make a dummy assembly to figure out the sparsity.
@@ -343,7 +374,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    {
       e_source = new LinearForm(&L2);
       TaylorCoefficient coeff;
-      DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
+      DomainLFIntegrator *d = new DomainLFIntegrator(coeff);
       e_source->AddDomainIntegrator(d);
       e_source->Assemble();
    }
@@ -415,22 +446,14 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
    Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
-   MassIntegrator mi;
+   MassIntegrator mi(full_ir);
    DensityIntegrator di(mat_id, qdata);
+   di.SetIntRule(full_ir);
    for (int e = 0; e < NE; e++)
    {
       L2.GetElementDofs(e, dofs);
-      if (mat_id == 1 && pmesh->GetAttribute(e) != 20)
-      {
-         mi.SetIntRule(cut_ir_1[e]);
-         di.SetIntRule(cut_ir_1[e]);
-      }
-      else if (mat_id == 2 && pmesh->GetAttribute(e) != 10)
-      {
-         mi.SetIntRule(cut_ir_2[e]);
-         di.SetIntRule(cut_ir_2[e]);
-      }
-      else
+      if ((mat_id == 1 && pmesh->GetAttribute(e) == 20) ||
+          (mat_id == 2 && pmesh->GetAttribute(e) == 10))
       {
          rho_z = 0.0;
          rho.SetSubVector(dofs, rho_z);
@@ -441,6 +464,9 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
       di.AssembleRHSElementVect(fe, eltr, rhs);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
+      std::cout << e << " " << Mrho.Det() << std::endl;
+      Mrho.Print();
+      rhs.Print();
       inv.Factor();
       inv.Mult(rhs, rho_z);
       rho.SetSubVector(dofs, rho_z);
@@ -495,7 +521,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    qdata_is_current = true;
 
-   const int nqp = cut_ir_1[0]->GetNPoints();
+   const int nqp = (cut_ir_1[0]) ? cut_ir_1[0]->GetNPoints()
+                                 : cut_ir_2[0]->GetNPoints();
    ParGridFunction x, v, e_1, e_2;
    Vector* sptr = const_cast<Vector*>(&S);
    x.MakeRef(&H1, *sptr, 0);
@@ -534,7 +561,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          }
 
          ElementTransformation *T = H1.GetElementTransformation(e);
-         e_k.GetValues(e, ir, e_vals);
+         e_k.GetValues(e, *ir_k[e], e_vals);
          for (int q = 0; q < nqp; q++)
          {
             const IntegrationPoint &ip = ir_k[e]->IntPoint(q);
@@ -543,7 +570,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const double detJ = Jpr.Det();
 
             // Assuming piecewise constant gamma that moves with the mesh.
-            const double rho    = r0DJ_k[e](q) / detJ / ip.weight;
+            const double rho    = r0DJ_k[e](q) / detJ;
             const double energy = fmax(0.0, e_vals(q));
             double p            = (gamma_k - 1.0) * rho * energy;
             double sound_speed  = sqrt(gamma_k * (gamma_k - 1.0) * energy);
@@ -570,7 +597,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
                sgrad_v.Symmetrize();
                double eig_val_data[3], eig_vec_data[9];
-               if (dim==1)
+               if (dim == 1)
                {
                   eig_val_data[0] = sgrad_v(0, 0);
                   eig_vec_data[0] = 1.;
@@ -617,7 +644,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             }
             // Quadrature data for partial assembly of the force operator.
             MultABt(stress, Jinv, stressJiT);
-            stressJiT *= ir.IntPoint(q).weight * detJ;
+            stressJiT *= ir_k[e]->IntPoint(q).weight * detJ;
             for (int vd = 0 ; vd < dim; vd++)
             {
                for (int gd = 0; gd < dim; gd++)

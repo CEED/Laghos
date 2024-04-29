@@ -36,10 +36,11 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    Vector shape(fe.GetDof());
    for (int q = 0; q < nqp; q++)
    {
-      fe.CalcShape(IntRule->IntPoint(q), shape);
+      const IntegrationPoint &ip = IntRule->IntPoint(q);
+      fe.CalcShape(ip, shape);
       // Note that rhoDetJ = rho0DetJ0.
-      if (mat_id == 1) { shape *= qdata.rho0DetJ0w_1[Tr.ElementNo](q); }
-      else             { shape *= qdata.rho0DetJ0w_2[Tr.ElementNo](q); }
+      if (mat_id == 1) { shape *= ip.weight * qdata.rho0DetJ0w_1[Tr.ElementNo](q); }
+      else             { shape *= ip.weight * qdata.rho0DetJ0w_2[Tr.ElementNo](q); }
       elvect += shape;
    }
 }
@@ -78,7 +79,6 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
       trial_fe.CalcShape(ip, shape);
       AddMultVWt(Vloc_force, shape, elmat);
    }
-   if (Tr.Attribute == 15) { elmat *= 0.5; }
 }
 
 } // namespace hydrodynamics

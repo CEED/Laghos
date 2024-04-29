@@ -55,12 +55,15 @@ struct QuadratureData
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
 
-   QuadratureData(int dim, int NE, int quads_per_el)
-      : Jac0inv(dim, dim, NE * quads_per_el),
-        stressJinvT_1(NE * quads_per_el, dim, dim),
-        stressJinvT_2(NE * quads_per_el, dim, dim),
-        rho0DetJ0w_1(NE), rho0DetJ0w_2(NE)
+   QuadratureData() { }
+
+   void SetSizes(int dim, int NE, int quads_per_el)
    {
+      Jac0inv.SetSize(dim, dim, NE * quads_per_el);
+      stressJinvT_1.SetSize(NE * quads_per_el, dim, dim);
+      stressJinvT_2.SetSize(NE * quads_per_el, dim, dim);
+      rho0DetJ0w_1.resize(NE);
+      rho0DetJ0w_2.resize(NE);
       for (int e = 0; e < NE; e++)
       {
          rho0DetJ0w_1[e].SetSize(quads_per_el);

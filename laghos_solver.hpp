@@ -66,10 +66,10 @@ protected:
    DenseTensor Me_1, Me_2, Me_inv_1, Me_inv_2;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
+   mutable IntegrationRule *full_ir;
    mutable Array<const IntegrationRule *> cut_ir_1, cut_ir_2;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
-   const int Q1D;
    mutable QuadratureData qdata;
    mutable bool qdata_is_current;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is

@@ -103,6 +103,8 @@ class CutVectorMassIntegrator: public VectorMassIntegrator
 };
 
 void InitTG2Mat(MaterialData &mat_data);
+void InitSod2Mat(MaterialData &mat_data);
+void InitTriPoint2Mat(MaterialData &mat_data);
 
 } // namespace hydrodynamics
 
