@@ -464,9 +464,6 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
       di.AssembleRHSElementVect(fe, eltr, rhs);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
-      std::cout << e << " " << Mrho.Det() << std::endl;
-      Mrho.Print();
-      rhs.Print();
       inv.Factor();
       inv.Mult(rhs, rho_z);
       rho.SetSubVector(dofs, rho_z);
@@ -484,11 +481,18 @@ double LagrangianHydroOperator::InternalEnergy(const ParGridFunction &e_1,
    double loc_ie = 0.0;
    for (int e = 0; e < NE; e++)
    {
+      const int attr = pmesh->GetAttribute(e);
       L2.GetElementDofs(e, l2dofs);
       e_1.GetSubVector(l2dofs, loc_e_1);
       e_2.GetSubVector(l2dofs, loc_e_2);
-      loc_ie += Me_1(e).InnerProduct(loc_e_1, one) +
-                Me_2(e).InnerProduct(loc_e_2, one);
+      if (attr == 10 || attr == 15)
+      {
+         loc_ie += Me_1(e).InnerProduct(loc_e_1, one);
+      }
+      if (attr == 15 || attr == 20)
+      {
+         loc_ie += Me_2(e).InnerProduct(loc_e_2, one);
+      }
    }
    MPI_Comm comm = H1.GetParMesh()->GetComm();
    MPI_Allreduce(&loc_ie, &glob_ie, 1, MPI_DOUBLE, MPI_SUM, comm);
