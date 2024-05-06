@@ -113,7 +113,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Me_inv_1(l2dofs_cnt, l2dofs_cnt, NE), Me_inv_2(l2dofs_cnt, l2dofs_cnt, NE),
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
-   full_ir(nullptr),
+   pure_elements_ir(nullptr),
    cut_ir_1(NE), cut_ir_2(NE),
    qdata(),
    qdata_is_current(false),
@@ -150,13 +150,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          cut_ir_1[e] = new IntegrationRule;
          mf_ir_1.GetVolumeIntegrationRule
              (Tr, *const_cast<IntegrationRule *>(cut_ir_1[e]));
-
-         if (full_ir == nullptr && attr == 10)
-         {
-            full_ir = new IntegrationRule;
-            mf_ir_1.GetVolumeIntegrationRule
-                (Tr, *const_cast<IntegrationRule *>(full_ir));
-         }
       }
       if (attr == 15 || attr == 20)
       {
@@ -165,6 +158,16 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
              (Tr, *const_cast<IntegrationRule *>(cut_ir_2[e]));
       }
    }
+
+   // Create an IntegrationRule for a general pure element.
+   // It has the same quad points as the cut ones.
+   // Used to project the densities locally to a ParGridFunction.
+   pure_elements_ir = new IntegrationRule;
+   ConstantCoefficient coeff_one(1.0);
+   MomentFittingIntRules mf_pure(cut_ir_order, coeff_one, 2);
+   pmesh->GetElementTransformation(0, &Tr);
+   mf_pure.GetVolumeIntegrationRule
+      (Tr, *const_cast<IntegrationRule *>(pure_elements_ir));
 
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
@@ -446,9 +449,9 @@ void LagrangianHydroOperator::ComputeDensity(int mat_id,
    Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
-   MassIntegrator mi(full_ir);
+   MassIntegrator mi(pure_elements_ir);
    DensityIntegrator di(mat_id, qdata);
-   di.SetIntRule(full_ir);
+   di.SetIntRule(pure_elements_ir);
    for (int e = 0; e < NE; e++)
    {
       L2.GetElementDofs(e, dofs);
