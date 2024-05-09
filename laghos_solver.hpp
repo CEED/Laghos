@@ -52,6 +52,7 @@ protected:
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
+   Coefficient &rho0_c;
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
    const double cfl;
    const bool use_viscosity, use_vorticity;
@@ -62,8 +63,8 @@ protected:
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
-   SparseMatrix Mv_spmat_copy;
-   DenseTensor Me_1, Me_2, Me_inv_1, Me_inv_2;
+   mutable SparseMatrix Mv_spmat_copy;
+   mutable DenseTensor Me_1, Me_2, Me_inv_1, Me_inv_2;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
    mutable IntegrationRule *pure_elements_ir;

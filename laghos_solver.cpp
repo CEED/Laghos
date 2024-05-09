@@ -99,6 +99,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets(4),
    x_gf(&H1),
    ess_tdofs(ess_tdofs),
+   rho0_c(rho0_coeff),
    dim(pmesh->Dimension()),
    NE(pmesh->GetNE()),
    l2dofs_cnt(L2.GetFE(0)->GetDof()),
@@ -306,6 +307,68 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    ParGridFunction dx;
    dx.MakeRef(&H1, dS_dt, 0);
    dx = v;
+
+   // Update all cut integration rules.
+   GridFunctionCoefficient ls_coeff(&mat_data.level_set);
+   ProductCoefficient ls_coeff_mat1(-1.0, ls_coeff);
+   ProductCoefficient ls_coeff_mat2( 1.0, ls_coeff);
+   const int cut_ir_order = 3;
+   MomentFittingIntRules mf_ir_1(cut_ir_order, ls_coeff_mat1, 2),
+                         mf_ir_2(cut_ir_order, ls_coeff_mat2, 2);
+   for (int e = 0; e < NE; e++)
+   {
+      const int attr = pmesh->GetAttribute(e);
+      IsoparametricTransformation Tr;
+      pmesh->GetElementTransformation(e, &Tr);
+      delete cut_ir_1[e];
+      delete cut_ir_2[e];
+      cut_ir_1[e] = nullptr;
+      cut_ir_2[e] = nullptr;
+      if (attr == 10 || attr == 15)
+      {
+         cut_ir_1[e] = new IntegrationRule;
+         mf_ir_1.GetVolumeIntegrationRule
+            (Tr, *const_cast<IntegrationRule *>(cut_ir_1[e]));
+      }
+      if (attr == 15 || attr == 20)
+      {
+         cut_ir_2[e] = new IntegrationRule;
+         mf_ir_2.GetVolumeIntegrationRule
+            (Tr, *const_cast<IntegrationRule *>(cut_ir_2[e]));
+      }
+   }
+
+   // Mv.BilinearForm::operator=(0.0);
+   // Mv.Update();
+   // Mv.Assemble();
+   // Mv_spmat_copy = Mv.SpMat();
+
+   // CutMassIntegrator cmi_1(rho0_c, cut_ir_1), cmi_2(rho0_c, cut_ir_2);
+   // for (int e = 0; e < NE; e++)
+   // {
+   //    const FiniteElement &fe = *L2.GetFE(e);
+   //    ElementTransformation &Tr = *L2.GetElementTransformation(e);
+   //    const int attr = pmesh->GetAttribute(e);
+
+   //    // Material 1.
+   //    if (attr == 10 || attr == 15)
+   //    {
+   //       DenseMatrixInverse inv(&Me_1(e));
+   //       cmi_1.AssembleElementMatrix(fe, Tr, Me_1(e));
+   //       inv.Factor();
+   //       inv.GetInverseMatrix(Me_inv_1(e));
+   //    }
+
+   //    // Material 2.
+   //    if (attr == 15 || attr == 20)
+   //    {
+   //       DenseMatrixInverse inv(&Me_2(e));
+   //       cmi_2.AssembleElementMatrix(fe, Tr, Me_2(e));
+   //       inv.Factor();
+   //       inv.GetInverseMatrix(Me_inv_2(e));
+   //    }
+   // }
+
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
