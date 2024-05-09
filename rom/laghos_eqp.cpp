@@ -4,7 +4,7 @@
 #include "linalg/NNLS.h"
 
 void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
-               CAROM::Vector const& w, CAROM::Matrix & Gt,
+               const bool useLQ, CAROM::Vector const& w, CAROM::Matrix & Gt,
                CAROM::Vector & sol)
 {
     CAROM::NNLSSolver nnls(nnls_tol, 0, maxNNLSnnz, 2);
@@ -15,7 +15,6 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
     CAROM::Vector rhs_Gw(Gt.numColumns(), false);
     Gt.transposeMult(w, rhs_Gw);
 
-    bool useLQ = false;  // TODO: input
     if (useLQ)
     {
 
@@ -704,7 +703,8 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
     }
 
     CAROM::Vector sol(ne * nqe, true);
-    SolveNNLS(input.rank, input.tolNNLS, input.maxNNLSnnz, w, Gt, sol);
+    SolveNNLS(input.rank, input.tolNNLS, input.maxNNLSnnz, input.LQ_NNLS,
+              w, Gt, sol);
 
     std::vector<double> solnz; // Solution nonzeros
     std::vector<int> indices;
@@ -1378,3 +1378,91 @@ void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *ope
     rde_dt = eqpFe;
 }
 
+void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
+{
+    MFEM_VERIFY(hyperreduce && hyperreductionSamplingType == eqp, "");
+    MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");
+
+    operSP->SetRomOperator(this);
+
+    basis->LiftToSampleMesh(S, fx);
+
+    operSP->ResetQuadratureData();
+    operSP->SetTime(t);
+
+    // TODO: can SolveEnergy be skipped here? We just want SolveVelocity at this point,
+    // as well as `UpdateMesh(S)` and `InitEQP`.
+    // This Mult calls includes `UpdateMesh`.
+    operSP->Mult(fx, fy);  // fy is not computed and not used in the EQP case.
+
+    operSP->SetQuadDataCurrent();
+
+    // TODO: allocate this just once in the class.
+    Vector Shalf(S.Size());
+    Shalf = S;
+
+    const int rXsize = basis->GetDimX();
+    const int rVsize = basis->GetDimV();
+    const int rEsize = basis->GetDimE();
+    MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+
+    Vector Shv, Shx, She;
+    Vector Sv, Sx, Se;
+    Vector vbar(rVsize);
+
+    Shx.SetDataAndSize(Shalf.GetData(), rXsize);
+    Shv.SetDataAndSize(Shalf.GetData() + rXsize, rVsize);
+    She.SetDataAndSize(Shalf.GetData() + rXsize + rVsize, rEsize);
+
+    Sx.SetDataAndSize(S.GetData(), rXsize);
+    Sv.SetDataAndSize(S.GetData() + rXsize, rVsize);
+    Se.SetDataAndSize(S.GetData() + rXsize + rVsize, rEsize);
+
+    vbar = Sv;
+
+    Shv.Add(0.5 * dt, eqpFv);
+
+    // Lift Shv to vh
+    const int sizeH1sp = basis->SolutionSizeH1SP();
+    Vector vh(sizeH1sp);
+
+    basis->LiftToSampleMesh_V(Shv, vh);
+
+    operSP->SolveEnergy(fx, vh, fy);  // fy is not computed and not used in the EQP case
+
+    She.Add(0.5 * dt, eqpFe);
+
+    Vector dx(rXsize);
+    CAROM::Vector vbar_libROM(vbar.GetData(), rVsize, false, false);
+    CAROM::Vector dx_libROM(dx.GetData(), rXsize, false, false);
+    CAROM::Vector Shv_libROM(Shv.GetData(), rVsize, false, false);
+    BXtBV->mult(Shv_libROM, dx_libROM);
+    dx_libROM += *BXtV0;
+
+    Shx.Add(0.5 * dt, dx);
+
+    // Now Shalf = (Sx, Sv, Se) is set to the half step. Next, set S_{n+1}.
+    basis->LiftToSampleMesh(Shalf, fx);
+    operSP->ResetQuadratureData();
+    // TODO: skip SolveEnergy here?
+    operSP->Mult(fx, fy);  // fy is not computed and not used in the EQP case
+    operSP->SetQuadDataCurrent();
+
+    Sv.Add(dt, eqpFv);
+
+    vbar += Sv;
+    vbar *= 0.5;
+
+    basis->LiftToSampleMesh_V(vbar, vh);
+
+    operSP->SolveEnergy(fx, vh, fy);  // fy is not computed and not used in the EQP case
+
+    Se.Add(dt, eqpFe);
+
+    BXtBV->mult(vbar_libROM, dx_libROM);
+    dx_libROM += *BXtV0;
+
+    Sx.Add(dt, dx);
+
+    operSP->ResetQuadratureData();
+}

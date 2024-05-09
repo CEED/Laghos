@@ -159,6 +159,10 @@ public:
         quad_data_is_current = false;
     }
 
+    void SetQuadDataCurrent() {
+        quad_data_is_current = true;
+    };
+
     // The density values, which are stored only at some quadrature points, are
     // projected as a ParGridFunction.
     void ComputeDensity(ParGridFunction &rho) const;

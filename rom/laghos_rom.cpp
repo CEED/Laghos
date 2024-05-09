@@ -2139,6 +2139,25 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
     }
 }
 
+void ROM_Basis::LiftToSampleMesh_V(const Vector &u, Vector &usp) const
+{
+    MFEM_VERIFY(u.Size() == rdimv, "");
+    MFEM_VERIFY(usp.Size() == size_H1_sp, "");
+
+    if (rank == 0)
+    {
+        for (int i=0; i<rdimv; ++i)
+            (*rV)(i) = u[i];
+
+        BVsp->mult(*rV, *spV);
+
+        for (int i=0; i<size_H1_sp; ++i)
+        {
+            usp[i] = (offsetInit && Voffset) ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
+        }
+    }
+}
+
 void ROM_Basis::SampleMeshAddInitialState(Vector &usp) const
 {
     MFEM_VERIFY(usp.Size() == SolutionSizeSP(), "");  // (2*size_H1_sp) + size_L2_sp
@@ -4283,7 +4302,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
-    if (!use_sample_mesh || rank == 0)
+    if (hyperreductionSamplingType == eqp && rank == 0)
+    {
+        StepRK2AvgEQP(S, t, dt);
+    }
+    else if (!use_sample_mesh || rank == 0)
     {
         if (use_sample_mesh)
             basis->LiftToSampleMesh(S, fx);
@@ -4460,8 +4483,6 @@ void ROM_Operator::StepRK4(Vector &S, double &t, double &dt)
                 "StepRK4 needs more general support");
 
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
-
-    const bool eqp_proj = use_sample_mesh && hyperreductionSamplingType == eqp;
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
 

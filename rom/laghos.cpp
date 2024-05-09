@@ -347,6 +347,8 @@ int main(int argc, char *argv[])
                    "Maximum number of nonzeros in NNLS solution.");
     args.AddOption(&romOptions.tolNNLS, "-tolnnls", "--tol-nnls",
                    "NNLS solver error tolerance.");
+    args.AddOption(&romOptions.LQ_NNLS, "-lqnnls", "--nnlsuselq", "-no-lqnnls", "--no-lq-nnls",
+                   "Enable or disable use of LQ factorization in NNLS system.");
     args.AddOption(&romOptions.sampfreq, "-sampfreq", "--samp-freq",
                    "Snapshot sampling frequency.");
     args.AddOption(&nnlsWindow0, "-nnlsw0", "--nnls-window0",

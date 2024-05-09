@@ -262,6 +262,7 @@ struct ROM_Options
     int maxNNLSnnz = 0; // max number of NNLS solution nonzeros
     double tolNNLS = 1.0e-14; // NNLS solver error tolerance
     bool skipNNLS = false;
+    bool LQ_NNLS = false;
 
     // snapshot sampling frequency (sample every sampfreq timestep)
     int sampfreq = 1;
@@ -877,6 +878,8 @@ public:
     }
 
     void LiftToSampleMesh(const Vector &x, Vector &xsp) const;
+    void LiftToSampleMesh_V(const Vector &x, Vector &xsp) const;
+
     void RestrictFromSampleMesh(const Vector &xsp, Vector &x,
                                 const bool timeDerivative=false,
                                 const bool rhs_without_mass_matrix=false,
@@ -1241,6 +1244,8 @@ public:
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
     void StepRK4(Vector &S, double &t, double &dt);
+
+    void StepRK2AvgEQP(Vector &S, double &t, double &dt) const;
 
     void ApplyHyperreduction(Vector &S);
     void PostprocessHyperreduction(Vector &S, bool keep_data=false);
