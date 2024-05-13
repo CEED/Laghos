@@ -106,6 +106,7 @@ int main(int argc, char *argv[])
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
+   double delta_tol = 1e-12;
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
@@ -152,6 +153,8 @@ int main(int argc, char *argv[])
                   "Relative CG tolerance (velocity linear solve).");
    args.AddOption(&ftz_tol, "-ftz", "--ftz-tol",
                   "Absolute flush-to-zero tolerance.");
+   args.AddOption(&delta_tol, "-dtol", "--delta-tol",
+                  "Tolerance for projecting Delta functions.");
    args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
                   "Maximum number of CG iterations (velocity linear solve).");
    args.AddOption(&max_tsteps, "-ms", "--max-steps",
@@ -521,7 +524,18 @@ int main(int argc, char *argv[])
       // For the Sedov test, we use a delta function at the origin.
       DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
                                blast_position[2], blast_energy);
+      e_coeff.SetTol(delta_tol);
       l2_e.ProjectCoefficient(e_coeff);
+
+      int non_finite = l2_e.CheckFinite();
+      MPI_Allreduce(MPI_IN_PLACE, &non_finite, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
+      if (non_finite > 0)
+      {
+         cout << "Delta function coult not be initialized!\n";
+         delete ode_solver;
+         delete pmesh;
+         return 1;
+      }
    }
    else
    {
