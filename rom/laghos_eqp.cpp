@@ -17,7 +17,6 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
 
     if (useLQ)
     {
-
         // Compute Q^T of the LQ factorization of G.
         CAROM::Matrix* Qt_ptr;
         Qt_ptr = Gt.qr_factorize();
@@ -1390,9 +1389,8 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
     operSP->ResetQuadratureData();
     operSP->SetTime(t);
 
-    // TODO: can SolveEnergy be skipped here? We just want SolveVelocity at this point,
-    // as well as `UpdateMesh(S)` and `InitEQP`.
     // This Mult calls includes `UpdateMesh`.
+    operSP->skipEnergySolve = true;  // Only solve for velocity
     operSP->Mult(fx, fy);  // fy is not computed and not used in the EQP case.
 
     operSP->SetQuadDataCurrent();
@@ -1444,7 +1442,7 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
     // Now Shalf = (Sx, Sv, Se) is set to the half step. Next, set S_{n+1}.
     basis->LiftToSampleMesh(Shalf, fx);
     operSP->ResetQuadratureData();
-    // TODO: skip SolveEnergy here?
+    // SolveEnergy is skipped here (we only solve for velocity)
     operSP->Mult(fx, fy);  // fy is not computed and not used in the EQP case
     operSP->SetQuadDataCurrent();
 

@@ -108,7 +108,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(int size,
       ftz_tol(ftz),
       noMvSolve(noMvSolve_), noMeSolve(noMeSolve_), use_eqp(use_eqp_),
       eqp_init_points(false), eqp_init(false),
-      material_pcf(material_),
+      material_pcf(material_), skipEnergySolve(false),
       Mv(&h1_fes), Mv_spmat_copy(),
       Me(l2dofs_cnt, l2dofs_cnt, nzones), Me_inv(l2dofs_cnt, l2dofs_cnt, nzones),
       integ_rule(IntRules.Get(h1_fes.GetMesh()->GetElementBaseGeometry(0),
@@ -242,7 +242,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
     if (use_eqp && !eqp_init_points) rom_op->InitEQP();
 
     SolveVelocity(S, dS_dt);
-    SolveEnergy(S, v, dS_dt);
+    if (!skipEnergySolve)
+        SolveEnergy(S, v, dS_dt);
 
     quad_data_is_current = false;
 }

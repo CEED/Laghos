@@ -207,6 +207,8 @@ public:
         eqp_ptid.clear();
         eqp_offset.clear();
     }
+
+    bool skipEnergySolve;
 };
 
 class TaylorCoefficient : public Coefficient
