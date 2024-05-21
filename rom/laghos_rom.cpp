@@ -426,7 +426,10 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
     CAROM::Vector rhs_Gw(Gt.numColumns(), false);
     Gt.transposeMult(w, rhs_Gw);
 
-    if (true)
+    // TODO: Make it a user input option.
+    bool const nnls_use_lq = true;
+
+    if (nnls_use_lq)
     {
         // Compute Q^T of the LQ factorization of G.
         CAROM::Matrix* Qt_ptr;
@@ -1172,6 +1175,18 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
 
     if (input.hyperreductionSamplingType == eqp_energy)
     {
+        // Get the bases resulting from the SVDs.
+        CAROM::Matrix const* basisV = generator_V->getSpatialBasis();
+        CAROM::Matrix const* basisE = generator_E->getSpatialBasis();
+
+        // TODO: Remove the const qualifier in libROM.
+        // Then orthonormalize the V and E bases w.r.t. the mass matrices
+        // and call endSamples() again to rewrite the bases, overwriting
+        // the previous versions.
+        // In this way, I will then have to orthonormalize only the new
+        // vectors I add (including when I read the bases in the
+        // online stage).
+
         if (rank == 0)
         {
             // Increase the X basis dimension by 1 to accomodate the
@@ -1214,12 +1229,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             // are written in the window parameters file in the caller's
             // scope.
         }
-
         MPI_Bcast(cutoff.GetData(), cutoff.Size(), MPI_INT, 0, MPI_COMM_WORLD);
-
-        // Get the bases resulting from the SVDs.
-        CAROM::Matrix const* basisV = generator_V->getSpatialBasis();
-        CAROM::Matrix const* basisE = generator_E->getSpatialBasis();
 
         CAROM::Matrix* tBasisV = nullptr;
         CAROM::Matrix* tBasisE = nullptr;
@@ -1248,7 +1258,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             {
                 (*tBasisV)(i, cutoff[1] - 1) = (*initV)(i);
             }
-            tBasisV->orthogonalize_last(-1, true);
+            //tBasisV->orthogonalize_last(-1, true);
         }
 
         // E basis construction.
@@ -1270,7 +1280,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             {
                 (*tBasisE)(i, cutoff[2] - 1) = 1.0;
             }
-            tBasisE->orthogonalize_last(-1, true);
+            //tBasisE->orthogonalize_last(-1, true);
         }
         else
         {
@@ -1290,7 +1300,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             {
                 (*tBasisE)(i, cutoff[2] - 2) = 1.0;
             }
-            tBasisE->orthogonalize_last(cutoff[2] - 1, true);
+            //tBasisE->orthogonalize_last(cutoff[2] - 1, true);
 
             // Add the E offset vector as the last E basis column
             // and reorthonormalize.
@@ -1298,8 +1308,11 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input,
             {
                 (*tBasisE)(i, cutoff[2] - 1) = (*initE)(i);
             }
-            tBasisE->orthogonalize_last(-1, true);
+            //tBasisE->orthogonalize_last(-1, true);
         }
+        // Mass induced GS orthonormalization.
+        MassGramSchmidt(input, 1, tBasisV);
+        MassGramSchmidt(input, 2, tBasisE);
         
         SetupEQP_Force(&Xsnap0, &Vsnap0, &Esnap0,
             tBasisV, tBasisE, input, sol);
@@ -1455,7 +1468,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_,
         mfH1.SetSize(tH1size);
         mfL2.SetSize(tL2size);
 
-        ReadSolutionBases(input.window, S);
+        ReadSolutionBases(input, S);
 
         if (spaceTime)
         {
@@ -2372,8 +2385,11 @@ int ROM_Basis::SolutionSizeFOM() const
     return (2*H1size) + L2size;  // full size, not true DOF size
 }
 
-void ROM_Basis::ReadSolutionBases(const int window, BlockVector const* S)
+void ROM_Basis::ReadSolutionBases(ROM_Options const& input,
+                                  BlockVector const* S)
 {
+    int const window = input.window;
+
 	// Velocity basis formation.
 	if (hyperreductionSamplingType == eqp_energy)
 	{
@@ -2427,9 +2443,11 @@ void ROM_Basis::ReadSolutionBases(const int window, BlockVector const* S)
             // Add the lifted V solution as the last basis vector.
             AddLastCol_V(*S);
         }
+        // Mass induced GS orthonormalization.
+        MassGramSchmidt(input, 1, basisV);
     }
-	else
-	{
+    else
+    {
 		if (!useVX)
 		{
 			basisV = ReadBasisROM(rank, basename + "/" + ROMBasisName::V +
@@ -2484,7 +2502,7 @@ void ROM_Basis::ReadSolutionBases(const int window, BlockVector const* S)
             {
                 (*basisE)(i, tmp_rdime) = 1.0;
             }
-            basisE->orthogonalize_last(-1, true);
+            //basisE->orthogonalize_last(-1, true);
         }
         else
         {
@@ -2515,14 +2533,16 @@ void ROM_Basis::ReadSolutionBases(const int window, BlockVector const* S)
             {
                 (*basisE)(i, tmp_rdime) = 1.0;
             }
-            basisE->orthogonalize_last(rdime-1, true);
+            //basisE->orthogonalize_last(rdime-1, true);
 
             // Add the lifted E solution as the last basis vector.
             AddLastCol_E(*S);
         }
+        // Mass induced GS orthonormalization.
+        MassGramSchmidt(input, 2, basisE);
     }
-	else
-	{
+    else
+    {
 		basisE = ReadBasisROM(rank, basename + "/" + ROMBasisName::E +
 			std::to_string(window) + basisIdentifier, tL2size, rdime);
 	}
@@ -2664,7 +2684,8 @@ void ROM_Basis::ReadTemporalBases(const int window)
 }
 
 // f is a full vector, not a true vector
-void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDerivative)
+void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r,
+                                const bool timeDerivative)
 {
     MFEM_VERIFY(r.Size() == rdimx + rdimv + rdime, "");
     MFEM_VERIFY(f.Size() == (2*H1size) + L2size, "");
@@ -2681,25 +2702,69 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
 
     basisX->transposeMult(*fH1, *rX);
 
-    for (int i=0; i<H1size; ++i)
-        (*gfH1)(i) = f[H1size + i];
+    if (hyperreductionSamplingType == eqp_energy)
+    {
+        Vector sv(H1size), Msv(H1size);
 
-    gfH1->GetTrueDofs(mfH1);
+        for (int i = 0; i < H1size; ++i)
+            sv[i] = f[H1size + i];
 
-    for (int i=0; i<tH1size; ++i)
-        (*fH1)(i) = (useOffset && Voffset) ? mfH1[i] - (*initV)(i) : mfH1[i];
+        lhoper->MultMv(sv, Msv);
 
-    basisV->transposeMult(*fH1, *rV);
+        for (int i = 0; i < H1size; ++i)
+            (*gfH1)(i) = Msv[i];
 
-    for (int i=0; i<L2size; ++i)
-        (*gfL2)(i) = f[(2*H1size) + i];
+        gfH1->GetTrueDofs(mfH1);
 
-    gfL2->GetTrueDofs(mfL2);
+        for (int i = 0; i < tH1size; ++i)
+            (*fH1)(i) = mfH1[i];
 
-    for (int i=0; i<tL2size; ++i)
-        (*fL2)(i) = useOffset ? mfL2[i] - (*initE)(i) : mfL2[i];
+        basisV->transposeMult(*fH1, *rV);
+    }
+    else
+    {
+        for (int i=0; i<H1size; ++i)
+            (*gfH1)(i) = f[H1size + i];
 
-    basisE->transposeMult(*fL2, *rE);
+        gfH1->GetTrueDofs(mfH1);
+
+        for (int i=0; i<tH1size; ++i)
+            (*fH1)(i) = (useOffset && Voffset) ? mfH1[i] - (*initV)(i) : mfH1[i];
+
+        basisV->transposeMult(*fH1, *rV);
+    }
+
+    if (hyperreductionSamplingType == eqp_energy)
+    {
+        Vector se(L2size), Mse(L2size);
+
+        for (int i = 0; i < L2size; ++i)
+            se[i] = f[(2*H1size) + i];
+
+        lhoper->MultMe(se, Mse);
+
+        for (int i = 0; i < L2size; ++i)
+            (*gfL2)(i) = Mse[i];
+
+        gfL2->GetTrueDofs(mfL2);
+
+        for (int i = 0; i < tL2size; ++i)
+            (*fL2)(i) = mfL2[i];
+
+        basisE->transposeMult(*fL2, *rE);
+    }
+    else
+    {
+        for (int i=0; i<L2size; ++i)
+            (*gfL2)(i) = f[(2*H1size) + i];
+
+        gfL2->GetTrueDofs(mfL2);
+
+        for (int i=0; i<tL2size; ++i)
+            (*fL2)(i) = useOffset ? mfL2[i] - (*initE)(i) : mfL2[i];
+
+        basisE->transposeMult(*fL2, *rE);
+    }
 
     for (int i=0; i<rdimx; ++i)
         r[i] = (*rX)(i);
@@ -2762,7 +2827,7 @@ void ROM_Basis::AddLastCol_V(BlockVector const& f)
 	for (int i = 0; i < tH1size; i++)
 		(*basisV)(i, rdimv-1) = mfH1[i];
 
-	basisV->orthogonalize_last(-1, true);
+	//basisV->orthogonalize_last(-1, true);
 }
 
 // f is a full vector, not a true vector
@@ -2778,7 +2843,7 @@ void ROM_Basis::AddLastCol_E(BlockVector const& f)
 	for (int i = 0; i < tL2size; i++)
 		(*basisE)(i, rdime-1) = mfL2[i];
 
-	basisE->orthogonalize_last(-1, true);
+	//basisE->orthogonalize_last(-1, true);
 }
 
 // f is a full vector, not a true vector
@@ -3587,38 +3652,42 @@ void ROM_Operator::ComputeReducedMv()
 	// TODO: do I need to enforce MPI rank == 0?
 	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
 	{
-		// Form inverse of reduced Mv
-		invMvROM.SetSize(nv);
+        // Form inverse of reduced Mv
+        //invMvROM.SetSize(nv);
 
-		const int size_H1 = basis->SolutionSizeH1FOM();
-		const int tsize_H1 = H1spaceFOM->GetTrueVSize();
-        
-		Wmat = new CAROM::Matrix(size_H1, nv, true);
+        const int size_H1 = basis->SolutionSizeH1FOM();
+        const int tsize_H1 = H1spaceFOM->GetTrueVSize();
 
-		ParGridFunction gf(H1spaceFOM), gf2(H1spaceFOM);
-		Vector vj(tsize_H1), vi(tsize_H1);
-		Vector Mvj(size_H1);
+        Wmat = new CAROM::Matrix(size_H1, nv, true);
 
-		for (int j = 0; j < nv; ++j)
-		{
-			basis->GetBasisVectorV(false, j, vj);
-			gf.SetFromTrueDofs(vj);
+        ParGridFunction gf(H1spaceFOM);
+        Vector vj(tsize_H1);
 
-			// store jth V basis vector in Wmat(:,j)
-			for (int i=0; i<size_H1; ++i) (*Wmat)(i,j) = gf[i];
+        //ParGridFunction gf2(H1spaceFOM);
+        //Vector vi(tsize_H1), Mvj(size_H1);
 
-			operFOM->MultMv(gf, Mvj);
+        for (int j = 0; j < nv; ++j)
+        {
+            basis->GetBasisVectorV(false, j, vj);
+            gf.SetFromTrueDofs(vj);
 
-			for (int i = 0; i < nv; ++i)
-			{
-				basis->GetBasisVectorV(false, i, vi);
-				gf2.SetFromTrueDofs(vi);
+            // store jth V basis vector in Wmat(:,j)
+            for (int i = 0; i < size_H1; ++i)
+            {
+                (*Wmat)(i,j) = gf[i];
+            }
 
-				invMvROM(i,j) = gf2 * Mvj;
-			}
-		}
-		invMvROM.Invert();
-	}
+            //operFOM->MultMv(gf, Mvj);
+
+            //for (int i = 0; i < nv; ++i)
+            //{
+            //	basis->GetBasisVectorV(false, i, vi);
+            //	gf2.SetFromTrueDofs(vi);
+            //	invMvROM(i,j) = gf2 * Mvj;
+            //}
+        }
+        //invMvROM.Invert();
+    }
     else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
@@ -3668,35 +3737,43 @@ void ROM_Operator::ComputeReducedMe()
     }
 	// TODO: do I need to enforce MPI rank == 0?
 	else if (hyperreduce && hyperreductionSamplingType == eqp_energy)
-	{
-		// Form inverse of reduced Me
-		invMeROM.SetSize(ne);
+    {
+        // Form inverse of reduced Me
+        //invMeROM.SetSize(ne);
 
-		const int size_L2 = basis->SolutionSizeL2FOM();
+        const int size_L2 = basis->SolutionSizeL2FOM();
+        const int tsize_L2 = L2spaceFOM->GetTrueVSize();
 
-		Wmat_E = new CAROM::Matrix(size_L2, ne, true);
+        Wmat_E = new CAROM::Matrix(size_L2, ne, true);
 
-		Vector ej(size_L2), ei(size_L2);
-		Vector Mej(size_L2);
+        ParGridFunction gf(L2spaceFOM);
+        Vector ej(tsize_L2); 
 
-		for (int j = 0; j < ne; ++j)
-		{
-			basis->GetBasisVectorE(false, j, ej);
+        //ParGridFunction gf2(L2spaceFOM);
+        //Vector ei(tsize_L2), Mej(size_L2);
 
-			// store jth E basis vector in Wmat_E(:,j)
-			for (int i=0; i<size_L2; ++i) (*Wmat_E)(i,j) = ej[i];
+        for (int j = 0; j < ne; ++j)
+        {
+            basis->GetBasisVectorE(false, j, ej);
+            gf.SetFromTrueDofs(ej);
 
-			operFOM->MultMe(ej, Mej);
+            // store jth E basis vector in Wmat_E(:,j)
+            for (int i = 0; i < size_L2; ++i)
+            {
+                (*Wmat_E)(i,j) = gf[i];
+            }
 
-			for (int i = 0; i < ne; ++i)
-			{
-				basis->GetBasisVectorE(false, i, ei);
+            //operFOM->MultMe(gf, Mej);
 
-				invMeROM(i,j) = ei * Mej;
-			}
-		}
-		invMeROM.Invert();
-	}
+            //for (int i = 0; i < ne; ++i)
+            //{
+            //    basis->GetBasisVectorE(false, i, ei);
+            //    gf2.SetFromTrueDofs(ei);
+            //    invMeROM(i,j) = gf2 * Mej;
+            //}
+        }
+        //invMeROM.Invert();
+    }
     else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
@@ -3752,7 +3829,9 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     }
 }
 
-void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip)
+void ROM_Operator::InducedInnerProduct(const int id1, const int id2,
+                                       const int var, const int dim,
+                                       double &ip)
 {
     ip = 0.0;
     if (use_sample_mesh)
@@ -3774,7 +3853,7 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
             operSP->MultMe(xj_sp, Mxj_sp);
         }
         else
-            MFEM_ABORT("Invalid input");
+            MFEM_ABORT("Invalid variable index.");
 
         for (int k=0; k<dim; ++k)
         {
@@ -5094,16 +5173,16 @@ void ROM_Operator::ForceIntegratorEQP(Vector & res,
 		}
     } // Loop (i) over EQP points
 
-    if (energy_conserve)
-    {
-        // Multiply by the reduced Mv inverse
-        Vector res_tmp(res.Size());
-        for (int i = 0; i < res.Size(); ++i)
-        {
-            res_tmp[i] = res[i];
-        }
-        invMvROM.Mult(res_tmp, res);
-    }
+    //if (energy_conserve)
+    //{
+    //    // Multiply by the reduced Mv inverse
+    //    Vector res_tmp(res.Size());
+    //    for (int i = 0; i < res.Size(); ++i)
+    //    {
+    //        res_tmp[i] = res[i];
+    //    }
+    //    invMvROM.Mult(res_tmp, res);
+    //}
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
@@ -5284,16 +5363,16 @@ void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res,
 		}
     } // Loop (i) over EQP points
 
-    if (energy_conserve)
-    {
-        // Multiply by the reduced Me inverse
-        Vector res_tmp(res.Size());
-        for (int i = 0; i < res.Size(); ++i)
-        {
-            res_tmp[i] = res[i];
-        }
-        invMeROM.Mult(res_tmp, res);
-    }
+    //if (energy_conserve)
+    //{
+    //    // Multiply by the reduced Me inverse
+    //    Vector res_tmp(res.Size());
+    //    for (int i = 0; i < res.Size(); ++i)
+    //    {
+    //        res_tmp[i] = res[i];
+    //    }
+    //    invMeROM.Mult(res_tmp, res);
+    //}
 
     MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);

@@ -851,7 +851,8 @@ public:
 
     void Init(ROM_Options const& input, Vector const& S);
 
-    void ReadSolutionBases(const int window, BlockVector const* S = nullptr);
+    void ReadSolutionBases(ROM_Options const& input,
+                           BlockVector const* S = nullptr);
     void ReadTemporalBases(const int window);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,

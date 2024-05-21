@@ -876,3 +876,193 @@ void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, Par
     cout << rank << ": " << name << " DIFF norm " << sqrt(diffglob2) << endl;
     cout << rank << ": " << name << " Rel. DIFF norm " << sqrt(diffglob2)/sqrt(fomglob2) << endl;
 }
+
+void MassInnerProduct(ROM_Options const& input, int const var, int const size,
+        CAROM::Matrix* basisMat, int const id1, int const id2,
+        double& inner_prod)
+{
+    MFEM_VERIFY(input.hyperreductionSamplingType == eqp_energy, "");
+    inner_prod = 0.0;
+
+    if (var == 1) // velocity
+    {
+        int const tsizeH1 = input.H1FESpace->GetTrueVSize();
+        int const sizeH1 = input.H1FESpace->GetVSize();
+
+        MFEM_VERIFY(size == tsizeH1, "Input size mismatch.");
+        MFEM_VERIFY(basisMat->numRows() == tsizeH1, "Input size mismatch.");
+
+        ParGridFunction gf(input.H1FESpace), gf2(input.H1FESpace);
+        Vector vj(tsizeH1), vi(tsizeH1);
+        Vector Mvj(sizeH1);
+
+        for (int i = 0; i < tsizeH1; ++i)
+        {
+            vj[i] = (*basisMat)(i, id1);
+        }
+        gf.SetFromTrueDofs(vj);
+
+        for (int i = 0; i < tsizeH1; ++i)
+        {
+            vi[i] = (*basisMat)(i, id2);
+        }
+        gf2.SetFromTrueDofs(vi);
+
+        input.FOMoper->MultMv(gf, Mvj);
+        inner_prod = gf2 * Mvj;
+    }
+    else if (var == 2) // energy
+    {
+        int const tsizeL2 = input.L2FESpace->GetTrueVSize();
+        int const sizeL2 = input.L2FESpace->GetVSize();
+
+        MFEM_VERIFY(size == tsizeL2, "Input size mismatch.");
+        MFEM_VERIFY(basisMat->numRows() == tsizeL2, "Input size mismatch.");
+
+        ParGridFunction gf(input.L2FESpace), gf2(input.L2FESpace);
+        Vector ej(tsizeL2), ei(tsizeL2);
+        Vector Mej(sizeL2);
+
+        for (int i = 0; i < tsizeL2; ++i)
+        {
+            ej[i] = (*basisMat)(i, id1);
+        }
+        gf.SetFromTrueDofs(ej);
+
+        for (int i = 0; i < sizeL2; ++i)
+        {
+            ei[i] = (*basisMat)(i, id2);
+        }
+        gf2.SetFromTrueDofs(ei);
+
+        input.FOMoper->MultMe(gf, Mej);
+        inner_prod = gf2 * Mej;
+    }
+    else
+    {
+        MFEM_ABORT("Invalid variable index.");
+    }
+}
+
+void MassGramSchmidt(ROM_Options const& input, int const var,
+        CAROM::Matrix* basisMat)
+{
+    MFEM_VERIFY(input.hyperreductionSamplingType == eqp_energy, "");
+    int const nrows = basisMat->numRows();
+    int const ncols = basisMat->numColumns();
+
+    if (var == 1) // velocity
+    {
+        MFEM_VERIFY(nrows == input.H1FESpace->GetTrueVSize(), "");
+    }
+    else if (var == 2) // energy
+    {
+        MFEM_VERIFY(nrows == input.L2FESpace->GetVSize(), "");
+    }
+    else
+    {
+        MFEM_ABORT("Invalid variable index.");
+    }
+
+    double factor;
+
+    for (int work = 0; work < ncols; ++work)
+    {
+        // Orthogonalize the column (twice currently).
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            for (int col = 0; col < work; ++col)
+            {
+                MassInnerProduct(input, var, nrows, basisMat, col, work,
+                        factor);
+                for (int row = 0; row < nrows; ++row)
+                {
+                    (*basisMat)(row, work) -= factor * (*basisMat)(row, col);
+                }
+            }
+        }
+
+        // Normalize the column.
+        MassInnerProduct(input, var, nrows, basisMat, work, work, factor);
+
+        if (factor > 1.0e-15) // zero tolerance
+        {
+            double inv_norm = 1.0 / sqrt(factor);
+            for (int row = 0; row < nrows; ++row)
+            {
+                (*basisMat)(row, work) *= inv_norm;
+            }
+        }
+    }
+}
+
+void MassGramSchmidt(ROM_Options const& input, int const var,
+        CAROM::Matrix* basisMat, CAROM::Matrix* Rmat)
+{
+    // The Gram-Scmidt algorithm factorizes input marix basisMat
+    // in the form QR, where
+    // Q is orthonormal w.r.t. the mass induced inner product,
+    // R is the upper triangular matrix of factors involved in the
+    // orthonormalization.
+    // Input matrix basisMat is overwritten with Q.
+
+    MFEM_VERIFY(input.hyperreductionSamplingType == eqp_energy, "");
+    int const nrows = basisMat->numRows();
+    int const ncols = basisMat->numColumns();
+
+    MFEM_VERIFY(Rmat->numRows() == ncols, "");
+    MFEM_VERIFY(Rmat->numColumns() == ncols, "");
+
+    if (var == 1) // velocity
+    {
+        MFEM_VERIFY(nrows == input.H1FESpace->GetTrueVSize(), "");
+    }
+    else if (var == 2) // energy
+    {
+        MFEM_VERIFY(nrows == input.L2FESpace->GetVSize(), "");
+    }
+    else
+    {
+        MFEM_ABORT("Invalid variable index.");
+    }
+
+    double factor;
+
+    for (int work = 0; work < ncols; ++work)
+    {
+        for (int row = 0; row < ncols; ++row)
+        {
+            (*Rmat)(row, work) = 0.0; // initialize to zero
+        }
+
+        // Orthogonalize the column (twice currently).
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            for (int col = 0; col < work; ++col)
+            {
+                MassInnerProduct(input, var, nrows, basisMat, col, work,
+                        factor);
+                (*Rmat)(col, work) += factor; // added in each pass
+                for (int row = 0; row < nrows; ++row)
+                {
+                    (*basisMat)(row, work) -= factor * (*basisMat)(row, col);
+                }
+            }
+        }
+
+        // Normalize the column.
+        MassInnerProduct(input, var, nrows, basisMat, work, work, factor);
+
+        if (factor > 1.0e-15) // zero tolerance
+        {
+            (*Rmat)(work, work) = sqrt(factor);
+
+            double inv_norm = 1.0 / (*Rmat)(work, work);
+            for (int row = 0; row < nrows; ++row)
+            {
+                (*basisMat)(row, work) *= inv_norm;
+            }
+        }
+    }
+}
+

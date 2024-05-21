@@ -60,4 +60,16 @@ void readVec(vector<int> &v, std::string file_name);
 // count the number of lines in a file
 int countNumLines(std::string file_name);
 
+// Inner product induced by the mass matrix.
+void MassInnerProduct(ROM_Options const& input, int const var, int const size,
+                      CAROM::Matrix* basisMat, int const id1, int const id2,
+                      double& inner_prod);
+
+// Gram-Schmidt orthonormalization w.r.t. the mass inner product.
+void MassGramSchmidt(ROM_Options const& input, int const var,
+                     CAROM::Matrix* basisMat);
+
+void MassGramSchmidt(ROM_Options const& input, int const var,
+                     CAROM::Matrix* basisMat, CAROM::Matrix* Rmat);
+
 #endif // MFEM_LAGHOS_UTILS
