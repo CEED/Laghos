@@ -17,3 +17,6 @@ tests/checkError
 tests/computeSpeedup
 tests/fileComparator
 tests/solutionComparator
+
+# Do not track dependencies
+dependencies
