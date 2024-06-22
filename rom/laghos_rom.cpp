@@ -363,11 +363,11 @@ CAROM::Matrix* ReadTemporalBasisROM(const int rank, const std::string filename, 
     // In libROM, a Matrix is always distributed row-wise. In this case, the global matrix is on each process.
     if (dim == -1)
     {
-        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0);
+        basis = (CAROM::Matrix*) reader.getTemporalBasis();
     }
     else
     {
-        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0, dim);
+        basis = (CAROM::Matrix*) reader.getTemporalBasis(dim);
     }
     temporalSize = basis->numRows();
 

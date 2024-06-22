@@ -1,0 +1,19 @@
+# Do not track objects or archives
+*.o
+*.orig
+run
+
+# Do not track backup files
+*~
+
+# Do not track log files
+*.log
+
+# Do not track executables
+laghos
+merge
+tests/basisComparator
+tests/checkError
+tests/computeSpeedup
+tests/fileComparator
+tests/solutionComparator

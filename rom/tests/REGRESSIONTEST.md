@@ -73,8 +73,8 @@ Only FOM solutions, ROM relative errors, and speed up are checked.
 
 ./runRegressionTests.sh -x -> Run all tests, but use the old regression test commands for the baseline and the new regression test commands for the user branch. This is useful if you would like to change the command-line for certain tests, but expect the same output. This can not be used with absolute tests.
 
-./runRegressionTests.sh -i "sedov_blast gresho_vortices" -> Run sedov_blast and gresho_vortices.
+./runRegressionTests.sh -i "sedov-blast gresho-vortices" -> Run sedov-blast and gresho-vortices.
 
 ./runRegressionTests.sh -e "taylor-green" -> Run all tests except taylor-green.
 
-./runRegressionTests.sh -i "sedov_blast" -e "taylor-green" -> Error. -i and -e can not be used simultaneously.
+./runRegressionTests.sh -i "sedov-blast" -e "taylor-green" -> Error. -i and -e can not be used simultaneously.
