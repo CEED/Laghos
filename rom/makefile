@@ -170,7 +170,7 @@ $(CONFIG_MK) $(MFEM_LIB_FILE):
 regtest: tests/fileComparator.cpp tests/basisComparator.cpp tests/solutionComparator.cpp tests/checkError.cpp tests/computeSpeedup.cpp
 	$(CXX) $(CXXFLAGS) -o tests/fileComparator tests/fileComparator.cpp
 	$(CXX) $(CXXFLAGS) -I$(LIBS_DIR)/libROM/lib -o tests/basisComparator tests/basisComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM
-	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -o tests/solutionComparator tests/solutionComparator.cpp $(LIBS)
+	$(CXX) $(CXXFLAGS) $(MFEM_INCFLAGS) -L$(LIBS_DIR)/libROM/build/lib -o tests/solutionComparator tests/solutionComparator.cpp -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM $(LIBS) -Wl,-rpath,${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libparmetis -L${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libparmetis -lparmetis -Wl,-rpath,${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libmetis -L${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libmetis -lmetis
 	$(CXX) $(CXXFLAGS) -o tests/checkError tests/checkError.cpp
 	$(CXX) $(CXXFLAGS) -o tests/computeSpeedup tests/computeSpeedup.cpp
 
