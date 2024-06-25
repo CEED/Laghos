@@ -94,12 +94,13 @@ void display_banner(ostream & os);
 int main(int argc, char *argv[])
 {
     // Initialize MPI.
-    MPI_Session mpi(argc, argv);
-    int myid = mpi.WorldRank();
-    int nprocs = mpi.WorldSize();
+    Mpi::Init();
+    const int myid = Mpi::WorldRank();
+    const int nprocs = Mpi::WorldSize();
+    const bool root = myid == 0;
 
     // Print the banner.
-    if (mpi.Root()) {
+    if (root) {
         display_banner(cout);
     }
 
@@ -344,11 +345,13 @@ int main(int argc, char *argv[])
     args.Parse();
     if (!args.Good())
     {
-        if (mpi.Root()) {
+        if (root) {
             args.PrintUsage(cout);
         }
         return 1;
     }
+
+    const std::string fileExt = GetRankString6(myid);
 
     std::string outputPath = "run";
     if (std::string(basename) != "") {
@@ -367,7 +370,7 @@ int main(int argc, char *argv[])
     romOptions.hyperreduce_basename = &hyperreduce_outputPath;
     romOptions.initSamples_basename = std::string(initSamples_basename);
 
-    if (mpi.Root()) {
+    if (root) {
         const char path_delim = '/';
         std::string::size_type pos = 0;
         do {
@@ -450,7 +453,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (mpi.Root()) {
+    if (root) {
         const char path_delim = '/';
         std::string::size_type pos = 0;
         do {
@@ -473,7 +476,7 @@ int main(int argc, char *argv[])
         parameterPointGreedySampler = UseROMDatabase(romOptions, myid, outputPath, greedyParam);
     }
 
-    if (mpi.Root())
+    if (root)
     {
         args.PrintOptions(cout);
     }
@@ -536,7 +539,7 @@ int main(int argc, char *argv[])
         if (p_assembly && dim == 1)
         {
             p_assembly = false;
-            if (mpi.Root())
+            if (root)
             {
                 cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
             }
@@ -547,7 +550,7 @@ int main(int argc, char *argv[])
     ParMesh* pmesh = NULL;
     if (fom_data)
     {
-        const int num_tasks = mpi.WorldSize();
+        const int num_tasks = nprocs;
         int unit = 1;
         int *nxyz = new int[dim];
         switch (partition_type)
@@ -800,7 +803,7 @@ int main(int argc, char *argv[])
         HYPRE_Int glob_size_l2 = L2FESpace->GlobalTrueVSize();
         HYPRE_Int glob_size_h1 = H1FESpace->GlobalTrueVSize();
 
-        if (mpi.Root())
+        if (root)
         {
             cout << "Number of kinematic (position, velocity) dofs: "
                  << glob_size_h1 << endl;
@@ -1173,18 +1176,16 @@ int main(int argc, char *argv[])
     if (outputSpaceTimeSolution)
     {
         // TODO: output FOM solution at every timestep, including initial state at t=0.
-        char fileExtension[100];
-        sprintf(fileExtension, ".%06d", myid);
 
-        std::string fullname = testing_parameter_outputPath + "/ST_Sol_Position" + fileExtension;
+        std::string fullname = testing_parameter_outputPath + "/ST_Sol_Position" + fileExt;
         ofs_STX.open(fullname.c_str(), std::ofstream::out);
         ofs_STX.precision(16);
 
-        fullname = testing_parameter_outputPath + "/ST_Sol_Velocity" + fileExtension;
+        fullname = testing_parameter_outputPath + "/ST_Sol_Velocity" + fileExt;
         ofs_STV.open(fullname.c_str(), std::ofstream::out);
         ofs_STV.precision(16);
 
-        fullname = testing_parameter_outputPath + "/ST_Sol_Energy" + fileExtension;
+        fullname = testing_parameter_outputPath + "/ST_Sol_Energy" + fileExt;
         ofs_STE.open(fullname.c_str(), std::ofstream::out);
         ofs_STE.precision(16);
 
@@ -1707,7 +1708,7 @@ int main(int argc, char *argv[])
                 {
                     oper->ResetQuadratureData();
                 }
-                if (mpi.Root()) {
+                if (root) {
                     cout << "Repeating step " << ti << endl;
                 }
                 if (steps < max_tsteps) {
@@ -1770,7 +1771,7 @@ int main(int argc, char *argv[])
                             sampler->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
                             if (samplerLast) samplerLast->SampleSolution(RKTime[RKidx], last_dt, real_pd, RKStages[RKidx]);
                         }
-                        if (mpi.Root()) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
+                        if (root) cout << "Runge-Kutta stage " << RKidx+1 << " sampled" << endl;
                     }
                 }
 
@@ -2049,7 +2050,7 @@ int main(int argc, char *argv[])
                 }
             }
 
-            if (mpi.Root())
+            if (root)
             {
                 if (last_step) {
                     std::ofstream outfile(testing_parameter_outputPath + "/num_steps");
@@ -2071,7 +2072,7 @@ int main(int argc, char *argv[])
                     MPI_Allreduce(&loc_norm, &tot_norm, 1, MPI_DOUBLE, MPI_SUM,
                                   pmesh->GetComm());
 
-                    if (mpi.Root())
+                    if (root)
                     {
                         cout << fixed;
                         cout << "step " << setw(5) << ti
@@ -2314,10 +2315,7 @@ int main(int argc, char *argv[])
         {
             if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
-                char tmp[100];
-                sprintf(tmp, ".%06d", myid);
-
-                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + fileExt;
 
                 std::ifstream checkfile(fullname);
                 if (checkfile.good())
@@ -2352,10 +2350,7 @@ int main(int argc, char *argv[])
             // solutions with varied basis size
             else if (romOptions.greedyErrorIndicatorType == varyBasisSize)
             {
-                char tmp[100];
-                sprintf(tmp, ".%06d", myid);
-
-                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + fileExt;
 
                 std::ifstream checkfile(fullname);
                 if (checkfile.good())
@@ -2395,17 +2390,17 @@ int main(int argc, char *argv[])
             }
             else if (romOptions.greedyErrorIndicatorType == fom)
             {
-                char tmp[100];
-                sprintf(tmp, ".%06d", myid);
-
-                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+                std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + fileExt;
 
                 std::ifstream checkfile(fullname);
                 if (checkfile.good())
                 {
-                    errorIndicator = PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Position_error_indicator", x_gf);
-                    errorIndicator = std::max(errorIndicator, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity_error_indicator", v_gf));
-                    errorIndicator = std::max(errorIndicator, PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy_error_indicator", e_gf));
+                    errorIndicator = PrintDiffParGridFunction(normtype, myid,
+                                     outputPath + "/Sol_Position_error_indicator", x_gf);
+                    errorIndicator = std::max(errorIndicator,
+                                              PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Velocity_error_indicator", v_gf));
+                    errorIndicator = std::max(errorIndicator,
+                                              PrintDiffParGridFunction(normtype, myid, outputPath + "/Sol_Energy_error_indicator", e_gf));
                     errorIndicatorVecSize = 1;
 
                     checkfile.close();
@@ -2451,11 +2446,11 @@ int main(int argc, char *argv[])
     }
     if (fom_data && (!rom_build_database || !rom_online))
     {
-        oper->PrintTimingData(mpi.Root(), steps);
+        oper->PrintTimingData(root, steps);
 
         const double energy_final = oper->InternalEnergy(*e_gf) +
                                     oper->KineticEnergy(*v_gf);
-        if (mpi.Root())
+        if (root)
         {
             cout << endl;
             cout << "Energy diff: " << scientific << setprecision(2)
@@ -2473,7 +2468,7 @@ int main(int argc, char *argv[])
             const double error_max = v_gf->ComputeMaxError(*v_coeff),
                          error_l1  = v_gf->ComputeL1Error(*v_coeff),
                          error_l2  = v_gf->ComputeL2Error(*v_coeff);
-            if (mpi.Root())
+            if (root)
             {
                 cout << "L_inf  error: " << error_max << endl
                      << "L_1    error: " << error_l1 << endl
@@ -2489,7 +2484,7 @@ int main(int argc, char *argv[])
             proc_pd[1] = (pd2_vdof >= 0) ? -(*S)(pd2_vdof) : 0.0;
             MPI_Reduce(proc_pd, real_pd, 2, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
-            if (mpi.Root())
+            if (root)
                 cout << "Penetration distance (upward, downward): " << real_pd[0] << ", " << real_pd[1] << endl;
         }
 
@@ -2501,7 +2496,7 @@ int main(int argc, char *argv[])
     }
 
     totalTimer.Stop();
-    if (mpi.Root()) {
+    if (root) {
         if(rom_online) cout << "Elapsed time for online preprocess: " << onlinePreprocessTimer.RealTime() << " sec\n";
         if(rom_restore) cout << "Elapsed time for restore phase: " << restoreTimer.RealTime() << " sec\n";
         if(rom_offline) cout << "Elapsed time for sampling in the offline phase: " << samplerTimer.RealTime() << " sec\n";
