@@ -431,59 +431,47 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
 
     if (nnls_use_lq)
     {
-        // Compute Q^T of the LQ factorization of G.
-        CAROM::Matrix* Qt_ptr;
-        Qt_ptr = Gt.qr_factorize();
+        // Compute LQ factorization of G.
+        std::vector<std::unique_ptr<CAROM::Matrix>> QR;
+        Gt.qr_factorize(QR);
+        const CAROM::Matrix & Qt = *QR[0]; // Q transpose
+        const CAROM::Matrix & R = *QR[1];  // L transpose
 
-        CAROM::Matrix Qt(Qt_ptr->getData(), Qt_ptr->numRows(),
-                         Qt_ptr->numColumns(), Qt_ptr->distributed(),
-                         false);
-
-        // Compute L of the factorization; L is lower triangular.
-        // G = L * Q --> L = G * Q^T
-        CAROM::Matrix L(Qt.numColumns(), Qt.numColumns(), false);
-        Gt.transposeMult(Qt, L);
-
-        // Check for nearly linearly dependent Q rows.
-        // This is achieved by checking the magnitude of the diagonal
-        // values of L.
+        // Check for nearly linearly dependent Q rows, by checking the
+        // magnitude of the diagonal values of L (equivalently, R).
         std::vector<int> row_ind;
-        for (int i = 0; i < L.numRows(); ++i)
+        for (int i = 0; i < R.numRows(); ++i)
         {
-            if (std::abs(L.item(i, i)) < 1e-12)
+            if (std::abs(R(i, i)) < 1e-12)
             {
                 row_ind.push_back(i);
                 std::cout << i << ", ";
             }
         }
-        std::cout << "\n";
-        std::cout << "Found " << row_ind.size() << " / " <<
-            L.numRows() << " nearly linearly dependent constraints.\n";
+        std::cout << "\nFound " << row_ind.size() << " / " <<
+            R.numRows() << " nearly linearly dependent constraints.\n";
 
         // Compute the RHS vector.
         CAROM::Vector rhs_ub(Qt.numColumns(), false);
         Qt.transposeMult(w, rhs_ub);
 
         // Compute the new RHS tolerance values.
-        const double delta = 1.0e-11;
+        double const delta = 1.0e-11;
         CAROM::Vector delta_new(rhs_ub.dim(), false);
         for (int i = 0; i < delta_new.dim(); ++i)
         {
-            double denominator = (i + 1) * std::abs(L.item(i, i));
+            double denominator = (i + 1) * std::abs(R(i, i));
             if (std::abs(denominator) < delta)
                 delta_new(i) = 1.0;
             else
                 delta_new(i) = delta / denominator;
 
+
             for (int j = i + 1; j < delta_new.dim(); ++j)
             {
-                denominator = (j + 1) * std::abs(L.item(j, i));
-
-                double temp;
-                if (std::abs(denominator) < delta)
-                    temp = 1.0;
-                else
-                    temp = delta / denominator;
+                denominator = (j + 1) * std::abs(R(i, j));  // L(j, i)
+                double const temp = std::abs(denominator) < delta ? 1.0 :
+                    delta / denominator;
 
                 if (temp < delta_new(i))
                     delta_new(i) = temp;
@@ -500,8 +488,6 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
 
         // Call the NNLS solver.
         nnls.solve_parallel_with_scalapack(Qt, rhs_lb, rhs_ub, sol);
-
-        delete Qt_ptr;
     }
     else
     {
