@@ -611,8 +611,9 @@ int main(int argc, char *argv[])
 
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x_gf_opt;
-         adv.TransferToLagr(rho0_gf, v_gf, hydro.GetIntRule(),
-                            hydro.GetRhoDetJw(), e_gf);
+         adv.TransferToLagr(rho0_gf, v_gf,
+                            hydro.GetIntRule(), hydro.GetRhoDetJw(),
+                            hydro.GetIntRule_b(), hydro.GetRhoDetJ_be(), e_gf);
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.

@@ -197,8 +197,10 @@ public:
    virtual MemoryClass GetMemoryClass() const
    { return Device::GetMemoryClass(); }
 
-   const IntegrationRule &GetIntRule() { return ir; }
-   Vector &GetRhoDetJw() { return qdata.rho0DetJ0w; }
+   const IntegrationRule &GetIntRule()   { return ir; }
+   const IntegrationRule &GetIntRule_b() { return b_ir; }
+   Vector &GetRhoDetJw()   { return qdata.rho0DetJ0w; }
+   Vector &GetRhoDetJ_be() { return qdata.rho0DetJ0_be; }
 
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
