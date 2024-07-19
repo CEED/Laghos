@@ -245,19 +245,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          inv.Factor();
          inv.GetInverseMatrix(Me_inv(e));
       }
+
       // Standard assembly for the velocity mass matrix.
       VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
       Mv.AddDomainIntegrator(vmi);
-
       Mv.BilinearForm::operator=(0.0);
-
       if (BC_strong == false)
       {
          auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
          nvmi->SetIntRule(&b_ir);
          Mv.AddBdrFaceIntegrator(nvmi);
       }
-
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
    }
@@ -561,6 +559,28 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
    H1.GetParMesh()->NewNodes(x_gf, false);
 }
 
+void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
+{
+   // Assumption is Mv was connected to the same Coefficient from the input.
+   Mv.Update();
+   Mv.BilinearForm::operator=(0.0);
+   Mv.Assemble();
+   Mv_spmat_copy = Mv.SpMat();
+
+   MassIntegrator mi(rho_coeff, &ir);
+   for (int e = 0; e < NE; e++)
+   {
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+      const int attr = pmesh->GetAttribute(e);
+
+      mi.AssembleElementMatrix(fe, Tr, Me(e));
+      DenseMatrixInverse inv(&Me(e));
+      inv.Factor();
+      inv.GetInverseMatrix(Me_inv(e));
+   }
+}
+
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
    UpdateMesh(S);
@@ -584,7 +604,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
-   DensityIntegrator di(qdata);
+   DensityIntegrator di(qdata.rho0DetJ0w);
    di.SetIntRule(&ir);
    for (int e = 0; e < NE; e++)
    {

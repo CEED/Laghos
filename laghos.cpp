@@ -81,6 +81,7 @@
 //
 // ALE test:
 // mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -tf 1.5 -s 7 -fa -vs 20 -vis
+// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -tf 1.5 -s 7 -fa -vs 20 -vis -ale 0.5
 //   source at (1.5, 1.5)
 
 
@@ -89,10 +90,12 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 #include "laghos_remesh.hpp"
+#include "laghos_remap.hpp"
 
 using std::cout;
 using std::endl;
 using namespace mfem;
+using namespace hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
@@ -419,6 +422,7 @@ int main(int argc, char *argv[])
    ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
+   GridFunctionCoefficient rho0_gf_coeff(&rho0_gf);
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -464,7 +468,7 @@ int main(int argc, char *argv[])
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace,
                                                 ess_tdofs, BC_strong,
-                                                rho0_coeff, rho0_gf,
+                                                rho0_gf_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
@@ -592,11 +596,29 @@ int main(int argc, char *argv[])
                  << "ALE step [" << ale_cnt << "] at " << t << ": " << endl;
          }
 
-         hydrodynamics::OptimizeMesh(x_gf);
+         ParGridFunction x_gf_opt(&H1FESpace);
+         OptimizeMesh(x_gf, x_gf_opt);
+
+         // Setup and initialize the remap operator.
+         const double cfl_remap = 0.1;
+         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap);
+
+         adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
+                          hydro.GetRhoDetJw(), e_gf);
+
+         // Remap to x_gf_opt..
+         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs);
+
+         // Move the mesh to x0 and transfer the result from the remap.
+         x_gf = x_gf_opt;
+         adv.TransferToLagr(rho0_gf, v_gf, hydro.GetIntRule(),
+                            hydro.GetRhoDetJw(), e_gf);
+
+         // Update mass matrices.
+         // Above we changed rho0_gf to reflect the mass matrices Coefficient.
+         hydro.UpdateMassMatrices(rho0_gf_coeff);
 
          ale_cnt++;
-
-         MFEM_ABORT("todo ale");
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
