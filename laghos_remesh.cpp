@@ -149,9 +149,9 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       socketstream vis1, vis2, vis3;
       common::VisualizeField(vis1, "localhost", 19916, fit_marker_vis_gf,
                              "Target positions (DOFS with value 1)",
-                             0, 0, 400, 400, (dim == 2) ? "Rjm" : "");
+                             0, 600, 400, 400, (dim == 2) ? "Rjm" : "");
       common::VisualizeMesh(vis2, "localhost", 19916, *pmesh, "Initial mesh",
-                            400, 0, 400, 400, "me");
+                            400, 600, 400, 400, "me");
    }
 
    Array<const AnalyticSurface *> surf_array;
@@ -172,7 +172,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       surfaces.ConvertParamCoordToPhys(coord_t, coord_x_in);
       socketstream vis1;
       common::VisualizeMesh(vis1, "localhost", 19916, *pmesh, "Mesh x->t->x",
-                            400, 0, 400, 400, "me");
+                            400, 600, 400, 400, "me");
       coord_x_in = x0;
    }
 
@@ -217,7 +217,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       coord_x_in = coord_x_out;
       socketstream vis2;
       common::VisualizeMesh(vis2, "localhost", 19916, *pmesh, "Final mesh",
-                            800, 0, 400, 400, "me");
+                            800, 600, 400, 400, "me");
       coord_x_in = x0;
    }
 

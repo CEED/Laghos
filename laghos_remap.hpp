@@ -28,6 +28,15 @@ namespace hydrodynamics
 class SolutionMover;
 struct MaterialData;
 
+class InterpolationRemap
+{
+   public:
+   InterpolationRemap() { }
+
+   void Remap(const ParGridFunction &source, const ParGridFunction &x_new,
+              ParGridFunction &interpolated);
+};
+
 // Performs the full remap advection loop.
 class RemapAdvector
 {
@@ -37,6 +46,7 @@ private:
    L2_FECollection fec_L2;
    H1_FECollection fec_H1;
    ParFiniteElementSpace pfes_L2, pfes_H1;
+   bool remap_v;
 
    const double cfl_factor;
 
@@ -51,7 +61,8 @@ private:
    Vector x0;
 
 public:
-   RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl);
+   RemapAdvector(const ParMesh &m, int order_v, int order_e,
+                 double cfl, bool remap_vel);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
@@ -72,6 +83,8 @@ public:
 class AdvectorOper : public TimeDependentOperator
 {
 protected:
+   bool remap_v = true;
+
    const Vector &x0;
    Vector &x_now;
    const Array<int> &v_ess_tdofs;
@@ -101,6 +114,8 @@ public:
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,
                 ParFiniteElementSpace &pfes_L2);
+
+   void SetVelocityRemap(bool flag) { remap_v = flag; }
 
    // Single RK stage solve for all fields contained in U.
    virtual void Mult(const Vector &U, Vector &dU) const;

@@ -599,21 +599,32 @@ int main(int argc, char *argv[])
          ParGridFunction x_gf_opt(&H1FESpace);
          OptimizeMesh(x_gf, x_gf_opt);
 
+         const bool remap_v_gslib = true;
+         const bool remap_v_adv   = !remap_v_gslib;
+
          // Setup and initialize the remap operator.
          const double cfl_remap = 0.1;
-         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap);
+         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap, remap_v_adv);
 
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
 
-         // Remap to x_gf_opt..
+         // Remap to x_gf_opt.
          adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs);
+
+         ParGridFunction v_new(&H1FESpace);
+         if (remap_v_gslib)
+         {
+            InterpolationRemap interp;
+            interp.Remap(v_gf, x_gf_opt, v_new);
+         }
 
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x_gf_opt;
          adv.TransferToLagr(rho0_gf, v_gf,
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),
                             hydro.GetIntRule_b(), hydro.GetRhoDetJ_be(), e_gf);
+         if (remap_v_gslib) { v_gf = v_new; }
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.

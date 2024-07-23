@@ -24,13 +24,70 @@ namespace mfem
 namespace hydrodynamics
 {
 
+void InterpolationRemap::Remap(const ParGridFunction &source,
+                               const ParGridFunction &x_new,
+                               ParGridFunction &interpolated)
+{
+   if (source.ParFESpace()->GetMyRank() == 0)
+   {
+      std::cout << "--- Interpolation remap of velocity." << std::endl;
+   }
+
+   ParMesh &pmesh_src = *source.ParFESpace()->GetParMesh();
+   ParFiniteElementSpace &pfes_tgt = *interpolated.ParFESpace();
+
+   const int dim = pmesh_src.Dimension();
+   MFEM_VERIFY(dim > 1, "Interpolation remap works only in 2D and 3D.");
+
+   const int NE = pmesh_src.GetNE();
+   const int nsp = interpolated.ParFESpace()->GetFE(0)->GetNodes().GetNPoints();
+   const int ncomp = source.VectorDim();
+
+   // Generate list of points where the grid function will be evaluated.
+   Vector vxyz = x_new;
+
+   // vxyz.SetSize(nsp * NE * dim);
+   // for (int e = 0; e < NE; e++)
+   // {
+   //    const IntegrationRule &ir = pfes_tgt.GetFE(e)->GetNodes();
+
+   //    // Transformation of the element with the new coordinates.
+   //    IsoparametricTransformation Tr;
+   //    pmesh_src.GetElementTransformation(e, x_new, &Tr);
+
+   //    // Node positions of the interpolated f-n (new element coordinates).
+   //    DenseMatrix pos_target_nodes;
+   //    Tr.Transform(ir, pos_target_nodes);
+   //    Vector rowx(vxyz.GetData() + e*nsp, nsp),
+   //           rowy(vxyz.GetData() + e*nsp + NE*nsp, nsp), rowz;
+   //    if (dim == 3)
+   //    {
+   //       rowz.SetDataAndSize(vxyz.GetData() + e*nsp + 2*NE*nsp, nsp);
+   //    }
+   //    pos_target_nodes.GetRow(0, rowx);
+   //    pos_target_nodes.GetRow(1, rowy);
+   //    if (dim == 3) { pos_target_nodes.GetRow(2, rowz); }
+   // }
+
+   const int nodes_cnt = vxyz.Size() / dim;
+
+   // Evaluate source grid function.
+   Vector interp_vals(ncomp * nodes_cnt);
+   FindPointsGSLIB finder(pfes_tgt.GetComm());
+   finder.Setup(pmesh_src);
+   finder.Interpolate(vxyz, source, interp_vals);
+
+   interpolated = interp_vals;
+}
+
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                             double cfl)
+                             double cfl, bool remap_vel)
    : pmesh(m, true), dim(pmesh.Dimension()),
      fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
      fec_H1(order_v, pmesh.Dimension()),
      pfes_L2(&pmesh, &fec_L2, 1),
      pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
+     remap_v(remap_vel),
      cfl_factor(cfl),
      offsets(4), S(),
      v(), rho(), e(), x0()
@@ -84,6 +141,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    ParFiniteElementSpace pfes_H1_s(&pmesh, pfes_H1.FEColl(), 1);
    AdvectorOper oper(S.Size(), x0, ess_tdofs, u, rho,
                      pfes_H1, pfes_H1_s, pfes_L2);
+   oper.SetVelocityRemap(remap_v);
    ode_solver.Init(oper);
 
    // Compute some time step [mesh_size / speed].
@@ -92,7 +150,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    {
       h_min = std::min(h_min, pmesh.GetElementSize(k));
    }
-   double v_max = 0.0;
+   double u_max = 0.0;
    const int s = vsize_H1 / dim;
 
    for (int i = 0; i < s; i++)
@@ -102,20 +160,17 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       {
          vel += u(i+j*s)*u(i+j*s);
       }
-      v_max = std::max(v_max, vel);
+      u_max = std::max(u_max, vel);
    }
 
-   double v_loc = v_max, h_loc = h_min;
-   MPI_Allreduce(&v_loc, &v_max, 1, MPI_DOUBLE, MPI_MAX, pfes_H1.GetComm());
+   double v_loc = u_max, h_loc = h_min;
+   MPI_Allreduce(&v_loc, &u_max, 1, MPI_DOUBLE, MPI_MAX, pfes_H1.GetComm());
    MPI_Allreduce(&h_loc, &h_min, 1, MPI_DOUBLE, MPI_MIN, pfes_H1.GetComm());
 
-   if (v_max == 0.0) // No need to change the fields.
-   {
-      return;
-   }
+   if (u_max == 0.0) { return; } // No need to change the fields.
 
-   v_max = std::sqrt(v_max);
-   double dt = cfl_factor * h_min / v_max;
+   u_max = std::sqrt(u_max);
+   double dt = cfl_factor * h_min / u_max;
 
    double t = 0.0;
    bool last_step = false;
@@ -280,42 +335,46 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    // Arrangement: interface (1), velocity (dim), density (1), energy (1).
    Vector *U_ptr = const_cast<Vector *>(&U);
 
-   // Solver for H1 fields (no monotonicity).
-   HypreSmoother prec;
-   prec.SetType(HypreSmoother::Jacobi, 1);
-   CGSolver lin_solver(pfes_H1.GetComm());
-   lin_solver.SetPreconditioner(prec);
-   lin_solver.SetRelTol(1e-8);
-   lin_solver.SetAbsTol(0.0);
-   lin_solver.SetMaxIter(100);
-   lin_solver.SetPrintLevel(0);
-
-   // Velocity remap.
-   Mr_H1.BilinearForm::operator=(0.0);
-   Mr_H1.Assemble();
-   Kr_H1.BilinearForm::operator=(0.0);
-   Kr_H1.Assemble();
-   HypreParMatrix *A = Mr_H1.ParallelAssemble();
-   lin_solver.SetOperator(*A);
-   Vector v, d_v, rhs_v(dofs_h1*dim);
-   v.MakeRef(*U_ptr, 0, dofs_h1*dim);
-   d_v.MakeRef(dU,   0, dofs_h1*dim);
-   Vector v_comp, rhs_v_comp;
-   for (int d = 0; d < dim; d++)
+   if (remap_v)
    {
-      v_comp.MakeRef(v, d * dofs_h1, dofs_h1);
-      rhs_v_comp.MakeRef(rhs_v, d * dofs_h1, dofs_h1);
-      Kr_H1.Mult(v_comp, rhs_v_comp);
+      std::cout << "Solving!" << std::endl;
+      // Solver for H1 fields (no monotonicity).
+      HypreSmoother prec;
+      prec.SetType(HypreSmoother::Jacobi, 1);
+      CGSolver lin_solver(pfes_H1.GetComm());
+      lin_solver.SetPreconditioner(prec);
+      lin_solver.SetRelTol(1e-8);
+      lin_solver.SetAbsTol(0.0);
+      lin_solver.SetMaxIter(100);
+      lin_solver.SetPrintLevel(0);
+
+      // Velocity remap.
+      Mr_H1.BilinearForm::operator=(0.0);
+      Mr_H1.Assemble();
+      Kr_H1.BilinearForm::operator=(0.0);
+      Kr_H1.Assemble();
+      HypreParMatrix *A = Mr_H1.ParallelAssemble();
+      lin_solver.SetOperator(*A);
+      Vector v, d_v, rhs_v(dofs_h1*dim);
+      v.MakeRef(*U_ptr, 0, dofs_h1*dim);
+      d_v.MakeRef(dU,   0, dofs_h1*dim);
+      Vector v_comp, rhs_v_comp;
+      for (int d = 0; d < dim; d++)
+      {
+         v_comp.MakeRef(v, d * dofs_h1, dofs_h1);
+         rhs_v_comp.MakeRef(rhs_v, d * dofs_h1, dofs_h1);
+         Kr_H1.Mult(v_comp, rhs_v_comp);
+      }
+      const Operator *P_v = pfes_H1.GetProlongationMatrix();
+      Vector RHS_V(P_v->Width()), X_V(P_v->Width());
+      P_v->MultTranspose(rhs_v, RHS_V);
+      X_V = 0.0;
+      OperatorHandle M_elim;
+      //M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
+      //Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
+      lin_solver.Mult(RHS_V, X_V);
+      P_v->Mult(X_V, d_v);
    }
-   const Operator *P_v = pfes_H1.GetProlongationMatrix();
-   Vector RHS_V(P_v->Width()), X_V(P_v->Width());
-   P_v->MultTranspose(rhs_v, RHS_V);
-   X_V = 0.0;
-   OperatorHandle M_elim;
-   //M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
-   //Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
-   lin_solver.Mult(RHS_V, X_V);
-   P_v->Mult(X_V, d_v);
 
    Vector el_min(NE), el_max(NE);
 
