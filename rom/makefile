@@ -135,10 +135,10 @@ TEST_FILES = tests/basisComparator.cpp tests/fileComparator.cpp tests/solutionCo
 	cd $(<D); $(Ccc) -c $(<F)
 
 laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM
+	$(CCC) -o laghos $(OBJECT_FILES) $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM -Wl,-rpath,${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libparmetis -L${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libparmetis -lparmetis -Wl,-rpath,${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libmetis -L${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libmetis -lmetis
 
 merge: merge.o $(CONFIG_MK) $(MFEM_LIB_FILE)
-				$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM
+	$(CCC) -o merge merge.o laghos_utils.o $(LIBS) -Wl,-rpath,$(LIBS_DIR)/libROM/build/lib -L$(LIBS_DIR)/libROM/build/lib -lROM -Wl,-rpath,${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libparmetis -L${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libparmetis -lparmetis -Wl,-rpath,${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libmetis -L${LIBS_DIR}/libROM/dependencies/parmetis-4.0.3/build/lib/libmetis -lmetis
 
 all: laghos merge
 
