@@ -106,7 +106,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  double ftz,
                                                  const int oq,
                                                  double bc_penalty,
-                                                 double perimeter) :
+                                                 double perimeter,
+                                                 AnalyticCompositeSurface &surf,
+                                                 const Array<int> &bes) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -143,6 +145,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1), Force_be(&L2, &H1),
+   surfaces(surf), be_to_surface(bes),
    wall_bc_penalty(bc_penalty), C_I(0.0),
    rho0_max(rho0_gf.Max()), perimeter(perimeter),
    ForcePA(nullptr), VMassPA(nullptr), EMassPA(nullptr),
@@ -499,6 +502,12 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 
 void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
 {
+   auto rho0_gfc = dynamic_cast<GridFunctionCoefficient *>(&rho_coeff);
+   rho0_max = rho0_gfc->GetGridFunction()->Max();
+   MPI_Allreduce(MPI_IN_PLACE, &rho0_max, 1,
+                 MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
+   UpdateBdrQuadratureData();
+
    // Assumption is Mv was connected to the same Coefficient from the input.
    Mv.Update();
    Mv.BilinearForm::operator=(0.0);
@@ -510,7 +519,6 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &Tr = *L2.GetElementTransformation(e);
-      const int attr = pmesh->GetAttribute(e);
 
       mi.AssembleElementMatrix(fe, Tr, Me(e));
       DenseMatrixInverse inv(&Me(e));
@@ -805,8 +813,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    qdata_is_current = true;
    forcemat_is_assembled = false;
 
-   if (dim > 1 && p_assembly) { return qupdate->UpdateQuadratureData(S, qdata); }
-
    // This code is only for the 1D/FA mode
    timer.sw_qdata.Start();
    const int nqp = ir.GetNPoints();
@@ -994,32 +1000,44 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
          double penalty_force = wall_bc_penalty * C_I * rho * cs;
 
+         // Get the face normal vector.
          Vector nor(dim);
          CalcOrtho(b_face_tr->Jacobian(), nor);
-         double nor_norm = sqrt(nor * nor);
+         nor /= sqrt(nor * nor);
 
-         Vector tn(nor);
-         tn /= nor_norm;
+         // Get the surface normal vector.
+         int surf_id = be_to_surface[be];
+         if (surf_id >= 0)
+         {
+            const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
+            Vector pos(2), nor_s(2);
+            tr_el.Transform(b_face_tr->GetElement1IntPoint(), pos);
+            surf->NormalVector(pos.GetData(), nor_s.GetData());
+
+            if (nor * nor_s < 0.0) { nor_s *= -1.0; }
+            nor = nor_s;
+         }
+         const double nor_norm = sqrt(nor * nor);
 
          Vector vShape;
          v.GetVectorValue(tr_el, tr_el.GetIntPoint(), vShape);
          double vDotn = 0.0;
          for (int d = 0; d < dim; d++)
          {
-            vDotn += vShape(d) * nor(d) / nor_norm;
+            vDotn += vShape(d) * nor(d);
          }
 
          DenseMatrix stress(dim);
          stress = 0.0;
          for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
          Vector weightedNormalStress(dim);
-         stress.Mult(tn, weightedNormalStress);
+         stress.Mult(nor, weightedNormalStress);
 
          for (int d = 0; d < dim; d++)
          {
             qdata.be_force_data(be, q, d) =
                   ip_f.weight * nor_norm *
-                  (vDotn * tn(d) * penalty_force - weightedNormalStress(d));
+                  (vDotn * nor(d) * penalty_force - weightedNormalStress(d));
          }
       }
    }
@@ -1034,8 +1052,6 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
       auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
       if (b_face_tr == nullptr) { continue; }
 
-      const int attr = pmesh->GetBdrElement(be)->GetAttribute();
-
       for (int q = 0; q < nqp_be; q++)
       {
          const IntegrationPoint &ip_f = b_ir.IntPoint(q);
@@ -1046,20 +1062,32 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
                                 std::pow(tr_el.Weight(), 1.0/dim);
          penalty_mass *= rho0_max * perimeter;
 
-         Vector nor(dim);
-         CalcOrtho(b_face_tr->Jacobian(), nor);
-         double nor_norm = sqrt(nor * nor);
+         // Get the face normal vector.
+         Vector nor_f(dim);
+         CalcOrtho(b_face_tr->Jacobian(), nor_f);
+         nor_f /= sqrt(nor_f * nor_f);
 
-         Vector tn(nor);
-         tn /= nor_norm;
+         // Get the surface normal vector.
+         int surf_id = be_to_surface[be];
+         if (surf_id >= 0)
+         {
+            const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
+            Vector pos(2), nor_s(2);
+            tr_el.Transform(b_face_tr->GetElement1IntPoint(), pos);
+            surf->NormalVector(pos.GetData(), nor_s.GetData());
 
+            if (nor_f * nor_s < 0.0) { nor_s *= -1.0; }
+            nor_f = nor_s;
+         }
+
+         const double nor_norm = sqrt(nor_f * nor_f);
          for (int dx = 0; dx < dim; dx++)
          {
             for (int dy = 0; dy < dim; dy++)
             {
                qdata.be_mass_data(dx, dy, be * nqp_be + q) =
                      ip_f.weight * nor_norm *
-                     tn(dx) * tn(dy) * penalty_mass;
+                     nor_f(dx) * nor_f(dy) * penalty_mass;
             }
          }
       }

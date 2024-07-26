@@ -143,6 +143,9 @@ protected:
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force, Force_be;
 
+   AnalyticCompositeSurface &surfaces;
+   const Array<int> &be_to_surface;
+
    double wall_bc_penalty, C_I;
    double rho0_max, perimeter;
 
@@ -188,7 +191,9 @@ public:
                            const bool visc, const bool vort, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q,
-                           double bc_penalty, double perimeter);
+                           double bc_penalty, double perimeter,
+                           AnalyticCompositeSurface &surf,
+                           const Array<int> &bes);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
