@@ -202,105 +202,67 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    UpdateBdrQuadratureData();
 
-   if (p_assembly)
+   // Standard local assembly and inversion for energy mass matrices.
+   // 'Me' is used in the computation of the internal energy
+   // which is used twice: once at the start and once at the end of the run.
+   MassIntegrator mi(rho0_coeff, &ir);
+   for (int e = 0; e < NE; e++)
    {
-      qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
-                            &timer, gamma_gf, ir, H1, L2);
-      ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
-      VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
-      EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
-      // Inside the above constructors for mass, there is reordering of the mesh
-      // nodes which is performed on the host. Since the mesh nodes are a
-      // subvector, so we need to sync with the rest of the base vector (which
-      // is assumed to be in the memory space used by the mfem::Device).
-      H1.GetParMesh()->GetNodes()->ReadWrite();
-      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-      // we must enforce v_x/y/z = 0 for the velocity components.
-      const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
-      Array<int> ess_bdr(bdr_attr_max);
-      for (int c = 0; c < dim; c++)
-      {
-         ess_bdr = 0;
-         ess_bdr[c] = 1;
-         H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-         c_tdofs[c].Read();
-      }
-      X.UseDevice(true);
-      B.UseDevice(true);
-      rhs.UseDevice(true);
-      e_rhs.UseDevice(true);
+      DenseMatrixInverse inv(&Me(e));
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+      mi.AssembleElementMatrix(fe, Tr, Me(e));
+      inv.Factor();
+      inv.GetInverseMatrix(Me_inv(e));
    }
-   else
-   {
-      // Standard local assembly and inversion for energy mass matrices.
-      // 'Me' is used in the computation of the internal energy
-      // which is used twice: once at the start and once at the end of the run.
-      MassIntegrator mi(rho0_coeff, &ir);
-      for (int e = 0; e < NE; e++)
-      {
-         DenseMatrixInverse inv(&Me(e));
-         const FiniteElement &fe = *L2.GetFE(e);
-         ElementTransformation &Tr = *L2.GetElementTransformation(e);
-         mi.AssembleElementMatrix(fe, Tr, Me(e));
-         inv.Factor();
-         inv.GetInverseMatrix(Me_inv(e));
-      }
 
-      // Standard assembly for the velocity mass matrix.
-      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
-      Mv.AddDomainIntegrator(vmi);
-      Mv.BilinearForm::operator=(0.0);
-      if (BC_strong == false)
-      {
-         auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
-         nvmi->SetIntRule(&b_ir);
-         Mv.AddBdrFaceIntegrator(nvmi);
-      }
-      Mv.Assemble();
-      Mv_spmat_copy = Mv.SpMat();
+   // Standard assembly for the velocity mass matrix.
+   VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
+   Mv.AddDomainIntegrator(vmi);
+   Mv.BilinearForm::operator=(0.0);
+   if (BC_strong == false)
+   {
+      auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
+      nvmi->SetIntRule(&b_ir);
+      Mv.AddBdrFaceIntegrator(nvmi);
    }
+   Mv.Assemble();
+   Mv_spmat_copy = Mv.SpMat();
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
    int Ne, ne = NE;
    double Volume, vol = 0.0;
-   if (dim > 1 && p_assembly)
+   const int NQ = ir.GetNPoints();
+   Vector rho_vals(NQ);
+   for (int e = 0; e < NE; e++)
    {
-      Rho0DetJ0Vol(dim, NE, ir, pmesh, L2, rho0_gf, qdata, vol);
-   }
-   else
-   {
-      const int NQ = ir.GetNPoints();
-      Vector rho_vals(NQ);
-      for (int e = 0; e < NE; e++)
+      rho0_gf.GetValues(e, ir, rho_vals);
+      ElementTransformation &Tr = *H1.GetElementTransformation(e);
+      for (int q = 0; q < NQ; q++)
       {
-         rho0_gf.GetValues(e, ir, rho_vals);
-         ElementTransformation &Tr = *H1.GetElementTransformation(e);
-         for (int q = 0; q < NQ; q++)
-         {
-            const IntegrationPoint &ip = ir.IntPoint(q);
-            Tr.SetIntPoint(&ip);
-            DenseMatrixInverse Jinv(Tr.Jacobian());
-            Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-            const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
-            qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
-         }
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         DenseMatrixInverse Jinv(Tr.Jacobian());
+         Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
+         const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
+         qdata.rho0DetJ0w(e*NQ + q) = rho0DetJ0 * ir.IntPoint(q).weight;
       }
-      for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
+   }
+   for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
 
-      for (int be = 0; be < NBE; be++)
+   for (int be = 0; be < NBE; be++)
+   {
+      int b_nqp = b_ir.GetNPoints();
+      auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
+      if (b_face_tr == nullptr) { continue; }
+      for (int q = 0; q < b_nqp; q++)
       {
-         int b_nqp = b_ir.GetNPoints();
-         auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
-         if (b_face_tr == nullptr) { continue; }
-         for (int q = 0; q < b_nqp; q++)
-         {
-            const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-            b_face_tr->SetAllIntPoints(&ip_f);
-            ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
-            qdata.rho0DetJ0_be(be * b_nqp + q) =
-                  tr_el.Weight() * rho0_gf.GetValue(tr_el);
-         }
+         const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+         b_face_tr->SetAllIntPoints(&ip_f);
+         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+         qdata.rho0DetJ0_be(be * b_nqp + q) =
+             tr_el.Weight() * rho0_gf.GetValue(tr_el);
       }
    }
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
@@ -314,45 +276,21 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       case Geometry::TETRAHEDRON: qdata.h0 = pow(6.0 * Volume / Ne, 1./3.); break;
       default: MFEM_ABORT("Unknown zone type!");
    }
-   qdata.h0 /= (double) H1.GetOrder(0); 
+   qdata.h0 /= (double) H1.GetOrder(0);
 
-   if (p_assembly)
-   {
-      // Setup the preconditioner of the velocity mass operator.
-      // BC are handled by the VMassPA, so ess_tdofs here can be empty.
-      Array<int> empty_tdofs;
-      VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), empty_tdofs);
-      CG_VMass.SetPreconditioner(*VMassPA_Jprec);
+   ForceIntegrator *fi = new ForceIntegrator(qdata);
+   fi->SetIntRule(&ir);
+   Force.AddDomainIntegrator(fi);
+   // Make a dummy assembly to figure out the sparsity.
+   Force.Assemble(0);
+   Force.Finalize(0);
 
-      CG_VMass.SetOperator(*VMassPA);
-      CG_VMass.SetRelTol(cg_rel_tol);
-      CG_VMass.SetAbsTol(0.0);
-      CG_VMass.SetMaxIter(cg_max_iter);
-      CG_VMass.SetPrintLevel(-1);
-
-      CG_EMass.SetOperator(*EMassPA);
-      CG_EMass.iterative_mode = false;
-      CG_EMass.SetRelTol(cg_rel_tol);
-      CG_EMass.SetAbsTol(0.0);
-      CG_EMass.SetMaxIter(cg_max_iter);
-      CG_EMass.SetPrintLevel(-1);
-   }
-   else
-   {
-      ForceIntegrator *fi = new ForceIntegrator(qdata);
-      fi->SetIntRule(&ir);
-      Force.AddDomainIntegrator(fi);
-      // Make a dummy assembly to figure out the sparsity.
-      Force.Assemble(0);
-      Force.Finalize(0);
-
-      auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
-      vpb->SetIntRule(&b_ir);
-      Force_be.AddBdrFaceIntegrator(vpb);
-      // Make a dummy assembly to figure out the sparsity.
-      Force_be.Assemble(0);
-      Force_be.Finalize(0);
-   }
+   auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
+   vpb->SetIntRule(&b_ir);
+   Force_be.AddBdrFaceIntegrator(vpb);
+   // Make a dummy assembly to figure out the sparsity.
+   Force_be.Assemble(0);
+   Force_be.Finalize(0);
 }
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
@@ -1095,6 +1033,8 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
    {
       auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
       if (b_face_tr == nullptr) { continue; }
+
+      const int attr = pmesh->GetBdrElement(be)->GetAttribute();
 
       for (int q = 0; q < nqp_be; q++)
       {

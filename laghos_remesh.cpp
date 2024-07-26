@@ -28,6 +28,7 @@ namespace hydrodynamics
 IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
 void OptimizeMesh(ParGridFunction &coord_x_in,
+                  AnalyticCompositeSurface &surfaces,
                   ParGridFunction &coord_x_out)
 {
    const int myid = coord_x_in.ParFESpace()->GetMyRank();
@@ -69,14 +70,13 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    MFEM_VERIFY(min_detJ > 0.0, "Inverted initial meshes are not supported.");
 
    // Mark which nodes to move tangentially.
-   Array<bool> fit_marker_top(pfes_mesh->GetNDofs());
-   Array<bool> fit_marker_right(pfes_mesh->GetNDofs());
+
+   const Array<bool> &fit_marker_top = surfaces.GetSurfaceID(0)->GetMarker();
+   const Array<bool> &fit_marker_right = surfaces.GetSurfaceID(1)->GetMarker();
    Array<bool> fit_marker_2(pfes_mesh->GetNDofs());
    ParFiniteElementSpace pfes_scalar(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction fit_marker_vis_gf(&pfes_scalar);
    Array<int> vdofs, ess_vdofs;
-   fit_marker_top   = false;
-   fit_marker_right = false;
    fit_marker_2     = false;
    fit_marker_vis_gf = 0.0;
    for (int e = 0; e < pmesh->GetNBE(); e++)
@@ -92,7 +92,6 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
          {
             // Eliminate y component.
             ess_vdofs.Append(vdofs[j+nd]);
-            fit_marker_top[vdofs[j]] = true;
          }
       }
       // Right boundary.
@@ -102,7 +101,6 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
          {
             // Eliminate y component.
             ess_vdofs.Append(vdofs[j+nd]);
-            fit_marker_right[vdofs[j]] = true;
          }
       }
       else if (attr == 3)
@@ -154,17 +152,6 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
                             400, 600, 400, 400, "me");
    }
 
-   Array<const AnalyticSurface *> surf_array;
-   Line_Top line_top(fit_marker_top);
-   Curve_Sine_Top curve_top(fit_marker_top);
-   Line_Right line_right(fit_marker_right);
-   Curve_Sine_Right curve_right(fit_marker_right);
-   surf_array.Append(&line_top);
-   //surf_array.Append(&curve_top);
-   surf_array.Append(&line_right);
-   //surf_array.Append(&curve_right);
-
-   AnalyticCompositeSurface surfaces(surf_array);
    surfaces.ConvertPhysCoordToParam(coord_x_in, coord_t);
 
    if (glvis)
@@ -193,13 +180,13 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    minres.SetAbsTol(0.0);
 
    // Nonlinear solver.
-   ParNonlinearForm a(pfes_mesh);
-   a.SetEssentialVDofs(ess_vdofs);
-   a.AddDomainIntegrator(integ);
+   ParNonlinearForm nlf(pfes_mesh);
+   nlf.SetEssentialVDofs(ess_vdofs);
+   nlf.AddDomainIntegrator(integ);
    const IntegrationRule &ir =
        IntRules.Get(pfes_mesh->GetFE(0)->GetGeomType(), quad_order);
    TMOPNewtonSolver solver(pfes_mesh->GetComm(), ir, 0);
-   solver.SetOperator(a);
+   solver.SetOperator(nlf);
    solver.SetPreconditioner(minres);
    solver.SetPrintLevel(1);
    solver.SetMaxIter(50);
@@ -207,9 +194,9 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    solver.SetAbsTol(0.0);
 
    // Solve.
-   Vector b(0);
+   Vector zero(0);
    coord_t.SetTrueVector();
-   solver.Mult(b, coord_t.GetTrueVector());
+   solver.Mult(zero, coord_t.GetTrueVector());
    coord_t.SetFromTrueVector();
    surfaces.ConvertParamCoordToPhys(coord_t, coord_x_out);
    if (glvis)

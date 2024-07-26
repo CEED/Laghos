@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
    bool fom = false;
    int dev = 0;
    double blast_energy = 0.25;
-   double blast_position[] = {1.5, 1.5, 0.0};
+   double blast_position[] = {1.0, 0.0, 0.0};
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -321,6 +321,41 @@ int main(int argc, char *argv[])
    H1_FECollection H1FEC(order_v, dim);
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+
+   //
+   // Construct the boundary curves.
+   //
+   // Mark which nodes to move tangentially.
+   Array<bool> fit_marker_top(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_right(H1FESpace.GetNDofs());
+   fit_marker_top   = false;
+   fit_marker_right = false;
+   Array<int> vdofs;
+   for (int e = 0; e < pmesh->GetNBE(); e++)
+   {
+      const int attr = pmesh->GetBdrElement(e)->GetAttribute();
+      const int nd = H1FESpace.GetBE(e)->GetDof();
+      H1FESpace.GetBdrElementVDofs(e, vdofs);
+
+      // Top boundary.
+      if (attr == 1)
+      {
+         for (int j = 0; j < nd; j++) { fit_marker_top[vdofs[j]] = true; }
+      }
+      // Right boundary.
+      else if (attr == 2)
+      {
+         for (int j = 0; j < nd; j++) { fit_marker_right[vdofs[j]] = true; }
+      }
+   }
+   double a = 0.2, b = 0.5, c = 1.5;
+   //double a = 0.0, b = 0.5, c = 0.0;
+   Curve_Sine_Top curve_top(fit_marker_top, a, b, c);
+   Curve_Sine_Right curve_right(fit_marker_right, a, b, c);
+   Array<AnalyticSurface *> surf_array;
+   surf_array.Append(&curve_top);
+   surf_array.Append(&curve_right);
+   AnalyticCompositeSurface surfaces(surf_array);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -597,7 +632,7 @@ int main(int argc, char *argv[])
          }
 
          ParGridFunction x_gf_opt(&H1FESpace);
-         OptimizeMesh(x_gf, x_gf_opt);
+         OptimizeMesh(x_gf, surfaces, x_gf_opt);
 
          const bool remap_v_gslib = true;
          const bool remap_v_adv   = !remap_v_gslib;

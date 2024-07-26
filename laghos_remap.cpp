@@ -74,8 +74,23 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
    // Evaluate source grid function.
    Vector interp_vals(ncomp * nodes_cnt);
    FindPointsGSLIB finder(pfes_tgt.GetComm());
-   finder.Setup(pmesh_src);
-   finder.Interpolate(vxyz, source, interp_vals);
+   finder.Setup(pmesh_src, 1.0);
+   finder.SetDistanceToleranceForPointsFoundOnBoundary(0.05);
+   finder.SetDefaultInterpolationValue(-1.0);
+   finder.FindPoints(vxyz);
+   const Array<unsigned int> &codes = finder.GetCode();
+   int cnt = 0;
+   for (int i = 0; i < nodes_cnt; i++)
+   {
+      if (codes[i] == 2)
+      {
+         cnt++;
+         cout << vxyz(i) << " " << vxyz(i + nodes_cnt) << endl;
+      }
+   }
+   std::cout << cnt << std::endl;
+   MFEM_VERIFY(cnt == 0, "Points not found");
+   finder.Interpolate(source, interp_vals);
 
    interpolated = interp_vals;
 }
@@ -337,7 +352,6 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 
    if (remap_v)
    {
-      std::cout << "Solving!" << std::endl;
       // Solver for H1 fields (no monotonicity).
       HypreSmoother prec;
       prec.SetType(HypreSmoother::Jacobi, 1);
