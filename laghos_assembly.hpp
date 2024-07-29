@@ -122,6 +122,22 @@ public:
                                        Vector &elvect);
 };
 
+class PressureIntegrator : public LinearFormIntegrator
+{
+   using LinearFormIntegrator::AssembleRHSElementVect;
+private:
+   const Vector &rhoDetJ;
+   const ParGridFunction &e;
+   double gamma;
+
+public:
+   PressureIntegrator(const Vector &rdj, const ParGridFunction &en, double g)
+    : rhoDetJ(rdj), e(en), gamma(g) { }
+   virtual void AssembleRHSElementVect(const FiniteElement &fe,
+                                       ElementTransformation &Tr,
+                                       Vector &elvect);
+};
+
 // Performs full assembly for the force operator.
 class ForceIntegrator : public BilinearFormIntegrator
 {

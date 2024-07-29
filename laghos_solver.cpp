@@ -565,6 +565,33 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    }
 }
 
+void LagrangianHydroOperator::ComputePressure(const ParGridFunction &e,
+                                              double gamma,
+                                              ParGridFunction &p) const
+{
+   p.SetSpace(&L2);
+   DenseMatrix M(l2dofs_cnt);
+   Vector rhs(l2dofs_cnt), p_z(l2dofs_cnt);
+   Array<int> dofs(l2dofs_cnt);
+   DenseMatrixInverse inv(&M);
+   MassIntegrator mi(&ir);
+   PressureIntegrator pi(qdata.rho0DetJ0w, e, gamma);
+   pi.SetIntRule(&ir);
+   for (int e = 0; e < NE; e++)
+   {
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &eltr = *L2.GetElementTransformation(e);
+      pi.AssembleRHSElementVect(fe, eltr, rhs);
+      mi.AssembleElementMatrix(fe, eltr, M);
+      inv.Factor();
+      inv.Mult(rhs, p_z);
+      L2.GetElementDofs(e, dofs);
+      p.SetSubVector(dofs, p_z);
+   }
+}
+
+
+
 double ComputeVolumeIntegral(const ParFiniteElementSpace &pfes,
                              const int DIM, const int NE, const int NQ,
                              const int Q1D, const int VDIM, const double norm,

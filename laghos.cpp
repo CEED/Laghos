@@ -517,12 +517,16 @@ int main(int argc, char *argv[])
                                                 order_q, pen_param, perimeter,
                                                 surfaces, be_to_surface);
 
-   socketstream vis_rho, vis_v, vis_e;
+   socketstream vis_rho, vis_v, vis_e, vis_p;
    char vishost[] = "localhost";
    int  visport   = 19916;
 
-   ParGridFunction rho_gf;
-   if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
+   ParGridFunction rho_gf, p_gf;
+   if (visualization || visit)
+   {
+      hydro.ComputeDensity(rho_gf);
+      hydro.ComputePressure(e_gf, mat_gf(0), p_gf);
+   }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
    const double momentum_in = hydro.Momentum(v_gf);
@@ -549,6 +553,9 @@ int main(int argc, char *argv[])
       Wx += offx;
       hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
+      Wx += offx;
+      hydrodynamics::VisualizeField(vis_p, vishost, visport, p_gf,
+                                    "Pressure", Wx, Wy, Ww, Wh);
    }
 
    // Save data for VisIt visualization.
@@ -729,7 +736,11 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh->GetComm());
 
-         if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
+         if (visualization || visit || gfprint)
+         {
+            hydro.ComputeDensity(rho_gf);
+            hydro.ComputePressure(e_gf, mat_gf(0), p_gf);
+         }
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
@@ -746,7 +757,10 @@ int main(int argc, char *argv[])
             Wx += offx;
             hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
                                           "Specific Internal Energy",
-                                          Wx, Wy, Ww,Wh);
+                                          Wx, Wy, Ww, Wh);
+            Wx += offx;
+            hydrodynamics::VisualizeField(vis_p, vishost, visport, p_gf,
+                                          "Pressure", Wx, Wy, Ww, Wh);
          }
 
          if (visit)

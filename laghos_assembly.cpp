@@ -40,6 +40,25 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    }
 }
 
+void PressureIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
+                                               ElementTransformation &Tr,
+                                               Vector &elvect)
+{
+   const int nqp = IntRule->GetNPoints();
+   Vector shape(fe.GetDof());
+   elvect.SetSize(fe.GetDof());
+   elvect = 0.0;
+   Vector e_vals(nqp);
+   for (int q = 0; q < nqp; q++)
+   {
+      e.GetValues(Tr.ElementNo, *IntRule, e_vals);
+      fe.CalcShape(IntRule->IntPoint(q), shape);
+      // Note that rhoDetJ = rho0DetJ0.
+      shape *= (gamma - 1.0) * rhoDetJ(Tr.ElementNo*nqp + q) * e_vals(q);
+      elvect += shape;
+   }
+}
+
 void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
                                              const FiniteElement &test_fe,
                                              ElementTransformation &Tr,
