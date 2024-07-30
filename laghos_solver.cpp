@@ -80,6 +80,49 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
+void VisualizeField(socketstream &sock, const char *vishost, int visport,
+                    QuadratureFunction &qf, const char *title,
+                    int x, int y, int w, int h)
+{
+   ParMesh *pmesh = dynamic_cast<ParMesh *>(qf.GetSpace()->GetMesh());
+   MPI_Comm comm = pmesh->GetComm();
+
+   int num_procs, myid;
+   MPI_Comm_size(comm, &num_procs);
+   MPI_Comm_rank(comm, &myid);
+
+   bool newly_opened = false;
+   int connection_failed;
+
+   do
+   {
+      if (!sock.is_open() || !sock)
+      {
+         sock.open(vishost, visport);
+         sock.precision(8);
+         newly_opened = true;
+      }
+
+      sock << "parallel " << num_procs << " " << myid << "\n";
+      sock << "quadrature\n" << *pmesh << qf;
+
+      if (newly_opened)
+      {
+         const char* keys = (pmesh->Dimension() == 2) ? "mAcRjl" : "mmaaAcl";
+
+         sock << "window_title '" << title << "'\n"
+              << "window_geometry "
+              << x << " " << y << " " << w << " " << h << "\n"
+              << "keys " << keys;
+         sock << std::endl;
+      }
+
+      connection_failed = !sock && !newly_opened;
+      MPI_Bcast(&connection_failed, 1, MPI_INT, 0, comm);
+   }
+   while (connection_failed);
+}
+
 static void Rho0DetJ0Vol(const int dim, const int NE,
                          const IntegrationRule &ir,
                          ParMesh *pmesh,
@@ -542,55 +585,41 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
    qdata.dt_est = std::numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
+void LagrangianHydroOperator::ComputeDensity(QuadratureFunction &rho) const
 {
-   rho.SetSpace(&L2);
-   DenseMatrix Mrho(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
-   Array<int> dofs(l2dofs_cnt);
-   DenseMatrixInverse inv(&Mrho);
-   MassIntegrator mi(&ir);
-   DensityIntegrator di(qdata.rho0DetJ0w);
-   di.SetIntRule(&ir);
+   const int nqp = ir.GetNPoints();
    for (int e = 0; e < NE; e++)
    {
-      const FiniteElement &fe = *L2.GetFE(e);
-      ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, rhs);
-      mi.AssembleElementMatrix(fe, eltr, Mrho);
-      inv.Factor();
-      inv.Mult(rhs, rho_z);
-      L2.GetElementDofs(e, dofs);
-      rho.SetSubVector(dofs, rho_z);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         rho(e*nqp + q) = qdata.rho0DetJ0w(e*nqp + q) / ip.weight / Tr.Weight();
+      }
    }
 }
 
-void LagrangianHydroOperator::ComputePressure(const ParGridFunction &e,
+void LagrangianHydroOperator::ComputePressure(const ParGridFunction &energy,
                                               double gamma,
-                                              ParGridFunction &p) const
+                                              QuadratureFunction &p) const
 {
-   p.SetSpace(&L2);
-   DenseMatrix M(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), p_z(l2dofs_cnt);
-   Array<int> dofs(l2dofs_cnt);
-   DenseMatrixInverse inv(&M);
-   MassIntegrator mi(&ir);
-   PressureIntegrator pi(qdata.rho0DetJ0w, e, gamma);
-   pi.SetIntRule(&ir);
+   const int nqp = ir.GetNPoints();
+   Vector e_vals(nqp);
    for (int e = 0; e < NE; e++)
    {
-      const FiniteElement &fe = *L2.GetFE(e);
-      ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      pi.AssembleRHSElementVect(fe, eltr, rhs);
-      mi.AssembleElementMatrix(fe, eltr, M);
-      inv.Factor();
-      inv.Mult(rhs, p_z);
-      L2.GetElementDofs(e, dofs);
-      p.SetSubVector(dofs, p_z);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+      energy.GetValues(e, ir, e_vals);
+
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         p(e*nqp + q) = (gamma - 1.0) * e_vals(q) *
+                        qdata.rho0DetJ0w(e*nqp + q) / ip.weight / Tr.Weight();
+      }
    }
 }
-
-
 
 double ComputeVolumeIntegral(const ParFiniteElementSpace &pfes,
                              const int DIM, const int NE, const int NQ,

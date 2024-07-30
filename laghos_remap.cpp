@@ -242,7 +242,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          T.SetIntPoint(&ip);
-         rhoDetJw(k*nqp + q) = rho_vals(q) * T.Jacobian().Det() * ip.weight;
+         rhoDetJw(k*nqp + q) = rho_vals(q) * T.Weight() * ip.weight;
       }
    }
 

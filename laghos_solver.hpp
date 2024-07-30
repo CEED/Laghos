@@ -36,6 +36,10 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
 
+void VisualizeField(socketstream &sock, const char *vishost, int visport,
+                    QuadratureFunction &gf, const char *title,
+                    int x = 0, int y = 0, int w = 400, int h = 400);
+
 struct TimingData
 {
    // Total times for all major computations:
@@ -219,9 +223,9 @@ public:
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho) const;
+   void ComputeDensity(QuadratureFunction &rho) const;
    void ComputePressure(const ParGridFunction &e, double gamma,
-                        ParGridFunction &p) const;
+                        QuadratureFunction &p) const;
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
    double Momentum(const ParGridFunction &v) const;
