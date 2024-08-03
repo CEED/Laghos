@@ -27,6 +27,8 @@ namespace mfem
 namespace hydrodynamics
 {
 
+IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
+
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
@@ -196,7 +198,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    CG_VMass(H1.GetParMesh()->GetComm()),
    CG_EMass(L2.GetParMesh()->GetComm()),
    timer(p_assembly ? L2TVSize : 1),
-   qupdate(nullptr),
    X(H1c.GetTrueVSize()),
    B(H1c.GetTrueVSize()),
    one(L2Vsize),
@@ -341,7 +342,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
 {
-   delete qupdate;
    if (p_assembly)
    {
       delete EMassPA;
@@ -393,84 +393,35 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       accel_src_gf.Read();
    }
 
-   if (p_assembly)
+   timer.sw_force.Start();
+   Force.Mult(one, rhs);
+   if (BC_strong == false) { Force_be.AddMult(one, rhs); }
+   timer.sw_force.Stop();
+   rhs.Neg();
+
+   if (source_type == 2)
    {
-      timer.sw_force.Start();
-      ForcePA->Mult(one, rhs);
-      timer.sw_force.Stop();
-      rhs.Neg();
-
-      // Partial assembly solve for each velocity component
-      const int size = H1c.GetVSize();
-      const Operator *Pconf = H1c.GetProlongationMatrix();
-      for (int c = 0; c < dim; c++)
-      {
-         dvc_gf.MakeRef(&H1c, dS_dt, H1Vsize + c*size);
-         rhs_c_gf.MakeRef(&H1c, rhs, c*size);
-
-         if (Pconf) { Pconf->MultTranspose(rhs_c_gf, B); }
-         else { B = rhs_c_gf; }
-
-         if (source_type == 2)
-         {
-            ParGridFunction accel_comp;
-            accel_comp.MakeRef(&H1c, accel_src_gf, c*size);
-            Vector AC;
-            accel_comp.GetTrueDofs(AC);
-            Vector BA(AC.Size());
-            VMassPA->MultFull(AC, BA);
-            B += BA;
-         }
-
-         H1c.GetRestrictionMatrix()->Mult(dvc_gf, X);
-         VMassPA->SetEssentialTrueDofs(c_tdofs[c]);
-         VMassPA->EliminateRHS(B);
-         timer.sw_cgH1.Start();
-         CG_VMass.Mult(B, X);
-         timer.sw_cgH1.Stop();
-         timer.H1iter += CG_VMass.GetNumIterations();
-         if (Pconf) { Pconf->Mult(X, dvc_gf); }
-         else { dvc_gf = X; }
-         // We need to sync the subvector 'dvc_gf' with its base vector
-         // because it may have been moved to a different memory space.
-         dvc_gf.GetMemory().SyncAlias(dS_dt.GetMemory(), dvc_gf.Size());
-      }
+      Vector rhs_accel(rhs.Size());
+      Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
+      rhs += rhs_accel;
    }
-   else
-   {
-      timer.sw_force.Start();
-      Force.Mult(one, rhs);
-      if (BC_strong == false) { Force_be.AddMult(one, rhs); }
-      timer.sw_force.Stop();
-      rhs.Neg();
 
-      if (source_type == 2)
-      {
-         Vector rhs_accel(rhs.Size());
-         Mv_spmat_copy.Mult(accel_src_gf, rhs_accel);
-         rhs += rhs_accel;
-      }
+   HypreParMatrix A;
+   Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
 
-      HypreParMatrix A;
-      Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
-
-      CGSolver cg(H1.GetParMesh()->GetComm());
-      HypreSmoother prec;
-      prec.SetType(HypreSmoother::Jacobi, 1);
-      cg.SetPreconditioner(prec);
-      cg.SetOperator(A);
-      cg.SetRelTol(cg_rel_tol);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(cg_max_iter);
-      IterativeSolver::PrintLevel print_level;
-      print_level.Summary();
-      cg.SetPrintLevel(-1);
-      timer.sw_cgH1.Start();
-      cg.Mult(B, X);
-      timer.sw_cgH1.Stop();
-      timer.H1iter += cg.GetNumIterations();
-      Mv.RecoverFEMSolution(X, rhs, dv);
-   }
+   CGSolver cg(H1.GetParMesh()->GetComm());
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+   cg.SetPreconditioner(prec);
+   cg.SetOperator(A);
+   cg.SetRelTol(cg_rel_tol);
+   cg.SetAbsTol(0.0);
+   cg.SetMaxIter(cg_max_iter);
+   IterativeSolver::PrintLevel print_level;
+   print_level.Summary();
+   cg.SetPrintLevel(-1);
+   cg.Mult(B, X);
+   Mv.RecoverFEMSolution(X, rhs, dv);
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -545,10 +496,6 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 
 void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
 {
-   auto rho0_gfc = dynamic_cast<GridFunctionCoefficient *>(&rho_coeff);
-   rho0_max = rho0_gfc->GetGridFunction()->Max();
-   MPI_Allreduce(MPI_IN_PLACE, &rho0_max, 1,
-                 MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
    UpdateBdrQuadratureData();
 
    // Assumption is Mv was connected to the same Coefficient from the input.
@@ -556,6 +503,10 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
    Mv.BilinearForm::operator=(0.0);
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
+
+   Vector ones(Mv.Size()), out(Mv.Size());
+   ones = 1.0;
+   Mv.Mult(ones, out);
 
    MassIntegrator mi(rho_coeff, &ir);
    for (int e = 0; e < NE; e++)
@@ -1114,8 +1065,10 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
          b_face_tr->SetAllIntPoints(&ip_f);
          ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
 
+         const double detJ = tr_el.Weight();
+         MFEM_VERIFY(detJ > 0, "Negative detJ at a face! " << detJ);
          double penalty_mass  = wall_bc_penalty * C_I * perimeter /
-                                std::pow(tr_el.Weight(), 1.0/dim);
+                                std::pow(tr_el.Weight(), 1.0 / dim);
          penalty_mass *= rho0_max * perimeter;
 
          // Get the face normal vector.
@@ -1515,56 +1468,6 @@ void QKernel(const int NE, const int NQ,
          MFEM_SYNC_THREAD;
       });
    }
-}
-
-void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
-{
-   timer->sw_qdata.Start();
-   Vector* S_p = const_cast<Vector*>(&S);
-   const int H1_size = H1.GetVSize();
-   const double h1order = (double) H1.GetOrder(0);
-   const double infinity = std::numeric_limits<double>::infinity();
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1,*S_p, 0);
-   H1R->Mult(x, e_vec);
-   q1->SetOutputLayout(QVectorLayout::byVDIM);
-   q1->Derivatives(e_vec, q_dx);
-   v.MakeRef(&H1,*S_p, H1_size);
-   H1R->Mult(v, e_vec);
-   q1->Derivatives(e_vec, q_dv);
-   e.MakeRef(&L2, *S_p, 2*H1_size);
-   q2->SetOutputLayout(QVectorLayout::byVDIM);
-   q2->Values(e, q_e);
-   q_dt_est = qdata.dt_est;
-   const int id = (dim << 4) | Q1D;
-   typedef void (*fQKernel)(const int NE, const int NQ,
-                            const bool use_viscosity,
-                            const bool use_vorticity,
-                            const double h0, const double h1order,
-                            const double cfl, const double infinity,
-                            const ParGridFunction &gamma_gf,
-                            const Array<double> &weights,
-                            const Vector &Jacobians, const Vector &rho0DetJ0w,
-                            const Vector &e_quads, const Vector &grad_v_ext,
-                            const DenseTensor &Jac0inv,
-                            Vector &dt_est, DenseTensor &stressJinvT);
-   static std::unordered_map<int, fQKernel> qupdate =
-   {
-      {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>}, {0x28,&QKernel<2,8>},
-      {0x34,&QKernel<3,4>}, {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
-   };
-   if (!qupdate[id])
-   {
-      mfem::out << "Unknown kernel 0x" << std::hex << id << std::endl;
-      MFEM_ABORT("Unknown kernel");
-   }
-   qupdate[id](NE, NQ, use_viscosity, use_vorticity, qdata.h0, h1order,
-               cfl, infinity, gamma_gf, ir.GetWeights(), q_dx,
-               qdata.rho0DetJ0w, q_e, q_dv,
-               qdata.Jac0inv, q_dt_est, qdata.stressJinvT);
-   qdata.dt_est = q_dt_est.Min();
-   timer->sw_qdata.Stop();
-   timer->quad_tstep += NE;
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const

@@ -28,6 +28,8 @@ namespace mfem
 namespace hydrodynamics
 {
 
+extern IntegrationRules IntRulesLo;
+
 /// Visualize the given parallel grid function, using a GLVis server on the
 /// specified host and port. Set the visualization window title, and optionally,
 /// its geometry.
@@ -59,42 +61,6 @@ struct TimingData
       L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
 };
 
-class QUpdate
-{
-private:
-   const int dim, vdim, NQ, NE, Q1D;
-   const bool use_viscosity, use_vorticity;
-   const double cfl;
-   TimingData *timer;
-   const IntegrationRule &ir;
-   ParFiniteElementSpace &H1, &L2;
-   const Operator *H1R;
-   Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
-   const QuadratureInterpolator *q1,*q2;
-   const ParGridFunction &gamma_gf;
-public:
-   QUpdate(const int d, const int ne, const int q1d,
-           const bool visc, const bool vort,
-           const double cfl, TimingData *t,
-           const ParGridFunction &gamma_gf,
-           const IntegrationRule &ir,
-           ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
-      dim(d), vdim(h1.GetVDim()),
-      NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
-      use_viscosity(visc), use_vorticity(vort), cfl(cfl),
-      timer(t), ir(ir), H1(h1), L2(l2),
-      H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-      q_dt_est(NE*NQ),
-      q_e(NE*NQ),
-      e_vec(NQ*NE*vdim),
-      q_dx(NQ*NE*vdim*vdim),
-      q_dv(NQ*NE*vdim*vdim),
-      q1(H1.GetQuadratureInterpolator(ir)),
-      q2(L2.GetQuadratureInterpolator(ir)),
-      gamma_gf(gamma_gf) { }
-
-   void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
-};
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
@@ -162,7 +128,6 @@ protected:
    // Linear solver for energy.
    CGSolver CG_VMass, CG_EMass;
    mutable TimingData timer;
-   mutable QUpdate *qupdate;
    mutable Vector X, B, one, rhs, e_rhs;
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];

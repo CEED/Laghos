@@ -521,7 +521,6 @@ int main(int argc, char *argv[])
    char vishost[] = "localhost";
    int  visport   = 19916;
 
-   ParGridFunction rho_gf;
    QuadratureSpace qs(*pmesh, hydro.GetIntRule());
    QuadratureFunction rho_qf(qs), p_qf(qs);
 
@@ -649,7 +648,7 @@ int main(int argc, char *argv[])
          }
 
          ParGridFunction x_gf_opt(&H1FESpace);
-         OptimizeMesh(x_gf, surfaces, x_gf_opt);
+         OptimizeMesh(x_gf, surfaces, hydro.GetIntRule(), x_gf_opt);
 
          const bool remap_v_gslib = true;
          const bool remap_v_adv   = !remap_v_gslib;
@@ -685,13 +684,6 @@ int main(int argc, char *argv[])
          ale_cnt++;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
-
-      // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
-      // data in S. This operation simply updates the Memory validity flags of
-      // the sub-vectors to match those of S.
-      x_gf.SyncAliasMemory(S);
-      v_gf.SyncAliasMemory(S);
-      e_gf.SyncAliasMemory(S);
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
@@ -795,23 +787,6 @@ int main(int argc, char *argv[])
             e_gf.SaveAsOne(e_ofs);
             e_ofs.close();
          }
-      }
-
-      // Problems checks
-      if (check)
-      {
-         double lnorm = e_gf * e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-         const double e_norm = sqrt(norm);
-         MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
-         MFEM_VERIFY(order_v==2, "check: order_v");
-         MFEM_VERIFY(order_e==1, "check: order_e");
-         MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
-         MFEM_VERIFY(t_final == 0.6, "check: t_final");
-         MFEM_VERIFY(cfl==0.5, "check: cfl");
-         MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
-         MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
-         Checks(ti, e_norm, checks);
       }
    }
    MFEM_VERIFY(!check || checks == 2, "Check error!");

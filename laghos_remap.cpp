@@ -256,7 +256,9 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
          const IntegrationPoint &ip_f = ir_rho_b.IntPoint(q);
          b_face_tr->SetAllIntPoints(&ip_f);
          ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
-         rhoDetJ_be(be * b_nqp + q) = tr_el.Weight() * rho0_gf.GetValue(tr_el);
+         double detJ = tr_el.Weight();
+         MFEM_VERIFY(detJ > 0, "Negative detJ at a face! " << detJ);
+         rhoDetJ_be(be * b_nqp + q) = detJ * rho0_gf.GetValue(tr_el);
       }
    }
 

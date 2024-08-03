@@ -25,10 +25,9 @@ namespace mfem
 namespace hydrodynamics
 {
 
-IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
-
 void OptimizeMesh(ParGridFunction &coord_x_in,
                   AnalyticCompositeSurface &surfaces,
+                  const IntegrationRule &ir,
                   ParGridFunction &coord_x_out)
 {
    const int myid = coord_x_in.ParFESpace()->GetMyRank();
@@ -39,12 +38,10 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    const int    precond      = 2;
    const int    art_type     = 0;
    const int    max_lin_iter = 100;
-   const int    quad_order   = 8;
    const bool   glvis        = true;
 
    ParFiniteElementSpace *pfes_mesh = coord_x_in.ParFESpace();
    ParMesh *pmesh = pfes_mesh->GetParMesh();
-   IntegrationRules *irules = &IntRulesLo;
 
    ParGridFunction x0(coord_x_in), coord_t(pfes_mesh);
 
@@ -55,8 +52,6 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    const int NE = pmesh->GetNE();
    for (int e = 0; e < NE; e++)
    {
-      const IntegrationRule &ir =
-          IntRules.Get(pfes_mesh->GetFE(0)->GetGeomType(), quad_order);
       ElementTransformation *transf = pmesh->GetElementTransformation(e);
       for (int j = 0; j < ir.GetNPoints(); j++)
       {
@@ -173,6 +168,14 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    auto integ = new TMOP_Integrator(metric, &target, nullptr);
    integ->EnableTangentialMovement(surfaces, *pfes_mesh);
 
+   ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
+   ParGridFunction dist(&pfes_dist);
+   dist = 0.1;
+   ConstantCoefficient limit_coeff(1.0);
+   integ->EnableLimiting(x0, dist, limit_coeff);
+
+   integ->ParEnableNormalization(x0);
+
    // Linear solver.
    MINRESSolver minres(pfes_mesh->GetComm());
    minres.SetMaxIter(100);
@@ -183,8 +186,6 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    ParNonlinearForm nlf(pfes_mesh);
    nlf.SetEssentialVDofs(ess_vdofs);
    nlf.AddDomainIntegrator(integ);
-   const IntegrationRule &ir =
-       IntRules.Get(pfes_mesh->GetFE(0)->GetGeomType(), quad_order);
    TMOPNewtonSolver solver(pfes_mesh->GetComm(), ir, 0);
    solver.SetOperator(nlf);
    solver.SetPreconditioner(minres);
