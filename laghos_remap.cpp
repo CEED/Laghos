@@ -358,14 +358,15 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       lin_solver.SetAbsTol(0.0);
       lin_solver.SetMaxIter(100);
       lin_solver.SetPrintLevel(0);
+      OperatorHandle Mass_oper;
 
       // Velocity remap.
       Mr_H1.BilinearForm::operator=(0.0);
       Mr_H1.Assemble();
       Kr_H1.BilinearForm::operator=(0.0);
       Kr_H1.Assemble();
-      HypreParMatrix *A = Mr_H1.ParallelAssemble();
-      lin_solver.SetOperator(*A);
+      Mass_oper.Reset(Mr_H1.ParallelAssemble());
+      lin_solver.SetOperator(*Mass_oper);
       Vector v, d_v, rhs_v(dofs_h1*dim);
       v.MakeRef(*U_ptr, 0, dofs_h1*dim);
       d_v.MakeRef(dU,   0, dofs_h1*dim);
@@ -380,9 +381,9 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Vector RHS_V(P_v->Width()), X_V(P_v->Width());
       P_v->MultTranspose(rhs_v, RHS_V);
       X_V = 0.0;
-      // OperatorHandle M_elim;
-      // M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
-      // Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
+      OperatorHandle M_elim;
+      M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
+      Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
       lin_solver.Mult(RHS_V, X_V);
       P_v->Mult(X_V, d_v);
    }
