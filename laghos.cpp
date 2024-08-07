@@ -621,10 +621,11 @@ int main(int argc, char *argv[])
          adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs);
 
          ParGridFunction v_new(&H1FESpace);
+
          if (remap_v_gslib)
          {
-            InterpolationRemap interp;
-            interp.Remap(v_gf, x_gf_opt, v_new);
+         //   InterpolationRemap interp;
+         //   interp.Remap(v_gf, x_gf_opt, v_new);
          }
 
          // Move the mesh to x0 and transfer the result from the remap.
