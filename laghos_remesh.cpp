@@ -26,7 +26,6 @@ namespace hydrodynamics
 {
 
 void OptimizeMesh(ParGridFunction &coord_x_in,
-                  AnalyticCompositeSurface &surfaces,
                   const IntegrationRule &ir,
                   ParGridFunction &coord_x_out)
 {
@@ -43,7 +42,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    ParFiniteElementSpace *pfes_mesh = coord_x_in.ParFESpace();
    ParMesh *pmesh = pfes_mesh->GetParMesh();
 
-   ParGridFunction x0(coord_x_in), coord_t(pfes_mesh);
+   ParGridFunction x0(coord_x_in);
 
    const int dim = pfes_mesh->GetMesh()->Dimension();
 
@@ -64,16 +63,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    { cout << "Minimum det(J) of the original mesh is " << min_detJ << endl; }
    MFEM_VERIFY(min_detJ > 0.0, "Inverted initial meshes are not supported.");
 
-   // Mark which nodes to move tangentially.
-
-   const Array<bool> &fit_marker_top = surfaces.GetSurfaceID(0)->GetMarker();
-   const Array<bool> &fit_marker_right = surfaces.GetSurfaceID(1)->GetMarker();
-   Array<bool> fit_marker_2(pfes_mesh->GetNDofs());
-   ParFiniteElementSpace pfes_scalar(pmesh, pfes_mesh->FEColl(), 1);
-   ParGridFunction fit_marker_vis_gf(&pfes_scalar);
    Array<int> vdofs, ess_vdofs;
-   fit_marker_2     = false;
-   fit_marker_vis_gf = 0.0;
    for (int e = 0; e < pmesh->GetNBE(); e++)
    {
       const int attr = pmesh->GetBdrElement(e)->GetAttribute();
@@ -85,8 +75,8 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       {
          for (int j = 0; j < nd; j++)
          {
-            // Eliminate y component.
-            ess_vdofs.Append(vdofs[j+nd]);
+            // Fix x component.
+            ess_vdofs.Append(vdofs[j]);
          }
       }
       // Right boundary.
@@ -94,7 +84,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       {
          for (int j = 0; j < nd; j++)
          {
-            // Eliminate y component.
+            // Fix y component.
             ess_vdofs.Append(vdofs[j+nd]);
          }
       }
@@ -103,7 +93,6 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
          // Fix y components.
          for (int j = 0; j < nd; j++)
          {
-            fit_marker_2[vdofs[j]] = true;
             ess_vdofs.Append(vdofs[j+nd]);
          }
       }
@@ -112,61 +101,26 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
          // Fix x components.
          for (int j = 0; j < nd; j++)
          {
-            fit_marker_2[vdofs[j]] = true;
             ess_vdofs.Append(vdofs[j]);
          }
-      }
-   }
-
-   for (int e = 0; e < pmesh->GetNBE(); e++)
-   {
-      pfes_mesh->GetBdrElementVDofs(e, vdofs);
-      const int nd = pfes_mesh->GetBE(e)->GetDof();
-
-      for (int j = 0; j < nd; j++)
-      {
-         int cnt = 0;
-         if (fit_marker_top[vdofs[j]])   { cnt++; }
-         if (fit_marker_right[vdofs[j]]) { cnt++; }
-         if (fit_marker_2[vdofs[j]])     { cnt++; }
-
-         fit_marker_vis_gf(vdofs[j]) = cnt;
-
-         if (cnt > 1) { ess_vdofs.Append(vdofs[j]); }
       }
    }
 
    // Visualize the selected nodes and their target positions.
    if (glvis)
    {
-      socketstream vis1, vis2, vis3;
-      common::VisualizeField(vis1, "localhost", 19916, fit_marker_vis_gf,
-                             "Target positions (DOFS with value 1)",
-                             0, 600, 400, 400, (dim == 2) ? "Rjm" : "");
-      common::VisualizeMesh(vis2, "localhost", 19916, *pmesh, "Initial mesh",
-                            400, 600, 400, 400, "me");
-   }
-
-   surfaces.ConvertPhysCoordToParam(coord_x_in, coord_t);
-
-   if (glvis)
-   {
-      surfaces.ConvertParamCoordToPhys(coord_t, coord_x_in);
       socketstream vis1;
-      common::VisualizeMesh(vis1, "localhost", 19916, *pmesh, "Mesh x->t->x",
+      common::VisualizeMesh(vis1, "localhost", 19916, *pmesh, "Initial mesh",
                             400, 600, 400, 400, "me");
-      coord_x_in = x0;
    }
 
    // TMOP setup.
    TMOP_QualityMetric *metric;
    if (dim == 2) { metric = new TMOP_Metric_002; }
    else          { metric = new TMOP_Metric_302; }
-   metric->use_old_invariants_code = true;
    TargetConstructor target(TargetConstructor::IDEAL_SHAPE_UNIT_SIZE,
                             pfes_mesh->GetComm());
    auto integ = new TMOP_Integrator(metric, &target, nullptr);
-   integ->EnableTangentialMovement(surfaces, *pfes_mesh);
 
    ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction dist(&pfes_dist);
@@ -196,10 +150,10 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    // Solve.
    Vector zero(0);
-   coord_t.SetTrueVector();
-   solver.Mult(zero, coord_t.GetTrueVector());
-   coord_t.SetFromTrueVector();
-   surfaces.ConvertParamCoordToPhys(coord_t, coord_x_out);
+   coord_x_out = coord_x_in;
+   coord_x_out.SetTrueVector();
+   solver.Mult(zero, coord_x_out.GetTrueVector());
+   coord_x_out.SetFromTrueVector();
    if (glvis)
    {
       coord_x_in = coord_x_out;

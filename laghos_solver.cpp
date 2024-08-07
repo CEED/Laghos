@@ -151,9 +151,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  double ftz,
                                                  const int oq,
                                                  double bc_penalty,
-                                                 double perimeter,
-                                                 AnalyticCompositeSurface &surf,
-                                                 const Array<int> &bes) :
+                                                 double perimeter) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -190,7 +188,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1), Force_be(&L2, &H1),
-   surfaces(surf), be_to_surface(bes),
    wall_bc_penalty(bc_penalty), C_I(0.0),
    rho0_max(rho0_gf.Max()), perimeter(perimeter),
    ForcePA(nullptr), VMassPA(nullptr), EMassPA(nullptr),
@@ -247,8 +244,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    MPI_Allreduce(MPI_IN_PLACE, &rho0_max, 1,
                  MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-   UpdateBdrQuadratureData();
-
    // Standard local assembly and inversion for energy mass matrices.
    // 'Me' is used in the computation of the internal energy
    // which is used twice: once at the start and once at the end of the run.
@@ -267,12 +262,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
    Mv.AddDomainIntegrator(vmi);
    Mv.BilinearForm::operator=(0.0);
-   if (BC_strong == false)
-   {
-      auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
-      nvmi->SetIntRule(&b_ir);
-      Mv.AddBdrFaceIntegrator(nvmi);
-   }
    Mv.Assemble();
    Mv_spmat_copy = Mv.SpMat();
 
@@ -332,9 +321,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Force.Assemble(0);
    Force.Finalize(0);
 
-   auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
-   vpb->SetIntRule(&b_ir);
-   Force_be.AddBdrFaceIntegrator(vpb);
    // Make a dummy assembly to figure out the sparsity.
    Force_be.Assemble(0);
    Force_be.Finalize(0);
@@ -496,8 +482,6 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 
 void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
 {
-   UpdateBdrQuadratureData();
-
    // Assumption is Mv was connected to the same Coefficient from the input.
    Mv.Update();
    Mv.BilinearForm::operator=(0.0);
@@ -985,122 +969,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    delete [] Jpr_b;
    timer.sw_qdata.Stop();
    timer.quad_tstep += NE;
-
-   // Boundary integrals data.
-   int nqp_be = b_ir.GetNPoints();
-   for (int be = 0; be < NBE; be++)
-   {
-      auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
-      if (b_face_tr == nullptr) { continue; }
-
-      for (int q = 0; q < nqp_be; q++)
-      {
-         const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-         b_face_tr->SetAllIntPoints(&ip_f);
-         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
-         const int z_id = tr_el.ElementNo;
-
-         double en  = fmax(0.0, e.GetValue(tr_el));
-         double rho = qdata.rho0DetJ0_be(be * nqp_be + q) / tr_el.Weight();
-         double p   = (gamma_gf(z_id) - 1.0) * rho * en;
-         double cs  = sqrt(gamma_gf(z_id) * (gamma_gf(z_id) - 1.0) * en);
-
-         double penalty_force = wall_bc_penalty * C_I * rho * cs;
-
-         // Get the face normal vector.
-         Vector nor(dim);
-         CalcOrtho(b_face_tr->Jacobian(), nor);
-         nor /= sqrt(nor * nor);
-
-         // Get the surface normal vector.
-         int surf_id = be_to_surface[be];
-         if (surf_id >= 0)
-         {
-            const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
-            Vector pos(2), nor_s(2);
-            tr_el.Transform(b_face_tr->GetElement1IntPoint(), pos);
-            surf->NormalVector(pos.GetData(), nor_s.GetData());
-
-            if (nor * nor_s < 0.0) { nor_s *= -1.0; }
-            nor = nor_s;
-         }
-         const double nor_norm = sqrt(nor * nor);
-
-         Vector vShape;
-         v.GetVectorValue(tr_el, tr_el.GetIntPoint(), vShape);
-         double vDotn = 0.0;
-         for (int d = 0; d < dim; d++)
-         {
-            vDotn += vShape(d) * nor(d);
-         }
-
-         DenseMatrix stress(dim);
-         stress = 0.0;
-         for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
-         Vector weightedNormalStress(dim);
-         stress.Mult(nor, weightedNormalStress);
-
-         for (int d = 0; d < dim; d++)
-         {
-            qdata.be_force_data(be, q, d) =
-                  ip_f.weight * nor_norm *
-                  (vDotn * nor(d) * penalty_force - weightedNormalStress(d));
-         }
-      }
-   }
-}
-
-void LagrangianHydroOperator::UpdateBdrQuadratureData() const
-{
-   // Boundary mass term data.
-   int nqp_be = b_ir.GetNPoints();
-   for (int be = 0; be < NBE; be++)
-   {
-      auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
-      if (b_face_tr == nullptr) { continue; }
-
-      for (int q = 0; q < nqp_be; q++)
-      {
-         const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-         b_face_tr->SetAllIntPoints(&ip_f);
-         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
-
-         const double detJ = tr_el.Weight();
-         MFEM_VERIFY(detJ > 0, "Negative detJ at a face! " << detJ);
-         double penalty_mass  = wall_bc_penalty * C_I * perimeter /
-                                std::pow(tr_el.Weight(), 1.0 / dim);
-         penalty_mass *= rho0_max * perimeter;
-
-         // Get the face normal vector.
-         Vector nor_f(dim);
-         CalcOrtho(b_face_tr->Jacobian(), nor_f);
-         nor_f /= sqrt(nor_f * nor_f);
-
-         // Get the surface normal vector.
-         int surf_id = be_to_surface[be];
-         if (surf_id >= 0)
-         {
-            const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
-            Vector pos(2), nor_s(2);
-            tr_el.Transform(b_face_tr->GetElement1IntPoint(), pos);
-            surf->NormalVector(pos.GetData(), nor_s.GetData());
-
-            if (nor_f * nor_s < 0.0) { nor_s *= -1.0; }
-            nor_f = nor_s;
-         }
-
-         const double nor_norm = sqrt(nor_f * nor_f);
-         for (int dx = 0; dx < dim; dx++)
-         {
-            for (int dy = 0; dy < dim; dy++)
-            {
-               qdata.be_mass_data(dx, dy, be * nqp_be + q) =
-                     ip_f.weight * nor_norm *
-                     nor_f(dx) * nor_f(dy) * penalty_mass;
-            }
-         }
-      }
-   }
 }
 
 /// Trace of a square matrix

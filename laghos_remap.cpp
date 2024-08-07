@@ -380,9 +380,9 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Vector RHS_V(P_v->Width()), X_V(P_v->Width());
       P_v->MultTranspose(rhs_v, RHS_V);
       X_V = 0.0;
-      OperatorHandle M_elim;
-      //M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
-      //Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
+      // OperatorHandle M_elim;
+      // M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
+      // Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
       lin_solver.Mult(RHS_V, X_V);
       P_v->Mult(X_V, d_v);
    }

@@ -80,10 +80,8 @@
 // mpirun -np 4 laghos -m data/sphere_hole_V4.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
 //
 // ALE test:
-// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 0.5 -ale 0.5
-//   source at (1.5, 1.5)
-// mpirun -np 4 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 0.5 -ale 0.5
-//   source at (1.0, 0.0)
+// mpirun -np 4 laghos -m data/square01_quad.mesh -p 1 -rs 3 -s 7 -fa -vs 20 -vis -tf 0.3 -ale 0.3
+//   source at (0.0, 0.0)
 
 #include <fstream>
 #include <sys/time.h>
@@ -152,11 +150,8 @@ int main(int argc, char *argv[])
    int dev = 0;
    double blast_energy = 0.25;
 
-   double blast_position[] = {1.0, 0.0, 0.0};
+   double blast_position[] = {0.0, 0.0, 0.0};
    double a = 0.2, b = 0.5, c = 1.5;
-
-   // double a = 0.0, b = 0.5, c = 0.0;
-   // double blast_position[] = {1.5, 1.5, 0.0};
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -327,47 +322,10 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
    ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
 
-   //
-   // Construct the boundary curves.
-   //
-   // Mark which nodes to move tangentially.
-   Array<bool> fit_marker_top(H1FESpace.GetNDofs());
-   Array<bool> fit_marker_right(H1FESpace.GetNDofs());
-   fit_marker_top   = false;
-   fit_marker_right = false;
-   Array<int> vdofs;
-   Array<int> be_to_surface(pmesh->GetNBE());
-   be_to_surface = -1;
-   for (int e = 0; e < pmesh->GetNBE(); e++)
-   {
-      const int attr = pmesh->GetBdrElement(e)->GetAttribute();
-      const int nd = H1FESpace.GetBE(e)->GetDof();
-      H1FESpace.GetBdrElementVDofs(e, vdofs);
-
-      // Top boundary.
-      if (attr == 1)
-      {
-         be_to_surface[e] = 0;
-         for (int j = 0; j < nd; j++) { fit_marker_top[vdofs[j]] = true; }
-      }
-      // Right boundary.
-      else if (attr == 2)
-      {
-         be_to_surface[e] = 1;
-         for (int j = 0; j < nd; j++) { fit_marker_right[vdofs[j]] = true; }
-      }
-   }
-   Curve_Sine_Top curve_top(fit_marker_top, a, b, c);
-   Curve_Sine_Right curve_right(fit_marker_right, a, b, c);
-   Array<AnalyticSurface *> surf_array;
-   surf_array.Append(&curve_top);
-   surf_array.Append(&curve_right);
-   AnalyticCompositeSurface surfaces(surf_array);
-
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs, ess_vdofs;
-   const bool BC_strong = false;
+   const bool BC_strong = true;
    if (BC_strong)
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
@@ -514,8 +472,7 @@ int main(int argc, char *argv[])
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, pen_param, perimeter,
-                                                surfaces, be_to_surface);
+                                                order_q, pen_param, perimeter);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_q;
    char vishost[] = "localhost";
@@ -648,9 +605,9 @@ int main(int argc, char *argv[])
          }
 
          ParGridFunction x_gf_opt(&H1FESpace);
-         OptimizeMesh(x_gf, surfaces, hydro.GetIntRule(), x_gf_opt);
+         OptimizeMesh(x_gf, hydro.GetIntRule(), x_gf_opt);
 
-         const bool remap_v_gslib = true;
+         const bool remap_v_gslib = false;
          const bool remap_v_adv   = !remap_v_gslib;
 
          // Setup and initialize the remap operator.
