@@ -28,6 +28,7 @@ namespace hydrodynamics
 void OptimizeMesh(ParGridFunction &coord_x_in,
                   AnalyticCompositeSurface &surfaces,
                   const IntegrationRule &ir,
+                  const IntegrationRule &ir_bdr,
                   ParGridFunction &coord_x_out)
 {
    const int myid = coord_x_in.ParFESpace()->GetMyRank();
@@ -56,7 +57,9 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       for (int j = 0; j < ir.GetNPoints(); j++)
       {
          transf->SetIntPoint(&ir.IntPoint(j));
-         min_detJ = min(min_detJ, transf->Jacobian().Det());
+         const double detJ = transf->Weight();
+         MFEM_VERIFY(detJ > 0, "Inverted volumetric QP before remesh!");
+         min_detJ = min(min_detJ, detJ);
       }
    }
    MPI_Allreduce(MPI_IN_PLACE, &min_detJ, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
@@ -170,7 +173,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction dist(&pfes_dist);
-   dist = 0.1;
+   dist = 0.2;
    ConstantCoefficient limit_coeff(1.0);
    integ->EnableLimiting(x0, dist, limit_coeff);
 
@@ -187,6 +190,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    nlf.SetEssentialVDofs(ess_vdofs);
    nlf.AddDomainIntegrator(integ);
    TMOPNewtonSolver solver(pfes_mesh->GetComm(), ir, 0);
+   solver.SetBdrIntegrationRule(ir_bdr);
    solver.SetOperator(nlf);
    solver.SetPreconditioner(minres);
    solver.SetPrintLevel(1);

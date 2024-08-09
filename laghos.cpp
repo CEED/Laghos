@@ -648,7 +648,8 @@ int main(int argc, char *argv[])
          }
 
          ParGridFunction x_gf_opt(&H1FESpace);
-         OptimizeMesh(x_gf, surfaces, hydro.GetIntRule(), x_gf_opt);
+         OptimizeMesh(x_gf, surfaces,
+                      hydro.GetIntRule(), hydro.GetIntRule_b(), x_gf_opt);
 
          const bool remap_v_gslib = true;
          const bool remap_v_adv   = !remap_v_gslib;

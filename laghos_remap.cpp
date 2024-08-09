@@ -242,7 +242,9 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          T.SetIntPoint(&ip);
-         rhoDetJw(k*nqp + q) = rho_vals(q) * T.Weight() * ip.weight;
+         double detJ = T.Weight();
+         MFEM_VERIFY(detJ > 0, "Inverted volumetric QP after remesh! " << detJ);
+         rhoDetJw(k*nqp + q) = rho_vals(q) * detJ * ip.weight;
       }
    }
 
@@ -257,7 +259,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
          b_face_tr->SetAllIntPoints(&ip_f);
          ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
          double detJ = tr_el.Weight();
-         MFEM_VERIFY(detJ > 0, "Negative detJ at a face! " << detJ);
+         MFEM_VERIFY(detJ > 0, "Inverted face QP after remesh! " << detJ);
          rhoDetJ_be(be * b_nqp + q) = detJ * rho0_gf.GetValue(tr_el);
       }
    }
