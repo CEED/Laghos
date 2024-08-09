@@ -82,7 +82,7 @@
 // ALE test:
 // mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 0.5 -ale 0.5
 //   source at (1.5, 1.5)
-// mpirun -np 4 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 0.5 -ale 0.5
+// mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 //   source at (1.0, 0.0)
 
 #include <fstream>
