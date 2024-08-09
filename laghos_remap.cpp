@@ -16,6 +16,7 @@
 
 #include "laghos_remap.hpp"
 #include "laghos_assembly.hpp"
+#include "laghos_solver.hpp"
 
 using namespace std;
 namespace mfem
@@ -116,6 +117,14 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    u_max = std::sqrt(u_max);
    double dt = cfl_factor * h_min / u_max;
 
+   socketstream vis_v;
+   char vishost[] = "localhost";
+   int  visport   = 19916;
+   int Wx = 0, Wy = 0; // window position
+   int Ww = 350, Wh = 350; // window size
+   int offx = Ww+10; // window offsets
+   Wx += offx;
+
    double t = 0.0;
    bool last_step = false;
    for (int ti = 1; !last_step; ti++)
@@ -138,6 +147,9 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
          cout << e_max << " " << e_max_new << endl;
          MFEM_ABORT("\n e_1 max remap violation");
       }
+
+      VisualizeField(vis_v, vishost, visport,
+                                          v, "Remapped Velocity", Wx, Wy, Ww, Wh);
    }
    if (pmesh.GetMyRank() == 0) { cout << endl; }
 }
@@ -208,17 +220,31 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
      u(mesh_vel), u_coeff(&u),
      rho_coeff(&rho),
      rho_u_coeff(rho_coeff, u_coeff),
-     Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s),
+     Mr_H1(&pfes_H1_s), Kr_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s), 
+     Cr_H1(&pfes_H1, &pfes_H1_s),
      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
      Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
 {
-   Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
+   // no need for Vector Massmatrix
+   //Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
+   Mr_H1.AddDomainIntegrator(new MassIntegrator(rho_coeff));
    Mr_H1.Assemble(0);
    Mr_H1.Finalize(0);
 
-   Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
+   // lumped Massmatrix
+   lummpedMr_H1.AddDomainIntegrator(new LumpedIntegrator(new MassIntegrator(rho_coeff)));
+   lummpedMr_H1.Assemble(0);
+   lummpedMr_H1.Finalize(0);
+   //lummpedMr_H1.SpMat().GetDiag(lumpedMr_H1_vec);
+
+   //Kr_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
+   Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff, -1.0));
    Kr_H1.Assemble(0);
    Kr_H1.Finalize(0);
+
+   Cr_H1.AddDomainIntegrator(new DivergenceIntegrator(rho_coeff));
+   Cr_H1.Assemble(0);
+   Cr_H1.Finalize(0);
 
    M_L2.AddDomainIntegrator(new MassIntegrator);
    M_L2.Assemble(0);
@@ -227,6 +253,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    M_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(new MassIntegrator));
    M_L2_Lump.Assemble(0);
    M_L2_Lump.Finalize(0);
+   
 
    K_L2.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
    auto dgt_i = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
@@ -261,11 +288,11 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
 
 void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 {
-   ParFiniteElementSpace &pfes_H1 = *Mr_H1.ParFESpace(),
+   ParFiniteElementSpace &pfes_H1_s = *Mr_H1.ParFESpace(),
                          &pfes_L2 = *M_L2.ParFESpace();
-   const int dim     = pfes_H1.GetMesh()->Dimension();
-   const int NE      = pfes_H1.GetNE();
-   const int dofs_h1 = pfes_H1.GetVSize() / dim, size_L2 = pfes_L2.GetVSize();
+   const int dim     = pfes_H1_s.GetMesh()->Dimension();
+   const int NE      = pfes_H1_s.GetNE();
+   const int dofs_h1 = pfes_H1_s.GetVSize(), size_L2 = pfes_L2.GetVSize();
 
    // Move the mesh.
    const double t = GetTime();
@@ -276,6 +303,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    // Arrangement: interface (1), velocity (dim), density (1), energy (1).
    Vector *U_ptr = const_cast<Vector *>(&U);
 
+   /*
    if (remap_v)
    {
       // Solver for H1 fields (no monotonicity).
@@ -316,6 +344,94 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       lin_solver.Mult(RHS_V, X_V);
       P_v->Mult(X_V, d_v);
    }
+   //*/
+
+   if (remap_v)
+   {
+      Mr_H1.BilinearForm::operator=(0.0);
+      Mr_H1.Assemble();
+      Kr_H1.BilinearForm::operator=(0.0);
+      Kr_H1.Assemble();
+      Cr_H1.MixedBilinearForm::operator=(0.0);
+      Cr_H1.Assemble();
+      
+      lummpedMr_H1.BilinearForm::operator=(0.0);
+      lummpedMr_H1.Assemble();
+      lummpedMr_H1.SpMat().GetDiag(lumpedMr_H1_vec);
+
+      // Sum up to get global entries of the lumped mass matrix
+      GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
+      Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
+      gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+      gcomm.Bcast(lumpedmassmatrix_array);
+
+      // Get the global stencil of the local truedofs
+      HypreParMatrix *M_hpm = Mr_H1.ParallelAssemble();
+      HypreParMatrix *K_hpm = Kr_H1.ParallelAssemble();
+      SparseMatrix M_glb, K_glb;
+      M_hpm->MergeDiagAndOffd(M_glb);
+      K_hpm->MergeDiagAndOffd(K_glb);
+      
+      // Array for rhs of a component of v
+      Array<double> rhs_array(dofs_h1);
+      HypreParVector v_d_hpr(&pfes_H1_s);
+      Vector v_d, v, d_v;
+      d_v.MakeRef(dU, 0, dofs_h1*dim);
+      v.MakeRef(*U_ptr, 0, dofs_h1*dim);
+
+      const auto I = K_glb.ReadI();
+      const auto J = K_glb.ReadJ();
+      const auto K = K_glb.ReadData();
+      const auto M = M_glb.ReadData();
+   
+      for(int d = 0; d < dim; d++)
+      {
+         v_d.MakeRef(v, d * dofs_h1, dofs_h1);
+         for(int i = 0; i < dofs_h1; i++)
+         {
+            int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+            if(i_td != -1)
+            {
+               v_d_hpr(i_td) = v_d(i);
+            }
+         }
+         Vector *v_d_glb = v_d_hpr.GlobalVector();
+         MFEM_VERIFY(v_d_hpr.Size() == K_glb.Height(), "true dof local vector size weird");
+         MFEM_VERIFY( v_d_glb->Size() == pfes_H1_s.GlobalTrueVSize(), "glb vector size weird");
+
+         for(int i = 0; i < dofs_h1; i++)
+         {  
+            rhs_array[i] = 0.0;
+
+            int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+            if(i_td == -1) {continue;}
+
+            for(int k = I[i_td]; k < I[i_td+1]; k++)
+            {  
+               int j_gl = J[k];
+               int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+               if( i_gl == j_gl ) {continue;}
+
+               // under the assumption that kij=kji, which is the case if the boundary term vanishes (mesh_vel * n = 0)
+               double dij = 0.0; //max(0.0, max(K[k], -K[k]));
+               rhs_array[i] += (dij - K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
+            }
+            rhs_array[i] /= lumpedMr_H1_vec(i);
+         }
+
+         gcomm.Reduce<double>(rhs_array, GroupCommunicator::Sum);
+         gcomm.Bcast(rhs_array);
+
+         for(int i = 0; i < dofs_h1; i++)
+         {
+            d_v(i + d * dofs_h1) = rhs_array[i]; 
+         }
+      }
+
+      //d_v.SetSubVector(v_ess_tdofs, 0.0);
+   }
+
+
 
    Vector el_min(NE), el_max(NE);
 
@@ -916,6 +1032,69 @@ UpdateSolutionAndFlux(const Vector &du_lo, const Vector &m,
          flux_data[k] -= fij;
       }
    }
+}
+
+
+void DivergenceIntegrator::AssembleElementMatrix2(
+        const FiniteElement &trial_fe, const FiniteElement &test_fe,
+        ElementTransformation &Trans,  DenseMatrix &elmat)
+{
+   dim = trial_fe.GetDim();
+   int trial_dof = trial_fe.GetDof();
+   int test_dof = test_fe.GetDof();
+   Vector v(dim);
+   Vector d_col;
+ 
+   dshape.SetSize(trial_dof, dim);
+   gshape.SetSize(trial_dof, dim);
+   Jadj.SetSize(dim);
+   shape.SetSize(test_dof);
+   elmat.SetSize(trial_dof, dim * test_dof);
+
+   const IntegrationRule *ir = IntRule ? IntRule : &GetRule(trial_fe, test_fe,
+                                                             Trans);
+ 
+   elmat = 0.0;
+   elmat_comp.SetSize(test_dof, trial_dof);
+ 
+   for (int i = 0; i < ir->GetNPoints(); i++)
+   {
+      const IntegrationPoint &ip = ir->IntPoint(i);
+      trial_fe.CalcDShape(ip, dshape);
+      test_fe.CalcShape(ip, shape);
+ 
+      Trans.SetIntPoint(&ip);
+      CalcAdjugate(Trans.Jacobian(), Jadj);
+ 
+      Mult(dshape, Jadj, gshape);
+      double rho = 1.0;
+      if (Q)
+      {
+         rho = Q->Eval(Trans, ip); 
+      }
+      shape *= ip.weight;
+
+      for(int d = 0; d < dim; d++)
+      {
+         for(int j = 0; j < test_dof; j++)
+         {
+            for(int k = 0; k < trial_dof; k++)
+            {
+               elmat(j, k + d * trial_dof) += shape(j) * gshape(k,d) * rho;
+            }
+         }
+      }
+   }
+}
+
+
+const IntegrationRule &DivergenceIntegrator::GetRule(const FiniteElement
+                                                    &trial_fe,
+                                                    const FiniteElement &test_fe,
+                                                   ElementTransformation &Trans)
+{
+   int order = Trans.OrderGrad(&trial_fe) + test_fe.GetOrder() + Trans.OrderJ();
+   return IntRules.Get(trial_fe.GetGeomType(), order);
 }
 
 } // namespace hydrodynamics
