@@ -100,6 +100,56 @@ class Curve_Sine_Right : public Analytic2DCurve
    { return 0.0; }
 };
 
+// x = 0.
+// y = t.
+// The distance is the error in x.
+class Line_Left : public Analytic2DCurve
+{
+   public:
+   Line_Left(const Array<int> &marker) : Analytic2DCurve(marker) { }
+
+   void t_of_xy(double x, double y, double &dist, double &t) const override
+   {
+      t    = y;
+      dist = x - 0.0;
+   }
+   void xy_of_t(double t, double dist, double &x, double &y) const override
+   {
+      x = 0.0;
+      y = t;
+   }
+
+   virtual double dx_dt(double t) const override { return 0.0; }
+   virtual double dy_dt(double t) const override { return 1.0; }
+   virtual double dx_dtdt(double t) const override { return 0.0; }
+   virtual double dy_dtdt(double t) const override { return 0.0; }
+};
+
+// x = t.
+// y = 0.
+// The distance is the error in y.
+class Line_Bottom : public Analytic2DCurve
+{
+   public:
+   Line_Bottom(const Array<int> &marker) : Analytic2DCurve(marker) { }
+
+   void t_of_xy(double x, double y, double &dist, double &t) const override
+   {
+      t    = x;
+      dist = y - 0.0;
+   }
+   void xy_of_t(double t, double dist, double &x, double &y) const override
+   {
+      x = t;
+      y = 0.0;
+   }
+
+   virtual double dx_dt(double t) const override { return 1.0; }
+   virtual double dy_dt(double t) const override { return 0.0; }
+   virtual double dx_dtdt(double t) const override { return 0.0; }
+   virtual double dy_dtdt(double t) const override { return 0.0; }
+};
+
 } // namespace hydrodynamics
 
 } // namespace mfem

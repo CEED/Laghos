@@ -181,6 +181,8 @@ public:
    void UpdateMesh(const Vector &S) const;
    void UpdateMassMatrices(Coefficient &rho_coeff);
 
+   void RemoveBdrNormalPart(ParGridFunction &v, const ParGridFunction &x);
+
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;

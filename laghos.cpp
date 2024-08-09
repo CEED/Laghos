@@ -333,8 +333,12 @@ int main(int argc, char *argv[])
    // Mark which nodes to move tangentially.
    Array<bool> fit_marker_top(H1FESpace.GetNDofs());
    Array<bool> fit_marker_right(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_bottom(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_left(H1FESpace.GetNDofs());
    fit_marker_top   = false;
    fit_marker_right = false;
+   fit_marker_bottom = false;
+   fit_marker_left   = false;
    Array<int> vdofs;
    Array<int> be_to_surface(pmesh->GetNBE());
    be_to_surface = -1;
@@ -356,12 +360,28 @@ int main(int argc, char *argv[])
          be_to_surface[e] = 1;
          for (int j = 0; j < nd; j++) { fit_marker_right[vdofs[j]] = true; }
       }
+      // Bottom boundary.
+      else if (attr == 3)
+      {
+         be_to_surface[e] = 2;
+         for (int j = 0; j < nd; j++) { fit_marker_bottom[vdofs[j]] = true; }
+      }
+      // Left boundary.
+      else if (attr == 4)
+      {
+         be_to_surface[e] = 3;
+         for (int j = 0; j < nd; j++) { fit_marker_left[vdofs[j]] = true; }
+      }
    }
    Curve_Sine_Top curve_top(fit_marker_top, a, b, c);
    Curve_Sine_Right curve_right(fit_marker_right, a, b, c);
+   Line_Bottom line_bottom(fit_marker_bottom);
+   Line_Left line_left(fit_marker_left);
    Array<AnalyticSurface *> surf_array;
    surf_array.Append(&curve_top);
    surf_array.Append(&curve_right);
+   surf_array.Append(&line_bottom);
+   surf_array.Append(&line_left);
    AnalyticCompositeSurface surfaces(surf_array);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
@@ -651,7 +671,7 @@ int main(int argc, char *argv[])
          OptimizeMesh(x_gf, surfaces,
                       hydro.GetIntRule(), hydro.GetIntRule_b(), x_gf_opt);
 
-         const bool remap_v_gslib = true;
+         const bool remap_v_gslib = false;
          const bool remap_v_adv   = !remap_v_gslib;
 
          // Setup and initialize the remap operator.
@@ -677,6 +697,8 @@ int main(int argc, char *argv[])
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),
                             hydro.GetIntRule_b(), hydro.GetRhoDetJ_be(), e_gf);
          if (remap_v_gslib) { v_gf = v_new; }
+
+         hydro.RemoveBdrNormalPart(v_gf, x_gf);
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.

@@ -496,7 +496,7 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 
 void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
 {
-   UpdateBdrQuadratureData();
+   //UpdateBdrQuadratureData();
 
    // Assumption is Mv was connected to the same Coefficient from the input.
    Mv.Update();
@@ -518,6 +518,43 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
       DenseMatrixInverse inv(&Me(e));
       inv.Factor();
       inv.GetInverseMatrix(Me_inv(e));
+   }
+}
+
+void LagrangianHydroOperator::RemoveBdrNormalPart(ParGridFunction &v,
+                                                  const ParGridFunction &x)
+{
+   MFEM_VERIFY(dim == 2, "only 2d");
+
+   Array<int> vdofs;
+   Vector v_vals;
+   for (int be = 0; be < H1.GetNBE(); be++)
+   {
+      H1.GetBdrElementVDofs(be, vdofs);
+      v.GetSubVector(vdofs, v_vals);
+
+      const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
+
+      const int dofs = vdofs.Size() / dim;
+      for (int i = 0; i < dofs; i++)
+      {
+         Vector pos(dim), nor(dim), v_i(dim);
+         for (int d = 0; d < dim; d++)
+         {
+            pos(d) = x(vdofs[i + d*dofs]);
+            v_i(d) = v(vdofs[i + d*dofs]);
+         }
+         surf->NormalVector(pos.GetData(), nor.GetData());
+         const double nor_norm = sqrt(nor * nor);
+         nor /= nor_norm;
+
+         const double v_dot_n = v_i * nor;
+
+         for (int d = 0; d < dim; d++)
+         {
+            v(vdofs[i + d*dofs]) -= v_dot_n * nor(d);
+         }
+      }
    }
 }
 

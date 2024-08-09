@@ -248,21 +248,21 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       }
    }
 
-   for (int be = 0; be < NBE; be++)
-   {
-      int b_nqp = ir_rho_b.GetNPoints();
-      auto b_face_tr = pmesh_lagr.GetBdrFaceTransformations(be);
-      if (b_face_tr == nullptr) { continue; }
-      for (int q = 0; q < b_nqp; q++)
-      {
-         const IntegrationPoint &ip_f = ir_rho_b.IntPoint(q);
-         b_face_tr->SetAllIntPoints(&ip_f);
-         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
-         double detJ = tr_el.Weight();
-         MFEM_VERIFY(detJ > 0, "Inverted face QP after remesh! " << detJ);
-         rhoDetJ_be(be * b_nqp + q) = detJ * rho0_gf.GetValue(tr_el);
-      }
-   }
+   // for (int be = 0; be < NBE; be++)
+   // {
+   //    int b_nqp = ir_rho_b.GetNPoints();
+   //    auto b_face_tr = pmesh_lagr.GetBdrFaceTransformations(be);
+   //    if (b_face_tr == nullptr) { continue; }
+   //    for (int q = 0; q < b_nqp; q++)
+   //    {
+   //       const IntegrationPoint &ip_f = ir_rho_b.IntPoint(q);
+   //       b_face_tr->SetAllIntPoints(&ip_f);
+   //       ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+   //       double detJ = tr_el.Weight();
+   //       MFEM_VERIFY(detJ > 0, "Inverted face QP after remesh! " << detJ);
+   //       rhoDetJ_be(be * b_nqp + q) = detJ * rho0_gf.GetValue(tr_el);
+   //    }
+   // }
 
    // Just copy energy.
    energy = e;

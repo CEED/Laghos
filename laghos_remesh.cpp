@@ -43,10 +43,9 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    ParFiniteElementSpace *pfes_mesh = coord_x_in.ParFESpace();
    ParMesh *pmesh = pfes_mesh->GetParMesh();
+   const int dim = pfes_mesh->GetMesh()->Dimension();
 
    ParGridFunction x0(coord_x_in), coord_t(pfes_mesh);
-
-   const int dim = pfes_mesh->GetMesh()->Dimension();
 
    // Compute the minimum det(J) of the starting mesh.
    double min_detJ = infinity();
@@ -71,6 +70,8 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    const Array<bool> &fit_marker_top = surfaces.GetSurfaceID(0)->GetMarker();
    const Array<bool> &fit_marker_right = surfaces.GetSurfaceID(1)->GetMarker();
+   const Array<bool> &fit_marker_bottom = surfaces.GetSurfaceID(2)->GetMarker();
+   const Array<bool> &fit_marker_left = surfaces.GetSurfaceID(3)->GetMarker();
    Array<bool> fit_marker_2(pfes_mesh->GetNDofs());
    ParFiniteElementSpace pfes_scalar(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction fit_marker_vis_gf(&pfes_scalar);
@@ -101,12 +102,13 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
             ess_vdofs.Append(vdofs[j+nd]);
          }
       }
+      // Bottom boundary.
       else if (attr == 3)
       {
          // Fix y components.
          for (int j = 0; j < nd; j++)
          {
-            fit_marker_2[vdofs[j]] = true;
+            // Eliminate y component.
             ess_vdofs.Append(vdofs[j+nd]);
          }
       }
@@ -115,8 +117,8 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
          // Fix x components.
          for (int j = 0; j < nd; j++)
          {
-            fit_marker_2[vdofs[j]] = true;
-            ess_vdofs.Append(vdofs[j]);
+            // Eliminate y component.
+            ess_vdofs.Append(vdofs[j+nd]);
          }
       }
    }
@@ -129,9 +131,10 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       for (int j = 0; j < nd; j++)
       {
          int cnt = 0;
-         if (fit_marker_top[vdofs[j]])   { cnt++; }
-         if (fit_marker_right[vdofs[j]]) { cnt++; }
-         if (fit_marker_2[vdofs[j]])     { cnt++; }
+         if (fit_marker_top[vdofs[j]])    { cnt++; }
+         if (fit_marker_right[vdofs[j]])  { cnt++; }
+         if (fit_marker_bottom[vdofs[j]]) { cnt++; }
+         if (fit_marker_left[vdofs[j]])   { cnt++; }
 
          fit_marker_vis_gf(vdofs[j]) = cnt;
 
@@ -173,7 +176,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction dist(&pfes_dist);
-   dist = 0.2;
+   dist = 0.02; // smaller is less motion.
    ConstantCoefficient limit_coeff(1.0);
    integ->EnableLimiting(x0, dist, limit_coeff);
 
@@ -190,7 +193,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    nlf.SetEssentialVDofs(ess_vdofs);
    nlf.AddDomainIntegrator(integ);
    TMOPNewtonSolver solver(pfes_mesh->GetComm(), ir, 0);
-   solver.SetBdrIntegrationRule(ir_bdr);
+   //solver.SetBdrIntegrationRule(ir_bdr);
    solver.SetOperator(nlf);
    solver.SetPreconditioner(minres);
    solver.SetPrintLevel(1);
