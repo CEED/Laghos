@@ -35,10 +35,10 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 // The distance is the error in y.
 class Curve_Sine_Top : public Analytic2DCurve
 {
-   private:
+private:
    const double a, b, c, x_scale;
 
-   public:
+public:
    Curve_Sine_Top(const Array<int> &marker, double a_, double b_, double c_)
        : Analytic2DCurve(marker),
        a(a_), b(b_), c(c_), x_scale(1.0 + a * sin(c * M_PI) + b) { }
@@ -69,10 +69,10 @@ class Curve_Sine_Top : public Analytic2DCurve
 // The distance is the error in x.
 class Curve_Sine_Right : public Analytic2DCurve
 {
-   private:
+private:
    const double a, b, c, y_scale;
 
-   public:
+public:
    Curve_Sine_Right(const Array<int> &marker, double a_, double b_, double c_)
        : Analytic2DCurve(marker),
        a(a_), b(b_), c(c_), y_scale(1.0 + a * sin(c * M_PI) + b) { }
@@ -105,7 +105,7 @@ class Curve_Sine_Right : public Analytic2DCurve
 // The distance is the error in x.
 class Line_Left : public Analytic2DCurve
 {
-   public:
+public:
    Line_Left(const Array<int> &marker) : Analytic2DCurve(marker) { }
 
    void t_of_xy(double x, double y, double &dist, double &t) const override
@@ -115,7 +115,7 @@ class Line_Left : public Analytic2DCurve
    }
    void xy_of_t(double t, double dist, double &x, double &y) const override
    {
-      x = 0.0;
+      x = dist + 0.0;
       y = t;
    }
 
@@ -130,7 +130,7 @@ class Line_Left : public Analytic2DCurve
 // The distance is the error in y.
 class Line_Bottom : public Analytic2DCurve
 {
-   public:
+public:
    Line_Bottom(const Array<int> &marker) : Analytic2DCurve(marker) { }
 
    void t_of_xy(double x, double y, double &dist, double &t) const override
@@ -141,13 +141,46 @@ class Line_Bottom : public Analytic2DCurve
    void xy_of_t(double t, double dist, double &x, double &y) const override
    {
       x = t;
-      y = 0.0;
+      y = dist + 0.0;
    }
 
    virtual double dx_dt(double t) const override { return 1.0; }
    virtual double dy_dt(double t) const override { return 0.0; }
    virtual double dx_dtdt(double t) const override { return 0.0; }
    virtual double dy_dtdt(double t) const override { return 0.0; }
+};
+
+// t in (-pi, pi] is the angle. The radius r is given. Center is at (0, 0).
+// x = cos(t).
+// y = sin(t).
+// The distance is the error in radius.
+class Circle : public Analytic2DCurve
+{
+private:
+   const double r;
+
+public:
+   Circle(const Array<int> &marker, double rad)
+    : Analytic2DCurve(marker), r(rad) { }
+
+   void t_of_xy(double x, double y, double &dist, double &t) const override
+   {
+      t    = atan2(y, x);
+      dist = sqrt(x*x + y*y) - r;
+   }
+
+   void xy_of_t(double t, double dist, double &x, double &y) const override
+   {
+      const double rad = dist + r;
+      x = rad * cos(t);
+      y = rad * sin(t);
+   }
+
+   virtual double dx_dt(double t) const override { return - r * sin(t); }
+   virtual double dy_dt(double t) const override { return   r * cos(t); }
+
+   virtual double dx_dtdt(double t) const override { return - r * r * cos(t); }
+   virtual double dy_dtdt(double t) const override { return - r * r * sin(t); }
 };
 
 } // namespace hydrodynamics

@@ -530,10 +530,13 @@ void LagrangianHydroOperator::RemoveBdrNormalPart(ParGridFunction &v,
    Vector v_vals;
    for (int be = 0; be < H1.GetNBE(); be++)
    {
+      const int surf_id = be_to_surface[be];
+      if (surf_id == -1) { continue; }
+
       H1.GetBdrElementVDofs(be, vdofs);
       v.GetSubVector(vdofs, v_vals);
 
-      const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
+      const AnalyticSurface *surf = surfaces.GetSurfaceID(surf_id);
 
       const int dofs = vdofs.Size() / dim;
       for (int i = 0; i < dofs; i++)

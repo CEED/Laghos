@@ -79,11 +79,11 @@
 // 3D spherical hole:
 // mpirun -np 4 laghos -m data/sphere_hole_V4.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
 //
-// ALE test:
-// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 0.5 -ale 0.5
-//   source at (1.5, 1.5)
+// ALE tests:
+// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 // mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
-//   source at (1.0, 0.0)
+//   dist = 0.02
+// mpirun -np 7 laghos -m data/circles.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 
 #include <fstream>
 #include <sys/time.h>
@@ -153,10 +153,7 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
 
    double blast_position[] = {1.0, 0.0, 0.0};
-   double a = 0.2, b = 0.5, c = 1.5;
-
-   // double a = 0.0, b = 0.5, c = 0.0;
-   // double blast_position[] = {1.5, 1.5, 0.0};
+   double a, b, c;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -239,6 +236,23 @@ int main(int argc, char *argv[])
       blast_position[0] = -0.5;
       blast_position[1] = -0.5;
       blast_position[2] = -0.5;
+   }
+   if (strcmp(mesh_file, "data/wall_linear.mesh") == 0)
+   {
+      a = 0.0; b = 0.5; c = 0.0;
+      blast_position[0] = 1.5;
+      blast_position[1] = 1.5;
+   }
+   if (strcmp(mesh_file, "data/wall_a02_b05_c15.mesh") == 0)
+   {
+      a = 0.2; b = 0.5; c = 1.5;
+      blast_position[0] = 1.0;
+      blast_position[1] = 0.0;
+   }
+   if (strcmp(mesh_file, "data/circles.mesh") == 0)
+   {
+      blast_position[0] =  -1.0;
+      blast_position[1] =   0.0;
    }
 
    // Configure the device from the command line options
@@ -335,10 +349,14 @@ int main(int argc, char *argv[])
    Array<bool> fit_marker_right(H1FESpace.GetNDofs());
    Array<bool> fit_marker_bottom(H1FESpace.GetNDofs());
    Array<bool> fit_marker_left(H1FESpace.GetNDofs());
-   fit_marker_top   = false;
-   fit_marker_right = false;
+   Array<bool> fit_marker_out(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_in(H1FESpace.GetNDofs());
+   fit_marker_top    = false;
+   fit_marker_right  = false;
    fit_marker_bottom = false;
    fit_marker_left   = false;
+   fit_marker_out    = false;
+   fit_marker_in     = false;
    Array<int> vdofs;
    Array<int> be_to_surface(pmesh->GetNBE());
    be_to_surface = -1;
@@ -372,16 +390,39 @@ int main(int argc, char *argv[])
          be_to_surface[e] = 3;
          for (int j = 0; j < nd; j++) { fit_marker_left[vdofs[j]] = true; }
       }
+      else if (attr == 5)
+      {
+         be_to_surface[e] = 0;
+         for (int j = 0; j < nd; j++) { fit_marker_out[vdofs[j]] = true; }
+      }
+      else if (attr == 7)
+      {
+         be_to_surface[e] = 1;
+         for (int j = 0; j < nd; j++) { fit_marker_in[vdofs[j]] = true; }
+      }
    }
    Curve_Sine_Top curve_top(fit_marker_top, a, b, c);
    Curve_Sine_Right curve_right(fit_marker_right, a, b, c);
    Line_Bottom line_bottom(fit_marker_bottom);
    Line_Left line_left(fit_marker_left);
+   Circle circle_out(fit_marker_out, 1.0);
+   Circle circle_in(fit_marker_in,  0.2);
    Array<AnalyticSurface *> surf_array;
-   surf_array.Append(&curve_top);
-   surf_array.Append(&curve_right);
-   surf_array.Append(&line_bottom);
-   surf_array.Append(&line_left);
+   if (strcmp(mesh_file, "data/wall_linear.mesh") == 0 ||
+       strcmp(mesh_file, "data/wall_a02_b05_c15.mesh") == 0)
+   {
+      surf_array.Append(&curve_top);
+      surf_array.Append(&curve_right);
+      surf_array.Append(&line_bottom);
+      surf_array.Append(&line_left);
+   }
+   else if (strcmp(mesh_file, "data/circles.mesh") == 0)
+   {
+      surf_array.Append(&circle_out);
+      surf_array.Append(&circle_in);
+   }
+   else { MFEM_ABORT("bad setup"); }
+
    AnalyticCompositeSurface surfaces(surf_array);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
@@ -461,6 +502,16 @@ int main(int argc, char *argv[])
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
+   // const int dofs = x_gf.Size() / 2;
+   // for (int i = 0; i < dofs; i++)
+   // {
+   //    if (fabs(x_gf(i) - 0.0) < 1e-6 && x_gf(i + dofs) > 0.0)
+   //    {
+   //       std::cout << x_gf(i) << " " << x_gf(i + dofs) << std::endl;
+   //    }
+   // }
+   // return 0;
+
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
@@ -490,7 +541,16 @@ int main(int argc, char *argv[])
       // For the Sedov test, we use a delta function at the origin.
       DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
                                blast_position[2], blast_energy);
+      e_coeff.SetTol(1e-6);
       l2_e.ProjectCoefficient(e_coeff);
+
+      ParGridFunction sss(l2_e);
+
+      DeltaCoefficient e2_coeff(0.0, 0.447214, 0.0, blast_energy);
+      e2_coeff.SetTol(1e-6);
+      sss.ProjectCoefficient(e2_coeff);
+
+      l2_e += sss;
    }
    else
    {
@@ -671,7 +731,7 @@ int main(int argc, char *argv[])
          OptimizeMesh(x_gf, surfaces,
                       hydro.GetIntRule(), hydro.GetIntRule_b(), x_gf_opt);
 
-         const bool remap_v_gslib = false;
+         const bool remap_v_gslib = true;
          const bool remap_v_adv   = !remap_v_gslib;
 
          // Setup and initialize the remap operator.

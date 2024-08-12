@@ -68,16 +68,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    // Mark which nodes to move tangentially.
 
-   const Array<bool> &fit_marker_top = surfaces.GetSurfaceID(0)->GetMarker();
-   const Array<bool> &fit_marker_right = surfaces.GetSurfaceID(1)->GetMarker();
-   const Array<bool> &fit_marker_bottom = surfaces.GetSurfaceID(2)->GetMarker();
-   const Array<bool> &fit_marker_left = surfaces.GetSurfaceID(3)->GetMarker();
-   Array<bool> fit_marker_2(pfes_mesh->GetNDofs());
-   ParFiniteElementSpace pfes_scalar(pmesh, pfes_mesh->FEColl(), 1);
-   ParGridFunction fit_marker_vis_gf(&pfes_scalar);
    Array<int> vdofs, ess_vdofs;
-   fit_marker_2     = false;
-   fit_marker_vis_gf = 0.0;
    for (int e = 0; e < pmesh->GetNBE(); e++)
    {
       const int attr = pmesh->GetBdrElement(e)->GetAttribute();
@@ -105,7 +96,6 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       // Bottom boundary.
       else if (attr == 3)
       {
-         // Fix y components.
          for (int j = 0; j < nd; j++)
          {
             // Eliminate y component.
@@ -114,7 +104,14 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       }
       else if (attr == 4)
       {
-         // Fix x components.
+         for (int j = 0; j < nd; j++)
+         {
+            // Eliminate y component.
+            ess_vdofs.Append(vdofs[j+nd]);
+         }
+      }
+      else if (attr == 5)
+      {
          for (int j = 0; j < nd; j++)
          {
             // Eliminate y component.
@@ -122,6 +119,10 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
          }
       }
    }
+
+   ParFiniteElementSpace pfes_scalar(pmesh, pfes_mesh->FEColl(), 1);
+   ParGridFunction fit_marker_vis_gf(&pfes_scalar);
+   fit_marker_vis_gf = 0.0;
 
    for (int e = 0; e < pmesh->GetNBE(); e++)
    {
@@ -131,10 +132,11 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
       for (int j = 0; j < nd; j++)
       {
          int cnt = 0;
-         if (fit_marker_top[vdofs[j]])    { cnt++; }
-         if (fit_marker_right[vdofs[j]])  { cnt++; }
-         if (fit_marker_bottom[vdofs[j]]) { cnt++; }
-         if (fit_marker_left[vdofs[j]])   { cnt++; }
+         for (int s = 0; s < surfaces.GetNumSurfaces(); s++)
+         {
+            const Array<bool> &m = surfaces.GetSurfaceID(s)->GetMarker();
+            if (m[vdofs[j]]) { cnt++; }
+         }
 
          fit_marker_vis_gf(vdofs[j]) = cnt;
 
@@ -147,7 +149,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    {
       socketstream vis1, vis2, vis3;
       common::VisualizeField(vis1, "localhost", 19916, fit_marker_vis_gf,
-                             "Target positions (DOFS with value 1)",
+                             "Marked DOFs",
                              0, 600, 400, 400, (dim == 2) ? "Rjm" : "");
       common::VisualizeMesh(vis2, "localhost", 19916, *pmesh, "Initial mesh",
                             400, 600, 400, 400, "me");
@@ -171,12 +173,13 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    metric->use_old_invariants_code = true;
    TargetConstructor target(TargetConstructor::IDEAL_SHAPE_UNIT_SIZE,
                             pfes_mesh->GetComm());
+   target.SetNodes(coord_x_in);
    auto integ = new TMOP_Integrator(metric, &target, nullptr);
    integ->EnableTangentialMovement(surfaces, *pfes_mesh);
 
    ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction dist(&pfes_dist);
-   dist = 0.02; // smaller is less motion.
+   dist = 10.0; // smaller is less motion.
    ConstantCoefficient limit_coeff(1.0);
    integ->EnableLimiting(x0, dist, limit_coeff);
 
