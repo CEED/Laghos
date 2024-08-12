@@ -35,8 +35,8 @@ private:
    ParMesh pmesh;
    int dim;
    L2_FECollection fec_L2;
-   H1_FECollection fec_H1;
-   ParFiniteElementSpace pfes_L2, pfes_H1;
+   H1_FECollection fec_H1, fec_H1Lag;
+   ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
    bool remap_v;
 
    const double cfl_factor;
@@ -80,15 +80,17 @@ protected:
    Vector &x_now;
    const Array<int> &v_ess_tdofs;
    ParGridFunction &u;
+   HypreParVector u_hpr;
    VectorGridFunctionCoefficient u_coeff;
    GridFunctionCoefficient rho_coeff;
    ScalarVectorProductCoefficient rho_u_coeff;
-   mutable ParBilinearForm Mr_H1, Kr_H1, lummpedMr_H1;
+   mutable ParBilinearForm Mr_H1, Kr_H1, KrT_H1, lummpedMr_H1;
    mutable ParMixedBilinearForm Cr_H1;
    mutable Vector lumpedMr_H1_vec;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
    double dt = 0.0;
+   Array <int> global_to_local;
 
    // Piecewise min and max of gf over all elements.
    void ComputeElementsMinMax(const ParGridFunction &gf,
@@ -97,6 +99,17 @@ protected:
    void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
                               const Vector &el_min, const Vector &el_max,
                               Vector &dof_min, Vector &dof_max) const;
+
+   void LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, 
+                              Vector &v, Vector &dv) const;
+
+   void HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
+                              const SparseMatrix &M_glb, Vector &v,
+                              Vector &d_v) const;
+
+   void MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, 
+                              const SparseMatrix &M_glb, Vector &v,
+                              Vector &d_v) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be moved.

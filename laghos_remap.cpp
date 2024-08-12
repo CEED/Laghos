@@ -29,9 +29,11 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
                              double cfl, bool remap_vel)
    : pmesh(m, true), dim(pmesh.Dimension()),
      fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
-     fec_H1(order_v, pmesh.Dimension()),
+     fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
+     fec_H1Lag(order_v, pmesh.Dimension()),
      pfes_L2(&pmesh, &fec_L2, 1),
      pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
+     pfes_H1Lag(&pmesh, &fec_H1Lag, pmesh.Dimension()),
      remap_v(remap_vel),
      cfl_factor(cfl),
      offsets(4), S(),
@@ -124,6 +126,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    int Ww = 350, Wh = 350; // window size
    int offx = Ww+10; // window offsets
    Wx += offx;
+   Wy += offx;
 
    double t = 0.0;
    bool last_step = false;
@@ -217,10 +220,10 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    : TimeDependentOperator(size),
      x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
      v_ess_tdofs(v_ess_td),
-     u(mesh_vel), u_coeff(&u),
+     u(mesh_vel), u_coeff(&u), u_hpr(&pfes_H1),
      rho_coeff(&rho),
      rho_u_coeff(rho_coeff, u_coeff),
-     Mr_H1(&pfes_H1_s), Kr_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s), 
+     Mr_H1(&pfes_H1_s), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s), 
      Cr_H1(&pfes_H1, &pfes_H1_s),
      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
      Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
@@ -238,13 +241,47 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    //lummpedMr_H1.SpMat().GetDiag(lumpedMr_H1_vec);
 
    //Kr_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
-   Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff, -1.0));
+   Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
    Kr_H1.Assemble(0);
    Kr_H1.Finalize(0);
 
+   KrT_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
+   KrT_H1.Assemble(0);
+   KrT_H1.Finalize(0);
+   
    Cr_H1.AddDomainIntegrator(new DivergenceIntegrator(rho_coeff));
    Cr_H1.Assemble(0);
    Cr_H1.Finalize(0);
+
+   /*
+   global_to_local.SetSize(pfes_H1_s.GlobalTrueVSize());
+   global_to_local = -1;
+   int counter = 0;
+   for(int g = 0; g < global_to_local.Size(); g++)
+   {
+      for(int i = 0; i < pfes_H1_s.GetVSize(); i++)
+      {
+         if(pfes_H1_s.GetGlobalTDofNumber(i) == g)
+         {
+            global_to_local[g] = i;
+            counter++;
+            break;
+         }
+      }
+      if(counter == pfes_H1_s.GetVSize())
+      {
+         break;
+      }
+   }
+   //*/
+
+   for(int i = 0; i < pfes_H1_s.GetVSize(); i++)
+   {
+      int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+      if(i_td == -1){continue;}
+
+      u_hpr(i_td) = u(i);
+   }
 
    M_L2.AddDomainIntegrator(new MassIntegrator);
    M_L2.Assemble(0);
@@ -293,6 +330,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    const int dim     = pfes_H1_s.GetMesh()->Dimension();
    const int NE      = pfes_H1_s.GetNE();
    const int dofs_h1 = pfes_H1_s.GetVSize(), size_L2 = pfes_L2.GetVSize();
+   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    // Move the mesh.
    const double t = GetTime();
@@ -352,36 +390,68 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Mr_H1.Assemble();
       Kr_H1.BilinearForm::operator=(0.0);
       Kr_H1.Assemble();
+      KrT_H1.BilinearForm::operator=(0.0);
+      KrT_H1.Assemble();
       Cr_H1.MixedBilinearForm::operator=(0.0);
       Cr_H1.Assemble();
+
+      //Kr_H1.SpMat().Print();
+      //MFEM_ABORT("");
       
       lummpedMr_H1.BilinearForm::operator=(0.0);
       lummpedMr_H1.Assemble();
       lummpedMr_H1.SpMat().GetDiag(lumpedMr_H1_vec);
 
       // Sum up to get global entries of the lumped mass matrix
+      //*
       GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
       Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
       gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
       gcomm.Bcast(lumpedmassmatrix_array);
+      //*/
+
+      for(int i = 0; i < lumpedMr_H1_vec.Size(); i++)
+      {
+         MFEM_VERIFY(lumpedMr_H1_vec(i) > 1e-12, "lumped mass matrix entry negative or zero!");
+      }
 
       // Get the global stencil of the local truedofs
       HypreParMatrix *M_hpm = Mr_H1.ParallelAssemble();
       HypreParMatrix *K_hpm = Kr_H1.ParallelAssemble();
-      SparseMatrix M_glb, K_glb;
+      HypreParMatrix *KT_hpm = KrT_H1.ParallelAssemble();
+      HypreParMatrix *C_hpm = Cr_H1.ParallelAssemble();
+      SparseMatrix M_glb, K_glb, KT_glb, C_glb;
       M_hpm->MergeDiagAndOffd(M_glb);
       K_hpm->MergeDiagAndOffd(K_glb);
+      KT_hpm->MergeDiagAndOffd(KT_glb);
+      C_hpm->MergeDiagAndOffd(C_glb);
       
-      // Array for rhs of a component of v
+      Vector v, v_d, d_v;
+      v.MakeRef(*U_ptr, 0, dofs_h1*dim);
+      d_v.MakeRef(dU, 0, dofs_h1*dim);
+      int scheme = 2;
+      switch(scheme)
+      {
+         case 0: LowOrderVel(K_glb, KT_glb, v, d_v); break;
+         case 1: HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v); break;
+         case 2: MCLVel(K_glb, KT_glb, M_glb, v, d_v); break;
+         default: MFEM_ABORT("Unknown scheme for velocity remap!");
+
+      }
+
+      
+      /*
+      //Vector *u_glb = u_hpr.GlobalVector();
       Array<double> rhs_array(dofs_h1);
       HypreParVector v_d_hpr(&pfes_H1_s);
-      Vector v_d, v, d_v;
-      d_v.MakeRef(dU, 0, dofs_h1*dim);
-      v.MakeRef(*U_ptr, 0, dofs_h1*dim);
+      //Vector v_d, v, d_v;
+      //d_v.MakeRef(dU, 0, dofs_h1*dim);
+      //v.MakeRef(*U_ptr, 0, dofs_h1*dim);
 
-      const auto I = K_glb.ReadI();
-      const auto J = K_glb.ReadJ();
+      const auto I = M_glb.ReadI();
+      const auto J = M_glb.ReadJ();
       const auto K = K_glb.ReadData();
+      const auto C = C_glb.ReadData();
       const auto M = M_glb.ReadData();
    
       for(int d = 0; d < dim; d++)
@@ -405,6 +475,10 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 
             int i_td = pfes_H1_s.GetLocalTDofNumber(i);
             if(i_td == -1) {continue;}
+            // check for essential true dof
+            int index = v_ess_tdofs.Find(i_td + d * pfes_H1_s.TrueVSize());
+            // if it is essential true dof, then skip it
+            if(index != -1){continue;}
 
             for(int k = I[i_td]; k < I[i_td+1]; k++)
             {  
@@ -412,9 +486,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
                int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
                if( i_gl == j_gl ) {continue;}
 
-               // under the assumption that kij=kji, which is the case if the boundary term vanishes (mesh_vel * n = 0)
-               double dij = 0.0; //max(0.0, max(K[k], -K[k]));
-               rhs_array[i] += (dij - K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
+               double dij = max( 0.0, max(K[k], KT_glb(i_td, j_gl)));
+               rhs_array[i] += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
             }
             rhs_array[i] /= lumpedMr_H1_vec(i);
          }
@@ -423,12 +496,12 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
          gcomm.Bcast(rhs_array);
 
          for(int i = 0; i < dofs_h1; i++)
-         {
+         {  
             d_v(i + d * dofs_h1) = rhs_array[i]; 
          }
+         delete v_d_glb;
       }
-
-      //d_v.SetSubVector(v_ess_tdofs, 0.0);
+      //*/
    }
 
 
@@ -491,6 +564,307 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    fct_e_solver.CalcFCTSolution(e_gf, Me_lumped, d_e_HO, d_e_LO,
                                 e_min, e_max, d_e);
 }
+
+void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, Vector &v, Vector &d_v) const
+{
+   GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
+   //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
+   //gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   //gcomm.Bcast(lumpedmassmatrix_array);
+
+   ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
+   const int dim     = pfes_H1_s.GetMesh()->Dimension();
+   const int dofs_h1 = pfes_H1_s.GetVSize();
+   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
+
+   d_v = 0.0;
+   Vector v_d;
+   Array<double> rhs_array(dofs_h1);
+   HypreParVector v_d_hpr(&pfes_H1_s);
+
+   const auto I = K_glb.ReadI();
+   const auto J = K_glb.ReadJ();
+   const auto K = K_glb.ReadData();
+   
+   for(int d = 0; d < dim; d++)
+   {
+      v_d.MakeRef(v, d * dofs_h1, dofs_h1);
+      for(int i = 0; i < dofs_h1; i++)
+      {
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td != -1)
+         {
+            v_d_hpr(i_td) = v_d(i);
+         }
+      }
+      Vector *v_d_glb = v_d_hpr.GlobalVector();
+      MFEM_VERIFY(v_d_hpr.Size() == K_glb.Height(), "true dof local vector size weird");
+      MFEM_VERIFY( v_d_glb->Size() == pfes_H1_s.GlobalTrueVSize(), "glb vector size weird");
+
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         rhs_array[i] = 0.0;
+
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td == -1) {continue;}
+
+         // check for essential true dof
+         int index = v_ess_tdofs.Find(i_td + d * pfes_H1_s.TrueVSize());
+         // if it is essential true dof, then skip it
+         if(index != -1){continue;}
+
+         int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+
+         for(int k = I[i_td]; k < I[i_td+1]; k++)
+         {  
+            int j_gl = J[k];
+            if( i_gl == j_gl ) {continue;}
+
+            double dij = max( 0.0, max(K[k], KT_glb(i_td, j_gl)));
+            rhs_array[i] += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
+         }
+         rhs_array[i] /= lumpedMr_H1_vec(i);
+
+
+      }
+
+      gcomm.Reduce<double>(rhs_array, GroupCommunicator::Sum);
+      gcomm.Bcast(rhs_array);
+
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         d_v(i + d * dofs_h1) = rhs_array[i]; 
+      }
+      delete v_d_glb;
+   }
+}
+
+void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, Vector &v, Vector &d_v) const
+{
+   GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
+   //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
+   //gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   //gcomm.Bcast(lumpedmassmatrix_array);
+
+   ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
+   const int dim     = pfes_H1_s.GetMesh()->Dimension();
+   const int dofs_h1 = pfes_H1_s.GetVSize();
+   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
+
+   d_v = 0.0;
+   Vector v_d;
+   Array<double> rhs_array(dofs_h1), udot_array(dofs_h1);
+   HypreParVector v_d_hpr(&pfes_H1_s), vdot(&pfes_H1_s);
+
+   const auto I = K_glb.ReadI();
+   const auto J = K_glb.ReadJ();
+   const auto K = K_glb.ReadData();
+   const auto M = M_glb.ReadData();
+   
+   for(int d = 0; d < dim; d++)
+   {
+      v_d.MakeRef(v, d * dofs_h1, dofs_h1);
+      for(int i = 0; i < dofs_h1; i++)
+      {
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td != -1)
+         {
+            v_d_hpr(i_td) = v_d(i);
+         }
+      }
+      Vector *v_d_glb = v_d_hpr.GlobalVector();
+      MFEM_VERIFY(v_d_hpr.Size() == K_glb.Height(), "true dof local vector size weird");
+      MFEM_VERIFY( v_d_glb->Size() == pfes_H1_s.GlobalTrueVSize(), "glb vector size weird");
+
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td == -1) {continue;}
+         vdot(i_td) = 0.0;
+         int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+
+         for(int k = I[i_td]; k < I[i_td+1]; k++)
+         {  
+            int j_gl = J[k];
+            if( i_gl == j_gl ) {continue;}
+
+            double dij = max( 0.0, max(K[k], KT_glb(i_td, j_gl)));
+            vdot(i_td) += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
+         }
+         vdot(i_td) /= lumpedMr_H1_vec(i);
+      }
+
+      Vector *vdot_glb = vdot.GlobalVector();
+
+
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         rhs_array[i] = 0.0;
+
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td == -1) {continue;}
+
+         // check for essential true dof
+         int index = v_ess_tdofs.Find(i_td + d * pfes_H1_s.TrueVSize());
+         // if it is essential true dof, then skip it
+         if(index != -1){continue;}
+
+         for(int k = I[i_td]; k < I[i_td+1]; k++)
+         {  
+            int j_gl = J[k];
+            int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+            if( i_gl == j_gl ) {continue;}
+
+            //double dij = max( 0.0, max(K[k], KT_glb(i_td, j_gl)));
+            rhs_array[i] += K[k] * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl)) + M[k] * ( vdot_glb->Elem(i_gl) - vdot_glb->Elem(j_gl));
+         }
+         rhs_array[i] /= lumpedMr_H1_vec(i);
+      }
+
+      gcomm.Reduce<double>(rhs_array, GroupCommunicator::Sum);
+      gcomm.Bcast(rhs_array);
+
+
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         d_v(i + d * dofs_h1) = rhs_array[i]; 
+      }
+      delete v_d_glb;
+      delete vdot_glb;
+   }
+}
+
+void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, Vector &v, Vector &d_v) const
+{
+   GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
+   //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
+   //gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   //gcomm.Bcast(lumpedmassmatrix_array);
+
+   ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
+   const int dim     = pfes_H1_s.GetMesh()->Dimension();
+   const int dofs_h1 = pfes_H1_s.GetVSize();
+   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
+
+   d_v = 0.0;
+   Vector v_d;
+   Array<double> rhs_array(dofs_h1), udot_array(dofs_h1);
+   HypreParVector v_d_hpr(&pfes_H1_s), vdot(&pfes_H1_s), v_min(&pfes_H1_s), v_max(&pfes_H1_s);
+   double fij, fij_bound, fij_star, wij, wji;
+
+   const auto I = K_glb.ReadI();
+   const auto J = K_glb.ReadJ();
+   const auto K = K_glb.ReadData();
+   const auto M = M_glb.ReadData();
+   
+   for(int d = 0; d < dim; d++)
+   {
+      v_d.MakeRef(v, d * dofs_h1, dofs_h1);
+      for(int i = 0; i < dofs_h1; i++)
+      {
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td != -1)
+         {
+            v_d_hpr(i_td) = v_d(i);
+         }
+      }
+      Vector *v_d_glb = v_d_hpr.GlobalVector();
+      MFEM_VERIFY(v_d_hpr.Size() == K_glb.Height(), "true dof local vector size weird");
+      MFEM_VERIFY( v_d_glb->Size() == pfes_H1_s.GlobalTrueVSize(), "glb vector size weird");
+
+      //compute low order time derivatives and local min and max
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td == -1) {continue;}
+         vdot(i_td) = 0.0;
+         int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+
+         v_min(i_td) = v_d_glb->Elem(i_gl);
+         v_max(i_td) = v_d_glb->Elem(i_gl);
+         for(int k = I[i_td]; k < I[i_td+1]; k++)
+         {  
+            int j_gl = J[k];
+            if( i_gl == j_gl ) {continue;}
+            v_min(i_td) = min(v_min(i_td), v_d_glb->Elem(j_gl));
+            v_max(i_td) = max(v_max(i_td), v_d_glb->Elem(j_gl));
+            double dij = max( 0.0, max(K[k], KT_glb(i_td, j_gl)));
+            vdot(i_td) += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
+         }
+         vdot(i_td) /= lumpedMr_H1_vec(i);
+      }
+
+      Vector *vdot_glb = vdot.GlobalVector();
+      Vector *vmin_glb = v_min.GlobalVector();
+      Vector *vmax_glb = v_max.GlobalVector();
+
+
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         rhs_array[i] = 0.0;
+
+         int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+         if(i_td == -1) {continue;}
+
+         // check for essential true dof
+         int index = v_ess_tdofs.Find(i_td + d * pfes_H1_s.TrueVSize());
+         // if it is essential true dof, then skip it
+         if(index != -1){continue;}
+
+         for(int k = I[i_td]; k < I[i_td+1]; k++)
+         {  
+            int j_gl = J[k];
+            int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+            if( i_gl == j_gl ) {continue;}
+
+            double dij = max( 0.0, max(K[k], KT_glb(i_td, j_gl)));
+
+            // compute target flux
+            fij = M[k] * (vdot_glb->Elem(i_gl) - vdot_glb->Elem(j_gl)) + dij * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl));
+            
+            //limit target flux to enforce local bounds for the bar states (note, that dij = dji)
+            wij = dij * (v_d_glb->Elem(i_gl) + v_d_glb->Elem(j_gl))  + K[k] * (v_d_glb->Elem(j_gl) - v_d_glb->Elem(i_gl));
+            wji = dij * (v_d_glb->Elem(i_gl) + v_d_glb->Elem(j_gl))  + KT_glb(i_td, j_gl) * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl)); 
+
+            if(fij > 0)
+            {
+               fij_bound = min(2.0 * dij * vmax_glb->Elem(i_gl) - wij, wji - 2.0 * dij * vmin_glb->Elem(j_gl));
+               fij_star = min(fij, fij_bound);
+
+               // to get rid of rounding errors wich influence the sign 
+               //fij_star = max(0.0, fij_star);
+            }
+            else
+            {
+               fij_bound = max(2.0 * dij * vmin_glb->Elem(i_gl) - wij, wji - 2.0 * dij * vmax_glb->Elem(j_gl));
+               fij_star = max(fij, fij_bound);
+
+               // to get rid of rounding errors wich influence the sign
+               //fij_star = min(0.0, fij_star);
+            }
+
+            rhs_array[i] += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl)) + fij_star;
+         }
+         rhs_array[i] /= lumpedMr_H1_vec(i);
+      }
+
+      gcomm.Reduce<double>(rhs_array, GroupCommunicator::Sum);
+      gcomm.Bcast(rhs_array);
+
+
+      for(int i = 0; i < dofs_h1; i++)
+      {  
+         d_v(i + d * dofs_h1) = rhs_array[i]; 
+      }
+
+      delete v_d_glb;
+      delete vdot_glb;
+      delete vmin_glb;
+      delete vmax_glb;
+   }
+}
+
+
 
 double AdvectorOper::Momentum(ParGridFunction &v, double t)
 {
