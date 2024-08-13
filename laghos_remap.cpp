@@ -26,7 +26,7 @@ namespace hydrodynamics
 {
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                             double cfl, bool remap_vel)
+                             double cfl, bool remap_vel, const Array<int> &ess_tdofs)
    : pmesh(m, true), dim(pmesh.Dimension()),
      fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
      fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
@@ -34,12 +34,17 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
      pfes_L2(&pmesh, &fec_L2, 1),
      pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
      pfes_H1Lag(&pmesh, &fec_H1Lag, pmesh.Dimension()),
+     v_ess_tdofs(ess_tdofs),
+     //M_mixed(&pfes_H1, &pfes_H1Lag),
+     //M_mixed(&pfes_H1Lag, &pfes_H1),
      remap_v(remap_vel),
      cfl_factor(cfl),
      offsets(4), S(),
      v(), rho(), e(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
+   //const int dim = pmesh.Dimension();
+   //const int ssice_H1 = pfes_H1.GetVSize() / dim;
 
    // Arrangement: velocity (dim), density (1), energy (1).
    offsets[0] = 0;
@@ -51,6 +56,8 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
    v.MakeRef(&pfes_H1, S, offsets[0]);
    rho.MakeRef(&pfes_L2, S, offsets[1]);
    e.MakeRef(&pfes_L2, S, offsets[2]);
+
+   
 }
 
 void RemapAdvector::InitFromLagr(const Vector &nodes0,
@@ -60,8 +67,53 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
                                  const ParGridFunction &energy)
 {
    x0 = nodes0;
-   v  = vel;
    e  = energy;
+   // project velocity field into Bernstein FE space via lumped L2 projection
+   ParMixedBilinearForm M_mixed(&pfes_H1Lag, &pfes_H1);
+   M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
+   M_mixed.Assemble(0);
+   M_mixed.Finalize(0);
+
+   HypreParMatrix *M_mixed_hpm = M_mixed.ParallelAssemble();
+
+   ParBilinearForm M_lumped(&pfes_H1);
+   M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
+   M_lumped.Assemble(0);
+   M_lumped.Finalize(0);
+
+   Vector lumped_vec(M_lumped.Height());
+   M_lumped.SpMat().GetDiag(lumped_vec);
+   GroupCommunicator &gcomm = pfes_H1.GroupComm();
+   Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
+   gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   gcomm.Bcast(lumpedmassmatrix_array);
+
+   const Operator *P_lag = pfes_H1Lag.GetProlongationMatrix();
+   const Operator *P_bern = pfes_H1.GetProlongationMatrix();
+   Vector VEL(P_lag->Width()), B(P_bern->Width());
+   Vector b(v.Size());
+   P_lag->MultTranspose(vel, VEL);
+   M_mixed_hpm->Mult(VEL, B);
+   P_bern->Mult(B, b);
+
+   int i_td, ess_tdof_index;
+   for(int i = 0; i < v.Size(); i++)
+   {  
+      //v(i) = 0.0;
+      i_td = pfes_H1.GetLocalTDofNumber(i);
+      ess_tdof_index = v_ess_tdofs.Find(i_td);
+
+      bool not_essential_tdof = (i_td != -1 && ess_tdof_index == -1);
+      v(i) = not_essential_tdof  * b(i) / lumped_vec(i);
+      if(!not_essential_tdof)
+      {
+         MFEM_VERIFY(abs(v(i)) < 1e-15, "bool multiplication weird");
+      }
+   } 
+   Array<double> v_array(v.GetData(), v.Size());
+   gcomm.Reduce<double>(v_array, GroupCommunicator::Sum);
+   gcomm.Bcast(v_array);
+
 
    e_max = e.Max();
    MPI_Allreduce(MPI_IN_PLACE, &e_max, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
@@ -167,9 +219,55 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
 {
    // This is used to update the mass matrices.
    rho0_gf = rho;
+   
+   ParMixedBilinearForm M_mixed(&pfes_H1, &pfes_H1Lag);
+   M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
+   M_mixed.Assemble(0);
+   M_mixed.Finalize(0);
 
+   const Operator *P_lag = pfes_H1Lag.GetProlongationMatrix();
+   const Operator *P_bern = pfes_H1.GetProlongationMatrix();
+   HypreParMatrix *M_mixed_hpm = M_mixed.ParallelAssemble();
+   Vector V(P_bern->Width()), B(P_bern->Width());
+   Vector b(v.Size());
+   P_bern->MultTranspose(v, V);
+   M_mixed_hpm->Mult(V, B);
+   P_lag->Mult(B, b);
+
+   ParBilinearForm M_lumped(&pfes_H1Lag);
+   M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
+   M_lumped.Assemble(0);
+   M_lumped.Finalize(0);
+
+   Vector lumped_vec(M_lumped.Height());
+   M_lumped.SpMat().GetDiag(lumped_vec);
+   GroupCommunicator &gcomm = pfes_H1Lag.GroupComm();
+   Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
+   gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   gcomm.Bcast(lumpedmassmatrix_array);
+
+   MFEM_VERIFY(vel.Size() == lumped_vec.Size(), "lumped size wrong");
+   MFEM_VERIFY(v.Size() == vel.Size(), "lumped size wrong");
    // Just copy velocity.
-   vel = v;
+   int i_td, ess_tdof_index;
+   for(int i = 0; i < v.Size(); i++)
+   {
+      i_td = pfes_H1.GetLocalTDofNumber(i);
+      ess_tdof_index = v_ess_tdofs.Find(i_td);
+      bool not_essential_tdof = (i_td != -1 && ess_tdof_index == -1);
+      vel(i) = not_essential_tdof * b(i) / lumped_vec(i);
+
+      if(!not_essential_tdof)
+      {
+         MFEM_VERIFY(abs(vel(i)) < 1e-15, "bool multiplication weird");
+      }
+      Array<double> vel_array(vel.GetData(), vel.Size());
+      gcomm.Reduce<double>(vel_array, GroupCommunicator::Sum);
+      gcomm.Bcast(vel_array);
+   }
+   //vel = v;
+
+
 
    ParMesh &pmesh_lagr = *vel.ParFESpace()->GetParMesh();
    const int NE  = pmesh_lagr.GetNE(),
@@ -392,8 +490,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Kr_H1.Assemble();
       KrT_H1.BilinearForm::operator=(0.0);
       KrT_H1.Assemble();
-      Cr_H1.MixedBilinearForm::operator=(0.0);
-      Cr_H1.Assemble();
+      //Cr_H1.MixedBilinearForm::operator=(0.0);
+      //Cr_H1.Assemble();
 
       //Kr_H1.SpMat().Print();
       //MFEM_ABORT("");
@@ -436,72 +534,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
          case 1: HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v); break;
          case 2: MCLVel(K_glb, KT_glb, M_glb, v, d_v); break;
          default: MFEM_ABORT("Unknown scheme for velocity remap!");
-
       }
-
-      
-      /*
-      //Vector *u_glb = u_hpr.GlobalVector();
-      Array<double> rhs_array(dofs_h1);
-      HypreParVector v_d_hpr(&pfes_H1_s);
-      //Vector v_d, v, d_v;
-      //d_v.MakeRef(dU, 0, dofs_h1*dim);
-      //v.MakeRef(*U_ptr, 0, dofs_h1*dim);
-
-      const auto I = M_glb.ReadI();
-      const auto J = M_glb.ReadJ();
-      const auto K = K_glb.ReadData();
-      const auto C = C_glb.ReadData();
-      const auto M = M_glb.ReadData();
-   
-      for(int d = 0; d < dim; d++)
-      {
-         v_d.MakeRef(v, d * dofs_h1, dofs_h1);
-         for(int i = 0; i < dofs_h1; i++)
-         {
-            int i_td = pfes_H1_s.GetLocalTDofNumber(i);
-            if(i_td != -1)
-            {
-               v_d_hpr(i_td) = v_d(i);
-            }
-         }
-         Vector *v_d_glb = v_d_hpr.GlobalVector();
-         MFEM_VERIFY(v_d_hpr.Size() == K_glb.Height(), "true dof local vector size weird");
-         MFEM_VERIFY( v_d_glb->Size() == pfes_H1_s.GlobalTrueVSize(), "glb vector size weird");
-
-         for(int i = 0; i < dofs_h1; i++)
-         {  
-            rhs_array[i] = 0.0;
-
-            int i_td = pfes_H1_s.GetLocalTDofNumber(i);
-            if(i_td == -1) {continue;}
-            // check for essential true dof
-            int index = v_ess_tdofs.Find(i_td + d * pfes_H1_s.TrueVSize());
-            // if it is essential true dof, then skip it
-            if(index != -1){continue;}
-
-            for(int k = I[i_td]; k < I[i_td+1]; k++)
-            {  
-               int j_gl = J[k];
-               int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
-               if( i_gl == j_gl ) {continue;}
-
-               double dij = max( 0.0, max(K[k], KT_glb(i_td, j_gl)));
-               rhs_array[i] += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
-            }
-            rhs_array[i] /= lumpedMr_H1_vec(i);
-         }
-
-         gcomm.Reduce<double>(rhs_array, GroupCommunicator::Sum);
-         gcomm.Bcast(rhs_array);
-
-         for(int i = 0; i < dofs_h1; i++)
-         {  
-            d_v(i + d * dofs_h1) = rhs_array[i]; 
-         }
-         delete v_d_glb;
-      }
-      //*/
    }
 
 
@@ -611,7 +644,12 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
          // check for essential true dof
          int index = v_ess_tdofs.Find(i_td + d * pfes_H1_s.TrueVSize());
          // if it is essential true dof, then skip it
-         if(index != -1){continue;}
+         if(index != -1)
+         {
+            // if truedof set dv/dt to zero under the assumption, 
+            // that the last timestep already satisfies the bc
+            continue;
+         }
 
          int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
 

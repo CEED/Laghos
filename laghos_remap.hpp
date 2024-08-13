@@ -37,6 +37,8 @@ private:
    L2_FECollection fec_L2;
    H1_FECollection fec_H1, fec_H1Lag;
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
+   const Array<int> &v_ess_tdofs;
+   //mutable ParMixedBilinearForm M_mixed;
    bool remap_v;
 
    const double cfl_factor;
@@ -53,7 +55,7 @@ private:
 
 public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                 double cfl, bool remap_vel);
+                 double cfl, bool remap_vel, const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
@@ -90,6 +92,7 @@ protected:
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
    double dt = 0.0;
+   
    Array <int> global_to_local;
 
    // Piecewise min and max of gf over all elements.

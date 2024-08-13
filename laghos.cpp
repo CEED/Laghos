@@ -612,7 +612,7 @@ int main(int argc, char *argv[])
 
          // Setup and initialize the remap operator.
          const double cfl_remap = 0.1;
-         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap, remap_v_adv);
+         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap, remap_v_adv, ess_tdofs);
 
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
