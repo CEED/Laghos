@@ -147,6 +147,7 @@ int main(int argc, char *argv[])
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
+   bool remap_v_stable = false;
    int dev = 0;
    double blast_energy = 0.25;
 
@@ -199,6 +200,8 @@ int main(int argc, char *argv[])
                   "Visualize every n-th timestep.");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
+   args.AddOption(&remap_v_stable, "-vrl", "--vremaplimited", "-no-vrl", "--no-vremaplimited",
+                  "Use limiter for the advection based remap of the velocity field.");
    args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
@@ -607,12 +610,12 @@ int main(int argc, char *argv[])
          ParGridFunction x_gf_opt(&H1FESpace);
          OptimizeMesh(x_gf, hydro.GetIntRule(), x_gf_opt);
 
-         const bool remap_v_gslib = false;
-         const bool remap_v_adv   = !remap_v_gslib;
+         //const bool remap_v_gslib = false;
+         //const bool remap_v_stable   = false;
 
          // Setup and initialize the remap operator.
          const double cfl_remap = 0.1;
-         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap, remap_v_adv, ess_tdofs);
+         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap, remap_v_stable, ess_tdofs);
 
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
@@ -620,20 +623,14 @@ int main(int argc, char *argv[])
          // Remap to x_gf_opt.
          adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs);
 
-         ParGridFunction v_new(&H1FESpace);
-
-         if (remap_v_gslib)
-         {
-         //   InterpolationRemap interp;
-         //   interp.Remap(v_gf, x_gf_opt, v_new);
-         }
+         //ParGridFunction v_new(&H1FESpace);
 
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x_gf_opt;
          adv.TransferToLagr(rho0_gf, v_gf,
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),
                             hydro.GetIntRule_b(), hydro.GetRhoDetJ_be(), e_gf);
-         if (remap_v_gslib) { v_gf = v_new; }
+         //if (remap_v_gslib) { v_gf = v_new; }
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.

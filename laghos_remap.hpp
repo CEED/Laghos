@@ -39,7 +39,7 @@ private:
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
    const Array<int> &v_ess_tdofs;
    //mutable ParMixedBilinearForm M_mixed;
-   bool remap_v;
+   bool remap_v_stable;
 
    const double cfl_factor;
 
@@ -55,7 +55,7 @@ private:
 
 public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                 double cfl, bool remap_vel, const Array<int> &ess_tdofs);
+                 double cfl, bool remap_v_stable, const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
@@ -76,18 +76,16 @@ public:
 class AdvectorOper : public TimeDependentOperator
 {
 protected:
-   bool remap_v = true;
+   bool remap_v_stable; // = false;
 
    const Vector &x0;
    Vector &x_now;
    const Array<int> &v_ess_tdofs;
    ParGridFunction &u;
-   HypreParVector u_hpr;
    VectorGridFunctionCoefficient u_coeff;
    GridFunctionCoefficient rho_coeff;
    ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm Mr_H1, Kr_H1, KrT_H1, lummpedMr_H1;
-   mutable ParMixedBilinearForm Cr_H1;
    mutable Vector lumpedMr_H1_vec;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
@@ -122,9 +120,11 @@ public:
                 ParGridFunction &rho,
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,
-                ParFiniteElementSpace &pfes_L2);
+                ParFiniteElementSpace &pfes_L2, 
+                bool remap_v);
 
-   void SetVelocityRemap(bool flag) { remap_v = flag; }
+   // obsolete
+   void SetVelocityRemap(bool flag) { remap_v_stable = flag; }
 
    // Single RK stage solve for all fields contained in U.
    virtual void Mult(const Vector &U, Vector &dU) const;
