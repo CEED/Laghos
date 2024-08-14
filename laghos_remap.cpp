@@ -74,42 +74,72 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    M_mixed.Assemble(0);
    M_mixed.Finalize(0);
 
-   HypreParMatrix *M_mixed_hpm = M_mixed.ParallelAssemble();
+   OperatorHandle M;
+   //M.Reset(M_mixed.ParallelAssemble());
+   M_mixed.FormRectangularSystemMatrix(v_ess_tdofs, v_ess_tdofs, M);
 
    ParBilinearForm M_lumped(&pfes_H1);
    M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
    M_lumped.Assemble(0);
    M_lumped.Finalize(0);
 
-   Vector lumped_vec(M_lumped.Height());
-   M_lumped.SpMat().GetDiag(lumped_vec);
-   GroupCommunicator &gcomm = pfes_H1.GroupComm();
-   Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
-   gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
-   gcomm.Bcast(lumpedmassmatrix_array);
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+   CGSolver lin_solver(pfes_H1.GetComm());
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetRelTol(1e-8);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   OperatorHandle Mass_oper;
 
-   const Operator *P_lag = pfes_H1Lag.GetProlongationMatrix();
-   const Operator *P_bern = pfes_H1.GetProlongationMatrix();
-   Vector VEL(P_lag->Width()), B(P_bern->Width());
-   Vector b(v.Size());
-   P_lag->MultTranspose(vel, VEL);
-   M_mixed_hpm->Mult(VEL, B);
-   P_bern->Mult(B, b);
+   Mass_oper.Reset(M_lumped.ParallelAssemble());
+   lin_solver.SetOperator(*Mass_oper);
 
-   int i_td, ess_tdof_index;
-   for(int i = 0; i < v.Size(); i++)
-   {  
+   const Operator *P_v = pfes_H1.GetRestrictionMatrix();
+   Vector RHS_V(P_v->Height()), X_V(P_v->Height()), VEL(P_v->Height());
+   P_v->Mult(vel, VEL);
+   M->Mult(VEL, RHS_V);
+   X_V = 0.0;
+   OperatorHandle M_elim;
+   M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
+   Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
+   lin_solver.Mult(RHS_V, X_V);
+   P_v->MultTranspose(X_V, v);
+
+   //Vector lumped_vec(M_lumped.Height());
+   //M_lumped.SpMat().GetDiag(lumped_vec);
+   //GroupCommunicator &gcomm = pfes_H1.GroupComm();
+   //Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
+   //gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   //gcomm.Bcast(lumpedmassmatrix_array);
+
+   //const Operator *P_lag = pfes_H1Lag.GetProlongationMatrix();
+   //const Operator *P = pfes_H1.GetProlongationMatrix();
+   //Vector VEL(P->Width()), B(P->Width()), ML_VEC(P->Width());
+   //Vector b(v.Size());
+   //P->MultTranspose(vel, VEL);
+   //P->MultTranspose(lumped_vec, ML_VEC);
+   //M->Mult(VEL, B);
+   //B /= ML_VEC;
+   //P->Mult(B, v);
+   //v /= lumped_vec;
+
+   //int i_td, ess_tdof_index;
+   //for(int i = 0; i < v.Size(); i++)
+   //{  
       //v(i) = 0.0;
-      i_td = pfes_H1.GetLocalTDofNumber(i);
-      ess_tdof_index = v_ess_tdofs.Find(i_td);
+      //i_td = pfes_H1.GetLocalTDofNumber(i);
+      //ess_tdof_index = v_ess_tdofs.Find(i_td);
 
-      bool not_essential_tdof = (i_td != -1 && ess_tdof_index == -1);
-      v(i) = not_essential_tdof  * b(i) / lumped_vec(i);
-      if(!not_essential_tdof)
-      {
-         MFEM_VERIFY(abs(v(i)) < 1e-15, "bool multiplication weird");
-      }
-   } 
+      //bool not_essential_tdof = (i_td != -1 && ess_tdof_index == -1);
+      //v(i) = b(i) / lumped_vec(i);
+      //if(!not_essential_tdof)
+      //{
+      //   MFEM_VERIFY(abs(v(i)) < 1e-15, "bool multiplication weird");
+      //}
+   //} 
+   GroupCommunicator &gcomm = pfes_H1.GroupComm();
    Array<double> v_array(v.GetData(), v.Size());
    gcomm.Reduce<double>(v_array, GroupCommunicator::Sum);
    gcomm.Bcast(v_array);
@@ -225,46 +255,78 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    M_mixed.Assemble(0);
    M_mixed.Finalize(0);
 
-   const Operator *P_lag = pfes_H1Lag.GetProlongationMatrix();
-   const Operator *P_bern = pfes_H1.GetProlongationMatrix();
-   HypreParMatrix *M_mixed_hpm = M_mixed.ParallelAssemble();
-   Vector V(P_bern->Width()), B(P_bern->Width());
-   Vector b(v.Size());
-   P_bern->MultTranspose(v, V);
-   M_mixed_hpm->Mult(V, B);
-   P_lag->Mult(B, b);
+   OperatorHandle M;
+   M.Reset(M_mixed.ParallelAssemble());
 
    ParBilinearForm M_lumped(&pfes_H1Lag);
    M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
    M_lumped.Assemble(0);
    M_lumped.Finalize(0);
 
-   Vector lumped_vec(M_lumped.Height());
-   M_lumped.SpMat().GetDiag(lumped_vec);
-   GroupCommunicator &gcomm = pfes_H1Lag.GroupComm();
-   Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
-   gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
-   gcomm.Bcast(lumpedmassmatrix_array);
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+   CGSolver lin_solver(pfes_H1.GetComm());
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetRelTol(1e-8);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   OperatorHandle Mass_oper;
 
-   MFEM_VERIFY(vel.Size() == lumped_vec.Size(), "lumped size wrong");
-   MFEM_VERIFY(v.Size() == vel.Size(), "lumped size wrong");
+   Mass_oper.Reset(M_lumped.ParallelAssemble());
+   lin_solver.SetOperator(*Mass_oper);
+
+   const Operator *P_v = pfes_H1.GetRestrictionMatrix();
+   Vector RHS_V(P_v->Height()), X_V(P_v->Height()), V(P_v->Height());
+   P_v->Mult(v, V);
+   M->Mult(V, RHS_V);
+   X_V = 0.0;
+   OperatorHandle M_elim;
+   M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
+   Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
+   lin_solver.Mult(RHS_V, X_V);
+   P_v->MultTranspose(X_V, vel);
+
+   //const Operator *P_lag = pfes_H1Lag.GetProlongationMatrix();
+   //HypreParMatrix *M_mixed_hpm = M_mixed.ParallelAssemble();
+   //Vector V(P_bern->Width()), B(P_bern->Width());
+   //Vector b(v.Size());
+   //P_bern->MultTranspose(v, V);
+   //M_mixed_hpm->Mult(V, B);
+   //P_lag->Mult(B, b);
+
+   //ParBilinearForm M_lumped(&pfes_H1Lag);
+   //M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
+   //M_lumped.Assemble(0);
+   //M_lumped.Finalize(0);
+
+   //Vector lumped_vec(M_lumped.Height());
+   //M_lumped.SpMat().GetDiag(lumped_vec);
+   //GroupCommunicator &gcomm = pfes_H1Lag.GroupComm();
+   //Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
+   //gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   //gcomm.Bcast(lumpedmassmatrix_array);
+
+   //MFEM_VERIFY(vel.Size() == lumped_vec.Size(), "lumped size wrong");
+   //MFEM_VERIFY(v.Size() == vel.Size(), "lumped size wrong");
    // Just copy velocity.
-   int i_td, ess_tdof_index;
-   for(int i = 0; i < v.Size(); i++)
-   {
-      i_td = pfes_H1.GetLocalTDofNumber(i);
-      ess_tdof_index = v_ess_tdofs.Find(i_td);
-      bool not_essential_tdof = (i_td != -1 && ess_tdof_index == -1);
-      vel(i) = not_essential_tdof * b(i) / lumped_vec(i);
+   //int i_td, ess_tdof_index;
+   //for(int i = 0; i < v.Size(); i++)
+   //{
+   //   i_td = pfes_H1.GetLocalTDofNumber(i);
+   //   ess_tdof_index = v_ess_tdofs.Find(i_td);
+   //   bool not_essential_tdof = (i_td != -1 && ess_tdof_index == -1);
+   //   vel(i) = not_essential_tdof * b(i) / lumped_vec(i);
 
-      if(!not_essential_tdof)
-      {
-         MFEM_VERIFY(abs(vel(i)) < 1e-15, "bool multiplication weird");
-      }
-      Array<double> vel_array(vel.GetData(), vel.Size());
-      gcomm.Reduce<double>(vel_array, GroupCommunicator::Sum);
-      gcomm.Bcast(vel_array);
-   }
+   //   if(!not_essential_tdof)
+   //   {
+   //      MFEM_VERIFY(abs(vel(i)) < 1e-15, "bool multiplication weird");
+   ///   }
+   GroupCommunicator &gcomm = pfes_H1Lag.GroupComm();
+   Array<double> vel_array(vel.GetData(), vel.Size());
+   gcomm.Reduce<double>(vel_array, GroupCommunicator::Sum);
+   gcomm.Bcast(vel_array);
+   //}
    //vel = v;
 
 
