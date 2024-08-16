@@ -85,7 +85,7 @@ protected:
    VectorGridFunctionCoefficient u_coeff;
    GridFunctionCoefficient rho_coeff;
    ScalarVectorProductCoefficient rho_u_coeff;
-   mutable ParBilinearForm Mr_H1, Kr_H1, KrT_H1, lummpedMr_H1;
+   mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
    mutable Vector lumpedMr_H1_vec;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
