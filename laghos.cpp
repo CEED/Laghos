@@ -82,8 +82,9 @@
 // ALE tests:
 // mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 // mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
-//   dist = 0.02
-// mpirun -np 7 laghos -m data/circles.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
+//   dist = 0.02 with advection.
+// mpirun -np 7 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
+// mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 
 #include <fstream>
 #include <sys/time.h>
@@ -132,6 +133,7 @@ int main(int argc, char *argv[])
    int order_q = -1;
    int ode_solver_type = 4;
    double t_final = 0.6;
+   double penalty_param = 20.0;
    double ale_period = -1.0;
    double cfl = 0.5;
    double cg_tol = 1e-8;
@@ -177,6 +179,8 @@ int main(int argc, char *argv[])
                   "            7 - RK2Avg.");
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
+   args.AddOption(&penalty_param, "-pp", "--penalty-param",
+                  "Penalty constant for the BC.");
    args.AddOption(&ale_period, "-ale", "--ale-period",
                   "ALE period interval in physical time.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
@@ -249,7 +253,8 @@ int main(int argc, char *argv[])
       blast_position[0] = 1.0;
       blast_position[1] = 0.0;
    }
-   if (strcmp(mesh_file, "data/circles.mesh") == 0)
+   if (strcmp(mesh_file, "data/circles3.mesh") == 0 ||
+       strcmp(mesh_file, "data/circles4.mesh") == 0)
    {
       blast_position[0] =  -1.0;
       blast_position[1] =   0.0;
@@ -406,7 +411,7 @@ int main(int argc, char *argv[])
    Line_Bottom line_bottom(fit_marker_bottom);
    Line_Left line_left(fit_marker_left);
    Circle circle_out(fit_marker_out, 1.0);
-   Circle circle_in(fit_marker_in,  0.2);
+   Circle circle_in(fit_marker_in, 0.4);
    Array<AnalyticSurface *> surf_array;
    if (strcmp(mesh_file, "data/wall_linear.mesh") == 0 ||
        strcmp(mesh_file, "data/wall_a02_b05_c15.mesh") == 0)
@@ -416,7 +421,8 @@ int main(int argc, char *argv[])
       surf_array.Append(&line_bottom);
       surf_array.Append(&line_left);
    }
-   else if (strcmp(mesh_file, "data/circles.mesh") == 0)
+   else if (strcmp(mesh_file, "data/circles3.mesh") == 0 ||
+            strcmp(mesh_file, "data/circles4.mesh") == 0)
    {
       surf_array.Append(&circle_out);
       surf_array.Append(&circle_in);
@@ -502,16 +508,6 @@ int main(int argc, char *argv[])
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
-   // const int dofs = x_gf.Size() / 2;
-   // for (int i = 0; i < dofs; i++)
-   // {
-   //    if (fabs(x_gf(i) - 0.0) < 1e-6 && x_gf(i + dofs) > 0.0)
-   //    {
-   //       std::cout << x_gf(i) << " " << x_gf(i + dofs) << std::endl;
-   //    }
-   // }
-   // return 0;
-
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
@@ -544,13 +540,12 @@ int main(int argc, char *argv[])
       e_coeff.SetTol(1e-6);
       l2_e.ProjectCoefficient(e_coeff);
 
-      ParGridFunction sss(l2_e);
+      // ParGridFunction sss(l2_e);
+      // DeltaCoefficient e2_coeff(0.4, 0.0, 0.0, blast_energy);
+      // e2_coeff.SetTol(1e-6);
+      // sss.ProjectCoefficient(e2_coeff);
 
-      DeltaCoefficient e2_coeff(0.0, 0.447214, 0.0, blast_energy);
-      e2_coeff.SetTol(1e-6);
-      sss.ProjectCoefficient(e2_coeff);
-
-      l2_e += sss;
+      // l2_e += sss;
    }
    else
    {
@@ -585,8 +580,7 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
-   const double pen_param = 20.0,
-                perimeter = 12.0; // TODO fix this.
+   const double perimeter = 12.0; // TODO fix this.
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace,
                                                 ess_tdofs, BC_strong,
@@ -594,7 +588,7 @@ int main(int argc, char *argv[])
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, pen_param, perimeter,
+                                                order_q, penalty_param, perimeter,
                                                 surfaces, be_to_surface);
 
    socketstream vis_rho, vis_v, vis_e, vis_p, vis_q;
@@ -731,7 +725,7 @@ int main(int argc, char *argv[])
          OptimizeMesh(x_gf, surfaces,
                       hydro.GetIntRule(), hydro.GetIntRule_b(), x_gf_opt);
 
-         const bool remap_v_gslib = true;
+         const bool remap_v_gslib = false;
          const bool remap_v_adv   = !remap_v_gslib;
 
          // Setup and initialize the remap operator.

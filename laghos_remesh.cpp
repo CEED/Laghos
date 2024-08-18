@@ -118,6 +118,14 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
             ess_vdofs.Append(vdofs[j+nd]);
          }
       }
+      else if (attr == 7)
+      {
+         for (int j = 0; j < nd; j++)
+         {
+            // Eliminate y component.
+            ess_vdofs.Append(vdofs[j+nd]);
+         }
+      }
    }
 
    ParFiniteElementSpace pfes_scalar(pmesh, pfes_mesh->FEColl(), 1);
@@ -179,7 +187,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction dist(&pfes_dist);
-   dist = 10.0; // smaller is less motion.
+   dist = 0.05; // smaller is less motion.
    ConstantCoefficient limit_coeff(1.0);
    integ->EnableLimiting(x0, dist, limit_coeff);
 
@@ -200,7 +208,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    solver.SetOperator(nlf);
    solver.SetPreconditioner(minres);
    solver.SetPrintLevel(1);
-   solver.SetMaxIter(50);
+   solver.SetMaxIter(100);
    solver.SetRelTol(1e-6);
    solver.SetAbsTol(0.0);
 
