@@ -38,7 +38,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
      remap_v_stable(remap_vel),
      cfl_factor(cfl),
      offsets(4), S(),
-     v(), rho(), e(), x0()
+     v(&pfes_H1), rho(), e(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
 
@@ -67,6 +67,8 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 
    if(remap_v_stable)
    {
+      GridFunction v_dummy(&pfes_H1);
+      v = v_dummy;
       // project velocity field into Bernstein FE space via lumped L2 projection
       ParMixedBilinearForm M_mixed(&pfes_H1Lag, &pfes_H1);
       M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
@@ -95,11 +97,16 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
       M->Mult(VEL, RHS_V);
       RHS_V /= M_L;
       v.Distribute(RHS_V);
+      //MFEM_ABORT("");
+      //v = vel;
    }
    else
    {
       // otherwise just copy velocity
+      //GridFunction v_dummy(&pfes_H1Lag);
+      //v = v_dummy;
       v = vel;
+      cout << " just copied " << v.Max()<< endl;
    }
 
 
@@ -112,7 +119,8 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 }
 
 void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
-                                         const Array<int> &ess_tdofs)
+                                         const Array<int> &ess_tdofs,
+                                         const Array<int> &ess_vdofs)
 {
    const int vsize_H1 = pfes_H1.GetVSize();
 
@@ -132,14 +140,14 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       // Bernstein scalar space. 
       // Scalar space only used when velocity remap with limiter
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1.FEColl(), 1);
-      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, u, rho,
+      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho,
                      pfes_H1, *pfes_H1_s, pfes_L2, remap_v_stable);
    }
    else
    {
       // Define scalar FE spaces for the solution, and the advection operator.
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1Lag.FEColl(), 1);
-      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, u, rho,
+      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho,
                      pfes_H1Lag, *pfes_H1_s, pfes_L2, remap_v_stable);
    }
    //oper.SetVelocityRemap(remap_v);
@@ -165,8 +173,8 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    }
 
    double v_loc = u_max, h_loc = h_min;
-   MPI_Allreduce(&v_loc, &u_max, 1, MPI_DOUBLE, MPI_MAX, pfes_H1.GetComm());
-   MPI_Allreduce(&h_loc, &h_min, 1, MPI_DOUBLE, MPI_MIN, pfes_H1.GetComm());
+   MPI_Allreduce(&v_loc, &u_max, 1, MPI_DOUBLE, MPI_MAX, pfes_H1Lag.GetComm());
+   MPI_Allreduce(&h_loc, &h_min, 1, MPI_DOUBLE, MPI_MIN, pfes_H1Lag.GetComm());
 
    if (u_max == 0.0) { return; } // No need to change the fields.
 
@@ -182,9 +190,11 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    int offy = Ww+100; // window offsets y
    Wx += offx;
    Wy += offy;
-
+   cout << v.Max() << endl;
    VisualizeField(vis_v, vishost, visport,
                                           v, "Remapped Velocity", Wx, Wy, Ww, Wh);
+
+   //MFEM_ABORT("");
    double t = 0.0;
    bool last_step = false;
    for (int ti = 1; !last_step; ti++)
@@ -304,6 +314,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
                            const Array<int> &v_ess_td,
+                           const Array<int> &v_ess_vd,
                            ParGridFunction &mesh_vel,
                            ParGridFunction &rho,
                            ParFiniteElementSpace &pfes_H1,
@@ -313,6 +324,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    : TimeDependentOperator(size),
      x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
      v_ess_tdofs(v_ess_td),
+     v_ess_vdofs(v_ess_vd),
      u(mesh_vel), u_coeff(&u),
      rho_coeff(&rho),
      rho_u_coeff(rho_coeff, u_coeff),
@@ -341,6 +353,42 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
       KrT_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
       KrT_H1.Assemble(0);
       KrT_H1.Finalize(0);
+      HypreParVector gl_ess_tdof(&pfes_H1);
+      gl_ess_tdof = -1.0;
+      for(int i = 0; i < pfes_H1.TrueVSize(); i++)
+      {
+         if(v_ess_tdofs.Find(i) != -1)
+         {
+            gl_ess_tdof(i) = 1.0;
+         }
+      }
+      auto gl_ess = gl_ess_tdof.GlobalVector();
+
+      is_global_ess_dof.SetSize(gl_ess->Size());
+      for(int i = 0; i < gl_ess->Size(); i++)
+      {
+         is_global_ess_dof[i] = (gl_ess->Elem(i) > 0.0);
+      }
+      delete gl_ess;
+      /*
+      cout << is_global_ess_dof.Size() << endl;
+      cout << endl;
+      if(Mpi::Root())
+      {
+         int counter = 0;
+         for(int i = 0; i < is_global_ess_dof.Size(); i++)
+         {
+            if(is_global_ess_dof[i])
+            {
+               cout << i<< endl;
+               counter++;
+            }
+         }
+         cout << endl;
+         cout << counter << endl;
+      }
+      MFEM_ABORT("")
+      //*/
    }
    else
    {
@@ -359,8 +407,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    // we technically are assembling - K
    Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
    Kr_H1.Assemble(0);
-   Kr_H1.Finalize(0);
-   
+   Kr_H1.Finalize(0);   
 
    M_L2.AddDomainIntegrator(new MassIntegrator);
    M_L2.Assemble(0);
@@ -370,7 +417,6 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    M_L2_Lump.Assemble(0);
    M_L2_Lump.Finalize(0);
    
-
    K_L2.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
    auto dgt_i = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
    auto dgt_b = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
@@ -493,7 +539,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Vector v, v_d, d_v;
       v.MakeRef(*U_ptr, 0, dofs_h1*dim);
       d_v.MakeRef(dU, 0, dofs_h1*dim);
-      int scheme = 1;
+      int scheme = 2;
       switch(scheme)
       {  
          case 0: LowOrderVel(K_glb, KT_glb, v, d_v); break;
@@ -580,6 +626,7 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
    const auto I = K_glb.ReadI();
    const auto J = K_glb.ReadJ();
    const auto K = K_glb.ReadData();
+   const auto KT = KT_glb.ReadData();
    
    for(int d = 0; d < dim; d++)
    {
@@ -620,7 +667,8 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
             int j_gl = J[k];
             if( i_gl == j_gl ) {continue;}
 
-            double dij = max( 0.0, max(-K[k], -KT_glb(i_td, j_gl)));
+            double dij = max( 0.0, max(-K[k], -KT[k]));
+            //dij = max( abs(K[k]), abs (KT[k]));
             rhs_array[i] += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
          }
          rhs_array[i] /= lumpedMr_H1_vec(i);
@@ -659,6 +707,7 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
    const auto I = K_glb.ReadI();
    const auto J = K_glb.ReadJ();
    const auto K = K_glb.ReadData();
+   const auto KT = KT_glb.ReadData();
    const auto M = M_glb.ReadData();
    
    for(int d = 0; d < dim; d++)
@@ -688,7 +737,8 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
             int j_gl = J[k];
             if( i_gl == j_gl ) {continue;}
 
-            double dij = max( 0.0, max(-K[k], -KT_glb(i_td, j_gl)));
+            double dij = max( 0.0, max(-K[k], -KT[k]));
+            //dij = max( abs(K[k]), abs(KT[k]));
             vdot(i_td) += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
          }
          vdot(i_td) /= lumpedMr_H1_vec(i);
@@ -715,7 +765,6 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
             int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
             if( i_gl == j_gl ) {continue;}
 
-            //double dij = max( 0.0, max(-K[k], -KT_glb(i_td, j_gl)));
             rhs_array[i] += K[k] * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl)) + M[k] * ( vdot_glb->Elem(i_gl) - vdot_glb->Elem(j_gl));
          }
          rhs_array[i] /= lumpedMr_H1_vec(i);
@@ -755,6 +804,7 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
    const auto I = K_glb.ReadI();
    const auto J = K_glb.ReadJ();
    const auto K = K_glb.ReadData();
+   const auto KT = KT_glb.ReadData();
    const auto M = M_glb.ReadData();
    
    for(int d = 0; d < dim; d++)
@@ -785,10 +835,13 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
          for(int k = I[i_td]; k < I[i_td+1]; k++)
          {  
             int j_gl = J[k];
-            if( i_gl == j_gl ) {continue;}
+            if( i_gl == j_gl) {continue;}// || is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()] )
             v_min(i_td) = min(v_min(i_td), v_d_glb->Elem(j_gl));
             v_max(i_td) = max(v_max(i_td), v_d_glb->Elem(j_gl));
-            double dij = max( 0.0, max(-K[k], -KT_glb(i_td, j_gl)));
+            double kij = -K[k];
+            double kji = -KT[k];// * (!is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()]);
+            //double dij = max(max(0.0, kij), kji);
+            double dij = max( abs(kij), abs(kji));
             vdot(i_td) += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
          }
          vdot(i_td) /= lumpedMr_H1_vec(i);
@@ -815,17 +868,22 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
          {  
             int j_gl = J[k];
             int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
-            if( i_gl == j_gl ) {continue;}
+            if( i_gl == j_gl)// || is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()]) 
+            {continue;}
 
-            double dij = max( 0.0, max(-K[k], -KT_glb(i_td, j_gl)));
+            double kij = -K[k];
+            double kji = - KT[k];// * (!is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()]);
 
-            // compute target flux
+            //double dij = max(max(0.0,kji),kij);
+            //dij = max( abs(K[k]), abs(KT[k]));
+            double dij = max( abs(kij), abs(kji));
             fij = M[k] * (vdot_glb->Elem(i_gl) - vdot_glb->Elem(j_gl)) + dij * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl));
             
             //limit target flux to enforce local bounds for the bar states (note, that dij = dji)
             wij = dij * (v_d_glb->Elem(i_gl) + v_d_glb->Elem(j_gl))  + K[k] * (v_d_glb->Elem(j_gl) - v_d_glb->Elem(i_gl));
-            wji = dij * (v_d_glb->Elem(i_gl) + v_d_glb->Elem(j_gl))  + KT_glb(i_td, j_gl) * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl)); 
+            wji = dij * (v_d_glb->Elem(i_gl) + v_d_glb->Elem(j_gl))  + KT[k]  * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl)); 
 
+            //KT_glb(i_td, j_gl) 
             if(fij > 0)
             {
                fij_bound = min(2.0 * dij * vmax_glb->Elem(i_gl) - wij, wji - 2.0 * dij * vmin_glb->Elem(j_gl));

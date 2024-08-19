@@ -615,13 +615,14 @@ int main(int argc, char *argv[])
 
          // Setup and initialize the remap operator.
          const double cfl_remap = 0.1;
+         cout << v_gf.Max() << endl;
          RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap, remap_v_stable, ess_tdofs);
 
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
 
          // Remap to x_gf_opt.
-         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs);
+         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs, ess_vdofs);
 
          //ParGridFunction v_new(&H1FESpace);
 

@@ -64,7 +64,8 @@ public:
                      const ParGridFunction &energy);
 
    virtual void ComputeAtNewPosition(const Vector &new_nodes,
-                                     const Array<int> &ess_tdofs);
+                                     const Array<int> &ess_tdofs, 
+                                     const Array<int> &ess_vdofs);
 
    void TransferToLagr(ParGridFunction &rho0_gf, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
@@ -80,7 +81,7 @@ protected:
 
    const Vector &x0;
    Vector &x_now;
-   const Array<int> &v_ess_tdofs;
+   const Array<int> &v_ess_tdofs, &v_ess_vdofs;
    ParGridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
    GridFunctionCoefficient rho_coeff;
@@ -91,7 +92,7 @@ protected:
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
    double dt = 0.0;
    
-   Array <int> global_to_local;
+   Array <bool> is_global_ess_dof;
 
    // Piecewise min and max of gf over all elements.
    void ComputeElementsMinMax(const ParGridFunction &gf,
@@ -115,7 +116,8 @@ protected:
 public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
-   AdvectorOper(int size, const Vector &x_start, const Array<int> &v_ess_td,
+   AdvectorOper(int size, const Vector &x_start, const Array<int> &v_ess_td, 
+                const Array<int> &v_ess_vd,
                 ParGridFunction &mesh_vel,
                 ParGridFunction &rho,
                 ParFiniteElementSpace &pfes_H1,
