@@ -103,16 +103,10 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
       M->Mult(VEL, RHS_V);
       RHS_V /= M_L;
       v.Distribute(RHS_V);
-      //MFEM_ABORT("");
-      //v = vel;
    }
    else
    {
-      // otherwise just copy velocity
-      //GridFunction v_dummy(&pfes_H1Lag);
-      //v = v_dummy;
       v = vel;
-      cout << " just copied " << v.Max()<< endl;
    }
 
 
@@ -196,7 +190,6 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    int offy = Ww+100; // window offsets y
    Wx += offx;
    Wy += offy;
-   cout << v.Max() << endl;
    VisualizeField(vis_v, vishost, visport,
                                           v, "Remapped Velocity", Wx, Wy, Ww, Wh);
 
