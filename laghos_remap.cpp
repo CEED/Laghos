@@ -49,7 +49,13 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
    offsets[3] = offsets[2] + vsize_L2;
    S.Update(offsets);
 
-   v.MakeRef(&pfes_H1, S, offsets[0]);
+   if(remap_v_stable)
+   {
+      v.MakeRef(&pfes_H1, S, offsets[0]);
+   }
+   else{
+      v.MakeRef(&pfes_H1Lag, S, offsets[0]);
+   }
    rho.MakeRef(&pfes_L2, S, offsets[1]);
    e.MakeRef(&pfes_L2, S, offsets[2]);
 
@@ -353,6 +359,8 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
       KrT_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
       KrT_H1.Assemble(0);
       KrT_H1.Finalize(0);
+
+      /*
       HypreParVector gl_ess_tdof(&pfes_H1);
       gl_ess_tdof = -1.0;
       for(int i = 0; i < pfes_H1.TrueVSize(); i++)
@@ -370,7 +378,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
          is_global_ess_dof[i] = (gl_ess->Elem(i) > 0.0);
       }
       delete gl_ess;
-      /*
+      
       cout << is_global_ess_dof.Size() << endl;
       cout << endl;
       if(Mpi::Root())
