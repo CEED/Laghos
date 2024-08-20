@@ -84,8 +84,8 @@ protected:
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
    ParGridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
-   GridFunctionCoefficient rho_coeff;
-   ScalarVectorProductCoefficient rho_u_coeff;
+   mutable GridFunctionCoefficient rho_coeff;
+   mutable ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
    mutable Vector lumpedMr_H1_vec;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
@@ -112,6 +112,8 @@ protected:
    void MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, 
                               const SparseMatrix &M_glb, Vector &v,
                               Vector &d_v) const;
+
+   void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, Vector &v, Vector &d_v) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be moved.

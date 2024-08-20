@@ -73,8 +73,6 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 
    if(remap_v_stable)
    {
-      GridFunction v_dummy(&pfes_H1);
-      v = v_dummy;
       // project velocity field into Bernstein FE space via lumped L2 projection
       ParMixedBilinearForm M_mixed(&pfes_H1Lag, &pfes_H1);
       M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
@@ -338,12 +336,15 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    //Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
    if(remap_v_stable)
    {
+      auto *mass_int = new MassIntegrator(rho_coeff);
+      //mass_int = new MassIntegrator(rho_coeff);
       Mr_H1_s.AddDomainIntegrator(new MassIntegrator(rho_coeff));
       Mr_H1_s.Assemble(0);
       Mr_H1_s.Finalize(0);
 
       // lumped Massmatrix only needed for limiter
-      lummpedMr_H1.AddDomainIntegrator(new LumpedIntegrator(new MassIntegrator(rho_coeff)));
+      //lumped_mass_int = new LumpedIntegrator(new MassIntegrator(rho_coeff));
+      lummpedMr_H1.AddDomainIntegrator( new LumpedIntegrator(new MassIntegrator(rho_coeff)));
       lummpedMr_H1.Assemble(0);
       lummpedMr_H1.Finalize(0);
 
@@ -352,6 +353,9 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
       KrT_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
       KrT_H1.Assemble(0);
       KrT_H1.Finalize(0);
+
+
+      //conv_int = new ConvectionIntegrator(rho_u_coeff);
 
       /*
       HypreParVector gl_ess_tdof(&pfes_H1);
@@ -540,12 +544,13 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Vector v, v_d, d_v;
       v.MakeRef(*U_ptr, 0, dofs_h1*dim);
       d_v.MakeRef(dU, 0, dofs_h1*dim);
-      int scheme = 2;
+      int scheme = 3;
       switch(scheme)
       {  
          case 0: LowOrderVel(K_glb, KT_glb, v, d_v); break;
          case 1: HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v); break;
          case 2: MCLVel(K_glb, KT_glb, M_glb, v, d_v); break;
+         case 3: ClipAndScale(pfes_H1_s, v, d_v); break;
          default: MFEM_ABORT("Unknown scheme for velocity remap!");
       }
    }
@@ -921,6 +926,87 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
       delete vmin_glb;
       delete vmax_glb;
    }
+}
+
+
+void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Vector &d_v) const
+{
+   d_v = 0.0;
+   auto conv_int = new ConvectionIntegrator(rho_u_coeff);
+   auto mass_int = new MassIntegrator(rho_coeff);
+
+   // scalar finite element space
+   const int nEl = pfes.GetNE();
+   const int dim = pfes.GetMesh()->Dimension();
+   const int nDofs = pfes.GetVSize();
+   Array<int> dofs;
+   Vector ve;
+
+   for(int e = 0; e < nEl; e++)
+   {  
+      auto element = pfes.GetFE(e);
+      auto eltrans = pfes.GetElementTransformation(e);
+      DenseMatrix Ke, Me;
+      conv_int->AssembleElementMatrix (*element, *eltrans, Ke);
+      mass_int->AssembleElementMatrix (*element, *eltrans, Me);
+      Vector me(Me.Height());
+      Me.GetRowSums(me);
+
+      pfes.GetElementDofs(e, dofs);
+      Vector re(dofs.Size());
+
+      MFEM_VERIFY(Me.Height()==dofs.Size(), "element dof sizes weird1");
+      MFEM_VERIFY(Me.Width()==dofs.Size(), "element dof sizes weird2");
+
+      for(int d = 0; d < dim; d++)
+      { 
+         Array<int> dofs_d = dofs;
+         for(int i = 0; i < dofs.Size(); i++)
+         {
+            dofs_d[i] = dofs[i] + d * nDofs;
+         }
+
+         v.GetSubVector(dofs_d, ve);
+         Ke.Mult(ve, re);
+
+         for(int i = 0; i < dofs.Size(); i++ )
+         {
+            for(int j = 0; j < dofs.Size(); j++)
+            {
+               if(j >= i) { continue;}
+               double dije = max(max(-Ke(i,j), -Ke(j,i)), 0.0);
+               //dij = max(abs(Ke(i,j)), abs (Ke(j,i)));
+               double diffusion = dije * (ve(j) - ve(i));
+
+               re(i) += diffusion;
+               re(j) -= diffusion;
+
+            }
+         }
+
+         for(int i =0; i < dofs.Size(); i++)
+         {
+            d_v(dofs_d[i]) += re(i);
+         }
+      }
+   }
+
+   GroupCommunicator &gcomm = Mr_H1.ParFESpace()->GroupComm();
+   Array<double> dv_array(d_v.GetData(), d_v.Size());
+   gcomm.Reduce<double>(dv_array, GroupCommunicator::Sum);
+   gcomm.Bcast(dv_array);
+   
+   Vector dv_comp;
+   for(int d = 0; d < dim; d++)
+   {
+      dv_comp.MakeRef(d_v, d * nDofs, nDofs);
+      dv_comp /= lumpedMr_H1_vec;
+   }
+   d_v.SetSubVector(v_ess_vdofs, 0.0);
+
+   delete conv_int;
+   delete mass_int;
+   //MFEM_ABORT("all good!")
 }
 
 
