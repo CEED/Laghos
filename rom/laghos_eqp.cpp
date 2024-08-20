@@ -511,8 +511,10 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
 
     Vector r(nqe);
 
-    // Compute G of size (NB * (nsnap+1)) x NQ, storing its transpose Gt.
-    CAROM::Matrix Gt(NQ, NB * (nsnap+1), true);
+    const int Gnsnap = input.window == 0 ? nsnap + 1 : nsnap;
+
+    // Compute G of size (NB * Gnsnap) x NQ, storing its transpose Gt.
+    CAROM::Matrix Gt(NQ, NB * Gnsnap, true);
     cout << "NNLS using " << NB << " basis dim for equation E " << equationE
          << " and " << nsnap << " snapshots" << endl;
 
@@ -577,7 +579,8 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
     MFEM_VERIFY(w_el.Size() == nqe, "");
 
     int oss = 0;
-    for (int s=-1; s<nsets; ++s)
+    const int s0 = input.window == 0 ? -1 : 0;
+    for (int s=s0; s<nsets; ++s)
     {
         const int nsnap_s = (s == -1) ? 1 : allnsnap[s];
         for (int i=0; i<nsnap_s; ++i)
@@ -1426,6 +1429,7 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
     // Now Shalf = (Sx, Sv, Se) is set to the half step. Next, set S_{n+1}.
     basis->LiftToSampleMesh(Shalf, fx);
     operSP->ResetQuadratureData();
+
     // SolveEnergy is skipped here (we only solve for velocity)
     operSP->Mult(fx, fy);  // fy is not computed and not used in the EQP case
     operSP->SetQuadDataCurrent();

@@ -1311,6 +1311,7 @@ int main(int argc, char *argv[])
         }
 
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
+        romS = 0.0;
 
         if (!romOptions.use_sample_mesh)
         {
@@ -1484,6 +1485,7 @@ int main(int argc, char *argv[])
 
             int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
             romS.SetSize(romSsize);
+            romS = 0.0;
             if (infile_tw_steps.good())
             {
                 infile_tw_steps >> nb_step;
@@ -1545,6 +1547,7 @@ int main(int argc, char *argv[])
 
                     romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                     romS.SetSize(romSsize);
+                    romS = 0.0;
                 }
 
                 if (rom_build_database && !rom_calc_rel_error && romOptions.greedyErrorIndicatorType == useLastLiftedSolution)
@@ -2018,7 +2021,9 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                if (usingWindows && window_par >= twep[romOptions.window] && romOptions.window < numWindows-1)
+                constexpr double windowTol = 0.99;
+                if (usingWindows && window_par >= windowTol*twep[romOptions.window]
+                        && romOptions.window < numWindows-1)
                 {
                     romOptions.window++;
                     outfile_tw_steps << ti << "\n";
@@ -2059,6 +2064,7 @@ int main(int argc, char *argv[])
                     if (!romOptions.use_sample_mesh)
                     {
                         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
+                        romS = 0.0;
                     }
                     timeLoopTimer.Start();
 

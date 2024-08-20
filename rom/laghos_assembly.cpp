@@ -117,7 +117,7 @@ void FastEvaluator::GetSomeL2Values(const Vector &vecL2, const Array<int> &qp,
               nqp1D    = tensors1D->LQshape1D.Width();
     if (dim == 2)
     {
-        MFEM_ABORT("TODO: optimize GetSomeL2Values in 2D");
+        //MFEM_ABORT("TODO: optimize GetSomeL2Values in 2D");
 
         DenseMatrix E(vecL2.GetData(), nL2dof1D, nL2dof1D);
         DenseMatrix LQ(nL2dof1D, nqp1D);
@@ -353,7 +353,7 @@ void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &
 
     if (dim == 2)
     {
-        MFEM_ABORT("TODO: optimize GetSomeVectorGrad in 2D");
+        //MFEM_ABORT("TODO: optimize GetSomeVectorGrad in 2D");
 
         const int nH1dof = nH1dof1D * nH1dof1D;
         DenseMatrix HQ(nH1dof1D, nqp1D), QQ(nqp1D, nqp1D);

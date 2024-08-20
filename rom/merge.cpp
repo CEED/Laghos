@@ -49,10 +49,17 @@ void MergePhysicalTimeWindow(const int rank, const int first_sv, const double en
     }
 }
 
-void MergeSamplingWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
-                         const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
-                         const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
-                         const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff, bool eqp)
+void MergeSamplingWindow(const int rank, const int first_sv,
+                         const double energyFraction, const int nsets,
+                         const std::string& basename, VariableName v,
+                         const std::string& varName,
+                         const std::string& basisIdentifier,
+                         const std::string& basis_filename,
+                         const int windowOverlapSamples, const int basisWindow,
+                         const bool useOffset, const offsetStyle offsetType,
+                         const int dim, const int totalSamples,
+                         const std::vector<std::vector<int>> &offsetAllWindows,
+                         int& cutoff, bool eqp)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
     std::unique_ptr<CAROM::BasisGenerator> window_basis_generator;
@@ -85,35 +92,60 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
 
         // getSnapshotMatrix includes the final column, so we don't add 1.
         int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
+
         int num_cols = col_ub - col_lb + 1;
         std::cout << num_cols << " columns read. Columns " << col_lb - 1 << " to " << col_ub - 1 << std::endl;
-        const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
+        CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
         MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
+
+        CAROM::Vector *init = nullptr;
 
         if (offsetInit && offsetType == interpolateOffset)
         {
             std::string path_init = basename + "/ROMoffset" + basisIdentifier + "/param" + std::to_string(paramID) + "_init";
-            CAROM::Vector *init = new CAROM::Vector(dim, true);
+            init = new CAROM::Vector(dim, true);
             init->read(path_init + varName + "0");
 
             for (int i = 0; i < dim; ++i)
             {
-                (*init)(i) += mat->item(i,0);
+                for (int j = 0; j < num_cols; ++j)
+                    mat->item(i,j) += (*init)(i);
+
+                (*init)(i) = mat->item(i,0);
             }
             init->write(path_init + varName + std::to_string(basisWindow));
-            delete init;
         }
 
         Vector tmp;
         tmp.SetSize(dim);
         for (int j = 0; j < num_cols; ++j)
         {
+            if (j == 0 && offsetInit)
+                continue;
+
             for (int i = 0; i < dim; ++i)
             {
                 tmp[i] = (offsetInit) ? mat->item(i,j) - mat->item(i,0) : mat->item(i,j);
             }
+
             window_basis_generator->takeSample(tmp.GetData());
+        }
+
+        if (offsetInit)
+        {
+            for (int j = 1; j < num_cols; ++j)
+            {
+                for (int i = 0; i < dim; ++i)
+                {
+                    mat->item(i,j) -= mat->item(i,0);
+                }
+            }
+
+            for (int i = 0; i < dim; ++i)
+            {
+                mat->item(i,0) = 0.0;
+            }
         }
 
         if (eqp)  // Write snapshots to be used in the EQP system
@@ -123,9 +155,27 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
                                               + varName +
                                               std::to_string(basisWindow)
                                               + basisIdentifier + "_snapshot";
-            mat->write(m_snapshot_filename);
+
+            if (offsetInit)
+            {
+                // Omit first column, which is zero.
+                // TODO: make optional input in Matrix::write for column range.
+                CAROM::Matrix mat1(mat->numRows(), mat->numColumns() - 1, mat->distributed());
+                for (int j = 1; j < num_cols; ++j)
+                {
+                    for (int i = 0; i < dim; ++i)
+                    {
+                        mat1(i,j-1) = (*mat)(i,j);
+                    }
+                }
+
+                mat1.write(m_snapshot_filename);
+            }
+            else
+                mat->write(m_snapshot_filename);
         }
 
+        delete init;
         delete mat;
     }
 
