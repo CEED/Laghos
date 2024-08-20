@@ -942,6 +942,9 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
    Array<int> dofs;
    Vector ve;
 
+   Array<double> v_max, v_min;
+   ComputeVelocityMinMax(v, v_min, v_max);
+
    for(int e = 0; e < nEl; e++)
    {  
       auto element = pfes.GetFE(e);
@@ -953,7 +956,8 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
       Me.GetRowSums(me);
 
       pfes.GetElementDofs(e, dofs);
-      Vector re(dofs.Size());
+      Vector re(dofs.Size()), vdote(dofs.Size()), fe(dofs.Size()), 
+            gamma_e(dofs.Size()), fe_star(dofs.Size());
 
       MFEM_VERIFY(Me.Height()==dofs.Size(), "element dof sizes weird1");
       MFEM_VERIFY(Me.Width()==dofs.Size(), "element dof sizes weird2");
@@ -965,9 +969,10 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
          {
             dofs_d[i] = dofs[i] + d * nDofs;
          }
-
          v.GetSubVector(dofs_d, ve);
-         Ke.Mult(ve, re);
+
+         // Compute low order element based time derivatives
+         Ke.Mult(ve, vdote);
 
          for(int i = 0; i < dofs.Size(); i++ )
          {
@@ -978,15 +983,97 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
                //dij = max(abs(Ke(i,j)), abs (Ke(j,i)));
                double diffusion = dije * (ve(j) - ve(i));
 
-               re(i) += diffusion;
-               re(j) -= diffusion;
-
+               vdote(i) += diffusion;
+               vdote(j) -= diffusion;
             }
          }
 
-         for(int i =0; i < dofs.Size(); i++)
+         // copy udot for right hand side before deviding by lumped mass matrix entries
+         re = vdote;
+         vdote /= me;
+
+         fe = 0.0;
+         gamma_e = 0.0;
+         // compute raw antidiffusive fluxes
+         for(int i = 0; i < dofs.Size(); i++)
          {
-            d_v(dofs_d[i]) += re(i);
+            for(int j = 0; j < dofs.Size(); j++)
+            {
+               if(j >= i) {continue;}
+               double dije = max(max(-Ke(i,j), -Ke(j,i)), 0.0);
+               double fije = dije * (ve(i) - ve(j)) + Me(i,j) * (vdote(i) - vdote(j));
+               fe(i) += fije;
+               fe(j) -= fije;
+
+               gamma_e(i) += dije;
+               gamma_e(j) += dije;
+            }
+         }
+         MFEM_VERIFY(abs(fe.Sum()) < 1e-15, "raw antidiff fluxes.." );
+
+         gamma_e *= 2.0;
+
+         double P_plus = 0.0;
+         double P_minus = 0.0;
+         fe_star = 0.0;
+         // clip
+         for(int i = 0; i < dofs.Size(); i++)
+         {
+            double fie_max = gamma_e(i) * (v_max[dofs_d[i]] - ve(i));
+            double fie_min = gamma_e(i) * (v_min[dofs_d[i]] - ve(i));
+
+            //cout << v_min[dofs_d[i]] << " < " <<ve(i) << " < " << v_max[dofs_d[i]] << endl;
+            //ve.Print();
+            MFEM_VERIFY( v_min[dofs_d[i]] - ve(i) < 1e-15 && v_max[dofs_d[i]] -ve(i) > -1e-15, "minmax wrong" );
+
+            fe_star(i) = min(max(fie_min, fe(i)), fie_max);
+
+            P_plus += max(fe_star(i), 0.0);
+            P_minus += min(fe_star(i), 0.0);
+
+            
+         }
+         const double P = P_minus + P_plus;
+
+         /*
+         if( P_minus < -1e-8)
+         {
+            cout << P_minus << endl;
+            cout << P_plus << endl;
+            cout << endl;
+         }
+         //*/
+
+         //scale 
+         for(int i = 0; i < dofs.Size(); i++)
+         {
+            if(fe_star(i) > 1e-14 && P > 1e-14)
+            {
+               fe_star(i) *= (- P_minus / P_plus);
+
+
+            }
+            else if(fe_star(i) < -1e-14 && P < -1e-14)
+            {
+               fe_star(i) *= (- P_plus / P_minus);
+            }
+         }
+         //cout << fe_star.Sum() << endl;
+         //MFEM_VERIFY(abs(fe_star.Sum()) < 1e-12, "Scale?" );
+         //*
+         if (abs(fe_star.Sum()) > 1e-14 && Mpi::Root())
+         {  
+            cout << endl;
+            cout << e << endl;
+            cout << log10(abs(fe_star.Sum())) << endl;
+            fe_star.Print();
+            MFEM_ABORT(" well ... ")
+         }
+         //*/
+
+         for(int i = 0; i < dofs.Size(); i++)
+         {
+            d_v(dofs_d[i]) += re(i) + fe_star(i);
          }
       }
    }
@@ -1009,6 +1096,46 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
    //MFEM_ABORT("all good!")
 }
 
+
+void AdvectorOper::ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const
+{
+   v_min.SetSize(v.Size());
+   v_max.SetSize(v.Size());
+
+   auto I = Mr_H1_s.SpMat().GetI();
+   auto J = Mr_H1_s.SpMat().GetJ();
+   int nDofs = Mr_H1_s.Height();
+   int dim = Mr_H1_s.ParFESpace()->GetMesh()->Dimension();
+
+   Vector v_comp(nDofs);
+   for(int d = 0; d < dim; d++)
+   {
+      v_comp.SetDataAndSize(v.GetData() + d * nDofs, nDofs);
+
+      for(int i = 0; i < nDofs; i++)
+      {  
+         //cout << i << endl;
+         //cout << "here" << endl;
+         v_max[i + d * nDofs] = v_comp(i);
+         v_min[i + d * nDofs] = v_comp(i);
+         for(int k = I[i]; k < I[i+1]; k++)
+         {
+            int j = J[k];
+
+            v_max[i + d * nDofs] = max(v_max[i + d * nDofs], v_comp(j));
+            v_min[i + d * nDofs] = min(v_min[i + d * nDofs], v_comp(j));
+
+         }
+      }
+   }
+
+   GroupCommunicator &gcomm = Mr_H1.ParFESpace()->GroupComm();
+   gcomm.Reduce<double>(v_max, GroupCommunicator::Max);
+   gcomm.Bcast(v_max);
+   gcomm.Reduce<double>(v_min, GroupCommunicator::Min);
+   gcomm.Bcast(v_min);
+
+}
 
 
 double AdvectorOper::Momentum(ParGridFunction &v, double t)

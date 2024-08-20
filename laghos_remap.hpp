@@ -114,7 +114,7 @@ protected:
                               Vector &d_v) const;
 
    void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, Vector &v, Vector &d_v) const;
-
+   void ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const;
 public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
