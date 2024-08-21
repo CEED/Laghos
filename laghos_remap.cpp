@@ -952,12 +952,13 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
       DenseMatrix Ke, Me;
       conv_int->AssembleElementMatrix (*element, *eltrans, Ke);
       mass_int->AssembleElementMatrix (*element, *eltrans, Me);
-      Vector me(Me.Height());
-      Me.GetRowSums(me);
 
       pfes.GetElementDofs(e, dofs);
       Vector re(dofs.Size()), vdote(dofs.Size()), fe(dofs.Size()), 
             gamma_e(dofs.Size()), fe_star(dofs.Size());
+
+      Vector me(Me.Height());
+      lumpedMr_H1_vec.GetSubVector(dofs, me);
 
       MFEM_VERIFY(Me.Height()==dofs.Size(), "element dof sizes weird1");
       MFEM_VERIFY(Me.Width()==dofs.Size(), "element dof sizes weird2");
@@ -980,7 +981,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
             {
                if(j >= i) { continue;}
                double dije = max(max(-Ke(i,j), -Ke(j,i)), 0.0);
-               //dij = max(abs(Ke(i,j)), abs (Ke(j,i)));
+               //dije = max(abs(Ke(i,j)), abs (Ke(j,i)));
                double diffusion = dije * (ve(j) - ve(i));
 
                vdote(i) += diffusion;
@@ -1001,6 +1002,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
             {
                if(j >= i) {continue;}
                double dije = max(max(-Ke(i,j), -Ke(j,i)), 0.0);
+               //dije = max(abs(Ke(i,j)), abs (Ke(j,i)));
                double fije = dije * (ve(i) - ve(j)) + Me(i,j) * (vdote(i) - vdote(j));
                fe(i) += fije;
                fe(j) -= fije;
@@ -1035,33 +1037,24 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
          }
          const double P = P_minus + P_plus;
 
-         /*
-         if( P_minus < -1e-8)
-         {
-            cout << P_minus << endl;
-            cout << P_plus << endl;
-            cout << endl;
-         }
-         //*/
-
          //scale 
          for(int i = 0; i < dofs.Size(); i++)
          {
-            if(fe_star(i) > 1e-14 && P > 1e-14)
+            if(fe_star(i) > 1e-15 && P > 1e-15)
             {
-               fe_star(i) *= (- P_minus / P_plus);
+               fe_star(i) *= - P_minus / P_plus;
 
 
             }
-            else if(fe_star(i) < -1e-14 && P < -1e-14)
+            else if(fe_star(i) < -1e-15 && P < -1e-15)
             {
-               fe_star(i) *= (- P_plus / P_minus);
+               fe_star(i) *= - P_plus / P_minus;
             }
          }
          //cout << fe_star.Sum() << endl;
-         //MFEM_VERIFY(abs(fe_star.Sum()) < 1e-12, "Scale?" );
+         //MFEM_VERIFY(abs(fe_star.Sum()) < 1e-15, "Scale?" );
          //*
-         if (abs(fe_star.Sum()) > 1e-14 && Mpi::Root())
+         if (abs(fe_star.Sum()) > 1e-14)
          {  
             cout << endl;
             cout << e << endl;
