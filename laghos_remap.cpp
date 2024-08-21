@@ -944,6 +944,8 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
    Array<double> v_max, v_min;
    ComputeVelocityMinMax(v, v_min, v_max);
+   Vector vdot(v.Size());
+   ComputeTimeDerivatives(v, conv_int, pfes, vdot);
 
    for(int e = 0; e < nEl; e++)
    {  
@@ -971,9 +973,9 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
             dofs_d[i] = dofs[i] + d * nDofs;
          }
          v.GetSubVector(dofs_d, ve);
+         vdot.GetSubVector(dofs_d, vdote);
 
-         // Compute low order element based time derivatives
-         Ke.Mult(ve, vdote);
+         Ke.Mult(ve, re);
 
          for(int i = 0; i < dofs.Size(); i++ )
          {
@@ -984,14 +986,10 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
                //dije = max(abs(Ke(i,j)), abs (Ke(j,i)));
                double diffusion = dije * (ve(j) - ve(i));
 
-               vdote(i) += diffusion;
-               vdote(j) -= diffusion;
+               re(i) += diffusion;
+               re(j) -= diffusion;
             }
          }
-
-         // copy udot for right hand side before deviding by lumped mass matrix entries
-         re = vdote;
-         vdote /= me;
 
          fe = 0.0;
          gamma_e = 0.0;
@@ -1024,16 +1022,10 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
             double fie_max = gamma_e(i) * (v_max[dofs_d[i]] - ve(i));
             double fie_min = gamma_e(i) * (v_min[dofs_d[i]] - ve(i));
 
-            //cout << v_min[dofs_d[i]] << " < " <<ve(i) << " < " << v_max[dofs_d[i]] << endl;
-            //ve.Print();
-            MFEM_VERIFY( v_min[dofs_d[i]] - ve(i) < 1e-15 && v_max[dofs_d[i]] -ve(i) > -1e-15, "minmax wrong" );
-
             fe_star(i) = min(max(fie_min, fe(i)), fie_max);
 
             P_plus += max(fe_star(i), 0.0);
-            P_minus += min(fe_star(i), 0.0);
-
-            
+            P_minus += min(fe_star(i), 0.0);            
          }
          const double P = P_minus + P_plus;
 
@@ -1043,26 +1035,13 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
             if(fe_star(i) > 1e-15 && P > 1e-15)
             {
                fe_star(i) *= - P_minus / P_plus;
-
-
             }
             else if(fe_star(i) < -1e-15 && P < -1e-15)
             {
                fe_star(i) *= - P_plus / P_minus;
             }
          }
-         //cout << fe_star.Sum() << endl;
-         //MFEM_VERIFY(abs(fe_star.Sum()) < 1e-15, "Scale?" );
-         //*
-         if (abs(fe_star.Sum()) > 1e-14)
-         {  
-            cout << endl;
-            cout << e << endl;
-            cout << log10(abs(fe_star.Sum())) << endl;
-            fe_star.Print();
-            MFEM_ABORT(" well ... ")
-         }
-         //*/
+         //MFEM_VERIFY(abs(fe_star.Sum()) < 1e-14, "Scale?" );
 
          for(int i = 0; i < dofs.Size(); i++)
          {
@@ -1086,9 +1065,74 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
    delete conv_int;
    delete mass_int;
-   //MFEM_ABORT("all good!")
 }
 
+void AdvectorOper::ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const
+{  
+   vdot = 0.0;
+
+   // scalar finite element space
+   const int nEl = pfes.GetNE();
+   const int dim = pfes.GetMesh()->Dimension();
+   const int nDofs = pfes.GetVSize();
+   Array<int> dofs;
+   Vector ve;
+
+   for(int e = 0; e < nEl; e++)
+   {  
+      auto element = pfes.GetFE(e);
+      auto eltrans = pfes.GetElementTransformation(e);
+      DenseMatrix Ke;
+      conv_int->AssembleElementMatrix (*element, *eltrans, Ke);
+
+      pfes.GetElementDofs(e, dofs);
+      Vector vdote(dofs.Size());
+
+      for(int d = 0; d < dim; d++)
+      { 
+         Array<int> dofs_d = dofs;
+         for(int i = 0; i < dofs.Size(); i++)
+         {
+            dofs_d[i] = dofs[i] + d * nDofs;
+         }
+         v.GetSubVector(dofs_d, ve);
+
+         Ke.Mult(ve, vdote);
+
+         for(int i = 0; i < dofs.Size(); i++ )
+         {
+            for(int j = 0; j < dofs.Size(); j++)
+            {
+               if(j >= i) { continue;}
+               double dije = max(max(-Ke(i,j), -Ke(j,i)), 0.0);
+               //dije = max(abs(Ke(i,j)), abs (Ke(j,i)));
+               double diffusion = dije * (ve(j) - ve(i));
+
+               vdote(i) += diffusion;
+               vdote(j) -= diffusion;
+            }
+         }
+
+         for(int i = 0; i < dofs.Size(); i++)
+         {
+            vdot(dofs_d[i]) += vdote(i);
+         }
+      }
+   }
+
+   GroupCommunicator &gcomm = Mr_H1.ParFESpace()->GroupComm();
+   Array<double> vdot_array(vdot.GetData(), vdot.Size());
+   gcomm.Reduce<double>(vdot_array, GroupCommunicator::Sum);
+   gcomm.Bcast(vdot_array);
+   
+   Vector vdot_comp;
+   for(int d = 0; d < dim; d++)
+   {
+      vdot_comp.MakeRef(vdot, d * nDofs, nDofs);
+      vdot_comp /= lumpedMr_H1_vec;
+   }
+
+}
 
 void AdvectorOper::ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const
 {
