@@ -187,7 +187,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction dist(&pfes_dist);
-   dist = 0.05; // smaller is less motion.
+   dist = 0.02; // smaller is less motion.
    ConstantCoefficient limit_coeff(1.0);
    integ->EnableLimiting(x0, dist, limit_coeff);
 

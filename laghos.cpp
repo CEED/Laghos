@@ -80,9 +80,10 @@
 // mpirun -np 4 laghos -m data/sphere_hole_V4.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
 //
 // ALE tests:
-// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
-// mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
-//   dist = 0.02 with advection.
+// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 2.5 -ale 0.25
+// remap gslib, dist = 0.05.
+// mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.2 -ale 0.2
+// remap gslib, dist = 0.02.
 // mpirun -np 7 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 
@@ -725,7 +726,7 @@ int main(int argc, char *argv[])
          OptimizeMesh(x_gf, surfaces,
                       hydro.GetIntRule(), hydro.GetIntRule_b(), x_gf_opt);
 
-         const bool remap_v_gslib = false;
+         const bool remap_v_gslib = true;
          const bool remap_v_adv   = !remap_v_gslib;
 
          // Setup and initialize the remap operator.
