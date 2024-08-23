@@ -29,6 +29,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
                   AnalyticCompositeSurface &surfaces,
                   const IntegrationRule &ir,
                   const IntegrationRule &ir_bdr,
+                  double remesh_dist,
                   ParGridFunction &coord_x_out)
 {
    const int myid = coord_x_in.ParFESpace()->GetMyRank();
@@ -187,7 +188,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    ParFiniteElementSpace pfes_dist(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction dist(&pfes_dist);
-   dist = 0.02; // smaller is less motion.
+   dist = remesh_dist; // smaller is less motion.
    ConstantCoefficient limit_coeff(1.0);
    integ->EnableLimiting(x0, dist, limit_coeff);
 

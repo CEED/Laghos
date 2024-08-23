@@ -40,13 +40,17 @@ class InterpolationRemap
 // Performs the full remap advection loop.
 class RemapAdvector
 {
-private:
+   private:
    ParMesh pmesh;
    int dim;
    L2_FECollection fec_L2;
-   H1_FECollection fec_H1;
-   ParFiniteElementSpace pfes_L2, pfes_H1;
+   H1_FECollection fec_H1, fec_H1Lag;
+   ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
+   const Array<int> &v_ess_tdofs;
+   //mutable ParMixedBilinearForm M_mixed;
+
    bool remap_v;
+   bool remap_v_stable;
 
    const double cfl_factor;
 
@@ -60,9 +64,10 @@ private:
    RK3SSPSolver ode_solver;
    Vector x0;
 
-public:
+   public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                 double cfl, bool remap_vel);
+                 double cfl, bool remap_v_, bool remap_v_stable_,
+                 const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
@@ -71,7 +76,8 @@ public:
                      const ParGridFunction &energy);
 
    virtual void ComputeAtNewPosition(const Vector &new_nodes,
-                                     const Array<int> &ess_tdofs);
+                                     const Array<int> &ess_tdofs,
+                                     const Array<int> &ess_vdofs);
 
    void TransferToLagr(ParGridFunction &rho0_gf, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
@@ -84,15 +90,17 @@ class AdvectorOper : public TimeDependentOperator
 {
 protected:
    bool remap_v = true;
+   bool remap_v_stable = false;
 
    const Vector &x0;
    Vector &x_now;
-   const Array<int> &v_ess_tdofs;
+   const Array<int> &v_ess_tdofs, &v_ess_vdofs;
    ParGridFunction &u;
    VectorGridFunctionCoefficient u_coeff;
-   GridFunctionCoefficient rho_coeff;
-   ScalarVectorProductCoefficient rho_u_coeff;
-   mutable ParBilinearForm Mr_H1, Kr_H1;
+   mutable GridFunctionCoefficient rho_coeff;
+   mutable ScalarVectorProductCoefficient rho_u_coeff;
+   mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
+   mutable Vector lumpedMr_H1_vec;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
    double dt = 0.0;
@@ -105,15 +113,32 @@ protected:
                               const Vector &el_min, const Vector &el_max,
                               Vector &dof_min, Vector &dof_max) const;
 
+   void LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
+                    Vector &v, Vector &dv) const;
+
+   void HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
+                                 const SparseMatrix &M_glb, Vector &v,
+                                 Vector &d_v) const;
+
+   void MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
+               const SparseMatrix &M_glb, Vector &v,
+               Vector &d_v) const;
+
+   void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, Vector &v, Vector &d_v) const;
+   void ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const;
+   void ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
+
 public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
    AdvectorOper(int size, const Vector &x_start, const Array<int> &v_ess_td,
+                const Array<int> &v_ess_vd,
                 ParGridFunction &mesh_vel,
                 ParGridFunction &rho,
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,
-                ParFiniteElementSpace &pfes_L2);
+                ParFiniteElementSpace &pfes_L2,
+                bool remap_v_s);
 
    void SetVelocityRemap(bool flag) { remap_v = flag; }
 

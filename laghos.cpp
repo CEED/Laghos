@@ -80,9 +80,11 @@
 // mpirun -np 4 laghos -m data/sphere_hole_V4.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
 //
 // ALE tests:
-// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 2.5 -ale 0.25
-// remap gslib, dist = 0.05.
-// mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.2 -ale 0.2
+// -rvg is remap v with gslib.
+// -rvs is remap v stabilized.
+// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -rd 0.05 -tf 2.5 -ale 0.25
+// remap gslib
+// mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -rd 0.02 -tf 1.2 -ale 0.2
 // remap gslib, dist = 0.02.
 // mpirun -np 7 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
@@ -136,6 +138,7 @@ int main(int argc, char *argv[])
    double t_final = 0.6;
    double penalty_param = 20.0;
    double ale_period = -1.0;
+   double remesh_dist = 0.05;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
@@ -152,6 +155,8 @@ int main(int argc, char *argv[])
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
+   bool remap_v_gslib  = false;
+   bool remap_v_stable = false;
    int dev = 0;
    double blast_energy = 0.25;
 
@@ -184,6 +189,8 @@ int main(int argc, char *argv[])
                   "Penalty constant for the BC.");
    args.AddOption(&ale_period, "-ale", "--ale-period",
                   "ALE period interval in physical time.");
+   args.AddOption(&remesh_dist, "-rd", "--rd",
+                  "Remesh physical distance.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
@@ -206,6 +213,10 @@ int main(int argc, char *argv[])
                   "Visualize every n-th timestep.");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
+   args.AddOption(&remap_v_gslib, "-rvg", "--rvg", "-no-rvg", "--no-rvg",
+                  "Remap v with GSLIB.");
+   args.AddOption(&remap_v_stable, "-rvs", "--rvs", "-no-rvs", "--no-rvs",
+                  "Use limiter for the advection based remap of the velocity field.");
    args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
@@ -435,6 +446,34 @@ int main(int argc, char *argv[])
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
    Array<int> ess_tdofs, ess_vdofs;
+
+   for (int e = 0; e < pmesh->GetNBE(); e++)
+   {
+      H1FESpace.GetBdrElementVDofs(e, vdofs);
+      const int nd = H1FESpace.GetBE(e)->GetDof();
+
+      for (int j = 0; j < nd; j++)
+      {
+         int cnt = 0;
+         for (int s = 0; s < surfaces.GetNumSurfaces(); s++)
+         {
+            const Array<bool> &m = surfaces.GetSurfaceID(s)->GetMarker();
+            if (m[vdofs[j]]) { cnt++; }
+         }
+
+         if (cnt > 1)
+         {
+            ess_vdofs.Append(vdofs[j]);
+            int tdof = H1FESpace.GetLocalTDofNumber(vdofs[j]);
+            if (tdof >= 0) { ess_tdofs.Append(tdof); }
+
+            ess_vdofs.Append(vdofs[j + nd]);
+            tdof = H1FESpace.GetLocalTDofNumber(vdofs[j + nd]);
+            if (tdof >= 0) { ess_tdofs.Append(tdof); }
+         }
+      }
+   }
+
    const bool BC_strong = false;
    if (BC_strong)
    {
@@ -724,20 +763,21 @@ int main(int argc, char *argv[])
 
          ParGridFunction x_gf_opt(&H1FESpace);
          OptimizeMesh(x_gf, surfaces,
-                      hydro.GetIntRule(), hydro.GetIntRule_b(), x_gf_opt);
+                      hydro.GetIntRule(), hydro.GetIntRule_b(),
+                      remesh_dist, x_gf_opt);
 
-         const bool remap_v_gslib = true;
          const bool remap_v_adv   = !remap_v_gslib;
 
          // Setup and initialize the remap operator.
          const double cfl_remap = 0.1;
-         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap, remap_v_adv);
+         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
+                           remap_v_adv, remap_v_stable, ess_tdofs);
 
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
 
          // Remap to x_gf_opt.
-         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs);
+         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs, ess_vdofs);
 
          ParGridFunction v_new(&H1FESpace);
          if (remap_v_gslib)
@@ -751,6 +791,7 @@ int main(int argc, char *argv[])
          adv.TransferToLagr(rho0_gf, v_gf,
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),
                             hydro.GetIntRule_b(), hydro.GetRhoDetJ_be(), e_gf);
+
          if (remap_v_gslib) { v_gf = v_new; }
 
          hydro.RemoveBdrNormalPart(v_gf, x_gf);
