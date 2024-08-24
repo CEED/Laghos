@@ -25,12 +25,14 @@ namespace mfem
 namespace hydrodynamics
 {
 
+socketstream vism;
+
 void OptimizeMesh(ParGridFunction &coord_x_in,
                   AnalyticCompositeSurface &surfaces,
                   const IntegrationRule &ir,
                   const IntegrationRule &ir_bdr,
                   double remesh_dist,
-                  ParGridFunction &coord_x_out)
+                  ParGridFunction &coord_x_out, bool vis)
 {
    const int myid = coord_x_in.ParFESpace()->GetMyRank();
 
@@ -40,7 +42,7 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    const int    precond      = 2;
    const int    art_type     = 0;
    const int    max_lin_iter = 100;
-   const bool   glvis        = true;
+   const bool   glvis        = vis;
 
    ParFiniteElementSpace *pfes_mesh = coord_x_in.ParFESpace();
    ParMesh *pmesh = pfes_mesh->GetParMesh();
@@ -156,24 +158,24 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    // Visualize the selected nodes and their target positions.
    if (glvis)
    {
-      socketstream vis1, vis2, vis3;
-      common::VisualizeField(vis1, "localhost", 19916, fit_marker_vis_gf,
+      socketstream vis;
+      common::VisualizeField(vism, "localhost", 19916, fit_marker_vis_gf,
                              "Marked DOFs",
                              0, 600, 400, 400, (dim == 2) ? "Rjm" : "");
-      common::VisualizeMesh(vis2, "localhost", 19916, *pmesh, "Initial mesh",
+      common::VisualizeMesh(vis, "localhost", 19916, *pmesh, "Initial mesh",
                             400, 600, 400, 400, "me");
    }
 
    surfaces.ConvertPhysCoordToParam(coord_x_in, coord_t);
 
-   if (glvis)
-   {
-      surfaces.ConvertParamCoordToPhys(coord_t, coord_x_in);
-      socketstream vis1;
-      common::VisualizeMesh(vis1, "localhost", 19916, *pmesh, "Mesh x->t->x",
-                            400, 600, 400, 400, "me");
-      coord_x_in = x0;
-   }
+   // if (glvis)
+   // {
+   //    surfaces.ConvertParamCoordToPhys(coord_t, coord_x_in);
+   //    socketstream vis1;
+   //    common::VisualizeMesh(vis1, "localhost", 19916, *pmesh, "Mesh x->t->x",
+   //                          400, 600, 400, 400, "me");
+   //    coord_x_in = x0;
+   // }
 
    // TMOP setup.
    TMOP_QualityMetric *metric;
@@ -222,8 +224,8 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
    if (glvis)
    {
       coord_x_in = coord_x_out;
-      socketstream vis2;
-      common::VisualizeMesh(vis2, "localhost", 19916, *pmesh, "Final mesh",
+      socketstream vis;
+      common::VisualizeMesh(vis, "localhost", 19916, *pmesh, "Final mesh",
                             800, 600, 400, 400, "me");
       coord_x_in = x0;
    }

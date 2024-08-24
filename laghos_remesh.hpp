@@ -28,7 +28,7 @@ namespace hydrodynamics
 void OptimizeMesh(ParGridFunction &coord_x_in,
                   AnalyticCompositeSurface &surfaces,
                   const IntegrationRule &ir, const IntegrationRule &ir_bdr,
-                  double remesh_dist, ParGridFunction &coord_x_out);
+                  double remesh_dist, ParGridFunction &coord_x_out, bool vis);
 
 // x = [1.0 + a sin(c pi) + b] t.
 // y = 1 + a sin(c pi t) + b t.

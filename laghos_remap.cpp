@@ -109,8 +109,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     v_ess_tdofs(ess_tdofs),
     remap_v(remap_v_), remap_v_stable(remap_v_stable_),
     cfl_factor(cfl),
-    offsets(4), S(),
-    v(&pfes_H1), rho(), e(), x0()
+    offsets(4), S(), v(), rho(), e(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
 
@@ -139,7 +138,11 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
                                  const Vector &rhoDetJw,
                                  const ParGridFunction &energy)
 {
+   // Original positions of the local mesh.
    x0 = nodes0;
+   GridFunction *x = pmesh.GetNodes();
+   *x = x0;
+
    e  = energy;
 
    if (remap_v_stable)
@@ -173,11 +176,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
       RHS_V /= M_L;
       v.Distribute(RHS_V);
    }
-   else
-   {
-      v = vel;
-   }
-
+   else { v = vel; }
 
    e_max = e.Max();
    MPI_Allreduce(MPI_IN_PLACE, &e_max, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
@@ -250,7 +249,6 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    u_max = std::sqrt(u_max);
    double dt = cfl_factor * h_min / u_max;
 
-   socketstream vis_v;
    char vishost[] = "localhost";
    int  visport   = 19916;
    int Wx = 0, Wy = 0; // window position
@@ -270,27 +268,19 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
          last_step = true;
       }
 
-      if (pmesh.GetMyRank() == 0) { cout << "." << flush; }
+      if (pmesh.GetMyRank() == 0) { cout << ". " << ti << std::endl; }
 
       oper->SetDt(dt);
       ode_solver.Step(S, t, dt);
 
-      double e_max_new = e.Max();
-      MPI_Allreduce(MPI_IN_PLACE, &e_max_new, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
-      if (e_max_new > e_max)
-      {
-         cout << e_max << " " << e_max_new << endl;
-         MFEM_ABORT("\n e_1 max remap violation");
-      }
-
       if (remap_v)
       {
-         VisualizeField(vis_v, vishost, visport,
-                        v, "Remapped Velocity", Wx, Wy, Ww, Wh);
+         VisualizeField(vis_v, vishost, visport, v,
+                        "Remapped Velocity", Wx, Wy, Ww, Wh);
       }
    }
+
    delete oper; delete pfes_H1_s;
-   if (pmesh.GetMyRank() == 0) { cout << endl; }
 }
 
 void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
@@ -345,8 +335,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    }
 
    ParMesh &pmesh_lagr = *vel.ParFESpace()->GetParMesh();
-   const int NE  = pmesh_lagr.GetNE(),
-       NBE = pmesh_lagr.GetNBE();
+   const int NE  = pmesh_lagr.GetNE();
    const int nqp = ir_rho.GetNPoints();
 
    Vector rho_vals(nqp);
@@ -363,6 +352,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       }
    }
 
+   // const int NBE = pmesh_lagr.GetNBE();
    // for (int be = 0; be < NBE; be++)
    // {
    //    int b_nqp = ir_rho_b.GetNPoints();
@@ -407,7 +397,6 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
 {
    // no need for Vector Massmatrix in stablised velocity remap
    // MCL only uses the first component of this, but unstable remap needs vector mass matrix
-   //Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
    if (remap_v_stable)
    {
       auto *mass_int = new MassIntegrator(rho_coeff);

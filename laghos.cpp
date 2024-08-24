@@ -83,9 +83,12 @@
 // -rvg is remap v with gslib.
 // -rvs is remap v stabilized.
 // mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -rd 0.05 -tf 2.5 -ale 0.25
-// mpirun -np 7 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -rd 0.02 -tf 1.2 -ale 0.2
-// mpirun -np 7 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 7.0 -ale 0.5 -rvs -rd 0.3
+// mpirun -np 6 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -rd 0.02 -tf 1.2 -ale 0.2
+// mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 7.0 -ale 0.5 -rvs -rd 0.3
+// mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.02 -rvs -rd 2.0 -ok 3 -ot 2
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
+
+
 
 #include <fstream>
 #include <sys/time.h>
@@ -137,6 +140,7 @@ int main(int argc, char *argv[])
    double penalty_param = 20.0;
    double ale_period = -1.0;
    double remesh_dist = 0.05;
+   int    circ_type   = 0;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
@@ -145,6 +149,7 @@ int main(int argc, char *argv[])
    bool p_assembly = true;
    bool impose_visc = false;
    bool visualization = false;
+   bool vis_remesh    = false;
    int vis_steps = 5;
    bool visit = false;
    bool gfprint = false;
@@ -189,6 +194,8 @@ int main(int argc, char *argv[])
                   "ALE period interval in physical time.");
    args.AddOption(&remesh_dist, "-rd", "--rd",
                   "Remesh physical distance.");
+   args.AddOption(&circ_type, "-ct", "--ct",
+                  "Type of circles test (0 is outside, 1 is inside).");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
@@ -207,6 +214,9 @@ int main(int argc, char *argv[])
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
+   args.AddOption(&vis_remesh, "-vis-r", "--vis-r", "-no-vis-r",
+                  "--no-vis-r",
+                  "Enable or disable GLVis visualization of remesh.");
    args.AddOption(&vis_steps, "-vs", "--visualization-steps",
                   "Visualize every n-th timestep.");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
@@ -266,8 +276,8 @@ int main(int argc, char *argv[])
    if (strcmp(mesh_file, "data/circles3.mesh") == 0 ||
        strcmp(mesh_file, "data/circles4.mesh") == 0)
    {
-      blast_position[0] =  -1.0;
-      blast_position[1] =   0.0;
+      blast_position[0] =  (circ_type == 0) ? -1.0 : 0.4;
+      blast_position[1] =  0.0;
    }
 
    // Configure the device from the command line options
@@ -476,17 +486,26 @@ int main(int argc, char *argv[])
    if (BC_strong)
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-      for (int d = 0; d < pmesh->Dimension(); d++)
-      {
-         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
-         // i.e., we must enforce v_x/y/z = 0 for the velocity components.
-         ess_bdr = 0; ess_bdr[d] = 1;
-         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-         ess_tdofs.Append(dofs_list);
-         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-         ess_vdofs.Append(dofs_list);
-      }
+
+      // Fix all.
+      ess_bdr = 1;
+      H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list);
+      ess_tdofs.Append(dofs_list);
+      H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker);
+      FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+      ess_vdofs.Append(dofs_list);
+
+      // for (int d = 0; d < pmesh->Dimension(); d++)
+      // {
+      //    // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
+      //    // i.e., we must enforce v_x/y/z = 0 for the velocity components.
+      //    ess_bdr = 0; ess_bdr[d] = 1;
+      //    H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+      //    ess_tdofs.Append(dofs_list);
+      //    H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+      //    FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+      //    ess_vdofs.Append(dofs_list);
+      // }
    }
 
    // Define the explicit ODE solver used for time integration.
@@ -716,6 +735,13 @@ int main(int argc, char *argv[])
    //      cout << endl;
    //   }
 
+   // Setup the remap operator.
+   const bool remap_v_adv   = !remap_v_gslib;
+   const double cfl_remap = 0.1;
+
+   RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
+                     remap_v_adv, remap_v_stable, ess_tdofs);
+
    int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)
    {
@@ -762,14 +788,7 @@ int main(int argc, char *argv[])
          ParGridFunction x_gf_opt(&H1FESpace);
          OptimizeMesh(x_gf, surfaces,
                       hydro.GetIntRule(), hydro.GetIntRule_b(),
-                      remesh_dist, x_gf_opt);
-
-         const bool remap_v_adv   = !remap_v_gslib;
-
-         // Setup and initialize the remap operator.
-         const double cfl_remap = 0.1;
-         RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
-                           remap_v_adv, remap_v_stable, ess_tdofs);
+                      remesh_dist, x_gf_opt, vis_remesh);
 
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
@@ -784,7 +803,6 @@ int main(int argc, char *argv[])
             interp.Remap(v_gf, x_gf_opt, v_new);
          }
 
-         // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x_gf_opt;
          adv.TransferToLagr(rho0_gf, v_gf,
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),

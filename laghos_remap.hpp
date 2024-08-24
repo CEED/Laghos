@@ -40,14 +40,13 @@ class InterpolationRemap
 // Performs the full remap advection loop.
 class RemapAdvector
 {
-   private:
+private:
    ParMesh pmesh;
    int dim;
    L2_FECollection fec_L2;
    H1_FECollection fec_H1, fec_H1Lag;
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
    const Array<int> &v_ess_tdofs;
-   //mutable ParMixedBilinearForm M_mixed;
 
    bool remap_v;
    bool remap_v_stable;
@@ -64,7 +63,9 @@ class RemapAdvector
    RK3SSPSolver ode_solver;
    Vector x0;
 
-   public:
+   socketstream vis_v;
+
+public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e,
                  double cfl, bool remap_v_, bool remap_v_stable_,
                  const Array<int> &ess_tdofs);
