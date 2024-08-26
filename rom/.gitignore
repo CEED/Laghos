@@ -1,7 +1,22 @@
-dependencies/
-run/
+# Do not track objects or archives
+*.o
+*.orig
+run
+
+# Do not track backup files
+*~
+
+# Do not track log files
+*.log
+
+# Do not track executables
 laghos
 merge
-*.o
-*.out
-job*.sh
+tests/basisComparator
+tests/checkError
+tests/computeSpeedup
+tests/fileComparator
+tests/solutionComparator
+
+# Do not track dependencies
+dependencies

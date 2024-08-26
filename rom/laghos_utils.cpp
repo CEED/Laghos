@@ -6,6 +6,13 @@
 
 using namespace std;
 
+std::string GetRankString6(int rank)
+{
+    ostringstream fileExt;
+    fileExt << setfill('0') << setw(6) << rank;
+    return fileExt.str();
+}
+
 void split_line(const std::string &line, std::vector<std::string> &words)
 {
     words.clear();
@@ -247,14 +254,15 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, c
     if (printout) cout << "Take first " << cutoff << " of " << sing_vals->dim() << " basis vectors" << endl;
 }
 
-void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::BasisGenerator* bg, const bool usingWindows, const int window)
+void PrintSingularValues(const int rank, const std::string& basename,
+                         const std::string& name, CAROM::BasisGenerator* bg,
+                         const bool usingWindows, const int window)
 {
     const CAROM::Vector* sing_vals = bg->getSingularValues();
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = (usingWindows) ? basename + "/sVal" + name + std::to_string(window) + tmp : basename + "/sVal" + name + tmp;
+    const std::string rankStr = GetRankString6(rank);
+    const std::string fullname = (usingWindows) ? basename + "/sVal" + name
+                                 + std::to_string(window) + rankStr : basename + "/sVal" + name + rankStr;
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);
@@ -530,15 +538,13 @@ void AppendPrintParGridFunction(std::ofstream *ofs, ParGridFunction *gf)
         *ofs << tv[i] << std::endl;
 }
 
-void PrintParGridFunction(const int rank, const std::string& name, ParGridFunction *gf)
+void PrintParGridFunction(const int rank, const std::string& name,
+                          ParGridFunction *gf)
 {
     Vector tv(gf->ParFESpace()->GetTrueVSize());
     gf->GetTrueDofs(tv);
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
+    std::string fullname = name + GetRankString6(rank);
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);
@@ -549,14 +555,12 @@ void PrintParGridFunction(const int rank, const std::string& name, ParGridFuncti
     ofs.close();
 }
 
-double PrintDiffParGridFunction(NormType normtype, const int rank, const std::string& name, ParGridFunction *gf)
+double PrintDiffParGridFunction(NormType normtype, const int rank,
+                                const std::string& name, ParGridFunction *gf)
 {
     Vector tv(gf->ParFESpace()->GetTrueVSize());
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + tmp;
+    std::string fullname = name + GetRankString6(rank);
 
     std::ifstream ifs(fullname.c_str());
 
@@ -790,10 +794,7 @@ double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std
         cout << rank << ": " << name << " Rel. DIFF norm " << relDIFFnorm << endl;
     }
 
-    char tmp[100];
-    sprintf(tmp, ".%06d", rank);
-
-    std::string fullname = name + "_norms" + tmp;
+    const std::string fullname = name + "_norms" + GetRankString6(rank);
 
     std::ofstream ofs(fullname.c_str(), std::ofstream::out);
     ofs.precision(16);
@@ -809,7 +810,8 @@ double PrintNormsOfParGridFunctions(NormType normtype, const int rank, const std
 
 }
 
-void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name, ParGridFunction *f1, ParGridFunction *f2,
+void PrintL2NormsOfParGridFunctions(const int rank, const std::string& name,
+                                    ParGridFunction *f1, ParGridFunction *f2,
                                     const bool scalar)
 {
     ConstantCoefficient zero(0.0);

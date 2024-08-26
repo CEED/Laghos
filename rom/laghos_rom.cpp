@@ -668,11 +668,11 @@ CAROM::Matrix* ReadTemporalBasisROM(const int rank, const std::string filename, 
     // In libROM, a Matrix is always distributed row-wise. In this case, the global matrix is on each process.
     if (dim == -1)
     {
-        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0);
+        basis = (CAROM::Matrix*) reader.getTemporalBasis();
     }
     else
     {
-        basis = (CAROM::Matrix*) reader.getTemporalBasis(0.0, dim);
+        basis = (CAROM::Matrix*) reader.getTemporalBasis(dim);
     }
     temporalSize = basis->numRows();
 
@@ -3579,10 +3579,8 @@ void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const&
 
     Vector b(st.Size());
 
-    char fileExtension[100];
-    sprintf(fileExtension, ".%06d", rank);
-
-    std::string fullname = testing_parameter_basename + "/ST_Sol_" + name + fileExtension;
+    const std::string fullname = testing_parameter_basename + "/ST_Sol_" + name
+                                 + GetRankString6(rank);
     std::ifstream ifs(fullname.c_str());
 
     const int tvsize = fespace->GetTrueVSize();
@@ -3601,7 +3599,10 @@ void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const&
     b = 0.0;
     M = 0.0;
 
-    // TODO: this is a full-order computation. Should it be hyperreduced? In any case, the FOM solution will need to be read, since the hyperreduction samples are unknown when the FOM solution is written to file, so there does not seem to be potential savings.
+    // TODO: this is a full-order computation. Should it be hyperreduced?
+    // In any case, the FOM solution will need to be read, since the
+    // hyperreduction samples are unknown when the FOM solution is written to
+    // file, so there does not seem to be potential savings.
 
     for (int t=0; t<nt; ++t)
     {
@@ -4152,10 +4153,8 @@ CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final,
 
         double errorIndicatorEnergyFraction = 0.9999;
 
-        char tmp[100];
-        sprintf(tmp, ".%06d", 0);
-
-        std::string fullname = outputPath + "/" + std::string("errorIndicatorVec") + tmp;
+        std::string fullname = outputPath + "/" +
+                               std::string("errorIndicatorVec") + GetRankString6(0);
 
         if (romOptions.greedyErrorIndicatorType == varyBasisSize)
         {

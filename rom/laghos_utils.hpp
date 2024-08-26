@@ -10,6 +10,8 @@
 using namespace std;
 using namespace mfem;
 
+std::string GetRankString6(int rank);
+
 void split_line(const string &line, vector<string> &words);
 
 void DeleteROMSolution(std::string outputPath);

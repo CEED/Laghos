@@ -473,8 +473,9 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
 int main(int argc, char *argv[])
 {
     // Initialize MPI.
-    MPI_Session mpi(argc, argv);
-    int myid = mpi.WorldRank();
+    Mpi::Init();
+    const int myid = Mpi::WorldRank();
+    const bool root = myid == 0;
 
     // Parse command-line options.
     int nset = 0;
@@ -519,12 +520,12 @@ int main(int argc, char *argv[])
     args.Parse();
     if (!args.Good())
     {
-        if (mpi.Root()) {
+        if (root) {
             args.PrintUsage(cout);
         }
         return 1;
     }
-    if (mpi.Root()) {
+    if (root) {
         args.PrintOptions(cout);
     }
     std::string outputPath = "run";
