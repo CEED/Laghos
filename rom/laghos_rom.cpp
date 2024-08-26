@@ -11,6 +11,8 @@
 #include "hyperreduction/S_OPT.h"
 #include "hyperreduction/STSampling.h"
 
+#include "utils/HDFDatabase.h"
+
 using namespace std;
 
 
@@ -2651,22 +2653,26 @@ void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
                                     std::vector<int> & indices,
                                     std::vector<double> & weights)
 {
-    cout << "ROM_Operator reading EQP solution for window " << input.window << endl;
+    cout << "Reading EQP solution for window " << input.window << endl;
 
     MFEM_VERIFY(indices.size() == 0 && weights.size() == 0, "");
 
     const string filename = basename + std::to_string(input.window);
 
-    std::ifstream infile(filename);
-    MFEM_VERIFY(infile.is_open(), "NNLS solution file does not exist.");
-    std::string line;
-    while (std::getline(infile, line))
-    {
-        std::vector<std::string> words;
-        split_line(line, words);
-        indices.push_back(std::stoi(words[0]));
-        weights.push_back(std::stod(words[1]));
-    }
+    CAROM::HDFDatabase infile;
+    const bool fileOpen = infile.open(filename, "r");
+    MFEM_VERIFY(fileOpen, "NNLS solution file does not exist.");
+
+    const int n = infile.getDoubleArraySize("weight");
+    MFEM_VERIFY(n > 0, "");
+
+    indices.resize(n);
+    weights.resize(n);
+
+    infile.getIntegerArray("index", indices.data(), n);
+    infile.getDoubleArray("weight", weights.data(), n);
+
+    infile.close();
 }
 
 void ROM_Operator::ReadElementsNNLS(ROM_Options const& input, string basename,

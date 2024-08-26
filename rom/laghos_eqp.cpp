@@ -2,6 +2,7 @@
 #include "laghos_utils.hpp"
 
 #include "linalg/NNLS.h"
+#include "utils/HDFDatabase.h"
 
 void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
                const bool useLQ, CAROM::Vector const& w, CAROM::Matrix & Gt,
@@ -122,17 +123,15 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
 void WriteSolutionNNLS(std::vector<int> const& indices, std::vector<double> const& sol,
                        const string filename)
 {
-    std::ofstream outfile(filename);
+    CAROM::HDFDatabase out;
+    out.create(filename);
 
     const int n = indices.size();
     MFEM_VERIFY(n == sol.size(), "");
 
-    for (int i=0; i<n; ++i)
-    {
-        outfile << indices[i] << " " << sol[i] << "\n";
-    }
-
-    outfile.close();
+    out.putIntegerArray("index", indices.data(), n);
+    out.putDoubleArray("weight", sol.data(), n);
+    out.close();
 }
 
 void ExtractNonzeros(CAROM::Vector const& v, std::vector<int> & indices,
