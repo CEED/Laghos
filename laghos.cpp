@@ -82,10 +82,10 @@
 // ALE tests:
 // -rvg is remap v with gslib.
 // -rvs is remap v stabilized.
-// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -rd 0.05 -tf 2.5 -ale 0.25
-// mpirun -np 6 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -rd 0.02 -tf 1.2 -ale 0.2
+// mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -vis-r -rd 0.05 -tf 2.5 -ale 0.25
+// mpirun -np 6 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -vis-r -rd 0.02 -tf 1.2 -ale 0.2
 // mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 0 -vis -tf 7.0 -ale 0.5 -rvs -rd 0.3
-// mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 1 -vis -tf 1.0 -ale 0.02 -rvs -rd 2.0 -ok 3 -ot 2
+// mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 1 -vis -tf 0.6 -ale 0.02 -rvs -rd 2.0 -ok 3 -ot 2
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 
 
