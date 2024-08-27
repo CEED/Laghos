@@ -73,12 +73,17 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 
    if(remap_v_stable)
    {
+      VectorGridFunctionCoefficient vel_coeff(&vel);
+      v.ProjectCoefficient(vel_coeff);
+
+      /*
       // project velocity field into Bernstein FE space via lumped L2 projection
       ParMixedBilinearForm M_mixed(&pfes_H1Lag, &pfes_H1);
       M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
       M_mixed.Assemble(0);
       M_mixed.Finalize(0);
 
+      Array<int> dummy;
       OperatorHandle M;
       M_mixed.FormRectangularSystemMatrix(v_ess_tdofs, v_ess_tdofs, M);
 
@@ -101,6 +106,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
       M->Mult(VEL, RHS_V);
       RHS_V /= M_L;
       v.Distribute(RHS_V);
+      //*/
    }
    else
    {
@@ -235,11 +241,16 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    
    if(remap_v_stable)
    {
+      VectorGridFunctionCoefficient v_coeff(&v);
+      vel.ProjectCoefficient(v_coeff);
+      /*
       // project velocity field back to Lagrange FE space via lumped L2 projection
       ParMixedBilinearForm M_mixed(&pfes_H1, &pfes_H1Lag);
       M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
       M_mixed.Assemble(0);
       M_mixed.Finalize(0);
+
+      Array<int> dummy;
 
       OperatorHandle M;
       M_mixed.FormRectangularSystemMatrix(v_ess_tdofs, v_ess_tdofs, M);
@@ -256,6 +267,12 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
       gcomm.Bcast(lumpedmassmatrix_array);
 
+      for(int i = 0; i < lumped_vec.Size(); i++)
+      {
+         cout << lumped_vec(i)<< endl;
+         MFEM_VERIFY(lumped_vec(i) > 1e-15, "lumped mass matrix entry negative or zero!");
+      }
+
       const Operator *R_v = pfes_H1Lag.GetRestrictionMatrix();
       Vector RHS_V(R_v->Height()), X_V(R_v->Height()), V(R_v->Height()), M_L(R_v->Height());
       R_v->Mult(v, V);
@@ -263,6 +280,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       M->Mult(V, RHS_V);
       RHS_V /= M_L;
       vel.Distribute(RHS_V);
+      //*/
    }
    else
    {
@@ -322,7 +340,7 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
      x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
      v_ess_tdofs(v_ess_td),
      v_ess_vdofs(v_ess_vd),
-     u(mesh_vel), u_coeff(&u),
+     u(mesh_vel), u_coeff(&u), u_bernstein(&pfes_H1),
      rho_coeff(&rho),
      rho_u_coeff(rho_coeff, u_coeff),
      Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s),
@@ -336,6 +354,9 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    //Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
    if(remap_v_stable)
    {
+      // project u into bernstein coefficients to use for GFE in subcell C&S
+      u_bernstein.ProjectCoefficient(u_coeff);
+
       auto *mass_int = new MassIntegrator(rho_coeff);
       //mass_int = new MassIntegrator(rho_coeff);
       Mr_H1_s.AddDomainIntegrator(new MassIntegrator(rho_coeff));
@@ -544,13 +565,14 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Vector v, v_d, d_v;
       v.MakeRef(*U_ptr, 0, dofs_h1*dim);
       d_v.MakeRef(dU, 0, dofs_h1*dim);
-      int scheme = 3;
+      int scheme = 4;
       switch(scheme)
       {  
          case 0: LowOrderVel(K_glb, KT_glb, v, d_v); break;
          case 1: HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v); break;
          case 2: MCLVel(K_glb, KT_glb, M_glb, v, d_v); break;
          case 3: ClipAndScale(pfes_H1_s, v, d_v); break;
+         case 4: SubcellClipAndScale(pfes_H1_s, pfes_H1, v, d_v); break;
          default: MFEM_ABORT("Unknown scheme for velocity remap!");
       }
    }
@@ -945,7 +967,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
    Array<double> v_max, v_min;
    ComputeVelocityMinMax(v, v_min, v_max);
    Vector vdot(v.Size());
-   ComputeTimeDerivatives(v, conv_int, pfes, vdot);
+   ComputeTimeDerivativesLO(v, conv_int, pfes, vdot);
 
    for(int e = 0; e < nEl; e++)
    {  
@@ -1061,13 +1083,164 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
       dv_comp.MakeRef(d_v, d * nDofs, nDofs);
       dv_comp /= lumpedMr_H1_vec;
    }
-   d_v.SetSubVector(v_ess_vdofs, 0.0);
+   //d_v.SetSubVector(v_ess_vdofs, 0.0);
 
    delete conv_int;
    delete mass_int;
 }
 
-void AdvectorOper::ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const
+void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, const ParFiniteElementSpace &pfes, Vector &v, Vector &d_v) const
+{
+   d_v = 0.0;
+   auto conv_int = new ConvectionIntegrator(rho_u_coeff);
+   auto mass_int = new MassIntegrator(rho_coeff);
+   auto div_int = new VectorDivergenceIntegrator(rho_coeff);
+
+   // scalar finite element space
+   const int nEl = pfes_s.GetNE();
+   const int dim = pfes_s.GetMesh()->Dimension();
+   const int nDofs = pfes_s.GetVSize();
+   Array<int> dofs, vdofs;
+   Vector ve;
+
+   Array<double> v_max, v_min;
+   ComputeVelocityMinMax(v, v_min, v_max);
+   Vector vdot(v.Size());
+   ComputeTimeDerivativesLO(v, conv_int, pfes_s, vdot);
+
+   for(int e = 0; e < nEl; e++)
+   {  
+      auto element_s = pfes_s.GetFE(e);
+      auto element = pfes.GetFE(e);
+      auto eltrans = pfes_s.GetElementTransformation(e);
+
+      DenseMatrix Ke, Me, Ce;
+      conv_int->AssembleElementMatrix(*element_s, *eltrans, Ke);
+      mass_int->AssembleElementMatrix(*element_s, *eltrans, Me);
+      div_int->AssembleElementMatrix2(*element, *element_s, *eltrans, Ce);
+
+      //Ce.Print();
+      //MFEM_ABORT("")
+
+      pfes_s.GetElementDofs(e, dofs);
+      pfes.GetElementVDofs(e, vdofs);
+      Vector re(dofs.Size()), vdote(dofs.Size()), fe(dofs.Size()), 
+            gamma_e(dofs.Size()), fe_star(dofs.Size());
+
+      Vector me(Me.Height());
+      Me.GetRowSums(me);
+
+      // lumped divergence operator
+      Vector ue(vdofs.Size());
+      u_bernstein.GetSubVector(vdofs, ue);
+      Vector k2(dofs.Size());
+      Ce.Mult(ue, k2);
+
+      DenseMatrixInverse Me_inverse(Me);
+      DenseMatrix Me_inv(Me.Size());
+      Me_inverse.GetInverseMatrix(Me_inv);
+
+      SparseMatrix C_tilde_e(dofs.Size(), vdofs.Size());
+      ComputeSparseGradient(e, pfes_s, C_tilde_e);
+   }
+}
+
+void AdvectorOper::ComputeSparseGradient(const int e, const ParFiniteElementSpace &pfes_s, SparseMatrix &C_tilde_e) const
+{
+   auto element_s = pfes_s.GetFE(e);
+   const int dim = pfes_s.GetMesh()->Dimension();
+   const int order = element_s->GetOrder();
+   const int N = order + 1;
+   C_tilde_e.OverrideSize(N, N * dim);
+
+   SparseMatrix C1d(N);
+   C1d.Set(0,0,- 0.5);
+   C1d.Set(order,order, 0.5);
+   for(int i = 0; i < N; i++)
+   {
+      for(int j = 0; j < N; j++)
+      {
+         if(j == i - 1)
+         {
+            C1d.Set(i, j, -0.5);
+         }
+         else if(j == i+1)
+         {
+            C1d.Set(i, j, 0.5);
+         }
+      }
+   }
+   C1d.Finalize();
+
+   for(int k = 0; k < dim; k++)
+   {
+      int size1 = 1;
+      for(int l = 0; l < k; l++)
+      {
+         size1 *= N;
+      } 
+
+      Array<int> offset1(size1+1);
+      for(int l = 0; l < size1 + 1; l++)
+      {
+         offset1[l] = l * N;
+      }
+
+      BlockMatrix I_kron_C_block(offset1);
+
+      for(int l = 0; l < size1; l++)
+      {
+         I_kron_C_block.SetBlock(l, l, &C1d);
+      }
+      I_kron_C_block.Finalize();
+      SparseMatrix *I_kron_C = I_kron_C_block.CreateMonolithic();
+
+      int size2 = 1;
+      for(int l = dim - 1; l > k; l--)
+      {
+         size2 *= N;
+      }
+      cout << "size " <<size2<< endl;
+      Array<int> offset2(I_kron_C->Height()+1);
+      for(int l = 0; l < I_kron_C->Height() + 1; l++)
+      {
+         offset2[l] = l * size2;
+         cout << offset2[l] << endl;
+      }
+      cout << "pow " << pow(double(N), double(dim)) << endl;
+      MFEM_VERIFY(abs(double(offset2[I_kron_C->Height()]) - pow(double(N), double(dim))) < 1e-14, "hmm");
+      BlockMatrix C1_kron_I(offset2);
+      Vector ones(size2);
+      ones = 1.0;
+      SparseMatrix Id(ones);
+      
+      auto I = I_kron_C->GetI();
+      auto J = I_kron_C->GetJ();
+      auto C = I_kron_C->GetData();
+
+      Array<SparseMatrix*> cijId;
+      for(int i = 0; i < I_kron_C->Height(); i++)
+      {  
+         for(int l = I[i]; l < I[i+1]; l++)
+         {
+            //Id *= C[l];
+
+            int index = cijId.Append(new SparseMatrix(ones));
+            *cijId[l] *= C[l];
+            int j = J[l];
+            C1_kron_I.SetBlock(i , j, cijId[l]);
+            //Id *= 1.0 / C[l];
+         }
+      }
+      C1_kron_I.Finalize();
+      C1_kron_I.GetBlock(0,0).Print();
+   }
+   
+   MFEM_ABORT("guut")
+
+}
+
+void AdvectorOper::ComputeTimeDerivativesLO(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const
 {  
    vdot = 0.0;
 

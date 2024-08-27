@@ -83,7 +83,8 @@ protected:
    Vector &x_now;
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
    ParGridFunction &u;
-   VectorGridFunctionCoefficient u_coeff;
+   ParGridFunction u_bernstein;
+   mutable VectorGridFunctionCoefficient u_coeff;
    mutable GridFunctionCoefficient rho_coeff;
    mutable ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
@@ -113,9 +114,11 @@ protected:
                               const SparseMatrix &M_glb, Vector &v,
                               Vector &d_v) const;
 
-   void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, Vector &v, Vector &d_v) const;
+   void ClipAndScale(const ParFiniteElementSpace &pfes_s, Vector &v, Vector &d_v) const;
+   void SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, const ParFiniteElementSpace &pfes, Vector &v, Vector &d_v) const;
    void ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const;
-   void ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
+   void ComputeTimeDerivativesLO(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
+   void ComputeSparseGradient(const int e, const ParFiniteElementSpace &pfes_s, SparseMatrix &C_tilde_e) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be moved.

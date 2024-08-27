@@ -598,7 +598,8 @@ int main(int argc, char *argv[])
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
-      else if (ale_period > 0.0 && t + 1e-12 > (ale_cnt + 1) * ale_period)
+      //else if (ale_period > 0.0 && t + 1e-12 > (ale_cnt + 1) * ale_period)
+      else if ( t + 1e-12 > (ale_cnt + 1) * ale_period)
       {
          // ALE step - the next remap period has been reached, the dt was ok.
          if (myid == 0)
