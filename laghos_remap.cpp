@@ -1107,6 +1107,8 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
    ComputeVelocityMinMax(v, v_min, v_max);
    Vector vdot(v.Size());
    ComputeTimeDerivativesLO(v, conv_int, pfes_s, vdot);
+   SparseMatrix C_tilde_e;
+   ComputeSparseGradient(pfes_s, C_tilde_e);
 
    for(int e = 0; e < nEl; e++)
    {  
@@ -1119,8 +1121,9 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
       mass_int->AssembleElementMatrix(*element_s, *eltrans, Me);
       div_int->AssembleElementMatrix2(*element, *element_s, *eltrans, Ce);
 
-      //Ce.Print();
+      Ce.Print();
       //MFEM_ABORT("")
+      cout << endl;
 
       pfes_s.GetElementDofs(e, dofs);
       pfes.GetElementVDofs(e, vdofs);
@@ -1137,17 +1140,31 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
       Ce.Mult(ue, k2);
 
       DenseMatrixInverse Me_inverse(Me);
-      DenseMatrix Me_inv(Me.Size());
+      DenseMatrix Me_inv(Me.Height());
       Me_inverse.GetInverseMatrix(Me_inv);
 
-      SparseMatrix C_tilde_e(dofs.Size(), vdofs.Size());
-      ComputeSparseGradient(e, pfes_s, C_tilde_e);
+
+      DenseMatrix Ce_tilde = Ce;
+      Ce_tilde = 0.0;
+
+      for(int i = 0; i < Ce.Height(); i++)
+      {
+         for (int j = 0; j < Ce.Width(); j++)
+         {
+            for(int l = 0; l < Ce.Height(); l++)
+            {
+               Ce_tilde(i,j) += me(i) * Me_inv(i,l) * Ce(l, j); 
+            }
+         } 
+      }
+      Ce_tilde.Print();
+      MFEM_ABORT("")
    }
 }
 
-void AdvectorOper::ComputeSparseGradient(const int e, const ParFiniteElementSpace &pfes_s, SparseMatrix &C_tilde_e) const
+void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, SparseMatrix &C_tilde_e) const
 {
-   auto element_s = pfes_s.GetFE(e);
+   auto element_s = pfes_s.GetFE(0);
    const int dim = pfes_s.GetMesh()->Dimension();
    const int order = element_s->GetOrder();
    const int N = order + 1;
@@ -1172,6 +1189,7 @@ void AdvectorOper::ComputeSparseGradient(const int e, const ParFiniteElementSpac
    }
    C1d.Finalize();
 
+   Array<SparseMatrix*> C_d_blocks(dim);
    for(int k = 0; k < dim; k++)
    {
       int size1 = 1;
@@ -1200,15 +1218,14 @@ void AdvectorOper::ComputeSparseGradient(const int e, const ParFiniteElementSpac
       {
          size2 *= N;
       }
-      cout << "size " <<size2<< endl;
+
       Array<int> offset2(I_kron_C->Height()+1);
       for(int l = 0; l < I_kron_C->Height() + 1; l++)
       {
          offset2[l] = l * size2;
-         cout << offset2[l] << endl;
       }
-      cout << "pow " << pow(double(N), double(dim)) << endl;
-      MFEM_VERIFY(abs(double(offset2[I_kron_C->Height()]) - pow(double(N), double(dim))) < 1e-14, "hmm");
+
+      MFEM_VERIFY(abs(double(offset2[I_kron_C->Height()]) - pow(double(N), double(dim))) < 1e-14, "Wrong Sizing of first kroneka product matrix ");
       BlockMatrix C1_kron_I(offset2);
       Vector ones(size2);
       ones = 1.0;
@@ -1223,21 +1240,144 @@ void AdvectorOper::ComputeSparseGradient(const int e, const ParFiniteElementSpac
       {  
          for(int l = I[i]; l < I[i+1]; l++)
          {
-            //Id *= C[l];
-
             int index = cijId.Append(new SparseMatrix(ones));
             *cijId[l] *= C[l];
             int j = J[l];
             C1_kron_I.SetBlock(i , j, cijId[l]);
-            //Id *= 1.0 / C[l];
          }
       }
-      C1_kron_I.Finalize();
-      C1_kron_I.GetBlock(0,0).Print();
+      C_d_blocks[k] = C1_kron_I.CreateMonolithic();
+
+      for(int l = 0; l < cijId.Size(); l++)
+      {
+         if(cijId[l])
+         {
+            delete cijId[l];
+         }
+      }
+
+   }
+   MFEM_VERIFY(C_d_blocks.Size() == dim, "wrong number of blocks!");
+
+   Array<int> offset3(dim +1);
+   for(int k = 0; k < dim + 1; k++)
+   {
+      offset3[k] = k * C_d_blocks[0]->Height();
+   }
+   Array<int> offset4(2);
+   offset4[0] = 0;
+   offset4[1]= C_d_blocks[0]->Height();
+   BlockMatrix C_d(offset4, offset3);
+
+   for(int l = 0; l < dim; l++)
+   {
+      C_d.SetBlock(0, l, C_d_blocks[l]);  
+   }
+   SparseMatrix temp =  *C_d.CreateMonolithic();
+   temp.SortColumnIndices();
+
+   auto I = temp.GetI();
+   auto J = temp.GetJ();
+   auto TEMP = temp.ReadData();
+
+   /*
+   for(int i = 0; i < temp.Height(); i++)
+   {
+      for(int l = I[i]; l < I[i+1]; l++)
+      {
+         int j = J[l];
+         cout << j << ", ";
+      }
+      cout << "\n";
+   }
+   cout << "\n";
+   //*/
+   
+   SparseMatrix reordered(temp.Height(), temp.Width());
+   
+   for(int ii =0; ii < temp.Height(); ii++)
+   {
+      for(int l = I[ii]; l < I[ii+1]; l++)
+      {  
+         int i = ReferenceIndexMapping(ii, dim, N);
+         int j = ReferenceIndexMapping(J[l], dim, N);
+
+         int d = 0;   
+         while(j - d * temp.Height() >=0)
+         {  
+            reordered.Set(i, j - d * temp.Height(), 1.0);
+            d++;
+         }
+         MFEM_VERIFY(d <= dim, "that should not be 1");
+         d = 0;
+         while(j + d * temp.Height() < temp.Width())
+         {
+            reordered.Set(i, j + d * temp.Height(), 1.0);
+            d++;
+         }
+         MFEM_VERIFY(d <= dim , "that should not be 2");
+
+      }
+   }
+
+   reordered.Finalize();
+   reordered = 0.0;
+   for(int ii =0; ii < temp.Height(); ii++)
+   {
+      for(int l = I[ii]; l < I[ii+1]; l++)
+      {
+         int i = ReferenceIndexMapping(ii, dim, N);
+         int j = ReferenceIndexMapping(J[l], dim, N);
+         reordered(i, j) = TEMP[l];
+      }
+   }
+   reordered.SortColumnIndices();
+   C_tilde_e = reordered;
+
+   C_tilde_e.Print();
+}
+
+int AdvectorOper::ReferenceIndexMapping(const int i, const int dim, const int N) const
+{
+   int size = 1;
+   // size = N^d
+   for(int d = 0; d < dim; d++)
+   {
+      size *= N;
+   }
+   MFEM_VERIFY(size == 9, "This only work for 2d Q2, i.e. 9 dofs per element!");
+
+   Array<int> index(size);
+
+   index[0] = 0;
+   index[1] = 4;
+   index[2] = 1;
+   index[3] = 7; 
+   index[4] = 8;
+   index[5] = 5;
+   index[6] = 3;
+   index[7] = 6;
+   index[8] = 2;
+   
+   if(i < size)
+   {
+      return index[i];
    }
    
-   MFEM_ABORT("guut")
+   // if y derivative
+   if(i - size < size)
+   {
+      return index[i - size] + size;
+   }
 
+   // if z derivative
+   if(i - 2*size < size)
+   {
+      return index[i - 2*size] + 2*size;
+   }
+
+   MFEM_ABORT("index in mapping not found");
+   return 0;
 }
 
 void AdvectorOper::ComputeTimeDerivativesLO(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const
