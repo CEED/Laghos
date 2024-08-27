@@ -120,6 +120,7 @@ protected:
    void ComputeTimeDerivativesLO(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
    void ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, SparseMatrix &C_tilde_e) const;
    int ReferenceIndexMapping(const int i, const int dim, const int N) const;
+   void TransferToPhysElem(const FiniteElement* el, ElementTransformation *eltrans,const SparseMatrix &C_tilde, SparseMatrix &Ce_tilde) const;
 public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.

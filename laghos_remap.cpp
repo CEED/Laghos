@@ -1107,8 +1107,8 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
    ComputeVelocityMinMax(v, v_min, v_max);
    Vector vdot(v.Size());
    ComputeTimeDerivativesLO(v, conv_int, pfes_s, vdot);
-   SparseMatrix C_tilde_e;
-   ComputeSparseGradient(pfes_s, C_tilde_e);
+   SparseMatrix C_tilde;
+   ComputeSparseGradient(pfes_s, C_tilde);
 
    for(int e = 0; e < nEl; e++)
    {  
@@ -1120,10 +1120,21 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
       conv_int->AssembleElementMatrix(*element_s, *eltrans, Ke);
       mass_int->AssembleElementMatrix(*element_s, *eltrans, Me);
       div_int->AssembleElementMatrix2(*element, *element_s, *eltrans, Ce);
+      SparseMatrix Ce_tilde_;
+      TransferToPhysElem(element, eltrans, C_tilde, Ce_tilde_);
 
-      Ce.Print();
+      Ce_tilde_.Print();
+      DenseMatrix Ce_tilde = *Ce_tilde_.ToDenseMatrix();
       //MFEM_ABORT("")
       cout << endl;
+      Ce_tilde -= Ce;
+
+      Vector ones(Ce_tilde.Width());
+      ones = 1.0;
+      Vector columnsums(Ce_tilde.Width());
+      Ce_tilde.MultTranspose(ones, columnsums);
+      cout << columnsums.Norml2() << endl;
+      MFEM_ABORT("")
 
       pfes_s.GetElementDofs(e, dofs);
       pfes.GetElementVDofs(e, vdofs);
@@ -1144,6 +1155,7 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
       Me_inverse.GetInverseMatrix(Me_inv);
 
 
+      /*
       DenseMatrix Ce_tilde = Ce;
       Ce_tilde = 0.0;
 
@@ -1158,7 +1170,53 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
          } 
       }
       Ce_tilde.Print();
+      //*/
       MFEM_ABORT("")
+   }
+}
+
+void AdvectorOper::TransferToPhysElem(const FiniteElement* el, ElementTransformation *eltrans,const SparseMatrix &C_tilde, SparseMatrix &Ce_tilde) const
+{
+   int dim = C_tilde.Width() / C_tilde.Height();
+   Ce_tilde = C_tilde;
+   auto ir = IntRules.Get(el->GetGeomType(), 1);
+   MFEM_VERIFY(ir.GetNPoints() == 1, "We assume the transformation to be linear, and take it from the center of the element. Thus we need middlepoint rule!");
+
+   const IntegrationPoint &ip = ir.IntPoint(0);
+
+   eltrans->SetIntPoint(&ip);
+   DenseMatrix JadjT(dim);
+   CalcAdjugateTranspose(eltrans->Jacobian(), JadjT);
+
+   Vector cij(dim);
+   Vector cije(dim);
+   auto I = C_tilde.GetI();
+   auto J = C_tilde.GetJ();
+   auto C = C_tilde.ReadData();
+   auto Ce = Ce_tilde.ReadWriteData();
+   for(int i = 0; i < C_tilde.Height(); i++)
+   {  
+      int entries = (I[i] - I[i+1]) / dim;
+      for(int k = I[i]; k < I[i+1]; k++ )
+      {
+         int j = J[k];
+         if(j >= C_tilde.Height())
+         {continue;}
+
+         for(int d = 0; d < dim; d++)
+         {
+            MFEM_VERIFY(k + d * entries < I[i+1], "ordering or something like that wrong");
+            cij(d) = C[k + d * entries];
+         }
+
+         JadjT.Mult(cij, cije);
+         
+         for(int d = 0; d < dim; d++)
+         {
+            MFEM_VERIFY(k + d * entries < I[i+1], "ordering or something like that wrong");
+            Ce[k + d * entries] = cije(d);
+         }
+      }  
    }
 }
 
@@ -1276,6 +1334,9 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
    SparseMatrix temp =  *C_d.CreateMonolithic();
    temp.SortColumnIndices();
 
+   //temp.Print();
+   //MFEM_ABORT("")
+
    auto I = temp.GetI();
    auto J = temp.GetJ();
    auto TEMP = temp.ReadData();
@@ -1334,7 +1395,7 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
    reordered.SortColumnIndices();
    C_tilde_e = reordered;
 
-   C_tilde_e.Print();
+   //C_tilde_e.Print();
 }
 
 int AdvectorOper::ReferenceIndexMapping(const int i, const int dim, const int N) const
