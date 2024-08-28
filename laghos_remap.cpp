@@ -1196,15 +1196,16 @@ void AdvectorOper::TransferToPhysElem(const FiniteElement* el, ElementTransforma
    auto Ce = Ce_tilde.ReadWriteData();
    for(int i = 0; i < C_tilde.Height(); i++)
    {  
-      int entries = (I[i] - I[i+1]) / dim;
+      int entries = (I[i+1] - I[i]) / dim;
       for(int k = I[i]; k < I[i+1]; k++ )
       {
          int j = J[k];
          if(j >= C_tilde.Height())
          {continue;}
-
          for(int d = 0; d < dim; d++)
          {
+            cout << J[k + d * entries]<< " == " <<  j + d *C_tilde.Height() << endl;
+            MFEM_VERIFY(J[k + d * entries]== j + d *C_tilde.Height(), "hmm");
             MFEM_VERIFY(k + d * entries < I[i+1], "ordering or something like that wrong");
             cij(d) = C[k + d * entries];
          }
@@ -1298,12 +1299,15 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
       {  
          for(int l = I[i]; l < I[i+1]; l++)
          {
-            int index = cijId.Append(new SparseMatrix(ones));
-            *cijId[l] *= C[l];
+            SparseMatrix *Id_l = new SparseMatrix(ones);
+            *Id_l *= C[l];
+            int index = cijId.Append(Id_l);
+            //*cijId[l] *= C[l];
             int j = J[l];
-            C1_kron_I.SetBlock(i , j, cijId[l]);
+            C1_kron_I.SetBlock(i , j, Id_l);
          }
       }
+      cout << k << endl;
       C_d_blocks[k] = C1_kron_I.CreateMonolithic();
 
       for(int l = 0; l < cijId.Size(); l++)
@@ -1331,6 +1335,9 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
    {
       C_d.SetBlock(0, l, C_d_blocks[l]);  
    }
+   //C_d.SetBlock(0, 0, C_d_blocks[1]);  
+   //C_d.SetBlock(0, 1, C_d_blocks[0]);  
+
    SparseMatrix temp =  *C_d.CreateMonolithic();
    temp.SortColumnIndices();
 
@@ -1356,7 +1363,7 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
    
    SparseMatrix reordered(temp.Height(), temp.Width());
    
-   for(int ii =0; ii < temp.Height(); ii++)
+   for(int ii = 0; ii < temp.Height(); ii++)
    {
       for(int l = I[ii]; l < I[ii+1]; l++)
       {  
@@ -1394,7 +1401,11 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
    }
    reordered.SortColumnIndices();
    C_tilde_e = reordered;
-
+   for(int d = 0; d < dim - 1; d++)
+   {
+      C_tilde_e *= 1.0 / N;
+   }
+   
    //C_tilde_e.Print();
 }
 
