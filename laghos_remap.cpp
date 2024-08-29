@@ -357,7 +357,6 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
       // project u into bernstein coefficients to use for GFE in subcell C&S
       u_bernstein.ProjectCoefficient(u_coeff);
 
-      auto *mass_int = new MassIntegrator(rho_coeff);
       //mass_int = new MassIntegrator(rho_coeff);
       Mr_H1_s.AddDomainIntegrator(new MassIntegrator(rho_coeff));
       Mr_H1_s.Assemble(0);
@@ -1067,7 +1066,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
          for(int i = 0; i < dofs.Size(); i++)
          {
-            d_v(dofs_d[i]) += re(i) + fe_star(i);
+            d_v(dofs_d[i]) += re(i);// + fe_star(i);
          }
       }
    }
@@ -1106,9 +1105,9 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
    Array<double> v_max, v_min;
    ComputeVelocityMinMax(v, v_min, v_max);
    Vector vdot(v.Size());
-   ComputeTimeDerivativesLO(v, conv_int, pfes_s, vdot);
-   SparseMatrix C_tilde;
-   ComputeSparseGradient(pfes_s, C_tilde);
+   //ComputeTimeDerivativesLO(v, conv_int, pfes_s, vdot);
+   //SparseMatrix C_tilde;
+   //ComputeSparseGradient(pfes_s, C_tilde);
 
    for(int e = 0; e < nEl; e++)
    {  
@@ -1120,25 +1119,24 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
       conv_int->AssembleElementMatrix(*element_s, *eltrans, Ke);
       mass_int->AssembleElementMatrix(*element_s, *eltrans, Me);
       div_int->AssembleElementMatrix2(*element, *element_s, *eltrans, Ce);
-      SparseMatrix Ce_tilde_;
-      TransferToPhysElem(element, eltrans, C_tilde, Ce_tilde_);
+      //SparseMatrix Ce_tilde;
+      //TransferToPhysElem(element, eltrans, C_tilde, Ce_tilde);
 
-      Ce_tilde_.Print();
-      DenseMatrix Ce_tilde = *Ce_tilde_.ToDenseMatrix();
+      //Ce_tilde_.Print();
+      //DenseMatrix Ce_tilde_ = *Ce_tilde.ToDenseMatrix();
       //MFEM_ABORT("")
-      cout << endl;
-      Ce_tilde -= Ce;
+      //Ce_tilde_ -= Ce;
 
-      Vector ones(Ce_tilde.Width());
-      ones = 1.0;
-      Vector columnsums(Ce_tilde.Width());
-      Ce_tilde.MultTranspose(ones, columnsums);
-      cout << columnsums.Norml2() << endl;
-      MFEM_ABORT("")
+      //Vector ones(Ce_tilde_.Width());
+      //ones = 1.0;
+      //Vector columnsums(Ce_tilde_.Width());
+      //Ce_tilde_.MultTranspose(ones, columnsums);
+      //cout << log10(columnsums.Norml2()) << endl;
+      //MFEM_VERIFY(columnsums.Norml2() < 1e-15, "Sparse Matrix wrong");
 
       pfes_s.GetElementDofs(e, dofs);
       pfes.GetElementVDofs(e, vdofs);
-      Vector re(dofs.Size()), vdote(dofs.Size()), fe(dofs.Size()), 
+      Vector re(dofs.Size()), cijuj(dofs.Size()),  vdote(dofs.Size()), fe(dofs.Size()), 
             gamma_e(dofs.Size()), fe_star(dofs.Size());
 
       Vector me(Me.Height());
@@ -1149,30 +1147,101 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
       u_bernstein.GetSubVector(vdofs, ue);
       Vector k2(dofs.Size());
       Ce.Mult(ue, k2);
+      Ce.Mult(ue, cijuj);
 
-      DenseMatrixInverse Me_inverse(Me);
-      DenseMatrix Me_inv(Me.Height());
-      Me_inverse.GetInverseMatrix(Me_inv);
+      //DenseMatrixInverse Me_inverse(Me);
+      //DenseMatrix Me_inv(Me.Height());
+      //Me_inverse.GetInverseMatrix(Me_inv);
+      Vector cij(dim), cji(dim), ui(dim), uj(dim);
 
 
-      /*
-      DenseMatrix Ce_tilde = Ce;
-      Ce_tilde = 0.0;
-
-      for(int i = 0; i < Ce.Height(); i++)
-      {
-         for (int j = 0; j < Ce.Width(); j++)
+      for(int d = 0; d < dim; d++)
+      { 
+         re = k2;
+         re *= -1.0;
+         Array<int> dofs_d = dofs;
+         for(int i = 0; i < dofs.Size(); i++)
          {
-            for(int l = 0; l < Ce.Height(); l++)
-            {
-               Ce_tilde(i,j) += me(i) * Me_inv(i,l) * Ce(l, j); 
+            dofs_d[i] = dofs[i] + d * nDofs;
+         }
+         v.GetSubVector(dofs_d, ve);
+
+         re *= ve;
+         //re = 0.0;
+         //vdot.GetSubVector(dofs_d, vdote);
+
+         //auto I = Ce_tilde.GetI();
+         //auto J = Ce_tilde.GetJ();
+         //auto CE = Ce_tilde.ReadData();
+
+         for(int i = 0; i < Ce.Height(); i++ )
+         {  
+            for(int j = 0; j < dofs.Size(); j++)
+            {  
+               for (int dd = 0; dd < dim; dd++)
+               {
+                  cij(dd) = Ce(i, j + dd * Ce.Height());
+                  cji(dd) = Ce(j, i + dd * Ce.Height());
+                  ui(dd) = ue(i + dd * Ce.Height());
+                  uj(dd) = ue(j + dd * Ce.Height());
+               }
+               
+               double cijuj = cij * uj;
+               double cijui = cij * ui;
+
+               if(j == i) { continue;}
+               double conv = cijuj * ve(j) - cijui * ve(i);
+               re(i) += conv;
+               //re(j) -= conv;
+
+               double dije = max(max(max(abs(cijuj), abs(cijui)), abs(cji*ui)), abs(cji*uj));
+               //max(max( abs(cijuj(j)), abs(cijuj(i))), 0.0);
+               double diffusion = dije * (ve(j) - ve(i));
+               re(i) += diffusion;
+               //re(j) -= diffusion;
+
             }
-         } 
+            /*
+            int NRowElem = (I[i+1] - I[i]) / dim;
+            for(int k = I[i]; k < I[i+1]; k++)
+            {
+               int j = J[k];
+               if(j >= i) { continue;}
+               double conv = cijuj(j) * ve(j) - cijuj(i) * ve(i);
+               re(i) += conv;
+               re(j) -= conv;
+               double dije = max(max(- cijuj(j), - cijuj(i)), 0.0);
+               double diffusion = dije * (ve(j) - ve(i));
+
+               //re(i) += diffusion;
+               //re(j) -= diffusion;
+            }
+            //*/
+         }
+
+         for(int i = 0; i < dofs.Size(); i++)
+         {
+            d_v(dofs_d[i]) += re(i) + fe_star(i);
+         }
       }
-      Ce_tilde.Print();
-      //*/
-      MFEM_ABORT("")
    }
+
+   GroupCommunicator &gcomm = Mr_H1.ParFESpace()->GroupComm();
+   Array<double> dv_array(d_v.GetData(), d_v.Size());
+   gcomm.Reduce<double>(dv_array, GroupCommunicator::Sum);
+   gcomm.Bcast(dv_array);
+   
+   Vector dv_comp;
+   for(int d = 0; d < dim; d++)
+   {
+      dv_comp.MakeRef(d_v, d * nDofs, nDofs);
+      dv_comp /= lumpedMr_H1_vec;
+   }
+   //d_v.SetSubVector(v_ess_vdofs, 0.0);
+
+   delete conv_int;
+   delete mass_int;
+   delete div_int;
 }
 
 void AdvectorOper::TransferToPhysElem(const FiniteElement* el, ElementTransformation *eltrans,const SparseMatrix &C_tilde, SparseMatrix &Ce_tilde) const
@@ -1204,7 +1273,7 @@ void AdvectorOper::TransferToPhysElem(const FiniteElement* el, ElementTransforma
          {continue;}
          for(int d = 0; d < dim; d++)
          {
-            cout << J[k + d * entries]<< " == " <<  j + d *C_tilde.Height() << endl;
+            //cout << J[k + d * entries]<< " == " <<  j + d *C_tilde.Height() << endl;
             MFEM_VERIFY(J[k + d * entries]== j + d *C_tilde.Height(), "hmm");
             MFEM_VERIFY(k + d * entries < I[i+1], "ordering or something like that wrong");
             cij(d) = C[k + d * entries];
@@ -1307,7 +1376,6 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
             C1_kron_I.SetBlock(i , j, Id_l);
          }
       }
-      cout << k << endl;
       C_d_blocks[k] = C1_kron_I.CreateMonolithic();
 
       for(int l = 0; l < cijId.Size(); l++)
@@ -1331,12 +1399,13 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
    offset4[1]= C_d_blocks[0]->Height();
    BlockMatrix C_d(offset4, offset3);
 
-   for(int l = 0; l < dim; l++)
-   {
-      C_d.SetBlock(0, l, C_d_blocks[l]);  
-   }
-   //C_d.SetBlock(0, 0, C_d_blocks[1]);  
-   //C_d.SetBlock(0, 1, C_d_blocks[0]);  
+   //for(int l = 0; l < dim; l++)
+   //{
+   //   C_d.SetBlock(0, l, C_d_blocks[l]);  
+   //}
+   MFEM_VERIFY(dim == 2, "Only works for 2d atm. Fix me! It is easy to fix. Trust me ;)")
+   C_d.SetBlock(0, 0, C_d_blocks[1]);  
+   C_d.SetBlock(0, 1, C_d_blocks[0]);  
 
    SparseMatrix temp =  *C_d.CreateMonolithic();
    temp.SortColumnIndices();
@@ -1403,7 +1472,7 @@ void AdvectorOper::ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, Sp
    C_tilde_e = reordered;
    for(int d = 0; d < dim - 1; d++)
    {
-      C_tilde_e *= 1.0 / N;
+      C_tilde_e *= 1.0 / double(N);
    }
    
    //C_tilde_e.Print();
