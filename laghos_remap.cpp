@@ -16,6 +16,7 @@
 
 #include "laghos_remap.hpp"
 #include "laghos_assembly.hpp"
+#include "laghos_solver.hpp"
 
 using namespace std;
 namespace mfem
@@ -116,6 +117,18 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    u_max = std::sqrt(u_max);
    double dt = cfl_factor * h_min / u_max;
 
+   socketstream vis_v;
+   char vishost[] = "localhost";
+   int  visport   = 19916;
+   int Wx = 0, Wy = 0; // window position
+   int Ww = 350, Wh = 350; // window size
+   int offx = Ww+10; // window offsets x
+   int offy = Ww+100; // window offsets y
+   Wx += offx;
+   Wy += offy;
+   VisualizeField(vis_v, vishost, visport,
+                                          v, "Remapped Velocity", Wx, Wy, Ww, Wh);
+
    double t = 0.0;
    bool last_step = false;
    for (int ti = 1; !last_step; ti++)
@@ -138,6 +151,9 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
          cout << e_max << " " << e_max_new << endl;
          MFEM_ABORT("\n e_1 max remap violation");
       }
+
+      VisualizeField(vis_v, vishost, visport,
+                                          v, "Remapped Velocity", Wx, Wy, Ww, Wh);
    }
    if (pmesh.GetMyRank() == 0) { cout << endl; }
 }
