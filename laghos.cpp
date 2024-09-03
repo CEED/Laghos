@@ -620,19 +620,19 @@ int main(int argc, char *argv[])
          // Remap to x_gf_opt.
          adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs);
 
-         ParGridFunction v_new(&H1FESpace);
-         if (remap_v_gslib)
-         {
-            InterpolationRemap interp;
-            interp.Remap(v_gf, x_gf_opt, v_new);
-         }
+         //ParGridFunction v_new(&H1FESpace);
+         //if (remap_v_gslib)
+         //{
+         //   InterpolationRemap interp;
+         //   interp.Remap(v_gf, x_gf_opt, v_new);
+         //}
 
          // Move the mesh to x0 and transfer the result from the remap.
          x_gf = x_gf_opt;
          adv.TransferToLagr(rho0_gf, v_gf,
                             hydro.GetIntRule(), hydro.GetRhoDetJw(),
                             hydro.GetIntRule_b(), hydro.GetRhoDetJ_be(), e_gf);
-         if (remap_v_gslib) { v_gf = v_new; }
+         //if (remap_v_gslib) { v_gf = v_new; }
 
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.

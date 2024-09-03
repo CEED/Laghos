@@ -28,15 +28,6 @@ namespace hydrodynamics
 class SolutionMover;
 struct MaterialData;
 
-class InterpolationRemap
-{
-   public:
-   InterpolationRemap() { }
-
-   void Remap(const ParGridFunction &source, const ParGridFunction &x_new,
-              ParGridFunction &interpolated);
-};
-
 // Performs the full remap advection loop.
 class RemapAdvector
 {
