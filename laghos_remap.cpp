@@ -1106,8 +1106,8 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
    ComputeVelocityMinMax(v, v_min, v_max);
    Vector vdot(v.Size());
    //ComputeTimeDerivativesLO(v, conv_int, pfes_s, vdot);
-   //SparseMatrix C_tilde;
-   //ComputeSparseGradient(pfes_s, C_tilde);
+   SparseMatrix C_tilde;
+   ComputeSparseGradient(pfes_s, C_tilde);
 
    for(int e = 0; e < nEl; e++)
    {  
@@ -1119,19 +1119,20 @@ void AdvectorOper::SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, cons
       conv_int->AssembleElementMatrix(*element_s, *eltrans, Ke);
       mass_int->AssembleElementMatrix(*element_s, *eltrans, Me);
       div_int->AssembleElementMatrix2(*element, *element_s, *eltrans, Ce);
-      //SparseMatrix Ce_tilde;
-      //TransferToPhysElem(element, eltrans, C_tilde, Ce_tilde);
+      SparseMatrix Ce_tilde__;
+      TransferToPhysElem(element, eltrans, C_tilde, Ce_tilde__);
 
-      //Ce_tilde_.Print();
-      //DenseMatrix Ce_tilde_ = *Ce_tilde.ToDenseMatrix();
+      //Ce_tilde__.Print();
+      DenseMatrix Ce_tilde_ = *Ce_tilde__.ToDenseMatrix();
       //MFEM_ABORT("")
-      //Ce_tilde_ -= Ce;
+      Ce_tilde_ -= Ce;
 
-      //Vector ones(Ce_tilde_.Width());
-      //ones = 1.0;
-      //Vector columnsums(Ce_tilde_.Width());
-      //Ce_tilde_.MultTranspose(ones, columnsums);
-      //cout << log10(columnsums.Norml2()) << endl;
+      Vector ones(Ce_tilde_.Width());
+      ones = 1.0;
+      Vector columnsums(Ce_tilde_.Width());
+      Ce_tilde_.MultTranspose(ones, columnsums);
+      //cout << "log = "<< log10(columnsums.Norml2()) << endl;
+      //cout << "normal = "<< columnsums.Norml2() << endl;
       //MFEM_VERIFY(columnsums.Norml2() < 1e-15, "Sparse Matrix wrong");
 
       pfes_s.GetElementDofs(e, dofs);
