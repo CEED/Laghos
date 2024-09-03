@@ -110,15 +110,14 @@ void FastEvaluator::GetL2Values(const Vector &vecL2, Vector &vecQ) const
     }
 }
 
-void FastEvaluator::GetSomeL2Values(const Vector &vecL2, const Array<int> &qp,
-                                    Vector &vecQ) const
+// This function is the same as GetL2Values, for a subset of quadrature points.
+void FastEvaluator::GetL2ValuesSubset(const Vector &vecL2,
+                                      const Array<int> &qp, Vector &vecQ) const
 {
     const int nL2dof1D = tensors1D->LQshape1D.Height(),
               nqp1D    = tensors1D->LQshape1D.Width();
     if (dim == 2)
     {
-        //MFEM_ABORT("TODO: optimize GetSomeL2Values in 2D");
-
         DenseMatrix E(vecL2.GetData(), nL2dof1D, nL2dof1D);
         DenseMatrix LQ(nL2dof1D, nqp1D);
 
@@ -128,7 +127,17 @@ void FastEvaluator::GetSomeL2Values(const Vector &vecL2, const Array<int> &qp,
         // LQ_j2_k1 = E_j1_j2 LQs_j1_k1  -- contract in x direction.
         // QQ_k1_k2 = LQ_j2_k1 LQs_j2_k2 -- contract in y direction.
         MultAtB(E, tensors1D->LQshape1D, LQ);
-        MultAtB(LQ, tensors1D->LQshape1D, QQ);
+        for (const auto p : qp)
+        {
+            const int k2 = p / nqp1D;
+            const int k1 = p - (k2 * nqp1D);
+            double entry = 0.0;
+            for (int j2 = 0; j2 < nL2dof1D; j2++)
+            {
+                entry += LQ(j2, k1) * tensors1D->LQshape1D(j2, k2);
+            }
+            QQ(k1, k2) = entry;
+        }
     }
     else
     {
@@ -152,12 +161,12 @@ void FastEvaluator::GetSomeL2Values(const Vector &vecL2, const Array<int> &qp,
             const int r = p - (k3 * nqp1D * nqp1D);
             const int k2 = r / nqp1D;
             const int k1 = r - (k2 * nqp1D);
-            QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
+            double entry = 0.0;
             for (int j2 = 0; j2 < nL2dof1D; j2++)
             {
-                QQ_Q(k1 + nqp1D*k2, k3) +=
-                    Q_LQ(k1, j2 + k3*nL2dof1D) * tensors1D->LQshape1D(j2, k2);
+                entry += Q_LQ(k1, j2 + k3*nL2dof1D) * tensors1D->LQshape1D(j2, k2);
             }
+            QQ_Q(k1 + nqp1D*k2, k3) = entry;
         }
     }
 }
@@ -344,8 +353,10 @@ void FastEvaluator::GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const
     }
 }
 
-void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &qp,
-                                      DenseTensor &J) const
+// This function is the same as GetVectorGrad, for a subset of quadrature points.
+void FastEvaluator::GetVectorGradSubset(const DenseMatrix &vec,
+                                        const Array<int> &qp,
+                                        DenseTensor &J) const
 {
     const int nH1dof1D = tensors1D->HQshape1D.Height(),
               nqp1D    = tensors1D->LQshape1D.Width();
@@ -353,10 +364,8 @@ void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &
 
     if (dim == 2)
     {
-        //MFEM_ABORT("TODO: optimize GetSomeVectorGrad in 2D");
-
         const int nH1dof = nH1dof1D * nH1dof1D;
-        DenseMatrix HQ(nH1dof1D, nqp1D), QQ(nqp1D, nqp1D);
+        DenseMatrix HQ(nH1dof1D, nqp1D);
         Vector x(nH1dof);
 
         const TensorBasisElement *fe =
@@ -375,31 +384,37 @@ void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &
             // HQ_i2_k1  = X_i1_i2 HQg_i1_k1  -- gradients in x direction.
             // QQ_k1_k2  = HQ_i2_k1 HQs_i2_k2 -- contract  in y direction.
             MultAtB(X, tensors1D->HQgrad1D, HQ);
-            MultAtB(HQ, tensors1D->HQshape1D, QQ);
 
             // Set the (c,0) component of the Jacobians at all quadrature points.
-            for (int k1 = 0; k1 < nqp1D; k1++)
+            for (const auto p : qp)
             {
-                for (int k2 = 0; k2 < nqp1D; k2++)
+                const int k2 = p / nqp1D;
+                const int k1 = p - (k2 * nqp1D);
+                const int idx = k2 * nqp1D + k1;
+                double entry = 0.0;
+                for (int j = 0; j < nH1dof1D; j++)
                 {
-                    const int idx = k2 * nqp1D + k1;
-                    J(idx)(c, 0) = QQ(k1, k2);
+                    entry += HQ(j, k1) * tensors1D->HQshape1D(j, k2);
                 }
+                J(idx)(c, 0) = entry;
             }
 
             // HQ_i2_k1  = X_i1_i2 HQs_i1_k1  -- contract  in x direction.
             // QQ_k1_k2  = HQ_i2_k1 HQg_i2_k2 -- gradients in y direction.
             MultAtB(X, tensors1D->HQshape1D, HQ);
-            MultAtB(HQ, tensors1D->HQgrad1D, QQ);
 
             // Set the (c,1) component of the Jacobians at all quadrature points.
-            for (int k1 = 0; k1 < nqp1D; k1++)
+            for (const auto p : qp)
             {
-                for (int k2 = 0; k2 < nqp1D; k2++)
+                const int k2 = p / nqp1D;
+                const int k1 = p - (k2 * nqp1D);
+                const int idx = k2 * nqp1D + k1;
+                double entry = 0.0;
+                for (int j = 0; j < nH1dof1D; j++)
                 {
-                    const int idx = k2 * nqp1D + k1;
-                    J(idx)(c, 1) = QQ(k1, k2);
+                    entry += HQ(j, k1) * tensors1D->HQgrad1D(j, k2);
                 }
+                J(idx)(c, 1) = entry;
             }
         }
     }
@@ -408,7 +423,7 @@ void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &
         const int nH1dof = nH1dof1D * nH1dof1D * nH1dof1D;
         DenseMatrix HH_Q(nH1dof1D * nH1dof1D, nqp1D),
                     H_HQ(HH_Q.GetData(), nH1dof1D, nH1dof1D * nqp1D),
-                    Q_HQ(nqp1D, nH1dof1D*nqp1D), QQ_Q(nqp1D * nqp1D, nqp1D);
+                    Q_HQ(nqp1D, nH1dof1D*nqp1D); //, QQ_Q(nqp1D * nqp1D, nqp1D);
         Vector x(nH1dof);
 
         const TensorBasisElement *fe =
@@ -437,15 +452,13 @@ void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &
                 const int r = p - (k3 * nqp1D * nqp1D);
                 const int k2 = r / nqp1D;
                 const int k1 = r - (k2 * nqp1D);
-
-                QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
+                double entry = 0.0;
                 for (int i2 = 0; i2 < nH1dof1D; i2++)
                 {
-                    QQ_Q(k1 + nqp1D*k2, k3) += Q_HQ(k1, i2 + k3*nH1dof1D) *
-                                               tensors1D->HQshape1D(i2, k2);
+                    entry += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                             tensors1D->HQshape1D(i2, k2);
                 }
-
-                J(p)(c, 0) = QQ_Q(k1 + k2*nqp1D, k3);
+                J(p)(c, 0) = entry;
             }
 
             // HHQ_i1_i2_k3 = X_i1_i2_i3 HQs_i3_k3   -- contract  in z direction.
@@ -461,14 +474,13 @@ void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &
                 const int r = p - (k3 * nqp1D * nqp1D);
                 const int k2 = r / nqp1D;
                 const int k1 = r - (k2 * nqp1D);
-
-                QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
+                double entry = 0.0;
                 for (int i2 = 0; i2 < nH1dof1D; i2++)
                 {
-                    QQ_Q(k1 + nqp1D*k2, k3) += Q_HQ(k1, i2 + k3*nH1dof1D) *
-                                               tensors1D->HQgrad1D(i2, k2);
+                    entry += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                             tensors1D->HQgrad1D(i2, k2);
                 }
-                J(p)(c, 1) = QQ_Q(k1 + k2*nqp1D, k3);
+                J(p)(c, 1) = entry;
             }
 
             // HHQ_i1_i2_k3 = X_i1_i2_i3 HQg_i3_k3   -- gradients in z direction.
@@ -484,13 +496,13 @@ void FastEvaluator::GetSomeVectorGrad(const DenseMatrix &vec, const Array<int> &
                 const int r = p - (k3 * nqp1D * nqp1D);
                 const int k2 = r / nqp1D;
                 const int k1 = r - (k2 * nqp1D);
-                QQ_Q(k1 + nqp1D*k2, k3) = 0.0;
+                double entry = 0.0;
                 for (int i2 = 0; i2 < nH1dof1D; i2++)
                 {
-                    QQ_Q(k1 + nqp1D*k2, k3) += Q_HQ(k1, i2 + k3*nH1dof1D) *
-                                               tensors1D->HQshape1D(i2, k2);
+                    entry += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                             tensors1D->HQshape1D(i2, k2);
                 }
-                J(p)(c, 2) = QQ_Q(k1 + k2*nqp1D, k3);
+                J(p)(c, 2) = entry;
             }
         }
     }

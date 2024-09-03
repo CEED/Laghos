@@ -841,8 +841,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                 if (using_eqp)
                 {
                     Array<int> qp(eqp_ptid.data() + eqp_offset[b], nqp_z);
-                    evaluator.GetSomeL2Values(e_loc, qp, e_vals);
-                    evaluator.GetSomeVectorGrad(vecvalMat, qp, Jpr_b[z]);
+                    evaluator.GetL2ValuesSubset(e_loc, qp, e_vals);
+                    evaluator.GetVectorGradSubset(vecvalMat, qp, Jpr_b[z]);
                 }
                 else
                 {
@@ -894,7 +894,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                 if (using_eqp)
                 {
                     Array<int> qp(eqp_ptid.data() + eqp_offset[b], nqp_z);
-                    evaluator.GetSomeVectorGrad(vecvalMat, qp, grad_v_ref);
+                    evaluator.GetVectorGradSubset(vecvalMat, qp, grad_v_ref);
                 }
                 else
                     evaluator.GetVectorGrad(vecvalMat, grad_v_ref);
