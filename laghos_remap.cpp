@@ -158,6 +158,8 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    if (pmesh.GetMyRank() == 0) { cout << endl; }
 }
 
+
+
 void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
                                    ParGridFunction &vel,
                                    const IntegrationRule &ir_rho,
@@ -224,17 +226,41 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
      u(mesh_vel), u_coeff(&u),
      rho_coeff(&rho),
      rho_u_coeff(rho_coeff, u_coeff),
-     Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s),
+     Mr_H1(&pfes_H1_s), Kr_H1(&pfes_H1_s),
      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
-     Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
+     Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2),
+     RefElemMesh(1, 2, 1)
 {
-   Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
-   Mr_H1.Assemble(0);
-   Mr_H1.Finalize(0);
+   Vector coords1(1), coords2(1);
+   coords1(0) = 0.0;
+   coords2(0) = 1.0;
+   RefElemMesh.AddVertex(coords1);
+   RefElemMesh.AddVertex(coords2);
+   int index = RefElemMesh.AddSegment(0,1);
+
+   cout << "numE " << RefElemMesh.GetNE() << endl;
+
+   int np = pfes_H1_s.GetFE(0)->GetOrder();
+   IntegrationRules GLIntRules(0, Quadrature1D::GaussLobatto);
+   MassIntegrator *mass_integ = new MassIntegrator();
+   mass_integ->SetIntRule(&GLIntRules.Get(Geometry::SQUARE, 2*np-1));
+
+   SparseMatrix C_tilde;
+   ComputeSparseGradient(C_tilde);
+   
+   //MFEM_ABORT("")
+
+   Mr_H1.AddDomainIntegrator(mass_integ);
+   Mr_H1.Assemble();
+   Mr_H1.Finalize();
 
    Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
    Kr_H1.Assemble(0);
    Kr_H1.Finalize(0);
+
+   cout << Kr_H1.Height() << endl;
+
+   MFEM_ABORT("");
 
    M_L2.AddDomainIntegrator(new MassIntegrator);
    M_L2.Assemble(0);
@@ -390,6 +416,79 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    ComputeSparsityBounds(pfes_L2, el_min, el_max, e_min, e_max);
    fct_e_solver.CalcFCTSolution(e_gf, Me_lumped, d_e_HO, d_e_LO,
                                 e_min, e_max, d_e);
+}
+
+void AdvectorOper::ComputeSparseGradient(SparseMatrix &C_tilde) const
+{
+   const int p = Mr_H1.FESpace()->GetFE(0)->GetOrder();
+   const int np = p+1;
+   const int dim = Mr_H1.FESpace()->GetMesh()->Dimension();
+   MFEM_VERIFY(dim == 2, "only implemented in 2D");
+   H1_SegmentElement elem(p);
+   IntegrationRules GLIntRules(0, Quadrature1D::GaussLobatto);
+   MassIntegrator *mass_integ_seg = new MassIntegrator();
+   mass_integ_seg->SetIntRule(&GLIntRules.Get(Geometry::SEGMENT, 2*p-1));
+   DenseMatrix Me;
+   cout << "numE " << RefElemMesh.GetNE() << endl;
+   auto eltrans = RefElemMesh.GetElementTransformation(0);
+   mass_integ_seg->AssembleElementMatrix(elem, *eltrans, Me);
+   //delete eltrans;
+   //delete mass_integ_seg;
+
+   Vector mdiag(np);
+   Me.GetDiag(mdiag);
+
+   // reorder 1D nodes from left to right (atm it is 0, 2, 1)
+   double last = mdiag(2);
+   mdiag(2) = mdiag(1);
+   mdiag(1) = last;
+
+   mdiag.Print();
+   MFEM_ABORT("");
+
+   SparseMatrix C1d(np);
+   C1d.Set(0,0,- 0.5);
+   C1d.Set(p,p, 0.5);
+   for(int i = 0; i < np; i++)
+   {
+      for(int j = 0; j < np; j++)
+      {
+         if(j == i - 1)
+         {
+            C1d.Set(i, j, -0.5);
+         }
+         else if(j == i+1)
+         {
+            C1d.Set(i, j, 0.5);
+         }
+      }
+   }
+   C1d.Finalize();
+
+   auto II = C1d.GetI();
+   auto JJ = C1d.GetJ();
+   auto CC = C1d.ReadData();
+   
+   SparseMatrix D1(np * np), D2(np*np);
+   // D1 = mdiag kron C1d, D2 = C1d kron mdiag
+   for(int i = 0; i < np; i++)
+   {
+      for(int k = II[i]; k < II[i+1]; k++)
+      {
+         const int j = JJ[k];
+
+         for(int l = 0; l < np; l++)
+         {
+            D1.Set(i + l * np, j + l * np, mdiag(l) * CC[k]);
+            D2.Set(l + i * np, l + j * np, mdiag(l) * CC[k]);
+         }
+      }
+   }
+
+
+
+
+
 }
 
 double AdvectorOper::Momentum(ParGridFunction &v, double t)

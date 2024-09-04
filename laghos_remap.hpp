@@ -83,6 +83,7 @@ protected:
    VectorGridFunctionCoefficient u_coeff;
    GridFunctionCoefficient rho_coeff;
    ScalarVectorProductCoefficient rho_u_coeff;
+   mutable Mesh RefElemMesh;
    mutable ParBilinearForm Mr_H1, Kr_H1;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
@@ -116,6 +117,8 @@ public:
    double Momentum(ParGridFunction &v, double t);
    double Interface(ParGridFunction &xi, double t);
    double Energy(ParGridFunction &e, double t);
+
+   void ComputeSparseGradient(SparseMatrix &C_tilde_e) const;
 };
 
 // Transfer of data between the Lagrange and the remap phases.
