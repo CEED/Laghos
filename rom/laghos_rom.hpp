@@ -247,7 +247,7 @@ struct ROM_Options
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
-    bool use_sample_mesh = false; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
+    bool use_sample_mesh = false; // whether to use sample mesh; True only for hyperreduce mode with GNAT, QDEIM, S-OPT
     bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     offsetStyle offsetType = useInitialState; // type of offset in time windows
@@ -271,7 +271,8 @@ struct ROM_Options
     // snapshot sampling frequency (sample every sampfreq timestep)
     int sampfreq = 1;
 
-    int numOfflineParameters = 1;  // TODO: input
+    // TODO: input this. Currently hard-coded for reproductive EQP.
+    int numOfflineParameters = 1;
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)
@@ -980,7 +981,7 @@ public:
 private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
-    const bool use_sample_mesh; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
+    const bool use_sample_mesh; // whether to use sample mesh; True only for hyperreduce mode with GNAT, QDEIM, S-OPT
     const bool offsetInit;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
@@ -1257,18 +1258,13 @@ public:
     void ApplyHyperreduction(Vector &S);
     void PostprocessHyperreduction(Vector &S, bool keep_data=false);
 
-    // TODO: should the following space time functions be refactored into a new space time ROM operator class?
+    // TODO: should the following space time functions be refactored into a new
+    // space time ROM operator class?
     void EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const;  // TODO: private function?
     void EvalSpaceTimeJacobian_RK4(Vector const& S, DenseMatrix &J) const;  // TODO: private function?
 
     void SolveSpaceTime(Vector &S);
     void SolveSpaceTimeGN(Vector &S);
-
-    void ForceIntegratorEQP_FOM(Vector & rhs) const;
-    void ForceIntegratorEQP(Vector & res) const;
-
-    void ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const;
-    void ForceIntegratorEQP_E(Vector const& v, Vector & res) const;
 
     void ForceIntegratorEQP_SP() const;
     void ForceIntegratorEQP_E_SP(Vector const& v) const;
@@ -1307,7 +1303,7 @@ private:
 
     const bool hyperreduce;
     HyperreductionSamplingType hyperreductionSamplingType = gnat;
-    bool use_sample_mesh = false; // whether to use sample mesh; True only when hyperreduce mode with GNAT, QDEIM, S-OPT
+    bool use_sample_mesh = false; // whether to use sample mesh; True only for hyperreduce mode with GNAT, QDEIM, S-OPT
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;
@@ -1379,8 +1375,11 @@ private:
 
     int window = 0;
 
-    void Setup_ForceIntegratorEQP_SP(int nqe);
-    void Setup_ForceIntegratorEQP_E_SP(int nqe);
+    // EQPmult data
+    mutable Vector rdv_dt, rdx_dt, rde_dt, rSv;
+
+    // StepRK2AvgEQP data
+    mutable Vector Shalf, vbar, vh, dx;
 
     // StepRK4 data
     Vector rk4_dS_dt, rk4_S0, rk4_dv_dt, rk4_v0, rk4_dx_dt, rk4_de_dt, rk4_rS0,

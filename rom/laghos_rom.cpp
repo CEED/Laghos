@@ -355,7 +355,6 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
         }
 
         Array<int> fvert;
-        // TODO: is this the right function in 2D?
         if (dim == 2)
             pmesh->GetElementEdges(e, faces, ori);
         else
@@ -431,9 +430,8 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
 
                     if (diff.Norml2() < 1.0e-8)
                     {
-                        MFEM_VERIFY(sid == -1, "");
                         sid = vert[v];
-                        // TODO: break
+                        break;
                     }
                 }
 
@@ -485,7 +483,6 @@ void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
                 continue;  // Skip elements not on smesh boundary
             }
 
-            // TODO: is this the right function in 2D?
             if (dim == 2)
                 smesh->GetElementEdges(selem, faces, ori);
             else
@@ -961,8 +958,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 }
 
 void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS,
-        int window, int rdimxPrev, int rdimvPrev,
-        int rdimePrev)
+        int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
 {
     MFEM_VERIFY(rank == 0 && window > 0, "");
 
@@ -1286,6 +1282,7 @@ void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
+// The CAROM::Matrix pointers in snapshots should be deleted by the caller.
 void LoadParametricSnapshots(const int nsets, const std::string *basename,
                              const std::string& varName,
                              const int window,
@@ -1297,7 +1294,6 @@ void LoadParametricSnapshots(const int nsets, const std::string *basename,
                                         std::to_string(paramID) + "_var" + varName +
                                         std::to_string(window) + "_snapshot";
 
-        // TODO: who deletes mat?
         CAROM::Matrix* mat = new CAROM::Matrix();
         mat->read(snapshot_filename);
 
@@ -1396,9 +1392,16 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         SetupEQP_Force(parametricSnapshotsX, parametricSnapshotsV, parametricSnapshotsE,
                        basisV, basisE, input, elemsEQP);
 
+        for (auto snapshot : parametricSnapshotsX)
+            delete snapshot;
+        for (auto snapshot : parametricSnapshotsV)
+            delete snapshot;
+        for (auto snapshot : parametricSnapshotsE)
+            delete snapshot;
+
         numSamplesV = 0;
 
-        CAROM::Matrix* BXtBV = GetBXtBV();  // TODO: eliminate this function?
+        CAROM::Matrix* BXtBV = basisX->transposeMult(basisV);
         BXtBV->write("run/BXtBV" + std::to_string(input.window));
         delete BXtBV;
 
@@ -1621,7 +1624,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         {
             Array<int> dofs;
             L2FESpace->GetElementDofs(e, dofs);
-            //sample_dofs_E[cnt] = dofs[0];
             localSamples[cnt] = dofs[0];
             cnt++;
         }
@@ -1775,8 +1777,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     smm->GatherDistributedMatrixRows("V", *basisV, rdimv, *BVsp);
     smm->GatherDistributedMatrixRows("E", *basisE, rdime, *BEsp);
 
-    if (hyperreductionSamplingType == eqp)
-        return;
+    if (hyperreductionSamplingType == eqp) return;
 
     smm->GatherDistributedMatrixRows("Fv", *basisFv, rdimfv, *BFvsp);
     smm->GatherDistributedMatrixRows("Fe", *basisFe, rdimfe, *BFesp);
@@ -2349,7 +2350,6 @@ void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
 }
 
 void MapSampleMeshEQP(const int nqe, std::map<int,int> & elem2smesh,
-                      const CAROM::SampleDOFSelector *s,  // TODO: remove?
                       std::vector<int> & p)
 {
     for (int i=0; i<p.size(); ++i)
@@ -2411,7 +2411,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         // boundary are enforced due to the fact that BVsp is defined as a submatrix of
         // basisV, which has boundary conditions applied in the full-order discretization.
 
-        cout << "Sample mesh bdr att max " << spmesh->bdr_attributes.Max() << endl;
+        //cout << "Sample mesh bdr att max " << spmesh->bdr_attributes.Max() << endl;
 
         // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
         // that the boundaries are straight.
@@ -2538,115 +2538,24 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         const IntegrationRule *ir0 = operSP->GetIntegrationRule();
         const int nqe = ir0->GetNPoints();
 
-        MapSampleMeshEQP(nqe, elem2smesh, basis->sampleSelector, eqpI);
-        MapSampleMeshEQP(nqe, elem2smesh, basis->sampleSelector, eqpI_E);
+        MapSampleMeshEQP(nqe, elem2smesh, eqpI);
+        MapSampleMeshEQP(nqe, elem2smesh, eqpI_E);
 
         // TODO: get the basename "run" from ROM_Options?
         W_elems.read("run/WelemsV" + std::to_string(window));
         W_E_elems.read("run/WelemsE" + std::to_string(window));
 
-        // Setup data for ForceIntegratorEQP_SP and ForceIntegratorEQP_E_SP
-        Setup_ForceIntegratorEQP_SP(nqe);
-        Setup_ForceIntegratorEQP_E_SP(nqe);
-    }
-}
-
-void ROM_Operator::Setup_ForceIntegratorEQP_SP(int nqe)
-{
-    // TODO: is any of this even used?
-    int eprev = -1;
-    Array<int> vdofs, edofs;
-
-    std::vector<int> elements;
-    for (int i=0; i<eqpW.size(); ++i)
-    {
-        const int e = eqpI[i] / nqe;  // Element index
-        if (e != eprev)
+        // Set nvdof, nedof
         {
-            elements.push_back(e);
-            eprev = e;
+            const int e = eqpI[0] / nqe;  // First element index
+            Array<int> dofs;
+            H1FESpaceSP->GetElementVDofs(e, dofs);
+            nvdof = dofs.Size();
+
+            L2FESpaceSP->GetElementVDofs(e, dofs);
+            nedof = dofs.Size();
         }
     }
-    eprev = -1;
-
-    bool negdof = false;
-
-    std::vector<int> elemDofs;
-    for (auto e : elements)
-    {
-        H1FESpaceSP->GetElementVDofs(e, vdofs);
-        if (nvdof == 0)
-        {
-            nvdof = vdofs.Size();
-        }
-        else
-        {
-            MFEM_VERIFY(nvdof == vdofs.Size(), "");
-        }
-
-        for (auto dof : vdofs)
-        {
-            elemDofs.push_back(dof < 0 ? -1-dof : dof);
-            if (dof < 0) negdof = true;
-        }
-    }
-
-    MFEM_VERIFY(nvdof * elements.size() == elemDofs.size(), "");
-    MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
-}
-
-void ROM_Operator::Setup_ForceIntegratorEQP_E_SP(int nqe)
-{
-    // TODO: is any of this even used?
-    int eprev = -1;
-    Array<int> vdofs, edofs;
-
-    std::vector<int> elements;
-    for (int i=0; i<eqpW_E.size(); ++i)
-    {
-        const int e = eqpI_E[i] / nqe;  // Element index
-        if (e != eprev)
-        {
-            elements.push_back(e);
-            eprev = e;
-        }
-    }
-    eprev = -1;
-
-    bool negdof = false;
-
-    std::vector<int> elemDofs;
-    for (auto e : elements)
-    {
-        H1FESpaceSP->GetElementVDofs(e, vdofs);
-        if (nvdof == 0)
-        {
-            nvdof = vdofs.Size();
-        }
-        else
-        {
-            MFEM_VERIFY(nvdof == vdofs.Size(), "");
-        }
-
-        L2FESpaceSP->GetElementVDofs(e, edofs);
-        if (nedof == 0)
-        {
-            nedof = edofs.Size();
-        }
-        else
-        {
-            MFEM_VERIFY(nedof == edofs.Size(), "");
-        }
-
-        for (auto dof : edofs)
-        {
-            elemDofs.push_back(dof < 0 ? -1-dof : dof);
-            if (dof < 0) negdof = true;
-        }
-    }
-
-    MFEM_VERIFY(nedof * elements.size() == elemDofs.size(), "");
-    MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
 }
 
 void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
@@ -2707,14 +2616,8 @@ void ROM_Basis::GetBasisVectorV(const bool sp, const int id, Vector &v) const
     else  // FOM version
     {
         MFEM_VERIFY(v.Size() == tH1size, "");
-        // TODO: eliminate ej, CBej. Just copy entries from basisV.
-        CAROM::Vector ej(rdimv, false);
-        CAROM::Vector CBej(tH1size, true);
-        ej = 0.0;
-        ej(id) = 1.0;
-        basisV->mult(ej, CBej);
         for (int i=0; i<tH1size; ++i)
-            v[i] = CBej(i);
+            v[i] = (*basisV)(i,id);
     }
 }
 
@@ -2730,13 +2633,8 @@ void ROM_Basis::GetBasisVectorE(const bool sp, const int id, Vector &v) const
     else  // FOM version
     {
         MFEM_VERIFY(v.Size() == tL2size, "");
-        CAROM::Vector ej(rdime, false);
-        CAROM::Vector CBej(tL2size, true);
-        ej = 0.0;
-        ej(id) = 1.0;
-        basisE->mult(ej, CBej);
         for (int i=0; i<tL2size; ++i)
-            v[i] = CBej(i);
+            v[i] = (*basisE)(i,id);
     }
 }
 
@@ -4335,7 +4233,6 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
         if (hyperreduce && hyperreductionSamplingType == eqp)
         {
-            //operFOM->SetRomOperator(this);
             operSP->SetRomOperator(this);
         }
 
@@ -4372,8 +4269,6 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
         rdS_dt = 0.0;
 
-        //Sx.SetDataAndSize(S.GetData(), basis->GetDimX());
-
         // In each sub-step:
         // - Update the global state Vector S.
         // - Compute dv_dt using S.
@@ -4384,12 +4279,10 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S is S0.
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        //if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         if (sample_mesh_proj) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         else if (eqp_proj)
         {
             CAROM::Vector dv_dt_libROM(dv_dt.GetData(), dv_dt.Size(), false, false);
-            //BVsp->transposeMult(dv_dt_libROM, *rV);
 
             rdv_dt = eqpFv;
             // Lift eqpFv to sample mesh space.
@@ -4403,7 +4296,6 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         add(v0, 0.5 * dt, dv_dt, V);
         if (eqp_proj) add(rv0, 0.5 * dt, rdv_dt, rV);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        //if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         if (sample_mesh_proj) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
@@ -4431,13 +4323,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        //if (use_sample_mesh) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
         if (sample_mesh_proj) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
 
         if (eqp_proj)
         {
             CAROM::Vector dv_dt_libROM(dv_dt.GetData(), dv_dt.Size(), false, false);
-            //BVsp->transposeMult(dv_dt_libROM, *rV);
 
             rdv_dt = eqpFv;
             // Lift eqpFv to sample mesh space.
@@ -4451,7 +4341,6 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         add(v0, 0.5 * dt, dv_dt, V);
         if (eqp_proj) add(rv0, 0.5 * dt, rdv_dt, rV);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        //if (use_sample_mesh) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         if (sample_mesh_proj) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
 
@@ -4478,7 +4367,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         if (eqp_proj) add(rS0, dt, rdS_dt, S);
         hydro_oper->ResetQuadratureData();
 
-        MFEM_VERIFY(!useReducedM, "TODO");
+        MFEM_VERIFY(!useReducedM, "");
 
         if (hyperreductionSamplingType != eqp)
         {

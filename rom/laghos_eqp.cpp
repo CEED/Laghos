@@ -715,13 +715,16 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
 
     const int localNumIndices = indices.size();
 
-    Int_Gatherv(localNumIndices, indices.data(), 0, rank, nprocs, MPI_COMM_WORLD, globalIndices);
-    Double_Gatherv(localNumIndices, solnz.data(), 0, rank, nprocs, MPI_COMM_WORLD, globalSol);
+    Int_Gatherv(localNumIndices, indices.data(), 0, rank, nprocs,
+                MPI_COMM_WORLD, globalIndices);
+    Double_Gatherv(localNumIndices, solnz.data(), 0, rank, nprocs,
+                   MPI_COMM_WORLD, globalSol);
 
     std::vector<int> counts(nprocs);
     std::vector<int> offsets(nprocs);
 
-    MPI_Gather(&localNumIndices, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gather(&localNumIndices, 1, MPI_INT, counts.data(), 1, MPI_INT, 0,
+               MPI_COMM_WORLD);
 
     offsets[0] = 0;
     for (int i=1; i<nprocs; ++i)
@@ -751,164 +754,6 @@ void ROM_Operator::InitEQP() const
     operSP->SetPointsEQP(eqpI_E);
 }
 
-void ROM_Operator::ForceIntegratorEQP(Vector & res) const
-{
-    MFEM_ABORT("REMOVE");
-    const IntegrationRule *ir = operFOM->GetIntegrationRule();
-    const int rdim = basis->GetDimV();
-    MFEM_VERIFY(eqpI.size() == eqpW.size(), "");
-    MFEM_VERIFY(res.Size() == rdim, "");
-
-    const int nqe = ir->GetWeights().Size();
-
-    DenseMatrix vshape, loc_force;
-    Vector shape, unitE, rhs;
-
-    Array<int> vdofs;
-
-    Vector v_e;
-
-    res = 0.0;
-
-    int eprev = -1;
-    int dof = 0;
-    int spaceDim = 0;
-
-    const hydrodynamics::QuadratureData & quad_data = operFOM->GetQuadData();
-
-    // TODO: optimize by storing some intermediate computations.
-
-    const FiniteElement *test_fe = nullptr;
-    const FiniteElement *trial_fe = nullptr;
-
-    if (!eqp_init)
-    {
-        eqp_init = true;
-
-        std::vector<int> elements;
-        for (int i=0; i<eqpW.size(); ++i)
-        {
-            const int e = eqpI[i] / nqe;  // Element index
-            if (e != eprev)
-            {
-                elements.push_back(e);
-                eprev = e;
-            }
-        }
-        eprev = -1;
-
-        // TODO: eliminate the following code, since W_elems is just read from file?
-        bool negdof = false;
-
-        std::vector<int> elemDofs;
-        for (auto e : elements)
-        {
-            H1spaceFOM->GetElementVDofs(e, vdofs);
-            if (nvdof == 0)
-            {
-                nvdof = vdofs.Size();
-            }
-            else
-            {
-                MFEM_VERIFY(nvdof == vdofs.Size(), "");
-            }
-
-            for (auto dof : vdofs)
-            {
-                elemDofs.push_back(dof < 0 ? -1-dof : dof);
-                if (dof < 0) negdof = true;
-            }
-        }
-
-        MFEM_VERIFY(nvdof * elements.size() == elemDofs.size(), "");
-        MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
-
-        // TODO: get the basename "run" and window from ROM_Options?
-        //W_elems.read(*input.basename + "/WelemsV" + std::to_string(input.window));
-        W_elems.read("run/WelemsV" + std::to_string(window));
-        MFEM_VERIFY(W_elems.numRows() == elemDofs.size() && W_elems.numColumns() == rdim, "");
-    }
-
-    int elemIndex = -1;
-
-    for (int i=0; i<eqpW.size(); ++i)
-    {
-        const int e = eqpI[i] / nqe;  // Element index
-        // Local (element) index of the quadrature point
-        const int qpi = eqpI[i] - (e*nqe);
-        const IntegrationPoint &ip = ir->IntPoint(qpi);
-
-        if (e != eprev)  // Update element transformation
-        {
-            elemIndex++;
-
-            test_fe = H1spaceFOM->GetFE(e);
-            trial_fe = L2spaceFOM->GetFE(e);
-
-            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), ""); // TODO: remove this sanity check
-
-            eprev = e;
-        }
-
-        // Integrate at the current point
-
-        // NOTE: quad_data is updated at the FOM level by LagrangianHydroOperator::UpdateQuadratureData.
-        // NOTE: quad_data includes ip.weight as a factor in quad_data.stressJinvT, so we divide it out here.
-        // TODO: reduce this UpdateQuadratureData function to the EQP points.
-
-        const int h1dofs_cnt = test_fe->GetDof();
-        const int dim = trial_fe->GetDim();
-
-        const int l2dofs_cnt = trial_fe->GetDof();
-
-        vshape.SetSize(h1dofs_cnt, dim);
-        loc_force.SetSize(h1dofs_cnt, dim);
-
-        shape.SetSize(l2dofs_cnt);
-
-        // Form stress:grad_shape at the current point.
-        test_fe->CalcDShape(ip, vshape);
-        for (int k = 0; k < h1dofs_cnt; k++)
-        {
-            for (int vd = 0; vd < dim; vd++) // Velocity components.
-            {
-                loc_force(k, vd) = 0.0;
-                for (int gd = 0; gd < dim; gd++) // Gradient components.
-                {
-                    loc_force(k, vd) +=
-                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
-                }
-            }
-        }
-
-        loc_force *= eqpW[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
-
-        trial_fe->CalcShape(ip, shape);
-
-        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
-
-        unitE.SetSize(shape.Size());
-        unitE = 1.0;
-
-        rhs.SetSize(h1dofs_cnt * dim);
-
-        v_e.SetSize(rhs.Size());
-
-        const int eos = elemIndex * nvdof;
-        for (int j=0; j<rdim; ++j)
-        {
-            for (int k=0; k<nvdof; ++k)
-                v_e[k] = W_elems(eos + k, j);
-
-            // Compute the inner product, on this element, with the j-th W vector.
-            res[j] += (v_e * Vloc_force) * (shape * unitE);
-        }  // Loop (j) over V basis vectors
-    } // Loop (i) over EQP points
-
-    MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
-                  MPI_COMM_WORLD);
-}
-
 void ROM_Operator::ForceIntegratorEQP_SP() const
 {
     const IntegrationRule *ir = operSP->GetIntegrationRule();
@@ -931,7 +776,7 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
 
     const hydrodynamics::QuadratureData & quad_data = operSP->GetQuadData();
 
-    // TODO: optimize by storing some intermediate computations.
+    // TODO: optimize by storing some intermediate computations?
 
     const FiniteElement *test_fe = nullptr;
     const FiniteElement *trial_fe = nullptr;
@@ -952,7 +797,7 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
             test_fe = H1FESpaceSP->GetFE(e);
             trial_fe = L2FESpaceSP->GetFE(e);
 
-            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), ""); // TODO: remove this sanity check
+            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), "");
 
             eprev = e;
         }
@@ -961,7 +806,6 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
 
         // NOTE: quad_data is updated at the FOM level by LagrangianHydroOperator::UpdateQuadratureData.
         // NOTE: quad_data includes ip.weight as a factor in quad_data.stressJinvT, so we divide it out here.
-        // TODO: reduce this UpdateQuadratureData function to the EQP points.
 
         const int h1dofs_cnt = test_fe->GetDof();
         const int dim = trial_fe->GetDim();
@@ -1020,176 +864,6 @@ void ROM_Operator::ForceIntegratorEQP_SP() const
 #endif
 }
 
-void ROM_Operator::ForceIntegratorEQP_E(Vector const& v, Vector & res) const
-{
-    MFEM_ABORT("REMOVE");
-
-    const IntegrationRule *ir = operFOM->GetIntegrationRule();
-    const int rdim = basis->GetDimE();
-    MFEM_VERIFY(eqpI_E.size() == eqpW_E.size(), "");
-    MFEM_VERIFY(res.Size() == rdim, "");
-
-    const int nqe = ir->GetWeights().Size();
-
-    DenseMatrix vshape, loc_force;
-    Vector shape, rhs;
-
-    Array<int> vdofs, edofs;
-
-    Vector v_e, w_e;
-
-    res = 0.0;
-
-    int eprev = -1;
-    int dof = 0;
-    int spaceDim = 0;
-
-    const hydrodynamics::QuadratureData & quad_data = operFOM->GetQuadData();
-
-    // TODO: optimize by storing some intermediate computations.
-
-    const FiniteElement *test_fe = nullptr;
-    const FiniteElement *trial_fe = nullptr;
-
-    if (!eqp_init_E)
-    {
-        eqp_init_E = true;
-
-        std::vector<int> elements;
-        for (int i=0; i<eqpW_E.size(); ++i)
-        {
-            const int e = eqpI_E[i] / nqe;  // Element index
-            if (e != eprev)
-            {
-                elements.push_back(e);
-                eprev = e;
-            }
-        }
-        eprev = -1;
-
-        bool negdof = false;
-
-        std::vector<int> elemDofs;
-        for (auto e : elements)
-        {
-            H1spaceFOM->GetElementVDofs(e, vdofs);
-            if (nvdof == 0)
-            {
-                nvdof = vdofs.Size();
-            }
-            else
-            {
-                MFEM_VERIFY(nvdof == vdofs.Size(), "");
-            }
-
-            L2spaceFOM->GetElementVDofs(e, edofs);
-            if (nedof == 0)
-            {
-                nedof = edofs.Size();
-            }
-            else
-            {
-                MFEM_VERIFY(nedof == edofs.Size(), "");
-            }
-
-            for (auto dof : edofs)
-            {
-                elemDofs.push_back(dof < 0 ? -1-dof : dof);
-                if (dof < 0) negdof = true;
-            }
-        }
-
-        MFEM_VERIFY(nedof * elements.size() == elemDofs.size(), "");
-        MFEM_VERIFY(!negdof, "negdof"); // If negative, flip sign of DOF value.
-
-        // TODO: get the basename "run" from ROM_Options?
-        //W_E_elems.read(*input.basename + "/WelemsE" + std::to_string(input.window));
-        W_E_elems.read("run/WelemsE" + std::to_string(window));
-        MFEM_VERIFY(W_E_elems.numRows() == elemDofs.size() && W_E_elems.numColumns() == rdim, "");
-    }
-
-    int elemIndex = -1;
-
-    for (int i=0; i<eqpW_E.size(); ++i)
-    {
-        const int e = eqpI_E[i] / nqe;  // Element index
-        // Local (element) index of the quadrature point
-        const int qpi = eqpI_E[i] - (e*nqe);
-        const IntegrationPoint &ip = ir->IntPoint(qpi);
-
-        if (e != eprev)  // Update element transformation
-        {
-            elemIndex++;
-
-            test_fe = H1spaceFOM->GetFE(e);
-            trial_fe = L2spaceFOM->GetFE(e);
-
-            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), ""); // TODO: remove this sanity check
-
-            H1spaceFOM->GetElementVDofs(e, vdofs);
-            MFEM_VERIFY(nvdof == vdofs.Size(), ""); // TODO: remove this sanity check
-
-            v.GetSubVector(vdofs, v_e);
-
-            eprev = e;
-        }
-
-        // Integrate at the current point
-
-        // NOTE: quad_data is updated at the FOM level by LagrangianHydroOperator::UpdateQuadratureData.
-        // NOTE: quad_data includes ip.weight as a factor in quad_data.stressJinvT, so we divide it out here.
-        // TODO: reduce this UpdateQuadratureData function to the EQP points.
-
-        const int h1dofs_cnt = test_fe->GetDof();
-        const int dim = trial_fe->GetDim();
-
-        const int l2dofs_cnt = trial_fe->GetDof();
-
-        vshape.SetSize(h1dofs_cnt, dim);
-        loc_force.SetSize(h1dofs_cnt, dim);
-
-        shape.SetSize(l2dofs_cnt);
-
-        // Form stress:grad_shape at the current point.
-        test_fe->CalcDShape(ip, vshape);
-        for (int k = 0; k < h1dofs_cnt; k++)
-        {
-            for (int vd = 0; vd < dim; vd++) // Velocity components.
-            {
-                loc_force(k, vd) = 0.0;
-                for (int gd = 0; gd < dim; gd++) // Gradient components.
-                {
-                    loc_force(k, vd) +=
-                        quad_data.stressJinvT(vd)(e*nqe + qpi, gd) * vshape(k,gd);
-                }
-            }
-        }
-
-        loc_force *= eqpW_E[i] / ip.weight;  // Replace exact quadrature weight with EQP weight.
-
-        trial_fe->CalcShape(ip, shape);
-
-        Vector Vloc_force(loc_force.Data(), loc_force.NumRows() * loc_force.NumCols());
-
-        rhs.SetSize(h1dofs_cnt * dim);
-
-        w_e.SetSize(nedof);
-
-        const int eos = elemIndex * nedof;
-        for (int j=0; j<rdim; ++j)
-        {
-            for (int k=0; k<nedof; ++k)
-                w_e[k] = W_E_elems(eos + k, j);
-
-            // Compute the inner product, on this element, with the j-th W vector.
-            res[j] += (v_e * Vloc_force) * (shape * w_e);
-        }  // Loop (j) over V basis vectors
-    } // Loop (i) over EQP points
-
-    MPI_Allreduce(MPI_IN_PLACE, res.GetData(), res.Size(), MPI_DOUBLE, MPI_SUM,
-                  MPI_COMM_WORLD);
-}
-
 void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
 {
     const IntegrationRule *ir = operSP->GetIntegrationRule();
@@ -1214,7 +888,7 @@ void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
 
     const hydrodynamics::QuadratureData & quad_data = operSP->GetQuadData();
 
-    // TODO: optimize by storing some intermediate computations.
+    // TODO: optimize by storing some intermediate computations?
 
     const FiniteElement *test_fe = nullptr;
     const FiniteElement *trial_fe = nullptr;
@@ -1235,10 +909,10 @@ void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
             test_fe = H1FESpaceSP->GetFE(e);
             trial_fe = L2FESpaceSP->GetFE(e);
 
-            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), ""); // TODO: remove this sanity check
+            MFEM_VERIFY(nvdof == test_fe->GetDim() * test_fe->GetDof(), "");
 
             H1FESpaceSP->GetElementVDofs(e, vdofs);
-            MFEM_VERIFY(nvdof == vdofs.Size(), ""); // TODO: remove this sanity check
+            MFEM_VERIFY(nvdof == vdofs.Size(), "");
 
             v.GetSubVector(vdofs, v_e);
 
@@ -1249,7 +923,6 @@ void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
 
         // NOTE: quad_data is updated at the FOM level by LagrangianHydroOperator::UpdateQuadratureData.
         // NOTE: quad_data includes ip.weight as a factor in quad_data.stressJinvT, so we divide it out here.
-        // TODO: reduce this UpdateQuadratureData function to the EQP points.
 
         const int h1dofs_cnt = test_fe->GetDof();
         const int dim = trial_fe->GetDim();
@@ -1308,31 +981,11 @@ void ROM_Operator::ForceIntegratorEQP_E_SP(Vector const& v) const
 #endif
 }
 
-// TODO: remove
-void ROM_Operator::ForceIntegratorEQP_FOM(Vector & rhs) const
-{
-    Vector res(basis->GetDimV());
-
-    ForceIntegratorEQP(res);
-    basis->LiftROMtoFOM_dVdt(res, rhs);
-}
-
-// TODO: remove
-void ROM_Operator::ForceIntegratorEQP_E_FOM(Vector const& v, Vector & rhs) const
-{
-    Vector res(basis->GetDimE());
-
-    ForceIntegratorEQP_E(v, res);
-    basis->LiftROMtoFOM_dEdt(res, rhs);
-}
-
 void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *oper,
                            Vector const& S, Vector &dS) const
 {
-    MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");
-    MFEM_VERIFY(dS.Size() == basis->SolutionSize(), "");
-
-    // TODO: allocate all this data just once in the class.
+    MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");
+    MFEM_ASSERT(dS.Size() == basis->SolutionSize(), "");
 
     basis->LiftToSampleMesh(S, fx);
 
@@ -1343,9 +996,7 @@ void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *ope
     const int rXsize = basis->GetDimX();
     const int rVsize = basis->GetDimV();
     const int rEsize = basis->GetDimE();
-    MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
-
-    Vector rdv_dt, rdx_dt, rde_dt, rSv;
+    MFEM_ASSERT(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
 
     rSv.SetDataAndSize(S.GetData() + rXsize, rVsize);
 
@@ -1365,8 +1016,8 @@ void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *ope
 
 void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
 {
-    MFEM_VERIFY(hyperreduce && hyperreductionSamplingType == eqp, "");
-    MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");
+    MFEM_ASSERT(hyperreduce && hyperreductionSamplingType == eqp, "");
+    MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");
 
     operSP->SetRomOperator(this);
 
@@ -1381,18 +1032,16 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
 
     operSP->SetQuadDataCurrent();
 
-    // TODO: allocate this just once in the class.
-    Vector Shalf(S.Size());
+    Shalf.SetSize(S.Size());
     Shalf = S;
 
     const int rXsize = basis->GetDimX();
     const int rVsize = basis->GetDimV();
     const int rEsize = basis->GetDimE();
-    MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+    MFEM_ASSERT(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
 
-    Vector Shv, Shx, She;
-    Vector Sv, Sx, Se;
-    Vector vbar(rVsize);
+    Vector Shx, Shv, She, Sv, Sx, Se;
+    vbar.SetSize(rVsize);
 
     Shx.SetDataAndSize(Shalf.GetData(), rXsize);
     Shv.SetDataAndSize(Shalf.GetData() + rXsize, rVsize);
@@ -1408,15 +1057,16 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
 
     // Lift Shv to vh
     const int sizeH1sp = basis->SolutionSizeH1SP();
-    Vector vh(sizeH1sp);
+    vh.SetSize(sizeH1sp);
 
     basis->LiftToSampleMesh_V(Shv, vh);
 
-    operSP->SolveEnergy(fx, vh, fy);  // fy is not computed and not used in the EQP case
+    // fy is not computed and not used in the EQP case
+    operSP->SolveEnergy(fx, vh, fy);
 
     She.Add(0.5 * dt, eqpFe);
 
-    Vector dx(rXsize);
+    dx.SetSize(rXsize);
     CAROM::Vector vbar_libROM(vbar.GetData(), rVsize, false, false);
     CAROM::Vector dx_libROM(dx.GetData(), rXsize, false, false);
     CAROM::Vector Shv_libROM(Shv.GetData(), rVsize, false, false);

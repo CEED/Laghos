@@ -1189,8 +1189,8 @@ int main(int argc, char *argv[])
         samplerTimer.Stop();
 
         if (myid == 0)
-            cout << "Sampling every " << romOptions.sampfreq <<
-                 " timestep(s)." << endl;
+            cout << "Sampling once every " << romOptions.sampfreq
+                 << " timestep(s)." << endl;
     }
 
     if (outputTimes)
@@ -2097,7 +2097,6 @@ int main(int argc, char *argv[])
                         }
                     }
 
-                    //romOper[romOptions.window]->UpdateSampleMeshNodes(romS);  // TODO?
                     ode_solver->Init(*romOper[romOptions.window]);
                 }
             }
