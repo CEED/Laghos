@@ -1402,7 +1402,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         numSamplesV = 0;
 
         CAROM::Matrix* BXtBV = basisX->transposeMult(basisV);
-        BXtBV->write("run/BXtBV" + std::to_string(input.window));
+        BXtBV->write(testing_parameter_basename + "/BXtBV" + std::to_string(input.window));
         delete BXtBV;
 
         CAROM::Vector* BXtV0 = basisX->transposeMult(*initV);
@@ -2497,18 +2497,22 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         ComputeReducedMv();
         ComputeReducedMe();
 
-        ReadSolutionNNLS(input, "run/nnlsV", eqpI, eqpW);
-        ReadSolutionNNLS(input, "run/nnlsE", eqpI_E, eqpW_E);
-
-        std::vector<int> elems;
-        ReadElementsNNLS(input, "run/nnlsElems", elems);
+        std::string path_init = basis->GetTestingParameterBasename()
+                                + "/ROMoffset" + input.basisIdentifier;
 
         BXtV0 = new CAROM::Vector(basis->GetDimX(), false);
-        BXtV0->read("run/ROMoffset" + input.basisIdentifier +
-                    "/BXt_initV" + std::to_string(input.window));
+        BXtV0->read(path_init + "/BXt_initV" + std::to_string(input.window));
+
+        path_init = basis->GetTestingParameterBasename();
 
         BXtBV = new CAROM::Matrix(basis->GetDimX(), basis->GetDimV(), false);
-        BXtBV->read("run/BXtBV" + std::to_string(window));
+        BXtBV->read(path_init + "/BXtBV" + std::to_string(window));
+
+        ReadSolutionNNLS(input, path_init + "/nnlsV", eqpI, eqpW);
+        ReadSolutionNNLS(input, path_init + "/nnlsE", eqpI_E, eqpW_E);
+
+        std::vector<int> elems;
+        ReadElementsNNLS(input, path_init + "/nnlsElems", elems);
 
         std::map<int,int> elem2smesh;
         for (int i=0; i<elems.size(); ++i)
@@ -2520,9 +2524,8 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         MapSampleMeshEQP(nqe, elem2smesh, eqpI);
         MapSampleMeshEQP(nqe, elem2smesh, eqpI_E);
 
-        // TODO: get the basename "run" from ROM_Options?
-        W_elems.read("run/WelemsV" + std::to_string(window));
-        W_E_elems.read("run/WelemsE" + std::to_string(window));
+        W_elems.read(path_init + "/WelemsV" + std::to_string(window));
+        W_E_elems.read(path_init +"/WelemsE" + std::to_string(window));
 
         // Set nvdof, nedof
         {

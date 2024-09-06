@@ -941,6 +941,11 @@ public:
         return rdimfe;
     }
 
+    string GetTestingParameterBasename() const
+    {
+        return testing_parameter_basename;
+    }
+
     void ApplyEssentialBCtoInitXsp(Array<int> const& ess_tdofs);
 
     void GetBasisVectorV(const bool sp, const int id, Vector &v) const;

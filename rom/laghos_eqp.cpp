@@ -120,8 +120,8 @@ void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
          relNorm << endl;
 }
 
-void WriteSolutionNNLS(std::vector<int> const& indices, std::vector<double> const& sol,
-                       const string filename)
+void WriteSolutionNNLS(std::vector<int> const& indices,
+                       std::vector<double> const& sol, const string filename)
 {
     CAROM::HDFDatabase out;
     out.create(filename);
@@ -386,8 +386,8 @@ void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
     // Write elems to file
     if (rank == 0)
     {
-        std::ofstream outfile("run/nnlsElems" + std::to_string(input.window));
-
+        std::ofstream outfile(GetTestingParameterBasename() + "/nnlsElems"
+                              + std::to_string(input.window));
         for (auto e : globalElems)
             outfile << e << endl;
         outfile.close();
@@ -741,8 +741,9 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
         }
 
         const std::string varName = equationE ? "E" : "V";
-        WriteSolutionNNLS(globalIndices, globalSol, "run/nnls" + varName +
-                          std::to_string(input.window));
+        WriteSolutionNNLS(globalIndices, globalSol,
+                          GetTestingParameterBasename() + "/nnls"
+                          + varName + std::to_string(input.window));
     }
 }
 
