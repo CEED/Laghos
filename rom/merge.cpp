@@ -87,14 +87,16 @@ void MergeSamplingWindow(const int rank, const int first_sv,
         // getSnapshotMatrix is 1-indexed, so we need to add 1.
         // TODO: why does this need to be different for EQP?
         const int add1 = eqp ? 0 : 1;
-        const int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v] + add1;
-        int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
+        const int num_snap = std::min(offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v] + add1,
+                                      basis_reader->getNumSamples("snapshot"));
+        const int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
 
         // getSnapshotMatrix includes the final column, so we don't add 1.
-        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
+        const int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
 
         int num_cols = col_ub - col_lb + 1;
-        std::cout << num_cols << " columns read. Columns " << col_lb - 1 << " to " << col_ub - 1 << std::endl;
+        std::cout << num_cols << " columns read. Columns " << col_lb - 1
+                  << " to " << col_ub - 1 << std::endl;
         CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
         MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
