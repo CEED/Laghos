@@ -1251,9 +1251,9 @@ public:
     }
 
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
-    void StepRK4(Vector &S, double &t, double &dt);
 
     void StepRK2AvgEQP(Vector &S, double &t, double &dt) const;
+    void StepRK4EQP(Vector &S, double &t, double &dt) const;
 
     void ApplyHyperreduction(Vector &S);
     void PostprocessHyperreduction(Vector &S, bool keep_data=false);
@@ -1270,6 +1270,10 @@ public:
     void ForceIntegratorEQP_E_SP(Vector const& v) const;
 
     void InitEQP() const;
+
+    bool UsingEQP() const {
+        return hyperreductionSamplingType == eqp;
+    }
 
     ~ROM_Operator()
     {
@@ -1381,11 +1385,8 @@ private:
     // StepRK2AvgEQP data
     mutable Vector Shalf, vbar, vh, dx;
 
-    // StepRK4 data
-    Vector rk4_dS_dt, rk4_S0, rk4_dv_dt, rk4_v0, rk4_dx_dt, rk4_de_dt, rk4_rS0,
-           rk4_rV, rk4_rdS_dt, rk4_rdv_dt, rk4_rv0, rk4_rdx_dt, rk4_rde_dt, rk4_k,
-           rk4_y, rk4_z;
-    CAROM::Vector rk4_spV, rk4_spE;
+    // StepRK4EQP data
+    mutable Vector rk4_k, rk4_y, rk4_z;
 };
 
 CAROM::GreedySampler* BuildROMDatabase(ROM_Options& romOptions, double& t_final, const int myid, const std::string outputPath,

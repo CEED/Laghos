@@ -134,6 +134,7 @@ int main(int argc, char *argv[])
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
     double dt_factor = 1.0;
+    double windowTol = 0.99;
     bool rom_build_database = false;
     bool rom_use_database = false;
     bool rom_sample_stages = false;
@@ -273,6 +274,8 @@ int main(int argc, char *argv[])
     args.AddOption(&windowOverlapSamples, "-nwinover", "--numwindowoverlap", "Number of samples for ROM window overlap.");
     args.AddOption(&dt_factor, "-dtFactor", "--dtFactor", "Scaling factor for dt.");
     args.AddOption(&dtc, "-dtc", "--dtc", "Fixed (constant) dt.");
+    args.AddOption(&windowTol, "-wtol", "--window-tol",
+                   "Tolerance factor for window changes.");
     args.AddOption(&romOptions.dmd, "-dmd", "--dmd", "-dmd", "--dmd",
                    "Do DMD calculations.");
     args.AddOption(&romOptions.dmd_tbegin, "-dmdtbegin", "--dmdtbegin",
@@ -1347,7 +1350,6 @@ int main(int argc, char *argv[])
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
-            //if (!romOptions.hyperreduce_prep)
             if (romOptions.use_sample_mesh)
             {
                 std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
@@ -2022,7 +2024,6 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                constexpr double windowTol = 0.99;
                 if (usingWindows && window_par >= windowTol*twep[romOptions.window]
                         && romOptions.window < numWindows-1)
                 {
@@ -2041,7 +2042,6 @@ int main(int argc, char *argv[])
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
 
-                    //timeLoopTimer.Stop();
                     SetWindowParameters(twparam, romOptions);
                     if (romOptions.use_sample_mesh)
                     {
@@ -2080,7 +2080,6 @@ int main(int argc, char *argv[])
 
                     // TODO: move the deletes after the time loop?
                     delete romOper[romOptions.window-1];
-                    //timeLoopTimer.Start();
 
                     if (romOptions.use_sample_mesh)
                     {

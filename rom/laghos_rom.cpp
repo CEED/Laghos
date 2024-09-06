@@ -950,7 +950,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
                                 << preprocessHyperreductionTimer.RealTime() << " sec\n";
     }
 
-    if (spaceTime && hyperreduce) // spaceTime && use_sample_mesh?
+    if (spaceTime && hyperreduce)
     {
         // TODO: include in preprocessHyperreductionTimer?
         SetSpaceTimeInitialGuess(input);
@@ -2456,37 +2456,16 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                 hyperreductionSamplingType == eqp);
 
         {
-            // StepRK4 data
-            rk4_dS_dt.SetSize(basis->SolutionSize());
-            rk4_S0.SetSize(basis->SolutionSize());
-
-            const int Vsize = basis->SolutionSizeH1SP();
-            const int Esize = basis->SolutionSizeL2SP();
-
-            rk4_spV.setSize(Vsize);
-            rk4_spE.setSize(Esize);
-
-            rk4_v0.SetDataAndSize(rk4_S0.GetData() + Vsize, Vsize);
-            rk4_de_dt.SetDataAndSize(rk4_dS_dt.GetData() + (2*Vsize), Esize);
-            rk4_dv_dt.SetDataAndSize(rk4_dS_dt.GetData() + Vsize, Vsize);
-            rk4_dx_dt.SetDataAndSize(rk4_dS_dt.GetData(), Vsize);
-
+            // StepRK4EQP data
             const int rXsize = basis->GetDimX();
             const int rVsize = basis->GetDimV();
             const int rEsize = basis->GetDimE();
             MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
 
-            rk4_rS0.SetSize(basis->SolutionSize());
-            rk4_rV.SetSize(rVsize);
-            rk4_rdS_dt.SetSize(rk4_rS0.Size());
-            rk4_rv0.SetDataAndSize(rk4_rS0.GetData() + rXsize, rVsize);
-            rk4_rde_dt.SetDataAndSize(rk4_rdS_dt.GetData() + rXsize + rVsize, rEsize);
-            rk4_rdv_dt.SetDataAndSize(rk4_rdS_dt.GetData() + rXsize, rVsize);
-            rk4_rdx_dt.SetDataAndSize(rk4_rdS_dt.GetData(), rXsize);
-
-            rk4_k.SetSize(rk4_S0.Size());
-            rk4_y.SetSize(rk4_S0.Size());
-            rk4_z.SetSize(rk4_S0.Size());
+            const int solSize = basis->SolutionSize();
+            rk4_k.SetSize(solSize);
+            rk4_y.SetSize(solSize);
+            rk4_z.SetSize(solSize);
         }
 
         if (input.spaceTimeMethod != no_space_time)
@@ -4240,7 +4219,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         const bool eqp_proj = use_sample_mesh && hyperreductionSamplingType == eqp;
 
         const int Vsize = use_sample_mesh ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
-        const int Esize = basis->SolutionSizeL2SP();
+        const int Esize = use_sample_mesh ? basis->SolutionSizeL2SP() : basis->SolutionSizeL2FOM();
         Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
 
         CAROM::Vector spV(Vsize, false);
@@ -4386,24 +4365,17 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     t += dt;
 }
 
-void ROM_Operator::StepRK4(Vector &S, double &t, double &dt)
+void ROM_Operator::StepRK4EQP(Vector &S, double &t, double &dt) const
 {
-    MFEM_VERIFY(rank == 0 && hyperreductionSamplingType == eqp && use_sample_mesh,
-                "StepRK4 needs more general support");
+    MFEM_ASSERT(rank == 0 && hyperreductionSamplingType == eqp && use_sample_mesh,
+                "StepRK4EQP needs more general support");
 
-    MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
+    MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
 
     if (hyperreduce && hyperreductionSamplingType == eqp)
-    {
         hydro_oper->SetRomOperator(this);
-    }
-
-    rk4_S0 = fx;
-
-    rk4_rS0 = S;
-    rk4_rdS_dt = 0.0;
 
     EQPmult(t, hydro_oper, S, rk4_k); // k1
 

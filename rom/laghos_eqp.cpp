@@ -347,8 +347,6 @@ void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
     SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, false, elems);
     SetupEQP_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, true, elems);
 
-    //WriteSampleMeshEQP(input, elems);
-
     // For the parallel case, gather local elems and construct global elems.
     std::vector<int> globalElems;
     {
