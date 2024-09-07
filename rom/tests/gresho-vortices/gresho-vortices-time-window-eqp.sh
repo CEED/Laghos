@@ -7,7 +7,6 @@ case $subTestNum in
     ;;
   2)
     $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.02 -s 7 -online -romhrprep -romsns -nwin 2 -rostype interpolate -hrsamptype eqp -cfl 0.35 -lqnnls
-    ;;
     $LAGHOS -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.02 -s 7 -online -romhr -romsns -nwin 2 -rostype interpolate -hrsamptype eqp -cfl 0.35 -lqnnls
     ;;
   3)
