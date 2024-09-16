@@ -564,7 +564,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
       Vector v, v_d, d_v;
       v.MakeRef(*U_ptr, 0, dofs_h1*dim);
       d_v.MakeRef(dU, 0, dofs_h1*dim);
-      int scheme = 4;
+      int scheme = 3;
       switch(scheme)
       {  
          case 0: LowOrderVel(K_glb, KT_glb, v, d_v); break;
@@ -998,30 +998,18 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
          Ke.Mult(ve, re);
 
+         fe = 0.0;
+         gamma_e = 0.0;
          for(int i = 0; i < dofs.Size(); i++ )
          {
-            for(int j = 0; j < dofs.Size(); j++)
+            for(int j = 0; j < i; j++)
             {
-               if(j >= i) { continue;}
                double dije = max(max(-Ke(i,j), -Ke(j,i)), 0.0);
-               //dije = max(abs(Ke(i,j)), abs (Ke(j,i)));
                double diffusion = dije * (ve(j) - ve(i));
 
                re(i) += diffusion;
                re(j) -= diffusion;
-            }
-         }
 
-         fe = 0.0;
-         gamma_e = 0.0;
-         // compute raw antidiffusive fluxes
-         for(int i = 0; i < dofs.Size(); i++)
-         {
-            for(int j = 0; j < dofs.Size(); j++)
-            {
-               if(j >= i) {continue;}
-               double dije = max(max(-Ke(i,j), -Ke(j,i)), 0.0);
-               //dije = max(abs(Ke(i,j)), abs (Ke(j,i)));
                double fije = dije * (ve(i) - ve(j)) + Me(i,j) * (vdote(i) - vdote(j));
                fe(i) += fije;
                fe(j) -= fije;
@@ -1053,11 +1041,11 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
          //scale 
          for(int i = 0; i < dofs.Size(); i++)
          {
-            if(fe_star(i) > 1e-15 && P > 1e-15)
+            if(fe_star(i) > 0.0 && P > 0.0)
             {
                fe_star(i) *= - P_minus / P_plus;
             }
-            else if(fe_star(i) < -1e-15 && P < -1e-15)
+            else if(fe_star(i) < 0.0 && P < 0.0)
             {
                fe_star(i) *= - P_plus / P_minus;
             }
@@ -1066,7 +1054,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
          for(int i = 0; i < dofs.Size(); i++)
          {
-            d_v(dofs_d[i]) += re(i);// + fe_star(i);
+            d_v(dofs_d[i]) += re(i) + fe_star(i);
          }
       }
    }
@@ -1082,7 +1070,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
       dv_comp.MakeRef(d_v, d * nDofs, nDofs);
       dv_comp /= lumpedMr_H1_vec;
    }
-   //d_v.SetSubVector(v_ess_vdofs, 0.0);
+   d_v.SetSubVector(v_ess_vdofs, 0.0);
 
    delete conv_int;
    delete mass_int;
