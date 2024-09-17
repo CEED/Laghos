@@ -115,12 +115,12 @@ protected:
                               Vector &d_v) const;
 
    void ClipAndScale(const ParFiniteElementSpace &pfes_s, Vector &v, Vector &d_v) const;
-   void SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, const ParFiniteElementSpace &pfes, Vector &v, Vector &d_v) const;
+   //void SubcellClipAndScale(const ParFiniteElementSpace &pfes_s, const ParFiniteElementSpace &pfes, Vector &v, Vector &d_v) const;
    void ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const;
    void ComputeTimeDerivativesLO(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
-   void ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, SparseMatrix &C_tilde_e) const;
-   int ReferenceIndexMapping(const int i, const int dim, const int N) const;
-   void TransferToPhysElem(const FiniteElement* el, ElementTransformation *eltrans,const SparseMatrix &C_tilde, SparseMatrix &Ce_tilde) const;
+   //void ComputeSparseGradient(const ParFiniteElementSpace &pfes_s, SparseMatrix &C_tilde_e) const;
+   //int ReferenceIndexMapping(const int i, const int dim, const int N) const;
+   //void TransferToPhysElem(const FiniteElement* el, ElementTransformation *eltrans,const SparseMatrix &C_tilde, SparseMatrix &Ce_tilde) const;
 public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
