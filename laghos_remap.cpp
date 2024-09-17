@@ -1729,69 +1729,6 @@ UpdateSolutionAndFlux(const Vector &du_lo, const Vector &m,
    }
 }
 
-
-void DivergenceIntegrator::AssembleElementMatrix2(
-        const FiniteElement &trial_fe, const FiniteElement &test_fe,
-        ElementTransformation &Trans,  DenseMatrix &elmat)
-{
-   dim = trial_fe.GetDim();
-   int trial_dof = trial_fe.GetDof();
-   int test_dof = test_fe.GetDof();
-   Vector v(dim);
-   Vector d_col;
- 
-   dshape.SetSize(trial_dof, dim);
-   gshape.SetSize(trial_dof, dim);
-   Jadj.SetSize(dim);
-   shape.SetSize(test_dof);
-   elmat.SetSize(trial_dof, dim * test_dof);
-
-   const IntegrationRule *ir = IntRule ? IntRule : &GetRule(trial_fe, test_fe,
-                                                             Trans);
- 
-   elmat = 0.0;
-   elmat_comp.SetSize(test_dof, trial_dof);
- 
-   for (int i = 0; i < ir->GetNPoints(); i++)
-   {
-      const IntegrationPoint &ip = ir->IntPoint(i);
-      trial_fe.CalcDShape(ip, dshape);
-      test_fe.CalcShape(ip, shape);
- 
-      Trans.SetIntPoint(&ip);
-      CalcAdjugate(Trans.Jacobian(), Jadj);
- 
-      Mult(dshape, Jadj, gshape);
-      double rho = 1.0;
-      if (Q)
-      {
-         rho = Q->Eval(Trans, ip); 
-      }
-      shape *= ip.weight;
-
-      for(int d = 0; d < dim; d++)
-      {
-         for(int j = 0; j < test_dof; j++)
-         {
-            for(int k = 0; k < trial_dof; k++)
-            {
-               elmat(j, k + d * trial_dof) += shape(j) * gshape(k,d) * rho;
-            }
-         }
-      }
-   }
-}
-
-
-const IntegrationRule &DivergenceIntegrator::GetRule(const FiniteElement
-                                                    &trial_fe,
-                                                    const FiniteElement &test_fe,
-                                                   ElementTransformation &Trans)
-{
-   int order = Trans.OrderGrad(&trial_fe) + test_fe.GetOrder() + Trans.OrderJ();
-   return IntRules.Get(trial_fe.GetGeomType(), order);
-}
-
 } // namespace hydrodynamics
 
 } // namespace mfem
