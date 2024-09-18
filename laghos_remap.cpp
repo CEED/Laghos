@@ -38,7 +38,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
      remap_v_stable(remap_vel),
      cfl_factor(cfl),
      offsets(4), S(),
-     v(&pfes_H1), rho(), e(), x0()
+     v(), rho(), e(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
 
@@ -124,7 +124,8 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 
 void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
                                          const Array<int> &ess_tdofs,
-                                         const Array<int> &ess_vdofs)
+                                         const Array<int> &ess_vdofs,
+                                         ParGridFunction &gamma_gf)
 {
    const int vsize_H1 = pfes_H1.GetVSize();
 
@@ -144,15 +145,15 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       // Bernstein scalar space. 
       // Scalar space only used when velocity remap with limiter
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1.FEColl(), 1);
-      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho,
-                     pfes_H1, *pfes_H1_s, pfes_L2, remap_v_stable);
+      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho, v, e,
+                     pfes_H1, *pfes_H1_s, pfes_L2, remap_v_stable, gamma_gf);
    }
    else
    {
       // Define scalar FE spaces for the solution, and the advection operator.
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1Lag.FEColl(), 1);
-      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho,
-                     pfes_H1Lag, *pfes_H1_s, pfes_L2, remap_v_stable);
+      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho, v, e,
+                     pfes_H1Lag, *pfes_H1_s, pfes_L2, remap_v_stable, gamma_gf);
    }
    //oper.SetVelocityRemap(remap_v);
    ode_solver.Init(*oper);
@@ -224,7 +225,8 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       VisualizeField(vis_v, vishost, visport,
                                           v, "Remapped Velocity", Wx, Wy, Ww, Wh);
    }
-   delete oper; delete pfes_H1_s;
+   delete oper; 
+   delete pfes_H1_s;
    if (pmesh.GetMyRank() == 0) { cout << endl; }
 }
 
@@ -332,10 +334,13 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
                            const Array<int> &v_ess_vd,
                            ParGridFunction &mesh_vel,
                            ParGridFunction &rho,
+                           ParGridFunction &vel,
+                           ParGridFunction &e_gf,
                            ParFiniteElementSpace &pfes_H1,
                            ParFiniteElementSpace &pfes_H1_s,
                            ParFiniteElementSpace &pfes_L2,
-                           bool remap_v)
+                           bool remap_v,
+                           ParGridFunction &gamma_gf_)
    : TimeDependentOperator(size),
      x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
      v_ess_tdofs(v_ess_td),
@@ -344,10 +349,12 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
      rho_coeff(&rho),
      rho_u_coeff(rho_coeff, u_coeff),
      Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s),
-     Mr_H1_s(&pfes_H1_s),
+     Mr_H1_s(&pfes_H1_s), Mn_H1_e(&pfes_H1),
      remap_v_stable(remap_v),
      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
-     Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
+     Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2),
+     gamma_gf(gamma_gf_), b_vn(&pfes_H1)
+     //(&IntRules.Get((pfes_H1.GetParMesh()->GetFaceTransformation(0))->GetGeometryType(), ( 3 * pfes_H1.GetOrder(0) + pfes_L2.GetOrder(0) - 1) ))
 {
    // no need for Vector Massmatrix in stablised velocity remap
    // MCL only uses the first component of this, but unstable remap needs vector mass matrix
@@ -373,10 +380,65 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
       KrT_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
       KrT_H1.Assemble(0);
       KrT_H1.Finalize(0);
+      
+      int ne = pfes_H1.GetParMesh()->GetNE();
+      double vol = 0.0;
+      for (int e = 0; e < ne; e++) { vol += pfes_H1.GetParMesh()->GetElementVolume(e); }
+      double Volume = 0.0;
+      int Ne = 0;
+      MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pfes_H1.GetParMesh()->GetComm());
+      MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pfes_H1.GetParMesh()->GetComm());
+      double h0 = 0.0;
+      double C_I = 0.0;
+      switch (pfes_H1.GetParMesh()->GetElementBaseGeometry(0))
+	   {
+	      case Geometry::SEGMENT: h0 = Volume / Ne; 
+            C_I = (double(pfes_H1.GetOrder(0)) + 1.0) * (double(pfes_H1.GetOrder(0)) + 1.0); break;
+	      case Geometry::SQUARE: h0 = sqrt(Volume / Ne); 
+            C_I = (double(pfes_H1.GetOrder(0)) + 1.0) * (double(pfes_H1.GetOrder(0)) + 1.0); break;
+	      case Geometry::TRIANGLE: h0 = sqrt(2.0 * Volume / Ne);
+            C_I = (double(pfes_H1.GetOrder(0)) + 1.0) * (double(pfes_H1.GetOrder(0)) + double(pfes_H1.GetParMesh()->Dimension())) / double(pfes_H1.GetParMesh()->Dimension()); break;
+	      case Geometry::CUBE: h0 = pow(Volume / Ne, 1./3.); 
+            C_I = (double(pfes_H1.GetOrder(0)) + 1.0) * (double(pfes_H1.GetOrder(0)) + 1.0); break;
+	      case Geometry::TETRAHEDRON: h0 = pow(6.0 * Volume / Ne, 1./3.); 
+            C_I = (double(pfes_H1.GetOrder(0)) + 1.0) * (double(pfes_H1.GetOrder(0)) + double(pfes_H1.GetParMesh()->Dimension())) / double(pfes_H1.GetParMesh()->Dimension()); break;
+	      default: MFEM_ABORT("Unknown zone type!");
+	   }
+      h0 /= (double) pfes_H1.GetOrder(0);
 
+      double lambda = 1.0;
+      double perimeter = 1.0;
+      double density_max = rho.Max();
+      double density_MAX = 0.0;
+      MPI_Allreduce(&density_max, &density_MAX, 1, MPI_DOUBLE, MPI_MAX, pfes_H1.GetParMesh()->GetComm());
+      
+      ParBilinearForm Mn_H1_(&pfes_H1);
+      NormalVelocityMassIntegrator *nvmi = new NormalVelocityMassIntegrator(h0, lambda * C_I, perimeter, density_MAX);
+      //IntegrationRule b_ir = IntRules.Get((pfes_H1.GetParMesh()->GetFaceTransformation(0))->GetGeometryType(), ( 3 * pfes_H1.GetOrder(0) + pfes_L2.GetOrder(0) - 1) );
+      //nvmi->SetIntRule(b_ir);
+      Mn_H1_.AddBdrFaceIntegrator(nvmi);
+      Mn_H1_.Assemble();
+      Mn_H1_.Finalize();
+      //Mn_H1 = Mn_H1_.SpMat();
+      lumpedMn_H1.SetSize(Mn_H1_.Height());
+      Mn_H1_.SpMat().GetRowSums(lumpedMn_H1);
+      Array<double> lumpedMn_array(lumpedMn_H1.GetData(), lumpedMn_H1.Size());
 
-      //conv_int = new ConvectionIntegrator(rho_u_coeff);
+      GroupCommunicator &gcomm = pfes_H1.GroupComm();
+      gcomm.Reduce<double>(lumpedMn_array, GroupCommunicator::Sum);
+      gcomm.Bcast(lumpedMn_array);
 
+      //ParBilinearForm Mn_H1_e(&pfes_H1);
+      //Mn_H1_e.AddBdrFaceIntegrator(nvmi);
+      //Mn_H1_e.SetAssemblyLevel(AssemblyLevel::ELEMENT);
+      //Mn_H1_e.Assemble();
+      //Mn_H1_e.Finalize();
+
+      DiffusionNormalVelocityIntegrator *dnvi = new DiffusionNormalVelocityIntegrator(h0, lambda * C_I, perimeter, rho, vel, gamma_gf, e_gf);
+      //dnvi->SetIntRule(b_ir);
+      b_vn.AddBdrFaceIntegrator(dnvi);
+      b_vn.Assemble();
+      
       /*
       HypreParVector gl_ess_tdof(&pfes_H1);
       gl_ess_tdof = -1.0;
@@ -1050,7 +1112,6 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
                fe_star(i) *= - P_plus / P_minus;
             }
          }
-         //MFEM_VERIFY(abs(fe_star.Sum()) < 1e-14, "Scale?" );
 
          for(int i = 0; i < dofs.Size(); i++)
          {
@@ -1059,18 +1120,27 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
       }
    }
 
+   b_vn.LinearForm::operator=(0.0);
+   b_vn.Assemble();
+   d_v += b_vn;
+   //cout << b_vn.Norml2() << endl;
+
    GroupCommunicator &gcomm = Mr_H1.ParFESpace()->GroupComm();
    Array<double> dv_array(d_v.GetData(), d_v.Size());
    gcomm.Reduce<double>(dv_array, GroupCommunicator::Sum);
    gcomm.Bcast(dv_array);
    
    Vector dv_comp;
+   Vector mn;
    for(int d = 0; d < dim; d++)
    {
       dv_comp.MakeRef(d_v, d * nDofs, nDofs);
-      dv_comp /= lumpedMr_H1_vec;
+      mn.MakeRef(lumpedMn_H1, d * nDofs, nDofs);
+      Vector m_total = lumpedMr_H1_vec;
+      m_total += mn;
+      dv_comp /= m_total;
    }
-   d_v.SetSubVector(v_ess_vdofs, 0.0);
+   //d_v.SetSubVector(v_ess_vdofs, 0.0);
 
    delete conv_int;
    delete mass_int;
@@ -1727,6 +1797,156 @@ UpdateSolutionAndFlux(const Vector &du_lo, const Vector &m,
          flux_data[k] -= fij;
       }
    }
+}
+
+
+void NormalVelocityMassIntegrator::AssembleFaceMatrix(const FiniteElement &fe,
+							const FiniteElement &fe2,
+							FaceElementTransformations &Tr,
+							DenseMatrix &elmat)
+{
+   const IntegrationRule *ir = IntRule ? IntRule : &GetRule(fe, fe2,
+                                                             Tr);
+   const int nqp_face = ir->GetNPoints();
+   const int dim = fe.GetDim();
+   const int h1dofs_cnt = fe.GetDof();
+   elmat.SetSize(h1dofs_cnt*dim);
+   elmat = 0.0;
+   Vector shape(h1dofs_cnt);
+   shape = 0.0;
+   for (int q = 0; q  < nqp_face; q++)
+	{
+	   const IntegrationPoint &ip_f = ir->IntPoint(q);
+	   // Set the integration point in the face and the neighboring elements
+	   Tr.SetAllIntPoints(&ip_f);
+	   const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	   ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	  
+	   Trans_el1.SetIntPoint(&eip);
+	   const int elementNo = Trans_el1.ElementNo;
+	   const int eq = elementNo*nqp_face + q;
+	 
+	   Vector nor;
+	   nor.SetSize(dim);
+	   nor = 0.0;
+	   CalcOrtho(Tr.Jacobian(), nor);
+	  
+	   double nor_norm = 0.0;
+	   for (int s = 0; s < dim; s++)
+      {
+	      nor_norm += nor(s) * nor(s);
+	   }
+	   nor_norm = sqrt(nor_norm);
+	  
+	   Vector tn = nor;
+	   tn /= nor_norm;
+	   double penaltyVal = 0.0;
+
+	   //  penaltyVal = penaltyParameter * globalmax_rho * (perimeter/std::pow(Trans_el1.Weight(),1.0/dim)) * perimeter ;
+	   // penaltyVal = penaltyParameter * globalmax_rho * (perimeter/(nor_norm / Tr.Elem1->Weight())) * perimeter ;
+	   penaltyVal = penaltyParameter * globalmax_rho * (perimeter/h0) * perimeter ;
+	
+	   fe.CalcShape(eip, shape);
+	   for (int i = 0; i < h1dofs_cnt; i++)
+	   {
+	      for (int vd = 0; vd < dim; vd++) // Velocity components.
+		   {
+		      for (int j = 0; j < h1dofs_cnt; j++)
+		      {
+		         for (int md = 0; md < dim; md++) // Velocity components.
+			      {	      
+			         elmat(i + vd * h1dofs_cnt, j + md * h1dofs_cnt) += shape(i) * shape(j) * abs( tn(vd) * tn(md)) * penaltyVal * ip_f.weight * nor_norm;
+			      }
+		      }
+		   }
+	   }
+	}
+}
+const IntegrationRule &NormalVelocityMassIntegrator::GetRule(const FiniteElement
+                                                    &trial_fe,
+                                                    const FiniteElement &test_fe,
+                                                   ElementTransformation &Trans)
+{
+   int order = trial_fe.GetOrder() + test_fe.GetOrder() + Trans.OrderJ();
+   return IntRules.Get(trial_fe.GetGeomType(), order);
+}
+
+void DiffusionNormalVelocityIntegrator::AssembleRHSElementVect(const FiniteElement &el,
+								   FaceElementTransformations &Tr,
+								   Vector &elvect)
+{  
+   const IntegrationRule *ir = IntRule ? IntRule : &GetRule(el, Tr);
+   const int nqp_face = ir->GetNPoints();
+   const int dim = el.GetDim();
+   const int h1dofs_cnt = el.GetDof();
+   elvect.SetSize(h1dofs_cnt*dim);
+   elvect = 0.0;
+   Vector shape(h1dofs_cnt);
+   shape = 0.0;
+   for (int q = 0; q  < nqp_face; q++)
+	{  
+	   const IntegrationPoint &ip_f = ir->IntPoint(q);
+	   // Set the integration point in the face and the neighboring elements
+	   Tr.SetAllIntPoints(&ip_f);
+	   const IntegrationPoint &eip = Tr.GetElement1IntPoint();
+	   ElementTransformation &Trans_el1 = Tr.GetElement1Transformation();
+	   Trans_el1.SetIntPoint(&eip);
+	   const int elementNo = Trans_el1.ElementNo;
+
+	   Vector nor;
+	   nor.SetSize(dim);
+	   nor = 0.0;
+	   CalcOrtho(Tr.Jacobian(), nor);
+       
+	   double nor_norm = 0.0;
+	   for (int s = 0; s < dim; s++)
+      {
+	      nor_norm += nor(s) * nor(s);
+	   }
+	   nor_norm = sqrt(nor_norm);
+
+	   Vector tn = nor;
+	   tn /= nor_norm;
+
+	   double penaltyVal = 0.0;
+	   double density_el1 = rho_gf.GetValue(Trans_el1,eip);
+
+	   Vector vShape;
+	   v_gf.GetVectorValue(elementNo, eip, vShape);
+	   double vDotn = 0.0;
+	   for (int s = 0; s < dim; s++)
+	   {
+	      vDotn += vShape(s) * nor(s)/nor_norm;
+	   }
+
+      double gamma_el1 = gamma_gf.GetValue(Trans_el1,eip);
+      double e_el1 = max(0.0, e_gf.GetValue(Trans_el1,eip));
+      double cs_el1 = sqrt(gamma_el1 * (gamma_el1 - 1.0) * e_el1);
+
+	   // NEW //
+	   // penaltyVal =  std::pow(penaltyParameter,1.0) * density_el1 * cs_el1 * (perimeter/std::pow(std::abs(Trans_el1.Weight()),1.0/dim));
+	   //  penaltyVal =  std::pow(penaltyParameter,1.0) * density_el1 * cs_el1;
+	   penaltyVal = std::pow(penaltyParameter,1.0) * density_el1 * cs_el1 * (perimeter/h0);
+      
+	   ///
+	   el.CalcShape(eip, shape);
+	 	  
+	   for (int i = 0; i < h1dofs_cnt; i++)
+	   {
+	      for (int vd = 0; vd < dim; vd++) // Velocity components.
+		   {
+		      elvect(i + vd * h1dofs_cnt) -= shape(i) * vDotn * tn(vd) * penaltyVal * ip_f.weight * nor_norm;
+		   }
+	   }
+	}
+}
+
+const IntegrationRule &DiffusionNormalVelocityIntegrator::GetRule(const FiniteElement &el, 
+                                          ElementTransformation &Trans)
+{
+   int order_l2 = el.GetOrder() - 1;
+   int order = 2 * el.GetOrder() + Trans.OrderJ() + 2 * order_l2;
+   return IntRules.Get(el.GetGeomType(), order);
 }
 
 } // namespace hydrodynamics

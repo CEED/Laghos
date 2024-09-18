@@ -80,7 +80,7 @@
 // mpirun -np 4 laghos -m data/sphere_hole_V4.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -ok 3 -ot 2 -vs 1000
 //
 // ALE test:
-// mpirun -np 4 laghos -m data/square01_quad.mesh -p 1 -rs 3 -s 7 -fa -vs 20 -vis -tf 0.3 -ale 0.3
+// mpirun -np 4 laghos -m data/square01_quad.mesh -p 1 -rs 3 -s 7 -fa -vs 20 -vis -tf 0.3 -ale 0.3 -vrl
 //   source at (0.0, 0.0)
 
 #include <fstream>
@@ -622,7 +622,7 @@ int main(int argc, char *argv[])
                           hydro.GetRhoDetJw(), e_gf);
 
          // Remap to x_gf_opt.
-         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs, ess_vdofs);
+         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs, ess_vdofs, mat_gf);
 
          //ParGridFunction v_new(&H1FESpace);
 

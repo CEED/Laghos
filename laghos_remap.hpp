@@ -65,7 +65,8 @@ public:
 
    virtual void ComputeAtNewPosition(const Vector &new_nodes,
                                      const Array<int> &ess_tdofs, 
-                                     const Array<int> &ess_vdofs);
+                                     const Array<int> &ess_vdofs,
+                                     ParGridFunction &gamma_gf);
 
    void TransferToLagr(ParGridFunction &rho0_gf, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
@@ -83,14 +84,19 @@ protected:
    Vector &x_now;
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
    ParGridFunction &u;
+   ParGridFunction &gamma_gf;
    ParGridFunction u_bernstein;
    mutable VectorGridFunctionCoefficient u_coeff;
    mutable GridFunctionCoefficient rho_coeff;
    mutable ScalarVectorProductCoefficient rho_u_coeff;
-   mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
+   mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1, Mn_H1_e;
+   //SparseMatrix Mn_H1;
+   mutable Vector lumpedMn_H1;
    mutable Vector lumpedMr_H1_vec;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
+   mutable ParLinearForm b_vn;
+   //const IntegrationRule *b_ir;
    double dt = 0.0;
    
    Array <bool> is_global_ess_dof;
@@ -128,10 +134,13 @@ public:
                 const Array<int> &v_ess_vd,
                 ParGridFunction &mesh_vel,
                 ParGridFunction &rho,
+                ParGridFunction &vel,
+                ParGridFunction &e_gf,
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,
                 ParFiniteElementSpace &pfes_L2, 
-                bool remap_v);
+                bool remap_v,
+                ParGridFunction &gamma_gf_);
 
    // obsolete
    void SetVelocityRemap(bool flag) { remap_v_stable = flag; }
@@ -231,6 +240,73 @@ public:
                                 const Vector &u_min, const Vector &u_max,
                                 Vector &du) const;
 };
+
+// Performs full assembly for the normal velocity mass matrix operator.
+class NormalVelocityMassIntegrator : public BilinearFormIntegrator
+{
+private:
+   const double h0;
+   //const ParGridFunction &alpha;
+   double penaltyParameter;
+   double perimeter;
+   //const int order_v;
+   const double &globalmax_rho;
+   //const double &globalmax_cs;
+   //const double &globalmax_viscous_coef;
+   //const ParGridFunction &rhoface_gf;
+   //const ParGridFunction &Jac0invface_gf;
+   //const ParGridFunction &rho0DetJ0face_gf;
+   //const ParGridFunction &v_gf;
+   //const ParGridFunction &csface_gf;
+            
+public:
+   NormalVelocityMassIntegrator(const double h0, double penaltyParameter, double perimeter, const double &globalmax_rho) : h0(h0), penaltyParameter(penaltyParameter), perimeter(perimeter), globalmax_rho(globalmax_rho) {  }
+   virtual void AssembleFaceMatrix(const FiniteElement &fe,
+				   const FiniteElement &fe2,
+				   FaceElementTransformations &Tr,
+				   DenseMatrix &elmat);
+
+   const IntegrationRule &GetRule(const FiniteElement
+                &trial_fe,
+                const FiniteElement &test_fe,
+                ElementTransformation &Trans);
+};
+
+// Performs full assembly for the normal velocity mass matrix operator.
+class DiffusionNormalVelocityIntegrator : public LinearFormIntegrator
+{
+private:
+   const double h0 ;
+   //const ParGridFunction &alpha;
+   double penaltyParameter;
+   double perimeter;
+   //const int order_v;
+   //const double &globalmax_rho;
+   //const double &globalmax_cs;
+   //const double &globalmax_viscous_coef;
+   const ParGridFunction &rho_gf;
+   //const ParGridFunction &csface_gf;
+   //const ParGridFunction &Jac0invface_gf;
+   //const ParGridFunction &rho0DetJ0face_gf;
+   const ParGridFunction &v_gf;
+   const ParGridFunction &e_gf;
+   const ParGridFunction &gamma_gf;
+   //const ParGridFunction &pface_gf;
+   //const bool use_viscosity;
+   //const bool use_vorticity;
+      
+public:
+   DiffusionNormalVelocityIntegrator(const double h0, double penaltyParameter, double perimeter, const ParGridFunction &rho_gf, const ParGridFunction &v_gf, const ParGridFunction &gamma_gf, ParGridFunction &e_gf) : h0(h0), penaltyParameter(penaltyParameter), perimeter(perimeter), rho_gf(rho_gf), v_gf(v_gf), gamma_gf(gamma_gf), e_gf(e_gf) {  }
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+					FaceElementTransformations &Tr,
+					Vector &elvect);
+   virtual void AssembleRHSElementVect(const FiniteElement &el,
+					ElementTransformation &Tr,
+   			   Vector &elvect) { MFEM_ABORT("Asemble RHSElementVect not implemented");};
+
+   const IntegrationRule &GetRule(const FiniteElement &el, ElementTransformation &Trans);
+};
+
 
 } // namespace hydrodynamics
 
