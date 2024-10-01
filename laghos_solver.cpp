@@ -14,9 +14,9 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "general/forall.hpp"
+#include "mfem/general/forall.hpp"
 #include "laghos_solver.hpp"
-#include "linalg/kernels.hpp"
+#include "mfem/linalg/kernels.hpp"
 #include <unordered_map>
 
 #ifdef MFEM_USE_MPI
