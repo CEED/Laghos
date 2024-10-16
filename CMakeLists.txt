@@ -3,9 +3,16 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 project(laghos CXX)
 
-# find_package(HIP QUIET)
-# find_package(HIPBLAS QUIET)
-# find_package(HIPSPARSE QUIET)
+# build flags
+if(NOT CMAKE_BUILD_TYPE)
+  message(STATUS "Setting build type to 'Release' as none was specified.")
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+endif()
+
+if(NOT CMAKE_CONFIGURATION_TYPES)
+  # Set the possible values of build type for cmake-gui
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
 
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
