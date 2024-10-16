@@ -184,7 +184,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    if (u_max == 0.0) { return; } // No need to change the fields.
 
    u_max = std::sqrt(u_max);
-   double dt = cfl_factor * h_min / u_max;
+   double dt = 0.5 * cfl_factor * h_min / u_max;
 
    socketstream vis_v;
    char vishost[] = "localhost";
@@ -1040,7 +1040,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
       pfes.GetElementDofs(e, dofs);
       Vector re(dofs.Size()), vdote(dofs.Size()), fe(dofs.Size()), 
-            gamma_e(dofs.Size()), fe_star(dofs.Size());
+            gamma_e(dofs.Size()), fe_star(dofs.Size()), ve_bar(dofs.Size());
 
       Vector me(Me.Height());
       lumpedMr_H1_vec.GetSubVector(dofs, me);
@@ -1062,6 +1062,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
          fe = 0.0;
          gamma_e = 0.0;
+         ve_bar = 0.0;
          for(int i = 0; i < dofs.Size(); i++ )
          {
             for(int j = 0; j < i; j++)
@@ -1076,6 +1077,10 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
                fe(i) += fije;
                fe(j) -= fije;
 
+               // add 2dije * uije and 2djie * ujie
+               ve_bar(i) += dije * (ve(i) + ve(j)) + Ke(i,j) * (ve(j) - ve(i));
+               ve_bar(j) += dije * (ve(j) + ve(i)) + Ke(i,j) * (ve(i) - ve(j));
+
                gamma_e(i) += dije;
                gamma_e(j) += dije;
             }
@@ -1086,12 +1091,13 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Ve
 
          double P_plus = 0.0;
          double P_minus = 0.0;
-         fe_star = 0.0;
+         //fe_star = 0.0;
+         
          // clip
          for(int i = 0; i < dofs.Size(); i++)
          {
-            double fie_max = gamma_e(i) * (v_max[dofs_d[i]] - ve(i));
-            double fie_min = gamma_e(i) * (v_min[dofs_d[i]] - ve(i));
+            double fie_max = gamma_e(i) * v_max[dofs_d[i]] - ve_bar(i);
+            double fie_min = gamma_e(i) * v_min[dofs_d[i]] - ve_bar(i);
 
             fe_star(i) = min(max(fie_min, fe(i)), fie_max);
 
