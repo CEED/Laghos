@@ -110,6 +110,67 @@ void FastEvaluator::GetL2Values(const Vector &vecL2, Vector &vecQ) const
     }
 }
 
+// This function is the same as GetL2Values, for a subset of quadrature points.
+void FastEvaluator::GetL2ValuesSubset(const Vector &vecL2,
+                                      const Array<int> &qp, Vector &vecQ) const
+{
+    const int nL2dof1D = tensors1D->LQshape1D.Height(),
+              nqp1D    = tensors1D->LQshape1D.Width();
+    if (dim == 2)
+    {
+        DenseMatrix E(vecL2.GetData(), nL2dof1D, nL2dof1D);
+        DenseMatrix LQ(nL2dof1D, nqp1D);
+
+        vecQ.SetSize(nqp1D * nqp1D);
+        DenseMatrix QQ(vecQ.GetData(), nqp1D, nqp1D);
+
+        // LQ_j2_k1 = E_j1_j2 LQs_j1_k1  -- contract in x direction.
+        // QQ_k1_k2 = LQ_j2_k1 LQs_j2_k2 -- contract in y direction.
+        MultAtB(E, tensors1D->LQshape1D, LQ);
+        for (const auto p : qp)
+        {
+            const int k2 = p / nqp1D;
+            const int k1 = p - (k2 * nqp1D);
+            double entry = 0.0;
+            for (int j2 = 0; j2 < nL2dof1D; j2++)
+            {
+                entry += LQ(j2, k1) * tensors1D->LQshape1D(j2, k2);
+            }
+            QQ(k1, k2) = entry;
+        }
+    }
+    else
+    {
+        DenseMatrix E(vecL2.GetData(), nL2dof1D*nL2dof1D, nL2dof1D);
+        DenseMatrix LL_Q(nL2dof1D * nL2dof1D, nqp1D),
+                    L_LQ(LL_Q.GetData(), nL2dof1D, nL2dof1D*nqp1D),
+                    Q_LQ(nqp1D, nL2dof1D*nqp1D);
+
+        vecQ.SetSize(nqp1D * nqp1D * nqp1D);
+        DenseMatrix QQ_Q(vecQ.GetData(), nqp1D * nqp1D, nqp1D);
+
+        // LLQ_j1_j2_k3  = E_j1_j2_j3 LQs_j3_k3   -- contract in z direction.
+        // QLQ_k1_j2_k3  = LQs_j1_k1 LLQ_j1_j2_k3 -- contract in x direction.
+        // QQQ_k1_k2_k3  = QLQ_k1_j2_k3 LQs_j2_k2 -- contract in y direction.
+        // The last step does some reordering (it's not product of matrices).
+        mfem::Mult(E, tensors1D->LQshape1D, LL_Q);
+        MultAtB(tensors1D->LQshape1D, L_LQ, Q_LQ);
+        for (const auto p : qp)
+        {
+            const int k3 = p / (nqp1D * nqp1D);
+            const int r = p - (k3 * nqp1D * nqp1D);
+            const int k2 = r / nqp1D;
+            const int k1 = r - (k2 * nqp1D);
+            double entry = 0.0;
+            for (int j2 = 0; j2 < nL2dof1D; j2++)
+            {
+                entry += Q_LQ(k1, j2 + k3*nL2dof1D) * tensors1D->LQshape1D(j2, k2);
+            }
+            QQ_Q(k1 + nqp1D*k2, k3) = entry;
+        }
+    }
+}
+
 void FastEvaluator::GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const
 {
     const int nH1dof1D = tensors1D->HQshape1D.Height(),
@@ -287,6 +348,161 @@ void FastEvaluator::GetVectorGrad(const DenseMatrix &vec, DenseTensor &J) const
                         J(idx)(c, 2) = QQ_Q(k1 + k2*nqp1D, k3);
                     }
                 }
+            }
+        }
+    }
+}
+
+// This function is the same as GetVectorGrad, for a subset of quadrature points.
+void FastEvaluator::GetVectorGradSubset(const DenseMatrix &vec,
+                                        const Array<int> &qp,
+                                        DenseTensor &J) const
+{
+    const int nH1dof1D = tensors1D->HQshape1D.Height(),
+              nqp1D    = tensors1D->LQshape1D.Width();
+    DenseMatrix X;
+
+    if (dim == 2)
+    {
+        const int nH1dof = nH1dof1D * nH1dof1D;
+        DenseMatrix HQ(nH1dof1D, nqp1D);
+        Vector x(nH1dof);
+
+        const TensorBasisElement *fe =
+            dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
+        const Array<int> &dof_map = fe->GetDofMap();
+
+        for (int c = 0; c < 2; c++)
+        {
+            // Transfer from the mfem's H1 local numbering to the tensor structure
+            // numbering.
+            for (int j = 0; j < nH1dof; j++) {
+                x[j] = vec(dof_map[j], c);
+            }
+            X.UseExternalData(x.GetData(), nH1dof1D, nH1dof1D);
+
+            // HQ_i2_k1  = X_i1_i2 HQg_i1_k1  -- gradients in x direction.
+            // QQ_k1_k2  = HQ_i2_k1 HQs_i2_k2 -- contract  in y direction.
+            MultAtB(X, tensors1D->HQgrad1D, HQ);
+
+            // Set the (c,0) component of the Jacobians at all quadrature points.
+            for (const auto p : qp)
+            {
+                const int k2 = p / nqp1D;
+                const int k1 = p - (k2 * nqp1D);
+                const int idx = k2 * nqp1D + k1;
+                double entry = 0.0;
+                for (int j = 0; j < nH1dof1D; j++)
+                {
+                    entry += HQ(j, k1) * tensors1D->HQshape1D(j, k2);
+                }
+                J(idx)(c, 0) = entry;
+            }
+
+            // HQ_i2_k1  = X_i1_i2 HQs_i1_k1  -- contract  in x direction.
+            // QQ_k1_k2  = HQ_i2_k1 HQg_i2_k2 -- gradients in y direction.
+            MultAtB(X, tensors1D->HQshape1D, HQ);
+
+            // Set the (c,1) component of the Jacobians at all quadrature points.
+            for (const auto p : qp)
+            {
+                const int k2 = p / nqp1D;
+                const int k1 = p - (k2 * nqp1D);
+                const int idx = k2 * nqp1D + k1;
+                double entry = 0.0;
+                for (int j = 0; j < nH1dof1D; j++)
+                {
+                    entry += HQ(j, k1) * tensors1D->HQgrad1D(j, k2);
+                }
+                J(idx)(c, 1) = entry;
+            }
+        }
+    }
+    else
+    {
+        const int nH1dof = nH1dof1D * nH1dof1D * nH1dof1D;
+        DenseMatrix HH_Q(nH1dof1D * nH1dof1D, nqp1D),
+                    H_HQ(HH_Q.GetData(), nH1dof1D, nH1dof1D * nqp1D),
+                    Q_HQ(nqp1D, nH1dof1D*nqp1D); //, QQ_Q(nqp1D * nqp1D, nqp1D);
+        Vector x(nH1dof);
+
+        const TensorBasisElement *fe =
+            dynamic_cast<const TensorBasisElement *>(H1FESpace.GetFE(0));
+        const Array<int> &dof_map = fe->GetDofMap();
+
+        for (int c = 0; c < 3; c++)
+        {
+            // Transfer from the mfem's H1 local numbering to the tensor structure
+            // numbering.
+            for (int j = 0; j < nH1dof; j++) {
+                x[j] = vec(dof_map[j], c);
+            }
+            X.UseExternalData(x.GetData(), nH1dof1D * nH1dof1D, nH1dof1D);
+
+            // HHQ_i1_i2_k3 = X_i1_i2_i3 HQs_i3_k3   -- contract  in z direction.
+            // QHQ_k1_i2_k3 = HQg_i1_k1 HHQ_i1_i2_k3 -- gradients in x direction.
+            // QQQ_k1_k2_k3 = QHQ_k1_i2_k3 HQs_i2_k2 -- contract  in y direction.
+            // The last step does some reordering (it's not product of matrices).
+            mfem::Mult(X, tensors1D->HQshape1D, HH_Q);
+            MultAtB(tensors1D->HQgrad1D, H_HQ, Q_HQ);
+
+            for (const auto p : qp)
+            {
+                const int k3 = p / (nqp1D * nqp1D);
+                const int r = p - (k3 * nqp1D * nqp1D);
+                const int k2 = r / nqp1D;
+                const int k1 = r - (k2 * nqp1D);
+                double entry = 0.0;
+                for (int i2 = 0; i2 < nH1dof1D; i2++)
+                {
+                    entry += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                             tensors1D->HQshape1D(i2, k2);
+                }
+                J(p)(c, 0) = entry;
+            }
+
+            // HHQ_i1_i2_k3 = X_i1_i2_i3 HQs_i3_k3   -- contract  in z direction.
+            // QHQ_k1_i2_k3 = HQs_i1_k1 HHQ_i1_i2_k3 -- contract  in x direction.
+            // QQQ_k1_k2_k3 = QHQ_k1_i2_k3 HQg_i2_k2 -- gradients in y direction.
+            // The last step does some reordering (it's not product of matrices).
+            mfem::Mult(X, tensors1D->HQshape1D, HH_Q);
+            MultAtB(tensors1D->HQshape1D, H_HQ, Q_HQ);
+
+            for (const auto p : qp)
+            {
+                const int k3 = p / (nqp1D * nqp1D);
+                const int r = p - (k3 * nqp1D * nqp1D);
+                const int k2 = r / nqp1D;
+                const int k1 = r - (k2 * nqp1D);
+                double entry = 0.0;
+                for (int i2 = 0; i2 < nH1dof1D; i2++)
+                {
+                    entry += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                             tensors1D->HQgrad1D(i2, k2);
+                }
+                J(p)(c, 1) = entry;
+            }
+
+            // HHQ_i1_i2_k3 = X_i1_i2_i3 HQg_i3_k3   -- gradients in z direction.
+            // QHQ_k1_i2_k3 = HQs_i1_k1 HHQ_i1_i2_k3 -- contract  in x direction.
+            // QQQ_k1_k2_k3 = QHQ_k1_i2_k3 HQs_i2_k2 -- contract  in y direction.
+            // The last step does some reordering (it's not product of matrices).
+            mfem::Mult(X, tensors1D->HQgrad1D, HH_Q);
+            MultAtB(tensors1D->HQshape1D, H_HQ, Q_HQ);
+
+            for (const auto p : qp)
+            {
+                const int k3 = p / (nqp1D * nqp1D);
+                const int r = p - (k3 * nqp1D * nqp1D);
+                const int k2 = r / nqp1D;
+                const int k1 = r - (k2 * nqp1D);
+                double entry = 0.0;
+                for (int i2 = 0; i2 < nH1dof1D; i2++)
+                {
+                    entry += Q_HQ(k1, i2 + k3*nH1dof1D) *
+                             tensors1D->HQshape1D(i2, k2);
+                }
+                J(p)(c, 2) = entry;
             }
         }
     }

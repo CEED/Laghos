@@ -20,6 +20,8 @@
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 
+class ROM_Operator;
+
 #ifdef MFEM_USE_MPI
 
 namespace mfem
@@ -122,8 +124,16 @@ protected:
     void UpdateQuadratureData(const Vector &S) const;
     void AssembleForceMatrix() const;
 
+private:
     const bool noMvSolve;
     const bool noMeSolve;
+    const bool use_eqp;
+    const ROM_Operator *rom_op = nullptr;
+    bool eqp_init_points;
+    mutable bool eqp_init;
+
+    std::set<int> eqp_elem, eqp_pts;
+    mutable std::vector<int> eqp_elid, eqp_ptid, eqp_offset;
 
 public:
     LagrangianHydroOperator(int size, ParFiniteElementSpace &h1_fes,
@@ -133,7 +143,7 @@ public:
                             Coefficient *material_, bool visc, bool vort, bool pa,
                             double cgt, int cgiter, double ftz_tol,
                             int h1_basis_type, bool noMvSolve_=false,
-                            bool noMeSolve_=false);
+                            bool noMeSolve_=false, bool use_eqp_=false);
 
     // Solve for dx_dt, dv_dt and de_dt.
     virtual void Mult(const Vector &S, Vector &dS_dt) const;
@@ -148,6 +158,10 @@ public:
     void ResetQuadratureData() const {
         quad_data_is_current = false;
     }
+
+    void SetQuadDataCurrent() {
+        quad_data_is_current = true;
+    };
 
     // The density values, which are stored only at some quadrature points, are
     // projected as a ParGridFunction.
@@ -164,6 +178,37 @@ public:
 
     void MultMv(const Vector &u, Vector &v);
     void MultMe(const Vector &u, Vector &v);
+
+    void MultMvInv(Vector &u, Vector &v);
+    void MultMeInv(Vector &u, Vector &v);
+
+    void SetRomOperator(const ROM_Operator *rop) {
+        rom_op = rop;
+    }
+
+    const IntegrationRule *GetIntegrationRule() const {
+        return &integ_rule;
+    }
+
+    const QuadratureData & GetQuadData() const {
+        return quad_data;
+    }
+
+    void SetPointsEQP(std::vector<int> const& points);
+
+    void ResetEQP()
+    {
+        eqp_init_points = false;
+        eqp_init = false;
+
+        eqp_elem.clear();
+        eqp_pts.clear();
+        eqp_elid.clear();
+        eqp_ptid.clear();
+        eqp_offset.clear();
+    }
+
+    bool skipEnergySolve;
 };
 
 class TaylorCoefficient : public Coefficient
