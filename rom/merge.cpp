@@ -621,7 +621,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(paramID, outputPath, "X", basisIdentifierString, sampleWindow, dim, snapshotSize[paramID]);
             MFEM_VERIFY(dim == dimX, "Inconsistent snapshot sizes");
             GetSnapshotDim(paramID, outputPath, "V", basisIdentifierString, sampleWindow, dim, dummy);
-            MFEM_VERIFY(dim == dimV && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
+            MFEM_VERIFY(dim == dimV && dummy == snapshotSize[paramID] + extraV, "Inconsistent snapshot sizes");
             GetSnapshotDim(paramID, outputPath, "E", basisIdentifierString, sampleWindow, dim, dummy);
             MFEM_VERIFY(dim == dimE && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
 

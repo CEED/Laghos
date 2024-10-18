@@ -260,7 +260,7 @@ void PrintSingularValues(const int rank, const std::string& basename,
 {
     const CAROM::Vector* sing_vals = bg->getSingularValues();
 
-    const std::string rankStr = GetRankString6(rank);
+    const std::string rankStr = "." + GetRankString6(rank);
     const std::string fullname = (usingWindows) ? basename + "/sVal" + name
                                  + std::to_string(window) + rankStr : basename + "/sVal" + name + rankStr;
 
