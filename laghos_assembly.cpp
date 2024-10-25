@@ -535,6 +535,7 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
    static std::unordered_map<int, fForceMult> call =
    {
       // 2D
+      {0x222,&ForceMult2D<2,2,2,1>},
       {0x234,&ForceMult2D<2,3,4,2>},
       {0x246,&ForceMult2D<2,4,6,3>},
       {0x258,&ForceMult2D<2,5,8,4>},
@@ -942,6 +943,7 @@ static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<int, fForceMultTranspose> call =
    {
+      {0x222,&ForceMultTranspose2D<2,2,2,1>},
       {0x234,&ForceMultTranspose2D<2,3,4,2>},
       {0x246,&ForceMultTranspose2D<2,4,6,3>},
       {0x258,&ForceMultTranspose2D<2,5,8,4>},
