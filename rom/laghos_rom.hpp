@@ -247,7 +247,6 @@ struct ROM_Options
 
     bool hyperreduce = false; // whether to use hyperreduction on ROM online phase
     bool hyperreduce_prep = false; // whether to do hyperreduction pre-processing on ROM online phase
-    bool use_sample_mesh = false; // whether to use sample mesh; True only for hyperreduce mode with GNAT, QDEIM, S-OPT
     bool GramSchmidt = true; // whether to use Gram-Schmidt with respect to mass matrices
     bool RK2AvgSolver = false; // true if RK2Avg solver is used for time integration
     offsetStyle offsetType = useInitialState; // type of offset in time windows
@@ -986,7 +985,6 @@ public:
 private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
-    const bool use_sample_mesh; // whether to use sample mesh; True only for hyperreduce mode with GNAT, QDEIM, S-OPT
     const bool offsetInit;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
@@ -1242,7 +1240,7 @@ public:
 
     void UpdateSampleMeshNodes(Vector const& romSol);
     double GetTimeStepEstimateSP() const {
-        if (!use_sample_mesh) return 0.0;
+        if (!hyperreduce) return 0.0;
 
         if (rank == 0)
         {
@@ -1312,7 +1310,6 @@ private:
 
     const bool hyperreduce;
     HyperreductionSamplingType hyperreductionSamplingType = gnat;
-    bool use_sample_mesh = false; // whether to use sample mesh; True only for hyperreduce mode with GNAT, QDEIM, S-OPT
 
     int Vsize_l2sp, Vsize_h1sp;
     ParFiniteElementSpace *L2FESpaceSP = 0;

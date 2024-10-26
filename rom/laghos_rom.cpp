@@ -714,7 +714,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
-      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep), use_sample_mesh(input.use_sample_mesh),
+      hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
       testing_parameter_basename(*input.testing_parameter_basename), hyperreduce_basename(*input.hyperreduce_basename),
@@ -732,7 +732,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     MPI_Comm_rank(comm, &rank);
     Array<int> nH1(nprocs);
 
-    if (spaceTime || !use_sample_mesh)
+    if (spaceTime || !hyperreduce)
     {
         tH1size = input.H1FESpace->GetTrueVSize();
         tL2size = input.L2FESpace->GetTrueVSize();
@@ -806,7 +806,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         rE2 = new CAROM::Vector(rdime, false);
     }
 
-    if (use_sample_mesh)
+    if (hyperreduce)
     {
         if (rank == 0)
         {
@@ -2371,11 +2371,11 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
-      spaceTimeMethod(input.spaceTimeMethod), hyperreductionSamplingType(input.hyperreductionSamplingType),
-      use_sample_mesh(input.use_sample_mesh), H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace),
-      window(input.window)
+      spaceTimeMethod(input.spaceTimeMethod),
+      hyperreductionSamplingType(input.hyperreductionSamplingType),
+      H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace), window(input.window)
 {
-    if (use_sample_mesh && rank == 0)
+    if (hyperreduce && rank == 0)
     {
         // Set up the sample mesh
         const int spsize = basis->SolutionSizeSP();
@@ -2477,7 +2477,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
             Sr.SetSize(STbasis->GetTotalNumSamples());
         }
     }
-    else if (!use_sample_mesh)
+    else if (!hyperreduce)
     {
         MFEM_VERIFY(input.FOMoper->Height() == input.FOMoper->Width(), "");
         fx.SetSize(input.FOMoper->Height());
@@ -2492,11 +2492,6 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
 
     if (hyperreduce && hyperreductionSamplingType == eqp)
     {
-        // TODO: are reduced mass matrices needed for EQP, or just W matrices?
-
-        ComputeReducedMv();
-        ComputeReducedMe();
-
         std::string path_init = basis->GetTestingParameterBasename()
                                 + "/ROMoffset" + input.basisIdentifier;
 
@@ -2887,7 +2882,7 @@ void ROM_Operator::ComputeReducedMv()
 {
     const int nv = basis->GetDimV();
 
-    if (use_sample_mesh && rank == 0)
+    if (hyperreduce && rank == 0)
     {
         invMvROM.SetSize(nv);
         const int size_H1_sp = basis->SolutionSizeH1SP();
@@ -2938,7 +2933,7 @@ void ROM_Operator::ComputeReducedMe()
 {
     const int ne = basis->GetDimE();
 
-    if (use_sample_mesh && rank == 0)
+    if (hyperreduce && rank == 0)
     {
         invMeROM.SetSize(ne);
         const int size_L2_sp = basis->SolutionSizeL2SP();
@@ -2983,7 +2978,7 @@ void ROM_Operator::ComputeReducedMe()
 
 void ROM_Operator::UpdateSampleMeshNodes(Vector const& romSol)
 {
-    if (!use_sample_mesh || rank != 0)
+    if (!hyperreduce || rank != 0)
         return;
 
     // Lift romSol to the sample mesh space to get X.
@@ -3002,7 +2997,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
     MFEM_VERIFY(x.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
     MFEM_VERIFY(x.Size() == y.Size(), "");
 
-    if (use_sample_mesh)
+    if (hyperreduce)
     {
         if (rank == 0)
         {
@@ -3028,7 +3023,7 @@ void ROM_Operator::Mult(const Vector &x, Vector &y) const
 void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int var, const int dim, double &ip)
 {
     ip = 0.0;
-    if (use_sample_mesh)
+    if (hyperreduce)
     {
         Vector xj_sp(dim);
         Vector xi_sp(dim);
@@ -3054,7 +3049,7 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
             ip += Mxj_sp[k]*xi_sp[k];
         }
     }
-    else if (!use_sample_mesh)
+    else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
     }
@@ -3062,7 +3057,7 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
 
 void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 {
-    if (use_sample_mesh && rank == 0)
+    if (hyperreduce && rank == 0)
     {
         // Induced Gram Schmidt normalization is equivalent to
         // factorizing the basis into X = QR,
@@ -3135,7 +3130,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
             }
         }
     }
-    else if (!use_sample_mesh)
+    else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
     }
@@ -3143,7 +3138,7 @@ void ROM_Operator::InducedGramSchmidt(const int var, Vector &S)
 
 void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_data)
 {
-    if (use_sample_mesh && rank == 0)
+    if (hyperreduce && rank == 0)
     {
         // Get back the original matrix X from matrix Q by undoing all the operations
         // in the induced Gram Schmidt normalization process.
@@ -3205,7 +3200,7 @@ void ROM_Operator::UndoInducedGramSchmidt(const int var, Vector &S, bool keep_da
         else
             (*R).Clear();
     }
-    else if (!use_sample_mesh)
+    else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
     }
@@ -3876,7 +3871,7 @@ void ROM_Operator::EvalSpaceTimeResidual_RK4(Vector const& S, Vector &f) const
         }
     }
 
-    MFEM_VERIFY(use_sample_mesh, "");
+    MFEM_VERIFY(hyperreduce, "");
 
     Sr = 0.0;
 
@@ -4201,14 +4196,14 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 {
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
-    hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
+    hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
     if (hyperreductionSamplingType == eqp && rank == 0)
     {
         StepRK2AvgEQP(S, t, dt);
     }
-    else if (!use_sample_mesh || rank == 0)
+    else if (!hyperreduce || rank == 0)
     {
-        if (use_sample_mesh)
+        if (hyperreduce)
             basis->LiftToSampleMesh(S, fx);
         else
             basis->LiftROMtoFOM(S, fx);
@@ -4218,11 +4213,11 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
             operSP->SetRomOperator(this);
         }
 
-        const bool sample_mesh_proj = use_sample_mesh && hyperreductionSamplingType != eqp;
-        const bool eqp_proj = use_sample_mesh && hyperreductionSamplingType == eqp;
+        const bool sample_mesh_proj = hyperreduce && hyperreductionSamplingType != eqp;
+        const bool eqp_proj = hyperreduce && hyperreductionSamplingType == eqp;
 
-        const int Vsize = use_sample_mesh ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
-        const int Esize = use_sample_mesh ? basis->SolutionSizeL2SP() : basis->SolutionSizeL2FOM();
+        const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
+        const int Esize = hyperreduce ? basis->SolutionSizeL2SP() : basis->SolutionSizeL2FOM();
         Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
 
         CAROM::Vector spV(Vsize, false);
@@ -4353,14 +4348,14 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
         if (hyperreductionSamplingType != eqp)
         {
-            if (use_sample_mesh)
+            if (hyperreduce)
                 basis->RestrictFromSampleMesh(fx, S, false);
             else
                 basis->ProjectFOMtoROM(fx, S);
         }
     }
 
-    if (use_sample_mesh)
+    if (hyperreduce)
     {
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
@@ -4370,12 +4365,12 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
 void ROM_Operator::StepRK4EQP(Vector &S, double &t, double &dt) const
 {
-    MFEM_ASSERT(rank == 0 && hyperreductionSamplingType == eqp && use_sample_mesh,
+    MFEM_ASSERT(rank == 0 && hyperreductionSamplingType == eqp && hyperreduce,
                 "StepRK4EQP needs more general support");
 
     MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
-    hydrodynamics::LagrangianHydroOperator *hydro_oper = use_sample_mesh ? operSP : operFOM;
+    hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
 
     if (hyperreduce && hyperreductionSamplingType == eqp)
         hydro_oper->SetRomOperator(this);
