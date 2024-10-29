@@ -1349,7 +1349,7 @@ int main(int argc, char *argv[])
                 for (int curr_window = numWindows-1; curr_window >= 0; --curr_window)
                     basis[curr_window]->writePDweights(pd2_tdof, curr_window);
             }
-            if (romOptions.hyperreduce)
+            if (!romOptions.hyperreduce_prep)
             {
                 std::string pd_weight_outputPath = testing_parameter_outputPath + "/pd_weight0";
                 ReadPDweight(pd_weight, pd_weight_outputPath);
@@ -2129,22 +2129,6 @@ int main(int argc, char *argv[])
                              << ",\tdt = " << setw(5) << setprecision(6) << dt
                              << ",\t|e| = " << setprecision(10)
                              << sqrt(tot_norm) << endl;
-                    }
-
-                    if (romOptions.hyperreductionSamplingType == eqp)
-                    {
-                        double energy_total, energy_diff;
-                        energy_total = oper->InternalEnergy(*e_gf) +
-                                       oper->KineticEnergy(*v_gf);
-                        energy_diff	= energy_total - energy_init;
-
-                        if (root)
-                        {
-                            cout << "\tE_tot = " << scientific << setprecision(5)
-                                 << energy_total
-                                 << ",\tE_diff = " << scientific << setprecision(5)
-                                 << energy_diff << endl;
-                        }
                     }
 
                     // Make sure all ranks have sent their 'v' solution before initiating
