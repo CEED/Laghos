@@ -2902,27 +2902,6 @@ void ROM_Operator::ComputeReducedMv()
 
         invMvROM.Invert();
     }
-    else if (hyperreduce && hyperreductionSamplingType == eqp)
-    {
-        const int size_H1 = basis->SolutionSizeH1FOM();
-        const int tsize_H1 = H1spaceFOM->GetTrueVSize();
-
-        Wmat = new CAROM::Matrix(size_H1, nv, true);
-
-        ParGridFunction gf(H1spaceFOM);
-
-        Vector vj(tsize_H1);
-        Vector Mvj(size_H1);
-        for (int j=0; j<nv; ++j)
-        {
-            basis->GetBasisVectorV(false, j, vj);
-            gf.SetFromTrueDofs(vj);
-            operFOM->MultMvInv(gf, Mvj);
-
-            for (int i=0; i<size_H1; ++i)
-                (*Wmat)(i,j) = Mvj[i];
-        }
-    }
     else if (!hyperreduce)
     {
         MFEM_ABORT("TODO");
@@ -2952,23 +2931,6 @@ void ROM_Operator::ComputeReducedMe()
         }
 
         invMeROM.Invert();
-    }
-    else if (hyperreduce && hyperreductionSamplingType == eqp)
-    {
-        const int size_L2 = basis->SolutionSizeL2FOM();
-
-        Wmat_E = new CAROM::Matrix(size_L2, ne, true);
-
-        Vector ej(size_L2);
-        Vector Mej(size_L2);
-        for (int j=0; j<ne; ++j)
-        {
-            basis->GetBasisVectorE(false, j, ej);
-            operFOM->MultMeInv(ej, Mej);
-
-            for (int i=0; i<size_L2; ++i)
-                (*Wmat_E)(i,j) = Mej[i];
-        }
     }
     else if (!hyperreduce)
     {

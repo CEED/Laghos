@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
     double blast_energy = 0.25;
     double blast_position[] = {0.0, 0.0, 0.0};
     double dt_factor = 1.0;
-    double windowTol = 0.99;
+    double windowTol = 1.0;
     bool rom_build_database = false;
     bool rom_use_database = false;
     bool rom_sample_stages = false;
