@@ -44,7 +44,7 @@ jobs:
 
     - name: build Hypre
       if: steps.hypre-cache.outputs.cache-hit != 'true'
-      uses: mfem/github-actions/build-hypre@master
+      uses: mfem/github-actions/build-hypre@v2.4
       with:
         archive: ${{ env.HYPRE_ARCHIVE }}
         dir: ${{ env.HYPRE_TOP_DIR }}
@@ -60,7 +60,7 @@ jobs:
 
     - name: build Metis
       if: steps.metis-cache.outputs.cache-hit != 'true'
-      uses: mfem/github-actions/build-metis@master
+      uses: mfem/github-actions/build-metis@v2.4
       with:
         archive: ${{ env.METIS_ARCHIVE }}
         dir: ${{ env.METIS_TOP_DIR }}
@@ -89,7 +89,7 @@ jobs:
 
     - name: build MFEM
       if: steps.mfem-cache.outputs.cache-hit != 'true'
-      uses: mfem/github-actions/build-mfem@master
+      uses: mfem/github-actions/build-mfem@v2.4
       with:
         os: ${{ runner.os }}
         hypre-dir: ${{ env.HYPRE_TOP_DIR }}
