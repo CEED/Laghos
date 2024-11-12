@@ -49,10 +49,17 @@ void MergePhysicalTimeWindow(const int rank, const int first_sv, const double en
     }
 }
 
-void MergeSamplingWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, VariableName v,
-                         const std::string& varName, const std::string& basisIdentifier, const std::string& basis_filename, const int windowOverlapSamples, const int basisWindow,
-                         const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
-                         const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
+void MergeSamplingWindow(const int rank, const int first_sv,
+                         const double energyFraction, const int nsets,
+                         const std::string& basename, VariableName v,
+                         const std::string& varName,
+                         const std::string& basisIdentifier,
+                         const std::string& basis_filename,
+                         const int windowOverlapSamples, const int basisWindow,
+                         const bool useOffset, const offsetStyle offsetType,
+                         const int dim, const int totalSamples,
+                         const std::vector<std::vector<int>> &offsetAllWindows,
+                         int& cutoff, bool eqp)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
     std::unique_ptr<CAROM::BasisGenerator> window_basis_generator;
@@ -78,42 +85,99 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
         std::unique_ptr<CAROM::BasisReader> basis_reader(new CAROM::BasisReader(snapshot_filename));
 
         // getSnapshotMatrix is 1-indexed, so we need to add 1.
-        int num_snap = offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v]+1;
-        int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
+        // TODO: why does this need to be different for EQP?
+        const int add1 = eqp ? 0 : 1;
+        const int num_snap = std::min(offsetAllWindows[offsetAllWindows.size()-1][paramID+nsets*v] + add1,
+                                      basis_reader->getNumSamples("snapshot"));
+        const int col_lb = offsetAllWindows[basisWindow][paramID+nsets*v] + 1;
 
         // getSnapshotMatrix includes the final column, so we don't add 1.
-        int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
+        const int col_ub = std::min(offsetAllWindows[basisWindow+1][paramID+nsets*v]+windowOverlapSamples+1, num_snap);
+
         int num_cols = col_ub - col_lb + 1;
-        std::cout << num_cols << " columns read. Columns " << col_lb - 1 << " to " << col_ub - 1 << std::endl;
-        const CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
+        std::cout << num_cols << " columns read. Columns " << col_lb - 1
+                  << " to " << col_ub - 1 << std::endl;
+        CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
         MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
+
+        CAROM::Vector *init = nullptr;
 
         if (offsetInit && offsetType == interpolateOffset)
         {
             std::string path_init = basename + "/ROMoffset" + basisIdentifier + "/param" + std::to_string(paramID) + "_init";
-            CAROM::Vector *init = new CAROM::Vector(dim, true);
+            init = new CAROM::Vector(dim, true);
             init->read(path_init + varName + "0");
 
             for (int i = 0; i < dim; ++i)
             {
-                (*init)(i) += mat->item(i,0);
+                for (int j = 0; j < num_cols; ++j)
+                    mat->item(i,j) += (*init)(i);
+
+                (*init)(i) = mat->item(i,0);
             }
             init->write(path_init + varName + std::to_string(basisWindow));
-            delete init;
         }
 
         Vector tmp;
         tmp.SetSize(dim);
         for (int j = 0; j < num_cols; ++j)
         {
+            if (j == 0 && offsetInit)
+                continue;
+
             for (int i = 0; i < dim; ++i)
             {
                 tmp[i] = (offsetInit) ? mat->item(i,j) - mat->item(i,0) : mat->item(i,j);
             }
+
             window_basis_generator->takeSample(tmp.GetData());
         }
 
+        if (offsetInit)
+        {
+            for (int j = 1; j < num_cols; ++j)
+            {
+                for (int i = 0; i < dim; ++i)
+                {
+                    mat->item(i,j) -= mat->item(i,0);
+                }
+            }
+
+            for (int i = 0; i < dim; ++i)
+            {
+                mat->item(i,0) = 0.0;
+            }
+        }
+
+        if (eqp)  // Write snapshots to be used in the EQP system
+        {
+            std::string m_snapshot_filename = basename + "/mparam" +
+                                              std::to_string(paramID) + "_var"
+                                              + varName +
+                                              std::to_string(basisWindow)
+                                              + basisIdentifier + "_snapshot";
+
+            if (offsetInit)
+            {
+                // Omit first column, which is zero.
+                // TODO: make optional input in Matrix::write for column range.
+                CAROM::Matrix mat1(mat->numRows(), mat->numColumns() - 1, mat->distributed());
+                for (int j = 1; j < num_cols; ++j)
+                {
+                    for (int i = 0; i < dim; ++i)
+                    {
+                        mat1(i,j-1) = (*mat)(i,j);
+                    }
+                }
+
+                mat1.write(m_snapshot_filename);
+            }
+            else
+                mat->write(m_snapshot_filename);
+        }
+
+        delete init;
         delete mat;
     }
 
@@ -131,7 +195,7 @@ void MergeSamplingWindow(const int rank, const int first_sv, const double energy
 void LoadSampleSets(const int rank, const double energyFraction, const int sv_shift, const int nsets, const std::string& basename, VariableName v,
                     const std::string& basisIdentifier, const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
                     const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
-                    const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
+                    const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff, bool eqp)
 {
     std::string varName;
     switch (v)
@@ -157,7 +221,7 @@ void LoadSampleSets(const int rank, const double energyFraction, const int sv_sh
     if (windowNumSamples > 0)
     {
         MergeSamplingWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
-                            useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff);
+                            useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff, eqp);
     }
     else
     {
@@ -312,19 +376,29 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
             else
                 tMax = windowRight;
 
+            constexpr double eps = 1.0e-8;
+
+            double tLastX = -1.0e100;
+            double tLastV = -1.0e100;
+            double tLastE = -1.0e100;
+
             for (int t = 0; t < windowNumSamples + 2; ++t)
             {
-                if (tSnapX[paramID].back() < tMax)
+                if (tSnapX[paramID].size() > 0) tLastX = tSnapX[paramID].back();
+                if (tSnapV[paramID].size() > 0) tLastV = tSnapV[paramID].back();
+                if (tSnapE[paramID].size() > 0) tLastE = tSnapE[paramID].back();
+
+                if (tSnapX[paramID].size() > 0 && (tSnapX[paramID].back() < tMax || tSnapX[paramID][0] < tMax + eps))
                 {
                     tSnapX[paramID].pop_back();
                     offsetCurrentWindow[paramID+nset*VariableName::X] += 1;
                 }
-                if (tSnapV[paramID].back() < tMax)
+                if (tSnapV[paramID].size() > 0 && (tSnapV[paramID].back() < tMax || tSnapV[paramID][0] < tMax + eps))
                 {
                     tSnapV[paramID].pop_back();
                     offsetCurrentWindow[paramID+nset*VariableName::V] += 1;
                 }
-                if (tSnapE[paramID].back() < tMax)
+                if (tSnapE[paramID].size() > 0 && (tSnapE[paramID].back() < tMax || tSnapE[paramID][0] < tMax + eps))
                 {
                     tSnapE[paramID].pop_back();
                     offsetCurrentWindow[paramID+nset*VariableName::E] += 1;
@@ -344,7 +418,15 @@ void GetParametricTimeWindows(const int nset, const bool SNS, const bool pd, con
                     }
                 }
             }
+
+            if (tSnapX[paramID].size() == 0)
+                tSnapX[paramID].push_back(tLastX);
+            if (tSnapV[paramID].size() == 0)
+                tSnapV[paramID].push_back(tLastV);
+            if (tSnapE[paramID].size() == 0)
+                tSnapE[paramID].push_back(tLastE);
         }
+
         offsetAllWindows.push_back(offsetCurrentWindow);
         numBasisWindows += 1;
 
@@ -408,6 +490,7 @@ int main(int argc, char *argv[])
     const char *twfile = "tw.csv";
     const char *twpfile = "twp.csv";
     const char *basisIdentifier = "";
+    bool eqp = false;
     ROM_Options romOptions;
 
     OptionsParser args(argc, argv);
@@ -433,6 +516,8 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining offline time windows");
     args.AddOption(&twpfile, "-twp", "--timewindowparamfilename",
                    "Name of the CSV file defining online time window parameters");
+    args.AddOption(&eqp, "-eqp", "--eqp", "-no-eqp", "--no-eqp",
+                   "Using EQP");
 
     args.Parse();
     if (!args.Good())
@@ -451,8 +536,6 @@ int main(int argc, char *argv[])
     }
 
     romOptions.offsetType = getOffsetStyle(offsetType);
-    MFEM_VERIFY(romOptions.offsetType != saveLoadOffset, "-rostype load is not compatible with parametric ROM")
-
     romOptions.indicatorType = getlocalROMIndicator(indicatorType);
     const bool pd = (romOptions.indicatorType != physicalTime);
 
@@ -502,10 +585,13 @@ int main(int argc, char *argv[])
     for (int sampleWindow = 0; sampleWindow < numWindows; ++sampleWindow)
     {
         GetSnapshotDim(0, outputPath, "X", basisIdentifierString, sampleWindow, dimX, snapshotSize[0]);
+        int extraV = 0;
         {
             int dummy = 0;
             GetSnapshotDim(0, outputPath, "V", basisIdentifierString, sampleWindow, dimV, dummy);
-            MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
+            extraV = (dummy == snapshotSize[0] + 1);  // 0 or 1
+            MFEM_VERIFY(dummy == snapshotSize[0] + extraV, "Inconsistent snapshot sizes");
+
             GetSnapshotDim(0, outputPath, "E", basisIdentifierString, sampleWindow, dimE, dummy);
             MFEM_VERIFY(dummy == snapshotSize[0], "Inconsistent snapshot sizes");
 
@@ -535,7 +621,7 @@ int main(int argc, char *argv[])
             GetSnapshotDim(paramID, outputPath, "X", basisIdentifierString, sampleWindow, dim, snapshotSize[paramID]);
             MFEM_VERIFY(dim == dimX, "Inconsistent snapshot sizes");
             GetSnapshotDim(paramID, outputPath, "V", basisIdentifierString, sampleWindow, dim, dummy);
-            MFEM_VERIFY(dim == dimV && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
+            MFEM_VERIFY(dim == dimV && dummy == snapshotSize[paramID] + extraV, "Inconsistent snapshot sizes");
             GetSnapshotDim(paramID, outputPath, "E", basisIdentifierString, sampleWindow, dim, dummy);
             MFEM_VERIFY(dim == dimE && dummy == snapshotSize[paramID], "Inconsistent snapshot sizes");
 
@@ -556,18 +642,18 @@ int main(int argc, char *argv[])
         for (int basisWindow = sampleWindow; basisWindow <= lastBasisWindow; ++basisWindow)
         {
             LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::X, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0]);
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0], eqp);
             LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::V, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize, offsetAllWindows, cutoff[1]);
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize + extraV, offsetAllWindows, cutoff[1], eqp);
             LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::E, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2]);
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2], eqp);
 
             if (!romOptions.SNS)
             {
                 LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fv, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3]);
+                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3], eqp);
                 LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fe, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4]);
+                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4], eqp);
             }
 
             if (myid == 0 && usingWindows)

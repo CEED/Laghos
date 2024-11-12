@@ -103,6 +103,12 @@ void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
 
 void RK4ROMSolver::Step(Vector &S, double &t, double &dt)
 {
+    if (rom && rom_oper->UsingEQP())
+    {
+        rom_oper->StepRK4EQP(S, t, dt);
+        return;
+    }
+
     //   0  |
     //  1/2 | 1/2
     //  1/2 |  0   1/2

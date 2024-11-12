@@ -11,6 +11,8 @@
 #include "hyperreduction/S_OPT.h"
 #include "hyperreduction/STSampling.h"
 
+#include "utils/HDFDatabase.h"
+
 using namespace std;
 
 
@@ -60,7 +62,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
     const bool sampleX = generator_X->isNextSample(t);
 
     Vector dSdt;
-    if (!sns)
+    if (!sns && rhsBasis)
     {
         dSdt.SetSize(S.Size());
         lhoper->Mult(S, dSdt);
@@ -136,7 +138,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             }
         }
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             MFEM_VERIFY(gfH1.Size() == H1size, "");
             for (int i=0; i<H1size; ++i)
@@ -172,7 +174,6 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
 
             addSample = generator_E->takeSample(Ediff.GetData());
             generator_E->computeNextSampleTime(Ediff.GetData(), dEdt.GetData(), t);
-
         }
         else
         {
@@ -185,7 +186,7 @@ void ROM_Sampler::SampleSolution(const double t, const double dt, const double p
             tSnapE.push_back(t);
         }
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             MFEM_VERIFY(gfL2.Size() == L2size, "");
             for (int i=0; i<L2size; ++i)
@@ -233,6 +234,307 @@ void DMD_Sampler::Finalize(ROM_Options& input)
     finalized = true;
 }
 
+// The input pmesh is the parallel, distributed FOM mesh with boundary attributes
+// to be copied to smesh. The sample mesh smesh is parallel but not distributed.
+// That is, smesh is entirely on the root process. The indices of elements in
+// pmesh (necessarily on this rank) contained in smesh are stored in elems.
+void MapBoundaryAttributesToSampleMesh(const int rank, const int nprocs,
+                                       std::set<int> const& elems,
+                                       vector<int> const& allNumLocalElems,
+                                       const ParMesh *pmesh, ParMesh *smesh)
+{
+    const int dim = pmesh->SpaceDimension();
+
+    // First, find the elements of smesh touching its boundary. These elements may
+    // or may not be on the boundary of pmesh. All interior elements of smesh are
+    // definitely interior to pmesh.
+
+    // Note that this version gathers data from pmesh for all sampled
+    // elements in smesh. This could be further optimized by gathering data
+    // only from elements on the boundary.
+
+    std::set<int> elemOnBdry;
+
+    Array<int> f2be;
+
+    if (rank == 0)
+    {
+        const int nbe = smesh->GetNBE();
+        // Initialize all boundary attributes to 4, which will denote the
+        // boundary elements of smesh that are interior to pmesh.
+        for (int i=0; i<nbe; ++i)
+            smesh->SetBdrAttribute(i, 4);
+
+        f2be = smesh->GetFaceToBdrElMap();
+
+        MFEM_VERIFY(f2be.Size() == smesh->GetNumFaces(), "");
+        MFEM_VERIFY(nbe < smesh->GetNumFaces(), "");
+
+        for (int e=0; e<smesh->GetNE(); ++e)
+        {
+            Array<int> faces, ori;
+            if (dim == 2)
+                smesh->GetElementEdges(e, faces, ori);
+            else
+                smesh->GetElementFaces(e, faces, ori);
+
+            for (auto f : faces)
+            {
+                if (f2be[f] >= 0)
+                {
+                    const int bel = f2be[f];
+                    elemOnBdry.insert(e);
+                    break;
+                }
+            }
+        }
+    }
+
+    vector<int> counts(nprocs);
+    vector<int> offsets(nprocs);
+
+    const int numLocalElems = elems.size();
+    vector<int> myLocalElems(numLocalElems);
+
+    int cnt = 0;
+    for (auto e : elems)
+    {
+        myLocalElems[cnt] = e;
+        cnt++;
+    }
+
+    MFEM_VERIFY(cnt == numLocalElems, "");
+
+    // Now that the elements on the boundary of smesh are known, gather vertex
+    // coordinates from the sampled elements of pmesh, in order to map vertices
+    // on those elements.
+
+    Array<int> vert, faces, ori;
+    pmesh->GetElementVertices(0, vert);  // Just getting number of vertices.
+
+    if (dim == 2)
+        pmesh->GetElementEdges(0, faces, ori);
+    else
+        pmesh->GetElementFaces(0, faces, ori);  // Just getting number of faces.
+
+    const int nve = vert.Size();  // Number of vertices per element, assumed constant.
+    const int nfe = faces.Size();  // Number of faces per element, assumed constant.
+    pmesh->GetFaceVertices(0, vert);  // Just getting number of vertices.
+    const int nvf = vert.Size();  // Number of vertices per face, assumed constant.
+
+    if (rank == 0)
+    {
+        offsets[0] = 0;
+        for (int i=0; i<nprocs; ++i)
+        {
+            counts[i] = dim * nve * allNumLocalElems[i];
+            if (i > 0)
+                offsets[i] = offsets[i-1] + counts[i-1];
+        }
+    }
+
+    vector<double> pcrd(dim * nve * numLocalElems);
+    vector<int> pvid(nve * numLocalElems);
+
+    vector<int> patt((nfe * (nvf + 1)) * numLocalElems);
+
+    const Array<int> pf2be = pmesh->GetFaceToBdrElMap();
+
+    for (int i=0; i<numLocalElems; ++i)
+    {
+        const int e = myLocalElems[i];
+        pmesh->GetElementVertices(e, vert);
+        MFEM_VERIFY(vert.Size() == nve, "All elements must be of the same type.");
+
+        for (int v=0; v<nve; ++v)
+        {
+            pvid[(i * nve) + v] = vert[v];  // Note that this is a local index.
+            const double *vc = pmesh->GetVertex(vert[v]);
+            for (int j=0; j<dim; ++j)
+                pcrd[(i * dim * nve) + (v * dim) + j] = vc[j];
+        }
+
+        Array<int> fvert;
+        if (dim == 2)
+            pmesh->GetElementEdges(e, faces, ori);
+        else
+            pmesh->GetElementFaces(e, faces, ori);
+
+        MFEM_VERIFY(faces.Size() == nfe, "");
+        for (int j=0; j<nfe; ++j)
+        {
+            const int f = faces[j];
+            const int bel = pf2be[f];
+            pmesh->GetFaceVertices(f, fvert);
+            MFEM_VERIFY(fvert.Size() == nvf, "");
+            for (int k=0; k<nvf; ++k)
+                patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + k] = fvert[k];
+
+            // If it is not a boundary element, use attribute -1.
+            const int attr = (bel >= 0) ? pmesh->GetBdrAttribute(bel) : -1;
+            patt[((nfe * (nvf + 1)) * i) + (j * (nvf + 1)) + nvf] = attr;
+        }
+    }
+
+    vector<double> allpcrd;
+    if (rank == 0) allpcrd.resize(offsets[nprocs-1] + counts[nprocs-1]);
+    MPI_Gatherv(pcrd.data(), pcrd.size(), MPI_DOUBLE, allpcrd.data(), counts.data(),
+                offsets.data(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Also gather vertex indices on the corresponding elements.
+    for (int i=0; i<nprocs; ++i)
+    {
+        counts[i] /= dim;
+        offsets[i] /= dim;
+    }
+
+    vector<int> allpvid;
+    if (rank == 0) allpvid.resize(allpcrd.size() / dim);
+    MPI_Gatherv(pvid.data(), pvid.size(), MPI_INT, allpvid.data(), counts.data(),
+                offsets.data(), MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Use the element vertex coordinate data in allpcrd and index data in allpvid
+    // to map pmesh vertices to smesh vertices. Note that vertex indices in
+    // allpvid are local to their rank, so we construct separate maps on each rank.
+    // It would be more convenient to use global indices, but constructing them
+    // is a more expensive operation.
+    vector<std::map<int,int>> vmap(nprocs);
+
+    if (rank == 0)
+    {
+        Vector diff(dim);
+        for (int i=0; i<nprocs; ++i)
+        {
+            for (int j=0; j<counts[i]; ++j)
+            {
+                const int pid = allpvid[offsets[i] + j];
+
+                const int selem = (int) ((offsets[i] + j) / nve);
+
+                auto search = elemOnBdry.find(selem);
+                if (search == elemOnBdry.end())
+                    continue;  // Skip elements not on smesh boundary
+
+                // Find the vertex of element selem of smesh with the same
+                // coordinates as pid.
+
+                smesh->GetElementVertices(selem, vert);
+                MFEM_VERIFY(vert.Size() == nve, "All elements must be of the same type.");
+
+                int sid = -1;
+                for (int v=0; v<nve; ++v)
+                {
+                    const double *vc = smesh->GetVertex(vert[v]);
+                    for (int k=0; k<dim; ++k)
+                        diff[k] = vc[k] - allpcrd[(dim*(offsets[i] + j)) + k];
+
+                    if (diff.Norml2() < 1.0e-8)
+                    {
+                        sid = vert[v];
+                        break;
+                    }
+                }
+
+                MFEM_VERIFY(sid >= 0, "");
+                vmap[i][pid] = sid;
+            }
+        }
+    }
+
+    // Now that the vertices are mapped on the elements of interest, gather
+    // boundary element attributes, with boundary elements defined by sorted
+    // vertex indices.
+
+    for (int i=0; i<nprocs; ++i)
+    {
+        counts[i] /= nve;
+        offsets[i] /= nve;
+
+        // Now counts[i] == allNumLocalElems[i]
+
+        counts[i] *= nfe * (nvf + 1);
+        offsets[i] *= nfe * (nvf + 1);
+    }
+
+    vector<int> allpatt;
+    if (rank == 0) allpatt.resize(offsets[nprocs-1] + counts[nprocs-1]);
+    MPI_Gatherv(patt.data(), patt.size(), MPI_INT, allpatt.data(), counts.data(),
+                offsets.data(), MPI_INT, 0, MPI_COMM_WORLD);
+
+    // The rest of this function is only for the root process, involving smesh
+    // but not pmesh.
+    if (rank != 0)
+        return;
+
+    // Copy the boundary element attributes to smesh.
+
+    vert.SetSize(nvf);
+    Array<int> svert(nvf);
+    cnt = 0;
+    for (int p=0; p<nprocs; ++p)
+    {
+        for (int e=0; e<allNumLocalElems[p]; ++e)
+        {
+            const int selem = cnt;
+            auto search = elemOnBdry.find(selem);
+            if (search == elemOnBdry.end())
+            {
+                cnt++;
+                continue;  // Skip elements not on smesh boundary
+            }
+
+            if (dim == 2)
+                smesh->GetElementEdges(selem, faces, ori);
+            else
+                smesh->GetElementFaces(selem, faces, ori);
+
+            MFEM_VERIFY(faces.Size() == nfe, "");
+
+            // Now counts[p] == nfe * (nvf + 1) * allNumLocalElems[p]
+            for (int f=0; f<nfe; ++f)
+            {
+                const int attr = allpatt[offsets[p] + (e * nfe * (nvf + 1)) + (f * (nvf + 1)) + nvf];
+                if (attr > 0)
+                {
+                    // Set vert to be the sorted smesh vertices corresponding to
+                    // the pmesh vertices on this face.
+                    for (int i=0; i<nvf; ++i)
+                        vert[i] = vmap[p][allpatt[offsets[p] + (e * nfe * (nvf + 1)) + (f * (nvf + 1)) + i]];
+
+                    vert.Sort();
+
+                    // Find the face of smesh element selem with vertices matching vert.
+                    int sfi = -1;
+                    for (int sf=0; sf<nfe; ++sf)
+                    {
+                        smesh->GetFaceVertices(faces[sf], svert);
+                        MFEM_VERIFY(svert.Size() == nvf, "");
+                        svert.Sort();
+
+                        // Compare the sorted arrays vert and svert
+                        if (svert == vert)  // See mfem/general/array.hpp for ==
+                        {
+                            MFEM_VERIFY(sfi == -1, "");
+                            sfi = sf;
+                        }
+                    }
+
+                    MFEM_VERIFY(sfi >= 0, "");
+                    const int bel = f2be[faces[sfi]];
+                    // Since the boundary attribute is set, this face must be a
+                    // boundary element of smesh.
+                    MFEM_VERIFY(bel >= 0, "");
+                    smesh->SetBdrAttribute(bel, attr);
+                }
+            }
+
+            cnt++;
+        }
+    }
+
+    MFEM_VERIFY(cnt == smesh->GetNE(), "");
+}
+
 void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
 {
     if (writeSnapshots)
@@ -240,7 +542,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV) generator_X->writeSnapshot();
         if (!useVX) generator_V->writeSnapshot();
         generator_E->writeSnapshot();
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             generator_Fv->writeSnapshot();
             generator_Fe->writeSnapshot();
@@ -251,7 +553,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         if (!useXV) generator_X->endSamples();
         if (!useVX) generator_V->endSamples();
         generator_E->endSamples();
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             generator_Fv->endSamples();
             generator_Fe->endSamples();
@@ -278,7 +580,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         BasisGeneratorFinalSummary(generator_E, first_sv, energyFraction, cutoff[2], basename + "/" + "rdimE" + input.basisIdentifier);
         PrintSingularValues(rank, basename, "E" + input.basisIdentifier, generator_E);
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             cout << "Fv basis summary output: " << endl;
             BasisGeneratorFinalSummary(generator_Fv, 0, energyFraction, cutoff[3], basename + "/" + "rdimFv" + input.basisIdentifier);
@@ -296,7 +598,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
         printSnapshotTime(tSnapV, path_tSnap, "V", input.basisIdentifier);
         printSnapshotTime(tSnapE, path_tSnap, "E", input.basisIdentifier);
 
-        if (!sns)
+        if (!sns && rhsBasis)
         {
             printSnapshotTime(tSnapFv, path_tSnap, "Fv", input.basisIdentifier);
             printSnapshotTime(tSnapFe, path_tSnap, "Fe", input.basisIdentifier);
@@ -324,7 +626,7 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     delete generator_V;
     delete generator_E;
 
-    if (!sns)
+    if (!sns && rhsBasis)
     {
         delete generator_Fv;
         delete generator_Fe;
@@ -522,7 +824,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 
     if (offsetInit)
     {
-        std::string path_init = testing_parameter_basename + "/ROMoffset" + input.basisIdentifier + "/init";
+        std::string path_init = testing_parameter_basename + "/ROMoffset" +
+                                input.basisIdentifier + "/init";
 
         if (input.offsetType == useInitialState)
         {
@@ -533,7 +836,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->read(path_init + "V0");
             initE->read(path_init + "E0");
 
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Read init vectors X, V, E with norms " << initX->norm()
+                 << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.restore || input.offsetType == saveLoadOffset)
         {
@@ -544,7 +848,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->read(path_init + "V" + std::to_string(input.window));
             initE->read(path_init + "E" + std::to_string(input.window));
 
-            cout << "Read init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Read init vectors X, V, E with norms " << initX->norm()
+                 << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
         else if (input.offsetType == interpolateOffset)
         {
@@ -578,7 +883,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             }
 
             // Determine the coefficients with respect to the offline parameters
-            // The coefficients are inversely porportional to distances and form a convex combination of offset data
+            // The coefficients are inversely porportional to distances and form
+            // a convex combination of offset data
             for (int param=0; param<paramID_list.size(); ++param)
             {
                 if (true_idx >= 0)
@@ -628,7 +934,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             initV->write(path_init + "V" + std::to_string(input.window));
             initE->write(path_init + "E" + std::to_string(input.window));
 
-            cout << "Interpolated init vectors X, V, E with norms " << initX->norm() << ", " << initV->norm() << ", " << initE->norm() << endl;
+            cout << "Interpolated init vectors X, V, E with norms " << initX->norm()
+                 << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
     }
 
@@ -637,9 +944,10 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
         if (rank == 0) cout << "start preprocessing hyper-reduction\n";
         StopWatch preprocessHyperreductionTimer;
         preprocessHyperreductionTimer.Start();
-        SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window, timesteps);
+        SetupHyperreduction(input.H1FESpace, input.L2FESpace, nH1, input.window, timesteps, input);
         preprocessHyperreductionTimer.Stop();
-        if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: " << preprocessHyperreductionTimer.RealTime() << " sec\n";
+        if (rank == 0) cout << "Elapsed time for hyper-reduction preprocessing: "
+                                << preprocessHyperreductionTimer.RealTime() << " sec\n";
     }
 
     if (spaceTime && hyperreduce)
@@ -649,7 +957,8 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     }
 }
 
-void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS, int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
+void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS,
+        int window, int rdimxPrev, int rdimvPrev, int rdimePrev)
 {
     MFEM_VERIFY(rank == 0 && window > 0, "");
 
@@ -973,13 +1282,145 @@ void SetBdryAttrForVelocity_Cartesian(ParMesh *pmesh)
     pmesh->SetAttributes();
 }
 
-void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteElementSpace *L2FESpace, Array<int>& nH1, const int window,
-                                    const std::vector<double> *timesteps)
+// The CAROM::Matrix pointers in snapshots should be deleted by the caller.
+void LoadParametricSnapshots(const int nsets, const std::string *basename,
+                             const std::string& varName,
+                             const int window,
+                             std::vector<const CAROM::Matrix*> & snapshots)
+{
+    for (int paramID = 0; paramID < nsets; ++paramID)
+    {
+        std::string snapshot_filename = *basename + "/mparam" +
+                                        std::to_string(paramID) + "_var" + varName +
+                                        std::to_string(window) + "_snapshot";
+
+        CAROM::Matrix* mat = new CAROM::Matrix();
+        mat->read(snapshot_filename);
+
+        snapshots.push_back(mat);
+    }
+}
+
+void ROM_Basis::SetStateFromTrueDOFs(Vector const& x, Vector const& v,
+                                     Vector const& e, Vector & S)
+{
+    MFEM_VERIFY(S.Size() == 2*H1size + L2size, "");
+    MFEM_VERIFY(x.Size() == tH1size, "");
+    MFEM_VERIFY(v.Size() == tH1size, "");
+    MFEM_VERIFY(e.Size() == tL2size, "");
+
+    // Set X component of S
+    mfH1 = x;
+    if (offsetInit)
+    {
+        for (int i=0; i<tH1size; ++i)
+        {
+            mfH1[i] += (*initX)(i);
+        }
+    }
+
+    gfH1->SetFromTrueDofs(mfH1);
+
+    for (int i=0; i<H1size; ++i)
+    {
+        S[i] = (*gfH1)[i];
+    }
+
+    // Set V component of S
+    mfH1 = v;
+    if (offsetInit)
+    {
+        for (int i=0; i<tH1size; ++i)
+        {
+            mfH1[i] += (*initV)(i);
+        }
+    }
+
+    gfH1->SetFromTrueDofs(mfH1);
+
+    for (int i=0; i<H1size; ++i)
+    {
+        S[H1size + i] = (*gfH1)[i];
+    }
+
+    // Set E component of S
+    mfL2 = e;
+    if (offsetInit)
+    {
+        for (int i=0; i<tL2size; ++i)
+        {
+            mfL2[i] += (*initE)(i);
+        }
+    }
+
+    gfL2->SetFromTrueDofs(mfL2);
+
+    for (int i=0; i<L2size; ++i)
+    {
+        S[(2 * H1size) + i] = (*gfL2)[i];
+    }
+}
+
+void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
+                                    ParFiniteElementSpace *L2FESpace,
+                                    Array<int>& nH1, const int window,
+                                    const std::vector<double> *timesteps,
+                                    ROM_Options const& input)
 {
     ParMesh *pmesh = H1FESpace->GetParMesh();
 
     const int fomH1size = H1FESpace->GlobalTrueVSize();
     const int fomL2size = L2FESpace->GlobalTrueVSize();
+
+    vector<int> num_sample_dofs_per_procE(nprocs);
+
+    std::set<int> elemsEQP;
+    if (hyperreductionSamplingType == eqp)
+    {
+        std::vector<const CAROM::Matrix*> parametricSnapshotsX,
+            parametricSnapshotsV, parametricSnapshotsE;
+
+        if (input.skipNNLS) return;
+
+        LoadParametricSnapshots(input.numOfflineParameters, input.basename, "X",
+                                input.window, parametricSnapshotsX);
+        LoadParametricSnapshots(input.numOfflineParameters, input.basename, "V",
+                                input.window, parametricSnapshotsV);
+        LoadParametricSnapshots(input.numOfflineParameters, input.basename, "E",
+                                input.window, parametricSnapshotsE);
+
+        SetupEQP_Force(parametricSnapshotsX, parametricSnapshotsV, parametricSnapshotsE,
+                       basisV, basisE, input, elemsEQP);
+
+        for (auto snapshot : parametricSnapshotsX)
+            delete snapshot;
+        for (auto snapshot : parametricSnapshotsV)
+            delete snapshot;
+        for (auto snapshot : parametricSnapshotsE)
+            delete snapshot;
+
+        numSamplesV = 0;
+
+        CAROM::Matrix* BXtBV = basisX->transposeMult(basisV);
+        BXtBV->write(testing_parameter_basename + "/BXtBV" + std::to_string(input.window));
+        delete BXtBV;
+
+        CAROM::Vector* BXtV0 = basisX->transposeMult(*initV);
+        BXtV0->write(testing_parameter_basename + "/ROMoffset" +
+                     input.basisIdentifier + "/BXt_initV" + std::to_string(input.window));
+        delete BXtV0;
+
+        numSamplesE = elemsEQP.size();  // Local number of samples
+        MPI_Allgather(&numSamplesE, 1, MPI_INT, num_sample_dofs_per_procE.data(),
+                      1, MPI_INT, comm);
+
+        // Set the global number of samples
+        numSamplesE = 0;
+        for (auto ns : num_sample_dofs_per_procE)
+            numSamplesE += ns;
+
+        MFEM_VERIFY(numSamplesE < fomL2size, "");
+    }
 
     numSamplesX = 0;
     vector<int> sample_dofs_X(numSamplesX);
@@ -989,11 +1430,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
-    BsinvV = spaceTime ? NULL : new CAROM::Matrix(numSamplesV, rdimfv, false);
+    BsinvV = spaceTime || hyperreductionSamplingType == eqp ? NULL :
+             new CAROM::Matrix(numSamplesV, rdimfv, false);
 
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
-    vector<int> num_sample_dofs_per_procE(nprocs);
     BsinvE = spaceTime ? NULL : new CAROM::Matrix(numSamplesE, rdimfe, false);
 
     if (rank == 0)
@@ -1173,7 +1614,36 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
             MFEM_VERIFY(PiEtransPiFe->numRows() == rdime && PiEtransPiFe->numColumns() == rdimfe, "");
         }
     }
-    else // not spaceTime
+    else if (hyperreductionSamplingType == eqp)
+    {
+        // Artificially set 1 DOF per element as a sample in the L2 space for E.
+        vector<int> localSamples(num_sample_dofs_per_procE[rank]);
+
+        int cnt = 0;
+        for (auto e : elemsEQP)
+        {
+            Array<int> dofs;
+            L2FESpace->GetElementDofs(e, dofs);
+            localSamples[cnt] = dofs[0];
+            cnt++;
+        }
+
+        MFEM_VERIFY(cnt == num_sample_dofs_per_procE[rank], "");
+        vector<int> offsets(nprocs);
+        offsets[0] = 0;
+        for (int i=1; i<nprocs; ++i)
+            offsets[i] = offsets[i-1] + num_sample_dofs_per_procE[i-1];
+
+        MPI_Allgatherv(localSamples.data(), num_sample_dofs_per_procE[rank],
+                       MPI_INT, sample_dofs_E.data(),
+                       num_sample_dofs_per_procE.data(),
+                       offsets.data(), MPI_INT, MPI_COMM_WORLD);
+
+        // No H1 samples for V
+        for (int i=0; i<nprocs; ++i)
+            num_sample_dofs_per_procV[i] = 0;
+    }
+    else // not spaceTime and not EQP
     {
         if (hyperreductionSamplingType == qdeim)
         {
@@ -1244,7 +1714,6 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     // Construct sample mesh
     const int nspaces = 2;
     std::vector<ParFiniteElementSpace*> fespace(nspaces);
-    std::vector<ParFiniteElementSpace*> spfespace(nspaces);
     fespace[0] = H1FESpace;
     fespace[1] = L2FESpace;
 
@@ -1273,7 +1742,19 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         size_L2_sp = sp_L2_space->GetTrueVSize();
 
         sample_pmesh = smm->GetSampleMesh();
-        SetBdryAttrForVelocity_Cartesian(sample_pmesh);
+    }
+
+    if (hyperreductionSamplingType == eqp)
+    {
+        MapBoundaryAttributesToSampleMesh(rank, nprocs, elemsEQP,
+                                          num_sample_dofs_per_procE,
+                                          pmesh, sample_pmesh);
+    }
+
+    if (rank == 0)
+    {
+        if (hyperreductionSamplingType != eqp)
+            SetBdryAttrForVelocity_Cartesian(sample_pmesh);
 
         BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
         BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -1284,7 +1765,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
         spE = new CAROM::Vector(size_L2_sp, false);
 
         sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
-        sV = new CAROM::Vector(numSamplesV, false);
+        sV = numSamplesV == 0 ? NULL : new CAROM::Vector(numSamplesV, false);
         sE = new CAROM::Vector(numSamplesE, false);
 
         BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
@@ -1295,6 +1776,8 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace, ParFiniteE
     smm->GatherDistributedMatrixRows("X", *basisX, rdimx, *BXsp);
     smm->GatherDistributedMatrixRows("V", *basisV, rdimv, *BVsp);
     smm->GatherDistributedMatrixRows("E", *basisE, rdime, *BEsp);
+
+    if (hyperreductionSamplingType == eqp) return;
 
     smm->GatherDistributedMatrixRows("Fv", *basisFv, rdimfv, *BFvsp);
     smm->GatherDistributedMatrixRows("Fe", *basisFe, rdimfe, *BFesp);
@@ -1446,6 +1929,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
+    if (hyperreductionSamplingType == eqp) return;
+
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
         basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
@@ -1531,6 +2016,28 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
 }
 
 // f is a full vector, not a true vector
+void ROM_Basis::ProjectFOMtoROM_V(Vector const& f, Vector & r, const bool timeDerivative)
+{
+    MFEM_VERIFY(r.Size() == rdimv, "");
+    MFEM_VERIFY(f.Size() == H1size, "");
+
+    const bool useOffset = offsetInit && (!timeDerivative);
+
+    for (int i=0; i<H1size; ++i)
+        (*gfH1)(i) = f[i];
+
+    gfH1->GetTrueDofs(mfH1);
+
+    for (int i=0; i<tH1size; ++i)
+        (*fH1)(i) = (useOffset && Voffset) ? mfH1[i] - (*initV)(i) : mfH1[i];
+
+    basisV->transposeMult(*fH1, *rV);
+
+    for (int i=0; i<rdimv; ++i)
+        r[i] = (*rV)(i);
+}
+
+// f is a full vector, not a true vector
 void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
 {
     MFEM_VERIFY(r.Size() == rdimx + rdimv + rdime, "");
@@ -1576,6 +2083,46 @@ void ROM_Basis::LiftROMtoFOM(Vector const& r, Vector & f)
         f[(2*H1size) + i] = (*gfL2)(i);
 }
 
+// f is a full vector, not a true vector
+void ROM_Basis::LiftROMtoFOM_dVdt(Vector const& r, Vector & f)
+{
+    MFEM_VERIFY(r.Size() == rdimv, "");
+    MFEM_VERIFY(f.Size() == H1size, "");
+
+    for (int i=0; i<rdimv; ++i)
+        (*rV)(i) = r[i];
+
+    basisV->mult(*rV, *fH1);
+
+    for (int i=0; i<tH1size; ++i)
+        mfH1[i] = (*fH1)(i);
+
+    gfH1->SetFromTrueDofs(mfH1);
+
+    for (int i=0; i<H1size; ++i)
+        f[i] = (*gfH1)(i);
+}
+
+// f is a full vector, not a true vector
+void ROM_Basis::LiftROMtoFOM_dEdt(Vector const& r, Vector & f)
+{
+    MFEM_VERIFY(r.Size() == rdime, "");
+    MFEM_VERIFY(f.Size() == L2size, "");
+
+    for (int i=0; i<rdime; ++i)
+        (*rE)(i) = r[i];
+
+    basisE->mult(*rE, *fL2);
+
+    for (int i=0; i<tL2size; ++i)
+        mfL2[i] = (*fL2)(i);
+
+    gfL2->SetFromTrueDofs(mfL2);
+
+    for (int i=0; i<L2size; ++i)
+        f[i] = (*gfL2)(i);
+}
+
 void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
 {
     MFEM_VERIFY(u.Size() == SolutionSize(), "");  // rdimx + rdimv + rdime
@@ -1606,6 +2153,25 @@ void ROM_Basis::LiftToSampleMesh(const Vector &u, Vector &usp) const
         {
             //usp[(2*size_H1_sp) + i] = std::max((*spE)(i), 0.0);
             usp[(2*size_H1_sp) + i] = offsetInit ? (*initEsp)(i) + (*spE)(i) : (*spE)(i);
+        }
+    }
+}
+
+void ROM_Basis::LiftToSampleMesh_V(const Vector &u, Vector &usp) const
+{
+    MFEM_VERIFY(u.Size() == rdimv, "");
+    MFEM_VERIFY(usp.Size() == size_H1_sp, "");
+
+    if (rank == 0)
+    {
+        for (int i=0; i<rdimv; ++i)
+            (*rV)(i) = u[i];
+
+        BVsp->mult(*rV, *spV);
+
+        for (int i=0; i<size_H1_sp; ++i)
+        {
+            usp[i] = (offsetInit && Voffset) ? (*initVsp)(i) + (*spV)(i) : (*spV)(i);
         }
     }
 }
@@ -1783,6 +2349,19 @@ void ROM_Basis::ProjectFromSampleMesh(const Vector &usp, Vector &u,
         u[osrom + i] = (*rE2)(i);
 }
 
+void MapSampleMeshEQP(const int nqe, std::map<int,int> & elem2smesh,
+                      std::vector<int> & p)
+{
+    for (int i=0; i<p.size(); ++i)
+    {
+        const int elem = p[i] / nqe;
+        const int q = p[i] - (elem * nqe);
+
+        const int sampleElem = elem2smesh[elem];
+        p[i] = (sampleElem * nqe) + q;
+    }
+}
+
 ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            Coefficient& rho_coeff, FunctionCoefficient& mat_coeff,
                            const int order_e, const int source,
@@ -1792,10 +2371,13 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                            FiniteElementCollection *L2fec, std::vector<double> *timesteps)
     : TimeDependentOperator(b->SolutionSize()), operFOM(input.FOMoper), basis(b),
       rank(b->GetRank()), hyperreduce(input.hyperreduce), useGramSchmidt(input.GramSchmidt),
-      spaceTimeMethod(input.spaceTimeMethod)
+      spaceTimeMethod(input.spaceTimeMethod),
+      hyperreductionSamplingType(input.hyperreductionSamplingType),
+      H1spaceFOM(input.H1FESpace), L2spaceFOM(input.L2FESpace), window(input.window)
 {
     if (hyperreduce && rank == 0)
     {
+        // Set up the sample mesh
         const int spsize = basis->SolutionSizeSP();
 
         fx.SetSize(spsize);
@@ -1870,7 +2452,21 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         operSP = new hydrodynamics::LagrangianHydroOperator(S.Size(), *H1FESpaceSP, *L2FESpaceSP,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                 visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
-                H1fec->GetBasisType(), noMsolve, noMsolve);
+                H1fec->GetBasisType(), noMsolve, noMsolve,
+                hyperreductionSamplingType == eqp);
+
+        {
+            // StepRK4EQP data
+            const int rXsize = basis->GetDimX();
+            const int rVsize = basis->GetDimV();
+            const int rEsize = basis->GetDimE();
+            MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+
+            const int solSize = basis->SolutionSize();
+            rk4_k.SetSize(solSize);
+            rk4_y.SetSize(solSize);
+            rk4_z.SetSize(solSize);
+        }
 
         if (input.spaceTimeMethod != no_space_time)
         {
@@ -1893,6 +2489,96 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         ComputeReducedMv();
         ComputeReducedMe();
     }
+
+    if (hyperreduce && hyperreductionSamplingType == eqp)
+    {
+        std::string path_init = basis->GetTestingParameterBasename()
+                                + "/ROMoffset" + input.basisIdentifier;
+
+        BXtV0 = new CAROM::Vector(basis->GetDimX(), false);
+        BXtV0->read(path_init + "/BXt_initV" + std::to_string(input.window));
+
+        path_init = basis->GetTestingParameterBasename();
+
+        BXtBV = new CAROM::Matrix(basis->GetDimX(), basis->GetDimV(), false);
+        BXtBV->read(path_init + "/BXtBV" + std::to_string(window));
+
+        ReadSolutionNNLS(input, path_init + "/nnlsV", eqpI, eqpW);
+        ReadSolutionNNLS(input, path_init + "/nnlsE", eqpI_E, eqpW_E);
+
+        std::vector<int> elems;
+        ReadElementsNNLS(input, path_init + "/nnlsElems", elems);
+
+        std::map<int,int> elem2smesh;
+        for (int i=0; i<elems.size(); ++i)
+            elem2smesh[elems[i]] = i;
+
+        const IntegrationRule *ir0 = operSP->GetIntegrationRule();
+        const int nqe = ir0->GetNPoints();
+
+        MapSampleMeshEQP(nqe, elem2smesh, eqpI);
+        MapSampleMeshEQP(nqe, elem2smesh, eqpI_E);
+
+        W_elems.read(path_init + "/WelemsV" + std::to_string(window));
+        W_E_elems.read(path_init +"/WelemsE" + std::to_string(window));
+
+        // Set nvdof, nedof
+        {
+            const int e = eqpI[0] / nqe;  // First element index
+            Array<int> dofs;
+            H1FESpaceSP->GetElementVDofs(e, dofs);
+            nvdof = dofs.Size();
+
+            L2FESpaceSP->GetElementVDofs(e, dofs);
+            nedof = dofs.Size();
+        }
+    }
+}
+
+void ROM_Operator::ReadSolutionNNLS(ROM_Options const& input, string basename,
+                                    std::vector<int> & indices,
+                                    std::vector<double> & weights)
+{
+    cout << "Reading EQP solution for window " << input.window << endl;
+
+    MFEM_VERIFY(indices.size() == 0 && weights.size() == 0, "");
+
+    const string filename = basename + std::to_string(input.window);
+
+    CAROM::HDFDatabase infile;
+    const bool fileOpen = infile.open(filename, "r");
+    MFEM_VERIFY(fileOpen, "NNLS solution file does not exist.");
+
+    const int n = infile.getDoubleArraySize("weight");
+    MFEM_VERIFY(n > 0, "");
+
+    indices.resize(n);
+    weights.resize(n);
+
+    infile.getIntegerArray("index", indices.data(), n);
+    infile.getDoubleArray("weight", weights.data(), n);
+
+    infile.close();
+}
+
+void ROM_Operator::ReadElementsNNLS(ROM_Options const& input, string basename,
+                                    std::vector<int> & elems)
+{
+    cout << "ROM_Operator reading EQP elements for window " << input.window << endl;
+
+    MFEM_VERIFY(elems.size() == 0, "");
+
+    const string filename = basename + std::to_string(input.window);
+
+    std::ifstream infile(filename);
+    MFEM_VERIFY(infile.is_open(), "NNLS elements file does not exist.");
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        std::vector<std::string> words;
+        split_line(line, words);
+        elems.push_back(std::stoi(words[0]));
+    }
 }
 
 void ROM_Basis::GetBasisVectorV(const bool sp, const int id, Vector &v) const
@@ -1907,13 +2593,8 @@ void ROM_Basis::GetBasisVectorV(const bool sp, const int id, Vector &v) const
     else  // FOM version
     {
         MFEM_VERIFY(v.Size() == tH1size, "");
-        CAROM::Vector ej(rdimv, false);
-        CAROM::Vector CBej(tH1size, true);
-        ej = 0.0;
-        ej(id) = 1.0;
-        basisV->mult(ej, CBej);
         for (int i=0; i<tH1size; ++i)
-            v[i] = CBej(i);
+            v[i] = (*basisV)(i,id);
     }
 }
 
@@ -1929,13 +2610,8 @@ void ROM_Basis::GetBasisVectorE(const bool sp, const int id, Vector &v) const
     else  // FOM version
     {
         MFEM_VERIFY(v.Size() == tL2size, "");
-        CAROM::Vector ej(rdime, false);
-        CAROM::Vector CBej(tL2size, true);
-        ej = 0.0;
-        ej(id) = 1.0;
-        basisE->mult(ej, CBej);
         for (int i=0; i<tL2size; ++i)
-            v[i] = CBej(i);
+            v[i] = (*basisE)(i,id);
     }
 }
 
@@ -2040,9 +2716,9 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
 {
     // Save files in subdirectory "hyperreduce_basename"
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "testing_parameter_basename"
-    // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
+    // If sample mesh is parameter independent (Sedov Blast), it is usual "basename"
 
-    std::string outfile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::string outfile_string = hyperreduce_basename + "/sample_pmesh_" + to_string(window);
     std::ofstream outfile_spmesh(outfile_string.c_str());
     sample_pmesh->ParPrint(outfile_spmesh);
 
@@ -2058,14 +2734,19 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     writeNum(size_L2_sp, hyperreduce_basename + "/" + "size_L2_sp" + "_" + to_string(window));
 
     if (spaceTimeMethod == gnat_lspg) BsinvX->write(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
-    BsinvV->write(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
+
+    if (BsinvV) BsinvV->write(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->write(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
     BXsp->write(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->write(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->write(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
 
-    BFvsp->write(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
-    BFesp->write(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+
+    if (hyperreductionSamplingType != eqp)
+    {
+        BFvsp->write(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
+        BFesp->write(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+    }
 
     spX->write(hyperreduce_basename + "/" + "spX" + "_" + to_string(window));
     spV->write(hyperreduce_basename + "/" + "spV" + "_" + to_string(window));
@@ -2108,9 +2789,9 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
 
     // Load files in subdirectory "hyperreduce_basename"
     // If sample mesh is parameter dependent (Rayleigh-Taylor), it is "testing_parameter_basename"
-    // If sample mesh is parameter independent (Sedov Blase), it is usual "basename"
+    // If sample mesh is parameter independent (Sedov Blast), it is usual "basename"
 
-    std::string infile_string = hyperreduce_basename + "/" + "sample_pmesh" + "_" + to_string(window);
+    std::string infile_string = hyperreduce_basename + "/sample_pmesh_" + to_string(window);
     std::ifstream infile_spmesh(infile_string.c_str());
     sample_pmesh = new ParMesh(comm, infile_spmesh);
 
@@ -2129,7 +2810,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     const int ntsamp = spaceTime ? timeSamples.size() : 1;
 
     BsinvX = NULL;
-    BsinvV = new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false);
+    BsinvV = numSamplesV == 0 ? NULL : new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false);
     BsinvE = new CAROM::Matrix(ntsamp * numSamplesE, rdimfe, false);
 
     BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
@@ -2141,7 +2822,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     spE = new CAROM::Vector(size_L2_sp, false);
 
     sX = numSamplesX == 0 ? NULL : new CAROM::Vector(numSamplesX, false);
-    sV = new CAROM::Vector(numSamplesV, false);
+    sV = numSamplesV == 0 ? NULL : new CAROM::Vector(numSamplesV, false);
     sE = new CAROM::Vector(numSamplesE, false);
 
     if (spaceTimeMethod == gnat_lspg)
@@ -2150,17 +2831,21 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
         BsinvX->read(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
     }
 
-    BsinvV->read(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
+    if (BsinvV)
+        BsinvV->read(hyperreduce_basename + "/" + "BsinvV" + "_" + to_string(window));
     BsinvE->read(hyperreduce_basename + "/" + "BsinvE" + "_" + to_string(window));
 
     BXsp->read(hyperreduce_basename + "/" + "BXsp" + "_" + to_string(window));
     BVsp->read(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->read(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
 
-    BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
-    BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
-    BFvsp->read(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
-    BFesp->read(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+    if (hyperreductionSamplingType != eqp)
+    {
+        BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
+        BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
+        BFvsp->read(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
+        BFesp->read(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
+    }
 
     spX->read(hyperreduce_basename + "/" + "spX" + "_" + to_string(window));
     spV->read(hyperreduce_basename + "/" + "spV" + "_" + to_string(window));
@@ -2207,7 +2892,7 @@ void ROM_Operator::ComputeReducedMv()
         Vector Mvj(nv);
         for (int j=0; j<nv; ++j)
         {
-            basis->GetBasisVectorV(hyperreduce, j, vj_sp);
+            basis->GetBasisVectorV(true, j, vj_sp);
             operSP->MultMv(vj_sp, Mvj_sp);
             basis->RestrictFromSampleMesh_V(Mvj_sp, Mvj);
 
@@ -2237,7 +2922,7 @@ void ROM_Operator::ComputeReducedMe()
         Vector Mej(ne);
         for (int j=0; j<ne; ++j)
         {
-            basis->GetBasisVectorE(hyperreduce, j, ej_sp);
+            basis->GetBasisVectorE(true, j, ej_sp);
             operSP->MultMe(ej_sp, Mej_sp);
             basis->RestrictFromSampleMesh_E(Mej_sp, Mej);
 
@@ -2308,14 +2993,14 @@ void ROM_Operator::InducedInnerProduct(const int id1, const int id2, const int v
 
         if (var == 1) // velocity
         {
-            basis->GetBasisVectorV(hyperreduce, id1, xj_sp);
-            basis->GetBasisVectorV(hyperreduce, id2, xi_sp);
+            basis->GetBasisVectorV(true, id1, xj_sp);
+            basis->GetBasisVectorV(true, id2, xi_sp);
             operSP->MultMv(xj_sp, Mxj_sp);
         }
         else if (var == 2) // energy
         {
-            basis->GetBasisVectorE(hyperreduce, id1, xj_sp);
-            basis->GetBasisVectorE(hyperreduce, id2, xi_sp);
+            basis->GetBasisVectorE(true, id1, xj_sp);
+            basis->GetBasisVectorE(true, id2, xi_sp);
             operSP->MultMe(xj_sp, Mxj_sp);
         }
         else
@@ -2819,6 +3504,54 @@ void ROM_Basis::SetSpaceTimeInitialGuess(ROM_Options const& input)
 void ROM_Basis::GetSpaceTimeInitialGuess(Vector& st) const
 {
     st = st0;
+}
+
+ROM_Basis::~ROM_Basis()
+{
+    delete rX;
+    delete rV;
+    delete rE;
+    delete rX2;
+    delete rV2;
+    delete rE2;
+    delete basisX;
+    if (!useXV && !useVX && !mergeXV) delete basisV;
+    delete basisE;
+    delete basisFv;
+    delete basisFe;
+    delete spX;
+    delete spV;
+    delete spE;
+    delete sX;
+    delete sV;
+    delete sE;
+    delete BXsp;
+    delete BVsp;
+    delete BEsp;
+    delete BFvsp;
+    delete BFesp;
+    delete BsinvX;
+    delete BsinvV;
+    delete BsinvE;
+    delete BX0;
+    delete initX;
+    delete initV;
+    delete initE;
+    delete initXsp;
+    delete initVsp;
+    delete initEsp;
+    delete BXXinv;
+    delete BVVinv;
+    delete BEEinv;
+    delete smm;
+    delete sampleSelector;
+    if (!hyperreduce)
+    {
+        delete fH1;
+        delete fL2;
+        delete gfH1;
+        delete gfL2;
+    }
 }
 
 void ROM_Operator::SolveSpaceTime(Vector &S)
@@ -3426,17 +4159,31 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
-
-    if (!hyperreduce || rank == 0)
+    if (hyperreductionSamplingType == eqp && rank == 0)
+    {
+        StepRK2AvgEQP(S, t, dt);
+    }
+    else if (!hyperreduce || rank == 0)
     {
         if (hyperreduce)
             basis->LiftToSampleMesh(S, fx);
         else
             basis->LiftROMtoFOM(S, fx);
 
+        if (hyperreduce && hyperreductionSamplingType == eqp)
+        {
+            operSP->SetRomOperator(this);
+        }
+
+        const bool sample_mesh_proj = hyperreduce && hyperreductionSamplingType != eqp;
+        const bool eqp_proj = hyperreduce && hyperreductionSamplingType == eqp;
+
         const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
-        const int Esize = basis->SolutionSizeL2SP();
+        const int Esize = hyperreduce ? basis->SolutionSizeL2SP() : basis->SolutionSizeL2FOM();
         Vector V(Vsize), dS_dt(fx.Size()), S0(fx);
+
+        CAROM::Vector spV(Vsize, false);
+        CAROM::Vector spE(Esize, false);
 
         // The monolithic BlockVector stores the unknown fields as follows:
         // (Position, Velocity, Specific Internal Energy).
@@ -3445,6 +4192,21 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         de_dt.SetDataAndSize(dS_dt.GetData() + (2*Vsize), Esize);
         dv_dt.SetDataAndSize(dS_dt.GetData() + Vsize, Vsize);
         dx_dt.SetDataAndSize(dS_dt.GetData(), Vsize);
+
+        const int rXsize = basis->GetDimX();
+        const int rVsize = basis->GetDimV();
+        const int rEsize = basis->GetDimE();
+        MFEM_VERIFY(rXsize + rVsize + rEsize == basis->SolutionSize(), "");
+
+        Vector rS0(S);
+        Vector rV(rVsize), rdS_dt(S.Size());
+        Vector rdv_dt, rv0, rdx_dt, rde_dt;
+        rv0.SetDataAndSize(rS0.GetData() + rXsize, rVsize);
+        rde_dt.SetDataAndSize(rdS_dt.GetData() + rXsize + rVsize, rEsize);
+        rdv_dt.SetDataAndSize(rdS_dt.GetData() + rXsize, rVsize);
+        rdx_dt.SetDataAndSize(rdS_dt.GetData(), rXsize);
+
+        rdS_dt = 0.0;
 
         // In each sub-step:
         // - Update the global state Vector S.
@@ -3456,37 +4218,103 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         // S is S0.
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        if (sample_mesh_proj) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        else if (eqp_proj)
+        {
+            CAROM::Vector dv_dt_libROM(dv_dt.GetData(), dv_dt.Size(), false, false);
+
+            rdv_dt = eqpFv;
+            // Lift eqpFv to sample mesh space.
+
+            CAROM::Vector eqpFv_libROM(eqpFv.GetData(), eqpFv.Size(), false, false);
+            basis->GetBVsp()->mult(eqpFv_libROM, spV);  // multPlus could be useful
+            dv_dt_libROM += spV;
+        }
+
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
+        if (eqp_proj) add(rv0, 0.5 * dt, rdv_dt, rV);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        if (sample_mesh_proj) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
+
+        if (eqp_proj)
+        {
+            CAROM::Vector de_dt_libROM(de_dt.GetData(), de_dt.Size(), false, false);
+
+            rde_dt = eqpFe;
+            // Lift eqpFe to sample mesh space.
+
+            CAROM::Vector eqpFe_libROM(eqpFe.GetData(), eqpFe.Size(), false, false);
+            basis->GetBEsp()->mult(eqpFe_libROM, spE);  // multPlus could be useful
+            de_dt_libROM += spE;
+        }
+
+        if (eqp_proj)
+        {
+            rdx_dt = rV;
+        }
 
         // -- 2.
         // S = S0 + 0.5 * dt * dS_dt;
         add(S0, 0.5 * dt, dS_dt, fx);
+        if (eqp_proj) add(rS0, 0.5 * dt, rdS_dt, S);
         hydro_oper->ResetQuadratureData();
         hydro_oper->UpdateMesh(fx);
         hydro_oper->SolveVelocity(fx, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+        if (sample_mesh_proj) basis->HyperreduceRHS_V(dv_dt); // Set dv_dt based on RHS computed by SolveVelocity
+
+        if (eqp_proj)
+        {
+            CAROM::Vector dv_dt_libROM(dv_dt.GetData(), dv_dt.Size(), false, false);
+
+            rdv_dt = eqpFv;
+            // Lift eqpFv to sample mesh space.
+
+            CAROM::Vector eqpFv_libROM(eqpFv.GetData(), eqpFv.Size(), false, false);
+            basis->GetBVsp()->mult(eqpFv_libROM, spV);  // multPlus could be useful
+            dv_dt_libROM += spV;
+        }
+
         // V = v0 + 0.5 * dt * dv_dt;
         add(v0, 0.5 * dt, dv_dt, V);
+        if (eqp_proj) add(rv0, 0.5 * dt, rdv_dt, rV);
         hydro_oper->SolveEnergy(fx, V, dS_dt);
-        if (hyperreduce) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
+        if (sample_mesh_proj) basis->HyperreduceRHS_E(de_dt); // Set de_dt based on RHS computed by SolveEnergy
         dx_dt = V;
+
+        if (eqp_proj)
+        {
+            CAROM::Vector de_dt_libROM(de_dt.GetData(), de_dt.Size(), false, false);
+
+            rde_dt = eqpFe;
+            // Lift eqpFe to sample mesh space.
+
+            CAROM::Vector eqpFe_libROM(eqpFe.GetData(), eqpFe.Size(), false, false);
+            basis->GetBEsp()->mult(eqpFe_libROM, spE);  // multPlus could be useful
+            de_dt_libROM += spE;
+        }
+
+        if (eqp_proj)
+        {
+            rdx_dt = rV;
+        }
 
         // -- 3.
         // S = S0 + dt * dS_dt.
         add(S0, dt, dS_dt, fx);
+        if (eqp_proj) add(rS0, dt, rdS_dt, S);
         hydro_oper->ResetQuadratureData();
 
-        MFEM_VERIFY(!useReducedM, "TODO");
+        MFEM_VERIFY(!useReducedM, "");
 
-        if (hyperreduce)
-            basis->RestrictFromSampleMesh(fx, S, false);
-        else
-            basis->ProjectFOMtoROM(fx, S);
+        if (hyperreductionSamplingType != eqp)
+        {
+            if (hyperreduce)
+                basis->RestrictFromSampleMesh(fx, S, false);
+            else
+                basis->ProjectFOMtoROM(fx, S);
+        }
     }
 
     if (hyperreduce)
@@ -3494,5 +4322,35 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         MPI_Bcast(S.GetData(), S.Size(), MPI_DOUBLE, 0, basis->comm);
     }
 
+    t += dt;
+}
+
+void ROM_Operator::StepRK4EQP(Vector &S, double &t, double &dt) const
+{
+    MFEM_ASSERT(rank == 0 && hyperreductionSamplingType == eqp && hyperreduce,
+                "StepRK4EQP needs more general support");
+
+    MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
+
+    hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
+
+    if (hyperreduce && hyperreductionSamplingType == eqp)
+        hydro_oper->SetRomOperator(this);
+
+    EQPmult(t, hydro_oper, S, rk4_k); // k1
+
+    add(S, dt/2.0, rk4_k, rk4_y);
+    add(S, dt/6.0, rk4_k, rk4_z);
+
+    EQPmult(t + dt/2.0, hydro_oper, rk4_y, rk4_k); // k2
+    add(S, dt/2.0, rk4_k, rk4_y);
+    rk4_z.Add(dt/3.0, rk4_k);
+
+    EQPmult(t + dt/2.0, hydro_oper, rk4_y, rk4_k); // k3
+    add(S, dt, rk4_k, rk4_y);
+    rk4_z.Add(dt/3.0, rk4_k);
+
+    EQPmult(t + dt, hydro_oper, rk4_y, rk4_k); // k4
+    add(rk4_z, dt/6.0, rk4_k, S);
     t += dt;
 }
