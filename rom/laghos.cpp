@@ -268,8 +268,6 @@ int main(int argc, char *argv[])
                    "Energy fraction for recommended X ROM basis size.");
     args.AddOption(&romOptions.sv_shift, "-sv-shift", "--sv-shift",
                    "Number of shifted singular values in energy fraction calculation when window-dependent offsets are not used.");
-    args.AddOption(&romOptions.squareSV, "-sqsv", "--square-sv", "-no-sqsv", "--no-square-sv",
-                   "Use singular values squared in energy fraction.");
     args.AddOption(&basisIdentifier, "-bi", "--bi", "Basis identifier for parametric case.");
     args.AddOption(&numWindows, "-nwin", "--numwindows", "Number of ROM time windows.");
     args.AddOption(&windowNumSamples, "-nwinsamp", "--numwindowsamples", "Number of samples in ROM windows.");

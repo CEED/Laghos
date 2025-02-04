@@ -10,7 +10,8 @@ using namespace mfem;
 
 void MergePhysicalTimeWindow(const int rank, const int first_sv, const double energyFraction, const int nsets, const std::string& basename, const std::string& varName,
                              const std::string& basisIdentifier, const std::string& basis_filename, const bool usingWindows, const int basisWindow, const int dim,
-                             const int totalSamples, const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff)
+                             const int totalSamples, const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff,
+                             bool squareSV)
 {
     std::unique_ptr<CAROM::BasisGenerator> basis_generator;
     CAROM::Options static_svd_options(dim, totalSamples, 1);
@@ -44,7 +45,7 @@ void MergePhysicalTimeWindow(const int rank, const int first_sv, const double en
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        BasisGeneratorFinalSummary(basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier, true, squareSV);
         PrintSingularValues(rank, basename, varName + basisIdentifier, basis_generator.get(), usingWindows, basisWindow);
     }
 }
@@ -59,7 +60,7 @@ void MergeSamplingWindow(const int rank, const int first_sv,
                          const bool useOffset, const offsetStyle offsetType,
                          const int dim, const int totalSamples,
                          const std::vector<std::vector<int>> &offsetAllWindows,
-                         int& cutoff, bool eqp)
+                         int& cutoff, bool eqp, bool squareSV)
 {
     bool offsetInit = (useOffset && offsetType != useInitialState && basisWindow > 0) && (v == X || v == V || v == E);
     std::unique_ptr<CAROM::BasisGenerator> window_basis_generator;
@@ -187,7 +188,7 @@ void MergeSamplingWindow(const int rank, const int first_sv,
     if (rank == 0)
     {
         cout << varName << " basis summary output: ";
-        BasisGeneratorFinalSummary(window_basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier);
+        BasisGeneratorFinalSummary(window_basis_generator.get(), first_sv, energyFraction, cutoff, basename + "/" + "rdim" + varName + basisIdentifier, true, squareSV);
         PrintSingularValues(rank, basename, varName + basisIdentifier, window_basis_generator.get(), true, basisWindow);
     }
 }
@@ -195,7 +196,7 @@ void MergeSamplingWindow(const int rank, const int first_sv,
 void LoadSampleSets(const int rank, const double energyFraction, const int sv_shift, const int nsets, const std::string& basename, VariableName v,
                     const std::string& basisIdentifier, const bool usingWindows, const int windowNumSamples, const int windowOverlapSamples, const int basisWindow,
                     const bool useOffset, const offsetStyle offsetType, const int dim, const int totalSamples,
-                    const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff, bool eqp)
+                    const std::vector<std::vector<int>> &offsetAllWindows, int& cutoff, bool eqp, bool squareSV)
 {
     std::string varName;
     switch (v)
@@ -221,11 +222,11 @@ void LoadSampleSets(const int rank, const double energyFraction, const int sv_sh
     if (windowNumSamples > 0)
     {
         MergeSamplingWindow(rank, first_sv, energyFraction, nsets, basename, v, varName, basisIdentifier, basis_filename, windowOverlapSamples, basisWindow,
-                            useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff, eqp);
+                            useOffset, offsetType, dim, totalSamples, offsetAllWindows, cutoff, eqp, squareSV);
     }
     else
     {
-        MergePhysicalTimeWindow(rank, first_sv, energyFraction, nsets, basename, varName, basisIdentifier, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff);
+        MergePhysicalTimeWindow(rank, first_sv, energyFraction, nsets, basename, varName, basisIdentifier, basis_filename, usingWindows, basisWindow, dim, totalSamples, offsetAllWindows, cutoff, squareSV);
     }
 }
 
@@ -518,7 +519,8 @@ int main(int argc, char *argv[])
                    "Name of the CSV file defining online time window parameters");
     args.AddOption(&eqp, "-eqp", "--eqp", "-no-eqp", "--no-eqp",
                    "Using EQP");
-
+    args.AddOption(&romOptions.squareSV, "-sqsv", "--square-sv", "-no-sqsv", "--no-square-sv",
+                   "Use singular values squared in energy fraction.");
     args.Parse();
     if (!args.Good())
     {
@@ -642,18 +644,18 @@ int main(int argc, char *argv[])
         for (int basisWindow = sampleWindow; basisWindow <= lastBasisWindow; ++basisWindow)
         {
             LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::X, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0], eqp);
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimX, totalSnapshotSize, offsetAllWindows, cutoff[0], eqp, romOptions.squareSV);
             LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::V, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize + extraV, offsetAllWindows, cutoff[1], eqp);
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSize + extraV, offsetAllWindows, cutoff[1], eqp, romOptions.squareSV);
             LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::E, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2], eqp);
+                           basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSize, offsetAllWindows, cutoff[2], eqp, romOptions.squareSV);
 
             if (!romOptions.SNS)
             {
                 LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fv, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3], eqp);
+                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimV, totalSnapshotSizeFv, offsetAllWindows, cutoff[3], eqp, romOptions.squareSV);
                 LoadSampleSets(myid, romOptions.energyFraction, romOptions.sv_shift, nset, outputPath, VariableName::Fe, basisIdentifierString, usingWindows, windowNumSamples, windowOverlapSamples,
-                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4], eqp);
+                               basisWindow, romOptions.useOffset, romOptions.offsetType, dimE, totalSnapshotSizeFe, offsetAllWindows, cutoff[4], eqp, romOptions.squareSV);
             }
 
             if (myid == 0 && usingWindows)
