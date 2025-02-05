@@ -208,7 +208,7 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, c
                                 int & cutoff, const std::string cutoffOutputPath, const bool printout)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
-    const CAROM::Vector* sing_vals = bg->getSingularValues();
+    const std::shared_ptr<const CAROM::Vector> sing_vals = bg->getSingularValues();
 
     MFEM_VERIFY(rom_dim <= sing_vals->dim(), "");
 
@@ -258,7 +258,7 @@ void PrintSingularValues(const int rank, const std::string& basename,
                          const std::string& name, CAROM::BasisGenerator* bg,
                          const bool usingWindows, const int window)
 {
-    const CAROM::Vector* sing_vals = bg->getSingularValues();
+    const std::shared_ptr<const CAROM::Vector> sing_vals = bg->getSingularValues();
 
     const std::string rankStr = "." + GetRankString6(rank);
     const std::string fullname = (usingWindows) ? basename + "/sVal" + name

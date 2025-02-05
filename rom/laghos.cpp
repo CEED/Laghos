@@ -1389,9 +1389,7 @@ int main(int argc, char *argv[])
     CAROM::DMD* dmd_V = NULL;
     CAROM::DMD* dmd_E = NULL;
 
-    CAROM::Vector* result_X = NULL;
-    CAROM::Vector* result_V = NULL;
-    CAROM::Vector* result_E = NULL;
+    std::unique_ptr<CAROM::Vector> result_X, result_V, result_E;
     if (rom_restore)
     {
         if (romOptions.dmd)
@@ -1438,9 +1436,9 @@ int main(int argc, char *argv[])
                     }
                 }
 
-                if (result_X != NULL) delete result_X;
-                if (result_V != NULL) delete result_V;
-                if (result_E != NULL) delete result_E;
+                result_X.release();
+                result_V.release();
+                result_E.release();
 
                 if (myid == 0) cout << "Predicting time t " << curr_time << " using DMD window " << curr_window << " with initial start time " << window_start_time << std::endl;
 
@@ -2630,9 +2628,6 @@ int main(int argc, char *argv[])
         delete dmd_X;
         delete dmd_V;
         delete dmd_E;
-        delete result_X;
-        delete result_V;
-        delete result_E;
     }
 
     return 0;

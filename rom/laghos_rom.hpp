@@ -310,9 +310,9 @@ public:
         if (offsetInit)
         {
             std::string path_init = (input.offsetType == interpolateOffset) ? basename + "/ROMoffset" + input.basisIdentifier + "/param" + std::to_string(parameterID) + "_init" : basename + "/ROMoffset" + input.basisIdentifier + "/init";
-            initX = new CAROM::Vector(tH1size, true);
-            initV = new CAROM::Vector(tH1size, true);
-            initE = new CAROM::Vector(tL2size, true);
+            initX.reset(new CAROM::Vector(tH1size, true));
+            initV.reset(new CAROM::Vector(tH1size, true));
+            initE.reset(new CAROM::Vector(tL2size, true));
             Xdiff.SetSize(tH1size);
             Ediff.SetSize(tL2size);
 
@@ -358,25 +358,22 @@ public:
         else
         {
             first_sv = input.sv_shift;
-            initX = NULL;
-            initV = NULL;
-            initE = NULL;
         }
 
         if (input.dmd_nonuniform)
         {
-            dmd_X = new CAROM::NonuniformDMD(tH1size, false, initX, initV);
+            dmd_X = new CAROM::NonuniformDMD(tH1size, initX, initV, false);
             dmd_V = new CAROM::NonuniformDMD(tH1size);
             dmd_E = new CAROM::NonuniformDMD(tL2size);
         }
         else
         {
             dmd_X = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS",
-                                           input.dmd_closest_rbf, initX);
+                                           input.dmd_closest_rbf, false, initX);
             dmd_V = new CAROM::AdaptiveDMD(tH1size, input.desired_dt, "G", "LS",
-                                           input.dmd_closest_rbf, initV);
+                                           input.dmd_closest_rbf, false, initV);
             dmd_E = new CAROM::AdaptiveDMD(tL2size, input.desired_dt, "G", "LS",
-                                           input.dmd_closest_rbf, initE);
+                                           input.dmd_closest_rbf, false, initE);
         }
     }
 
@@ -424,9 +421,7 @@ private:
     Vector X, X0, Xdiff, Ediff, dXdt, V, V0, dVdt, E, E0, dEdt;
 
     const bool offsetInit;
-    CAROM::Vector *initX = 0;
-    CAROM::Vector *initV = 0;
-    CAROM::Vector *initE = 0;
+    std::shared_ptr<CAROM::Vector> initX, initV, initE;
 
     ParGridFunction gfH1, gfL2;
 
@@ -958,8 +953,8 @@ public:
         return BEsp;
     }
 
-    CAROM::Matrix *GetBXtBV() {
-        return basisX->transposeMult(basisV);
+    std::unique_ptr<CAROM::Matrix> GetBXtBV() {
+        return basisX->transposeMult(*basisV);
     }
 
     void ComputeReducedMatrices(bool sns1);
@@ -978,9 +973,9 @@ public:
     CAROM::SampleMeshManager *smm = NULL;
     CAROM::SampleDOFSelector *sampleSelector = NULL;
 
-    CAROM::Matrix* PiXtransPiV = 0;  // TODO: make this private and use a function to access its mult
-    CAROM::Matrix* PiXtransPiX = 0;  // TODO: make this private and use a function to access its mult
-    CAROM::Matrix* PiXtransPiXlag = 0;  // TODO: make this private and use a function to access its mult
+    std::unique_ptr<CAROM::Matrix> PiXtransPiV;  // TODO: make this private and use a function to access its mult
+    std::unique_ptr<CAROM::Matrix> PiXtransPiX;  // TODO: make this private and use a function to access its mult
+    std::unique_ptr<CAROM::Matrix> PiXtransPiXlag;  // TODO: make this private and use a function to access its mult
 
 private:
     const bool hyperreduce;
@@ -1003,11 +998,7 @@ private:
 
     std::string basisIdentifier;
 
-    CAROM::Matrix* basisX = 0;
-    CAROM::Matrix* basisV = 0;
-    CAROM::Matrix* basisE = 0;
-    CAROM::Matrix* basisFv = 0;
-    CAROM::Matrix* basisFe = 0;
+    std::shared_ptr<CAROM::Matrix> basisX, basisV, basisE, basisFv, basisFe;
 
     std::string basename = "run";
     std::string testing_parameter_basename = "run";
@@ -1050,13 +1041,7 @@ protected:
     CAROM::Vector *sV = NULL;
     CAROM::Vector *sE = NULL;
 
-    CAROM::Matrix *BsinvX = NULL;
-    CAROM::Matrix *BsinvV = NULL;
-    CAROM::Matrix *BsinvE = NULL;
-
-    CAROM::Matrix *BwinX = NULL;
-    CAROM::Matrix *BwinV = NULL;
-    CAROM::Matrix *BwinE = NULL;
+    std::unique_ptr<CAROM::Matrix> BsinvX, BsinvV, BsinvE, BwinX, BwinV, BwinE;
 
     CAROM::Vector *initX = 0;
     CAROM::Vector *initV = 0;
@@ -1064,7 +1049,7 @@ protected:
     CAROM::Vector *initXsp = 0;
     CAROM::Vector *initVsp = 0;
     CAROM::Vector *initEsp = 0;
-    CAROM::Vector *BX0 = NULL;
+    std::unique_ptr<CAROM::Vector> BX0;
 
     CAROM::Vector *BtInitDiffX = 0;  // TODO: destructor
     CAROM::Vector *BtInitDiffV = 0;
@@ -1083,9 +1068,8 @@ protected:
     const bool Voffset;
 
     const bool RK2AvgFormulation;
-    CAROM::Matrix *BXXinv = NULL;
-    CAROM::Matrix *BVVinv = NULL;
-    CAROM::Matrix *BEEinv = NULL;
+
+    std::unique_ptr<CAROM::Matrix> BXXinv, BVVinv, BEEinv;
 
     double energyFraction_X;
 
@@ -1101,8 +1085,8 @@ protected:
 private:
     void SetSpaceTimeInitialGuessComponent(Vector& st, std::string const& name,
                                            ParFiniteElementSpace *fespace,
-                                           const CAROM::Matrix* basis,
-                                           const CAROM::Matrix* tbasis,
+                                           const CAROM::Matrix &basis,
+                                           const CAROM::Matrix &tbasis,
                                            const int nt,
                                            const int rdim) const;
 
@@ -1114,16 +1098,16 @@ private:
     void SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
                         std::vector<const CAROM::Matrix*> snapV,
                         std::vector<const CAROM::Matrix*> snapE,
-                        const CAROM::Matrix* basisV,
-                        const CAROM::Matrix* basisE,
+                        const std::shared_ptr<CAROM::Matrix> &basisV,
+                        const std::shared_ptr<CAROM::Matrix> &basisE,
                         ROM_Options const& input,
                         std::set<int> & elems);
 
     void SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
                            std::vector<const CAROM::Matrix*> snapV,
                            std::vector<const CAROM::Matrix*> snapE,
-                           const CAROM::Matrix* basisV,
-                           const CAROM::Matrix* basisE,
+                           const std::shared_ptr<CAROM::Matrix> &basisV,
+                           const std::shared_ptr<CAROM::Matrix> &basisE,
                            ROM_Options const& input,
                            bool equationE,
                            std::set<int> & elems);
@@ -1137,16 +1121,8 @@ private:
     int VTos = 0;  // Velocity temporal index offset, used for V and Fe. This fixes the issue that V and Fe are not sampled at t=0, since they are initially zero. This is valid for the Sedov test but not in general when the initial velocity is nonzero.
     // TODO: generalize for nonzero initial velocity.
 
-    CAROM::Matrix* tbasisX = 0;
-    CAROM::Matrix* tbasisV = 0;
-    CAROM::Matrix* tbasisE = 0;
-    CAROM::Matrix* tbasisFv = 0;
-    CAROM::Matrix* tbasisFe = 0;
-
-    CAROM::Matrix* PiVtransPiFv = 0;
-    CAROM::Matrix* PiEtransPiFe = 0;
-
-    // TODO: delete the new pointers added for space-time
+    std::shared_ptr<CAROM::Matrix> tbasisX, tbasisV, tbasisE, tbasisFv, tbasisFe;
+    std::unique_ptr<CAROM::Matrix> PiVtransPiFv, PiEtransPiFe;
 
     std::vector<int> timeSamples;  // merged V and E time samples
 

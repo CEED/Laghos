@@ -97,7 +97,7 @@ void MergeSamplingWindow(const int rank, const int first_sv,
         int num_cols = col_ub - col_lb + 1;
         std::cout << num_cols << " columns read. Columns " << col_lb - 1
                   << " to " << col_ub - 1 << std::endl;
-        CAROM::Matrix* mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
+        std::unique_ptr<CAROM::Matrix> mat = basis_reader->getSnapshotMatrix(col_lb, col_ub);
         MFEM_VERIFY(dim == mat->numRows(), "Inconsistent snapshot size");
         MFEM_VERIFY(num_cols == mat->numColumns(), "Inconsistent number of snapshots");
 
@@ -178,7 +178,6 @@ void MergeSamplingWindow(const int rank, const int first_sv,
         }
 
         delete init;
-        delete mat;
     }
 
     cout << "Computing SVD for " << varName << " in basis window " << basisWindow << endl;
@@ -235,7 +234,7 @@ void GetSnapshotDim(const int id, const std::string& basename, const std::string
     std::string filename = basename + "/param" + std::to_string(id) + "_var" + varName + std::to_string(window) + basisIdentifier + "_snapshot";
 
     CAROM::BasisReader reader(filename);
-    const CAROM::Matrix *S = reader.getSnapshotMatrix();
+    const std::unique_ptr<CAROM::Matrix> S = reader.getSnapshotMatrix();
     varDim = S->numRows();
     numSnapshots = S->numColumns();
 }

@@ -635,17 +635,17 @@ void ROM_Sampler::Finalize(Array<int> &cutoff, ROM_Options& input)
     finalized = true;
 }
 
-CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const int vectorSize, int& dim)
+std::shared_ptr<CAROM::Matrix> ReadBasisROM(const int rank, const std::string filename, const int vectorSize, int& dim)
 {
     CAROM::BasisReader reader(filename);
-    CAROM::Matrix *basis;
+    std::shared_ptr<CAROM::Matrix> basis;
     if (dim == -1)
     {
-        basis = (CAROM::Matrix*) reader.getSpatialBasis();
+        basis = reader.getSpatialBasis();
     }
     else
     {
-        basis = (CAROM::Matrix*) reader.getSpatialBasis(dim);
+        basis = reader.getSpatialBasis(dim);
     }
 
     MFEM_VERIFY(basis->numRows() == vectorSize, "");
@@ -656,20 +656,20 @@ CAROM::Matrix* ReadBasisROM(const int rank, const std::string filename, const in
     return basis;
 }
 
-CAROM::Matrix* ReadTemporalBasisROM(const int rank, const std::string filename, int& temporalSize, int& dim)
+std::shared_ptr<CAROM::Matrix> ReadTemporalBasisROM(const int rank, const std::string filename, int& temporalSize, int& dim)
 {
     CAROM::BasisReader reader(filename);
-    CAROM::Matrix *basis;
+    std::shared_ptr<CAROM::Matrix> basis;
 
     // The size of basis is (number of time samples) x (basis dimension), and it is a distributed matrix.
     // In libROM, a Matrix is always distributed row-wise. In this case, the global matrix is on each process.
     if (dim == -1)
     {
-        basis = (CAROM::Matrix*) reader.getTemporalBasis();
+        basis = reader.getTemporalBasis();
     }
     else
     {
-        basis = (CAROM::Matrix*) reader.getTemporalBasis(dim);
+        basis = reader.getTemporalBasis(dim);
     }
     temporalSize = basis->numRows();
 
@@ -682,8 +682,8 @@ CAROM::Matrix* ReadTemporalBasisROM(const int rank, const std::string filename, 
 CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const int vectorSize, const int rowOS, int& dim,
                             hydrodynamics::LagrangianHydroOperator *lhoper, const int var)
 {
-    CAROM::Matrix* A = ReadBasisROM(rank, filename, vectorSize, dim);
-    CAROM::Matrix* S = new CAROM::Matrix(A->numRows(), A->numColumns(), A->distributed());
+    std::shared_ptr<CAROM::Matrix> A = ReadBasisROM(rank, filename, vectorSize, dim);
+    CAROM::Matrix *S = new CAROM::Matrix(A->numRows(), A->numColumns(), A->distributed());
     Vector Bej(A->numRows());
     Vector MBej(A->numRows());
 
@@ -702,8 +702,6 @@ CAROM::Matrix* MultBasisROM(const int rank, const std::string filename, const in
         for (int i=0; i<S->numRows(); ++i)
             (*S)(i,j) = MBej[i];
     }
-
-    delete A;
 
     return S;
 }
@@ -962,9 +960,9 @@ void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS
 {
     MFEM_VERIFY(rank == 0 && window > 0, "");
 
-    BwinX = new CAROM::Matrix(rdimx, rdimxPrev, false);
-    BwinV = new CAROM::Matrix(rdimv, rdimvPrev, false);
-    BwinE = new CAROM::Matrix(rdime, rdimePrev, false);
+    BwinX.reset(new CAROM::Matrix(rdimx, rdimxPrev, false));
+    BwinV.reset(new CAROM::Matrix(rdimv, rdimvPrev, false));
+    BwinE.reset(new CAROM::Matrix(rdime, rdimePrev, false));
 
     BwinX->read(basename + "/" + "BwinX" + "_" + to_string(window));
     BwinV->read(basename + "/" + "BwinV" + "_" + to_string(window));
@@ -1401,14 +1399,12 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
 
         numSamplesV = 0;
 
-        CAROM::Matrix* BXtBV = basisX->transposeMult(basisV);
+        std::unique_ptr<CAROM::Matrix> BXtBV = basisX->transposeMult(*basisV);
         BXtBV->write(testing_parameter_basename + "/BXtBV" + std::to_string(input.window));
-        delete BXtBV;
 
-        CAROM::Vector* BXtV0 = basisX->transposeMult(*initV);
+        std::unique_ptr<CAROM::Vector> BXtV0 = basisX->transposeMult(*initV);
         BXtV0->write(testing_parameter_basename + "/ROMoffset" +
                      input.basisIdentifier + "/BXt_initV" + std::to_string(input.window));
-        delete BXtV0;
 
         numSamplesE = elemsEQP.size();  // Local number of samples
         MPI_Allgather(&numSamplesE, 1, MPI_INT, num_sample_dofs_per_procE.data(),
@@ -1425,17 +1421,20 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     numSamplesX = 0;
     vector<int> sample_dofs_X(numSamplesX);
     vector<int> num_sample_dofs_per_procX(nprocs);
-    BsinvX = NULL;
+    BsinvX.reset(nullptr);
 
     numSamplesV = std::min(fomH1size, numSamplesV);
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
-    BsinvV = spaceTime || hyperreductionSamplingType == eqp ? NULL :
-             new CAROM::Matrix(numSamplesV, rdimfv, false);
+
+    if (spaceTime || hyperreductionSamplingType == eqp)
+        BsinvV.reset(nullptr);
+    else
+        BsinvV.reset(new CAROM::Matrix(numSamplesV, rdimfv, false));
 
     numSamplesE = std::min(fomL2size, numSamplesE);
     vector<int> sample_dofs_E(numSamplesE);
-    BsinvE = spaceTime ? NULL : new CAROM::Matrix(numSamplesE, rdimfe, false);
+    BsinvE.reset(spaceTime ? nullptr : new CAROM::Matrix(numSamplesE, rdimfe, false));
 
     if (rank == 0)
     {
@@ -1500,11 +1499,11 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         CAROM::Matrix sampledSpatialBasisV(numSamplesV, basisFv->numColumns(), false); // TODO: distributed
         CAROM::Matrix sampledSpatialBasisE(numSamplesE, basisFe->numColumns(), false); // TODO: distributed
 
-        CAROM::SpaceTimeSampling(basisFv, tbasisFv, rdimfv, t_samples_V, sample_dofs_V.data(),
+        CAROM::SpaceTimeSampling(*basisFv, *tbasisFv, rdimfv, t_samples_V, sample_dofs_V.data(),
                                  num_sample_dofs_per_procV.data(), sampledSpatialBasisV, rank, nprocs,
                                  numTimeSamplesV, numSamplesV, excludeFinalTimeSample);
 
-        CAROM::SpaceTimeSampling(basisFe, tbasisFe, rdimfe, t_samples_E, sample_dofs_E.data(),
+        CAROM::SpaceTimeSampling(*basisFe, *tbasisFe, rdimfe, t_samples_E, sample_dofs_E.data(),
                                  num_sample_dofs_per_procE.data(), sampledSpatialBasisE, rank, nprocs,
                                  numTimeSamplesE, numSamplesE, excludeFinalTimeSample);
 
@@ -1514,7 +1513,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
             sampledSpatialBasisX = new CAROM::Matrix(numSamplesV, basisV->numColumns(), false); // TODO: distributed
             std::vector<int> t_samples_X(numTimeSamplesV);
             sample_dofs_X.resize(numSamplesV);
-            CAROM::SpaceTimeSampling(basisV, tbasisV, rdimv, t_samples_X, sample_dofs_X.data(),
+            CAROM::SpaceTimeSampling(*basisV, *tbasisV, rdimv, t_samples_X, sample_dofs_X.data(),
                                      num_sample_dofs_per_procX.data(), *sampledSpatialBasisX, rank, nprocs,
                                      numTimeSamplesV, numSamplesV, excludeFinalTimeSample);
 
@@ -1553,19 +1552,19 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
             outfile.close();
         }
 
-        BsinvV = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimfv, false);
-        BsinvE = new CAROM::Matrix(timeSamples.size() * numSamplesE, rdimfe, false);
+        BsinvV.reset(new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimfv, false));
+        BsinvE.reset(new CAROM::Matrix(timeSamples.size() * numSamplesE, rdimfe, false));
 
-        GetSampledSpaceTimeBasis(timeSamples, tbasisFv, sampledSpatialBasisV, *BsinvV);
-        GetSampledSpaceTimeBasis(timeSamples, tbasisFe, sampledSpatialBasisE, *BsinvE);
+        GetSampledSpaceTimeBasis(timeSamples, *tbasisFv, sampledSpatialBasisV, *BsinvV);
+        GetSampledSpaceTimeBasis(timeSamples, *tbasisFe, sampledSpatialBasisE, *BsinvE);
 
         if (spaceTimeMethod == gnat_lspg)
         {
             // Use V basis for hyperreduction of the RHS of the equation of motion dX/dt = V, although it is linear.
             // Also use V samples, which are actually for Fv.
             // TODO: can fewer samples be used here, or does it matter (would it improve speed)?
-            BsinvX = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimv, false);
-            GetSampledSpaceTimeBasis(timeSamples, tbasisV, *sampledSpatialBasisX, *BsinvX);
+            BsinvX.reset(new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimv, false));
+            GetSampledSpaceTimeBasis(timeSamples, *tbasisV, *sampledSpatialBasisX, *BsinvX);
             delete sampledSpatialBasisX;
         }
 
@@ -1588,9 +1587,9 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
                 // TODO: remove these SpaceTimeProduct calls?
                 // TODO: set arguments based on whether VTos == 1
 #ifdef STXV
-                PiXtransPiV = SpaceTimeProduct(basisV, tbasisV, basisV, tbasisV, &RK4scaling, true, true, true);
+                PiXtransPiV = SpaceTimeProduct(*basisV, *tbasisV, *basisV, *tbasisV, &RK4scaling, true, true, true);
 #else
-                PiXtransPiV = SpaceTimeProduct(basisX, tbasisX, basisV, tbasisV, &RK4scaling, false, true, true);
+                PiXtransPiV = SpaceTimeProduct(*basisX, *tbasisX, *basisV, *tbasisV, &RK4scaling, false, true, true);
 #endif
             }
         }
@@ -1600,15 +1599,15 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
             // TODO: remove these SpaceTimeProduct calls?
             // TODO: set arguments based on whether VTos == 1
 #ifdef STXV
-            PiXtransPiX = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, false, true);
-            PiXtransPiXlag = SpaceTimeProduct(basisV, tbasisV, basisX, tbasisX, NULL, true, false, true, false);
+            PiXtransPiX = SpaceTimeProduct(*basisV, *tbasisV, *basisX, *tbasisX, NULL, true, false, false, true);
+            PiXtransPiXlag = SpaceTimeProduct(*basisV, *tbasisV, *basisX, *tbasisX, NULL, true, false, true, false);
 #else
-            PiXtransPiX = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, false, true);
-            PiXtransPiXlag = SpaceTimeProduct(basisX, tbasisX, basisX, tbasisX, NULL, false, false, true, false);
+            PiXtransPiX = SpaceTimeProduct(*basisX, *tbasisX, *basisX, *tbasisX, NULL, false, false, false, true);
+            PiXtransPiXlag = SpaceTimeProduct(*basisX, *tbasisX, *basisX, *tbasisX, NULL, false, false, true, false);
 #endif
 
-            PiVtransPiFv = SpaceTimeProduct(basisV, tbasisV, basisFv, tbasisFv, NULL, true, false);
-            PiEtransPiFe = SpaceTimeProduct(basisE, tbasisE, basisFe, tbasisFe, NULL, false, true);
+            PiVtransPiFv = SpaceTimeProduct(*basisV, *tbasisV, *basisFv, *tbasisFv, NULL, true, false);
+            PiEtransPiFe = SpaceTimeProduct(*basisE, *tbasisE, *basisFe, *tbasisFe, NULL, false, true);
 
             MFEM_VERIFY(PiVtransPiFv->numRows() == rdimv && PiVtransPiFv->numColumns() == rdimfv, "");
             MFEM_VERIFY(PiEtransPiFe->numRows() == rdime && PiEtransPiFe->numColumns() == rdimfe, "");
@@ -1647,7 +1646,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     {
         if (hyperreductionSamplingType == qdeim)
         {
-            CAROM::QDEIM(basisFv,
+            CAROM::QDEIM(*basisFv,
                          rdimfv,
                          sample_dofs_V,
                          num_sample_dofs_per_procV,
@@ -1656,7 +1655,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
                          nprocs,
                          numSamplesV);
 
-            CAROM::QDEIM(basisFe,
+            CAROM::QDEIM(*basisFe,
                          rdimfe,
                          sample_dofs_E,
                          num_sample_dofs_per_procE,
@@ -1667,7 +1666,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         }
         else if (hyperreductionSamplingType == sopt)
         {
-            CAROM::S_OPT(basisFv,
+            CAROM::S_OPT(*basisFv,
                          rdimfv,
                          sample_dofs_V,
                          num_sample_dofs_per_procV,
@@ -1677,7 +1676,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
                          numSamplesV,
                          &initSamplesV);
 
-            CAROM::S_OPT(basisFe,
+            CAROM::S_OPT(*basisFe,
                          rdimfe,
                          sample_dofs_E,
                          num_sample_dofs_per_procE,
@@ -1689,7 +1688,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         }
         else
         {
-            CAROM::GNAT(basisFv,
+            CAROM::GNAT(*basisFv,
                         rdimfv,
                         sample_dofs_V,
                         num_sample_dofs_per_procV,
@@ -1699,7 +1698,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
                         numSamplesV,
                         &initSamplesV);
 
-            CAROM::GNAT(basisFe,
+            CAROM::GNAT(*basisFe,
                         rdimfe,
                         sample_dofs_E,
                         num_sample_dofs_per_procE,
@@ -1788,48 +1787,35 @@ void ROM_Basis::ComputeReducedMatrices(bool sns1)
     if (!spaceTime && rank == 0)
     {
         // Compute reduced matrix BsinvX = BXsp^T BVsp
-        BsinvX = BXsp->transposeMult(BVsp);
+        BsinvX = BXsp->transposeMult(*BVsp);
 
         if (offsetInit)
         {
-            BX0 = BXsp->transposeMult(initVsp);
+            BX0 = BXsp->transposeMult(*initVsp);
             MFEM_VERIFY(BX0->dim() == rdimx, "");
         }
 
         if (!sns1)
         {
             // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
-            CAROM::Matrix *prod1 = BFvsp->transposeMult(BVsp);
-            CAROM::Matrix *prod2 = BsinvV->mult(prod1);
-
-            delete prod1;
-            delete BsinvV;
-
-            BsinvV = prod2;
+            std::unique_ptr<CAROM::Matrix> prod1 = BFvsp->transposeMult(*BVsp);
+            BsinvV = BsinvV->transposeMult(*prod1);
 
             // Compute reduced matrix BsinvE = (BEsp^T BFesp BsinvE^T)^T = BsinvE BFesp^T BEsp
-            prod1 = BFesp->transposeMult(BEsp);
-            prod2 = BsinvE->mult(prod1);
-
-            delete prod1;
-            delete BsinvE;
-
-            BsinvE = prod2;
+            prod1 = BFesp->transposeMult(*BEsp);
+            BsinvE = BsinvE->mult(*prod1);
         }
 
         if (RK2AvgFormulation)
         {
-            const CAROM::Matrix *prodX = BXsp->transposeMult(BXsp);
+            const std::unique_ptr<const CAROM::Matrix> prodX = BXsp->transposeMult(*BXsp);
             BXXinv = prodX->inverse();
-            delete prodX;
 
-            const CAROM::Matrix *prodV = BVsp->transposeMult(BVsp);
+            const std::unique_ptr<const CAROM::Matrix> prodV = BVsp->transposeMult(*BVsp);
             BVVinv = prodV->inverse();
-            delete prodV;
 
-            const CAROM::Matrix *prodE = BEsp->transposeMult(BEsp);
+            const std::unique_ptr<const CAROM::Matrix> prodE = BEsp->transposeMult(*BEsp);
             BEEinv = prodE->inverse();
-            delete prodE;
         }
     }
 }
@@ -1918,10 +1904,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         cout << rank << ": ROM_Basis used energy fraction " << energyFraction_X
              << " and merged X-X0 and V bases with resulting dimension " << rdimx << endl;
 
-        delete basisX;
-        delete basisV;
-
-        const CAROM::Matrix* basisX_full = generator_XV.getSpatialBasis();
+        std::shared_ptr<const CAROM::Matrix> basisX_full = generator_XV.getSpatialBasis();
 
         // Make a deep copy first rdimx columns of basisX_full, which is inefficient.
         basisX = basisX_full->getFirstNColumns(rdimx);
@@ -1933,8 +1916,8 @@ void ROM_Basis::ReadSolutionBases(const int window)
 
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
-        basisFv = MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1);
-        basisFe = MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2);
+        basisFv.reset(MultBasisROM(rank, basename + "/" + ROMBasisName::V + std::to_string(window) + basisIdentifier, tH1size, 0, rdimfv, lhoper, 1));
+        basisFe.reset(MultBasisROM(rank, basename + "/" + ROMBasisName::E + std::to_string(window) + basisIdentifier, tL2size, 0, rdimfe, lhoper, 2));
         basisFv->write(hyperreduce_basename + "/" + ROMBasisName::Fv + std::to_string(window) + basisIdentifier);
         basisFe->write(hyperreduce_basename + "/" + ROMBasisName::Fe + std::to_string(window) + basisIdentifier);
     }
@@ -2685,9 +2668,9 @@ void ROM_Basis::ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut)
 
 void ROM_Basis::computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options const& input, const int window)
 {
-    BwinX = basisX->transposeMult(basisPrev.basisX);
-    BwinV = basisV->transposeMult(basisPrev.basisV);
-    BwinE = basisE->transposeMult(basisPrev.basisE);
+    BwinX = basisX->transposeMult(*basisPrev.basisX);
+    BwinV = basisV->transposeMult(*basisPrev.basisV);
+    BwinE = basisE->transposeMult(*basisPrev.basisE);
 
     if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
     {
@@ -2809,9 +2792,9 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
 
     const int ntsamp = spaceTime ? timeSamples.size() : 1;
 
-    BsinvX = NULL;
-    BsinvV = numSamplesV == 0 ? NULL : new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false);
-    BsinvE = new CAROM::Matrix(ntsamp * numSamplesE, rdimfe, false);
+    BsinvX.reset(nullptr);
+    BsinvV.reset(numSamplesV == 0 ? nullptr : new CAROM::Matrix(ntsamp * numSamplesV, rdimfv, false));
+    BsinvE.reset(new CAROM::Matrix(ntsamp * numSamplesE, rdimfe, false));
 
     BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
     BVsp = new CAROM::Matrix(size_H1_sp, rdimv, false);
@@ -2827,7 +2810,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
 
     if (spaceTimeMethod == gnat_lspg)
     {
-        BsinvX = new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimv, false);
+        BsinvX.reset(new CAROM::Matrix(timeSamples.size() * numSamplesV, rdimv, false));
         BsinvX->read(hyperreduce_basename + "/" + "BsinvX" + "_" + to_string(window));
     }
 
@@ -3407,8 +3390,8 @@ void STROM_Basis::RestrictFromSampleMesh(const int ti, Vector const& usp, Vector
 // TODO: remove argument nt?
 void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const& name,
         ParFiniteElementSpace *fespace,
-        const CAROM::Matrix* basis,
-        const CAROM::Matrix* tbasis,
+        const CAROM::Matrix &basis,
+        const CAROM::Matrix &tbasis,
         const int nt,
         const int rdim) const
 {
@@ -3422,8 +3405,8 @@ void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const&
 
     const int tvsize = fespace->GetTrueVSize();
     //Vector s(tvsize);
-    MFEM_VERIFY(tvsize == basis->numRows() && nt == tbasis->numRows(), "");
-    MFEM_VERIFY(rdim == basis->numColumns() && rdim == tbasis->numColumns(), "");
+    MFEM_VERIFY(tvsize == basis.numRows() && nt == tbasis.numRows(), "");
+    MFEM_VERIFY(rdim == basis.numColumns() && rdim == tbasis.numColumns(), "");
 
     // Compute the inner product of the input space-time vector against each
     // space-time basis vector, which for the j-th basis vector is
@@ -3449,11 +3432,11 @@ void ROM_Basis::SetSpaceTimeInitialGuessComponent(Vector& st, std::string const&
             ifs >> d;
             for (int j=0; j<rdim; ++j)
             {
-                b[j] += d * basis->item(i, j) * tbasis->item(t, j);
+                b[j] += d * basis(i, j) * tbasis(t, j);
                 //s[i] = d;
 
                 for (int k=j; k<rdim; ++k)  // Upper triangular part only
-                    M(j,k) += basis->item(i, j) * tbasis->item(t, j) * basis->item(i, k) * tbasis->item(t, k);
+                    M(j,k) += basis(i, j) * tbasis(t, j) * basis(i, k) * tbasis(t, k);
             }
         }
     }
@@ -3496,9 +3479,9 @@ void ROM_Basis::SetSpaceTimeInitialGuess(ROM_Options const& input)
     st0X.MakeRef(st0, 0, rdimx);
     st0V.MakeRef(st0, rdimx, rdimv);
     st0E.MakeRef(st0, rdimx + rdimv, rdime);
-    SetSpaceTimeInitialGuessComponent(st0X, "Position", input.H1FESpace, basisX, tbasisX, temporalSize, rdimx);
-    SetSpaceTimeInitialGuessComponent(st0V, "Velocity", input.H1FESpace, basisV, tbasisV, temporalSize - VTos, rdimv);
-    SetSpaceTimeInitialGuessComponent(st0E, "Energy", input.L2FESpace, basisE, tbasisE, temporalSize, rdime);
+    SetSpaceTimeInitialGuessComponent(st0X, "Position", input.H1FESpace, *basisX, *tbasisX, temporalSize, rdimx);
+    SetSpaceTimeInitialGuessComponent(st0V, "Velocity", input.H1FESpace, *basisV, *tbasisV, temporalSize - VTos, rdimv);
+    SetSpaceTimeInitialGuessComponent(st0E, "Energy", input.L2FESpace, *basisE, *tbasisE, temporalSize, rdime);
 }
 
 void ROM_Basis::GetSpaceTimeInitialGuess(Vector& st) const
@@ -3514,11 +3497,6 @@ ROM_Basis::~ROM_Basis()
     delete rX2;
     delete rV2;
     delete rE2;
-    delete basisX;
-    if (!useXV && !useVX && !mergeXV) delete basisV;
-    delete basisE;
-    delete basisFv;
-    delete basisFe;
     delete spX;
     delete spV;
     delete spE;
@@ -3530,19 +3508,12 @@ ROM_Basis::~ROM_Basis()
     delete BEsp;
     delete BFvsp;
     delete BFesp;
-    delete BsinvX;
-    delete BsinvV;
-    delete BsinvE;
-    delete BX0;
     delete initX;
     delete initV;
     delete initE;
     delete initXsp;
     delete initVsp;
     delete initEsp;
-    delete BXXinv;
-    delete BVVinv;
-    delete BEEinv;
     delete smm;
     delete sampleSelector;
     if (!hyperreduce)
