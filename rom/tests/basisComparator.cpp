@@ -26,12 +26,12 @@ void compareBasis(string &baselineFile, string &targetFile, double errorBound, i
     vector<double> reducedDiffVecNormL2;
 
     CAROM::BasisReader baselineReader(baselineFile);
-    CAROM::Matrix *baselineBasis = (CAROM::Matrix*) baselineReader.getSpatialBasis(0.0);
-    CAROM::Vector *baselineSV = (CAROM::Vector*) baselineReader.getSingularValues(0.0);
+    std::unique_ptr<CAROM::Matrix> baselineBasis = baselineReader.getSpatialBasis(0.0);
+    std::unique_ptr<CAROM::Vector> baselineSV = baselineReader.getSingularValues(0.0);
     CAROM::BasisReader targetReader(targetFile);
-    CAROM::Matrix *targetBasis = (CAROM::Matrix*) targetReader.getSpatialBasis(0.0);
+    std::unique_ptr<CAROM::Matrix> targetBasis = targetReader.getSpatialBasis(0.0);
     CAROM::BasisReader diffReader(baselineFile);
-    CAROM::Matrix *diffBasis = (CAROM::Matrix*) diffReader.getSpatialBasis(0.0);
+    std::unique_ptr<CAROM::Matrix> diffBasis = diffReader.getSpatialBasis(0.0);
 
     // Get basis dimensions
     int baselineNumRows = baselineBasis->numRows();

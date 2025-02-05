@@ -1799,7 +1799,7 @@ void ROM_Basis::ComputeReducedMatrices(bool sns1)
         {
             // Compute reduced matrix BsinvV = (BVsp^T BFvsp BsinvV^T)^T = BsinvV BFvsp^T BVsp
             std::unique_ptr<CAROM::Matrix> prod1 = BFvsp->transposeMult(*BVsp);
-            BsinvV = BsinvV->transposeMult(*prod1);
+            BsinvV = BsinvV->mult(*prod1);
 
             // Compute reduced matrix BsinvE = (BEsp^T BFesp BsinvE^T)^T = BsinvE BFesp^T BEsp
             prod1 = BFesp->transposeMult(*BEsp);
