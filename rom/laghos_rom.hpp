@@ -272,6 +272,8 @@ struct ROM_Options
 
     // TODO: input this. Currently hard-coded for reproductive EQP.
     int numOfflineParameters = 1;
+
+    bool squareSV = true;
 };
 
 static double* getGreedyParam(ROM_Options& romOptions, const char* greedyParam)

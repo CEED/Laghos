@@ -204,8 +204,10 @@ void VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
     opin.close();
 }
 
-void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, const double energyFraction,
-                                int & cutoff, const std::string cutoffOutputPath, const bool printout)
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv,
+                                const double energyFraction, int & cutoff,
+                                const std::string cutoffOutputPath,
+                                const bool printout, const bool squareSV)
 {
     const int rom_dim = bg->getSpatialBasis()->numColumns();
     const std::shared_ptr<const CAROM::Vector> sing_vals = bg->getSingularValues();
@@ -214,7 +216,8 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, c
 
     double sum = 0.0;
     for (int sv = first_sv; sv < sing_vals->dim(); ++sv) {
-        sum += (*sing_vals)(sv);
+        const double s = (*sing_vals)(sv);
+        sum += squareSV ? s * s : s;
     }
 
     vector<double> energy_fractions = {0.9999, 0.999, 0.99, 0.9};
@@ -222,7 +225,8 @@ void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, c
 
     double partialSum = 0.0;
     for (int sv = first_sv; sv < sing_vals->dim(); ++sv) {
-        partialSum += (*sing_vals)(sv);
+        const double s = (*sing_vals)(sv);
+        partialSum += squareSV ? s * s : s;
         if (printout)
         {
             for (int i = energy_fractions.size() - 1; i >= 0; i--)
