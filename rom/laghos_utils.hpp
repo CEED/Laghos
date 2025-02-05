@@ -24,7 +24,11 @@ void WriteOfflineParam(int dim, double dt, ROM_Options& romOptions, const int nu
 
 void VerifyOfflineParam(int& dim, double &dt, ROM_Options& romOptions, const int numWindows, const char* twfile, std::string paramfile, const bool rom_offline);
 
-void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv, const double energyFraction, int & cutoff, const std::string cutoffOutputPath = "", const bool printout=true);
+void BasisGeneratorFinalSummary(CAROM::BasisGenerator* bg, const int first_sv,
+                                const double energyFraction, int & cutoff,
+                                const std::string cutoffOutputPath = "",
+                                const bool printout=true,
+                                const bool squareSV=true);
 
 void PrintSingularValues(const int rank, const std::string& basename, const std::string& name, CAROM::BasisGenerator* bg, const bool usingWindows = false, const int window = -1);
 
