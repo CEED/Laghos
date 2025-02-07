@@ -321,8 +321,8 @@ void ComputeElementRowOfG_E(const IntegrationRule *ir,
 void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
                                std::vector<const CAROM::Matrix*> snapV,
                                std::vector<const CAROM::Matrix*> snapE,
-                               const CAROM::Matrix* basisV,
-                               const CAROM::Matrix* basisE,
+                               const std::shared_ptr<CAROM::Matrix> &basisV,
+                               const std::shared_ptr<CAROM::Matrix> &basisE,
                                ROM_Options const& input, std::set<int> & elems)
 {
     MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
@@ -451,8 +451,8 @@ void ROM_Basis::SetupEQP_Force(std::vector<const CAROM::Matrix*> snapX,
 void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
                                   std::vector<const CAROM::Matrix*> snapV,
                                   std::vector<const CAROM::Matrix*> snapE,
-                                  const CAROM::Matrix* basisV,
-                                  const CAROM::Matrix* basisE,
+                                  const std::shared_ptr<CAROM::Matrix> &basisV,
+                                  const std::shared_ptr<CAROM::Matrix> &basisE,
                                   ROM_Options const& input,
                                   bool equationE,
                                   std::set<int> & elems)
