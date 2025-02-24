@@ -63,10 +63,12 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#include "laghos_mesh.hpp"
 
 using std::cout;
 using std::endl;
 using namespace mfem;
+using namespace hydrodynamics;
 
 // Choice for the problem setup.
 static int problem, dim;
@@ -94,6 +96,7 @@ int main(int argc, char *argv[])
    // Parse command-line options.
    problem = 1;
    dim = 3;
+   int elem_per_mpi = 1;
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
@@ -128,6 +131,8 @@ int main(int argc, char *argv[])
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
+   args.AddOption(&elem_per_mpi, "-epm", "--elem-per-mpi",
+                  "Number of element per mpi task.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
@@ -212,8 +217,15 @@ int main(int argc, char *argv[])
 
    // On all processors, use the default builtin 1D/2D/3D mesh or read the
    // serial one given on the command line.
-   Mesh *mesh;
-   if (strncmp(mesh_file, "default", 7) != 0)
+   Mesh *mesh = nullptr;
+   int *mpi_partitioning = nullptr;
+   const bool mesh_gen = (strncmp(mesh_file, "generate", 8) == 0);
+   if (mesh_gen)
+   {
+      mesh = CartesianMesh(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
+                           rp_levels, &mpi_partitioning);
+   }
+   else if (strncmp(mesh_file, "default", 7) != 0)
    {
       mesh = new Mesh(mesh_file, true, true);
    }
@@ -263,7 +275,10 @@ int main(int argc, char *argv[])
    }
 
    // Refine the mesh in serial to increase the resolution.
-   for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   if (mesh_gen == false)
+   {
+      for (int lev = 0; lev < rs_levels; lev++) { mesh->UniformRefinement(); }
+   }
    const int mesh_NE = mesh->GetNE();
    if (Mpi::Root())
    {
@@ -368,7 +383,12 @@ int main(int argc, char *argv[])
    int product = 1;
    for (int d = 0; d < dim; d++) { product *= nxyz[d]; }
    const bool cartesian_partitioning = (cxyz.Size()>0)?true:false;
-   if (product == num_tasks || cartesian_partitioning)
+   if (mesh_gen)
+   {
+      pmesh = new ParMesh(MPI_COMM_WORLD, *mesh, mpi_partitioning);
+      delete mpi_partitioning;
+   }
+   else if (product == num_tasks || cartesian_partitioning)
    {
       if (cartesian_partitioning)
       {
