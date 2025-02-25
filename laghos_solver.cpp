@@ -445,7 +445,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
       timer.sw_cgL2.Start();
       CG_EMass.Mult(e_rhs, de);
       timer.sw_cgL2.Stop();
-      const HYPRE_Int cg_num_iter = CG_EMass.GetNumIterations();
+      const HYPRE_BigInt cg_num_iter = CG_EMass.GetNumIterations();
       timer.L2iter += (cg_num_iter==0) ? 1 : cg_num_iter;
       // Move the memory location of the subvector 'de' to the memory
       // location of the base vector 'dS_dt'.
@@ -663,7 +663,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
    MPI_Reduce(my_rt, T, 5, MPI_DOUBLE, MPI_MAX, 0, com);
 
-   HYPRE_Int mydata[3], alldata[3];
+   HYPRE_BigInt mydata[3], alldata[3];
    mydata[0] = timer.L2dof * timer.L2iter;
    mydata[1] = timer.quad_tstep;
    mydata[2] = NE;
@@ -673,7 +673,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    {
       using namespace std;
       // FOM = (FOM1 * T1 + FOM2 * T2 + FOM3 * T3) / (T1 + T2 + T3)
-      const HYPRE_Int H1iter = p_assembly ? (timer.H1iter/dim) : timer.H1iter;
+      const HYPRE_BigInt H1iter = p_assembly ? (timer.H1iter/dim) : timer.H1iter;
       const double FOM1 = 1e-6 * H1GTVSize * H1iter / T[0];
       const double FOM2 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / T[2];
       const double FOM3 = 1e-6 * alldata[1] * ir.GetNPoints() / T[3];
@@ -701,7 +701,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
            << FOM << endl;
       if (!fom) { return; }
       const int QPT = ir.GetNPoints();
-      const HYPRE_Int GNZones = alldata[2];
+      const HYPRE_BigInt GNZones = alldata[2];
       const long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
       cout << endl;
       cout << "| Ranks " << "| Zones   "

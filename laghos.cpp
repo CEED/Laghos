@@ -479,8 +479,8 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-   const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
+   const HYPRE_BigInt glob_size_l2 = L2FESpace.GlobalTrueVSize();
+   const HYPRE_BigInt glob_size_h1 = H1FESpace.GlobalTrueVSize();
    if (Mpi::Root())
    {
       cout << "Number of kinematic (position, velocity) dofs: "

@@ -43,15 +43,15 @@ struct TimingData
    StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
 
    // Store the number of dofs of the corresponding local CG
-   const HYPRE_Int L2dof;
+   const HYPRE_BigInt L2dof;
 
    // These accumulate the total processed dofs or quad points:
    // #(CG iterations) for the L2 CG solve.
    // #quads * #(RK sub steps) for the quadrature data computations.
-   HYPRE_Int H1iter, L2iter;
-   HYPRE_Int quad_tstep;
+   HYPRE_BigInt H1iter, L2iter;
+   HYPRE_BigInt quad_tstep;
 
-   TimingData(const HYPRE_Int l2d) :
+   TimingData(const HYPRE_BigInt l2d) :
       L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
 };
 
@@ -103,10 +103,10 @@ protected:
    // FE spaces local and global sizes
    const int H1Vsize;
    const int H1TVSize;
-   const HYPRE_Int H1GTVSize;
+   const HYPRE_BigInt H1GTVSize;
    const int L2Vsize;
    const int L2TVSize;
-   const HYPRE_Int L2GTVSize;
+   const HYPRE_BigInt L2GTVSize;
    Array<int> block_offsets;
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
