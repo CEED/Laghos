@@ -64,6 +64,10 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 #include "laghos_mesh.hpp"
+#include "fem/qinterp/eval.hpp"
+#include "fem/qinterp/det.cpp"
+#include "fem/qinterp/grad.hpp"
+#include "fem/integ/bilininteg_mass_kernels.hpp"
 
 using std::cout;
 using std::endl;
@@ -214,6 +218,37 @@ int main(int argc, char *argv[])
    backend.Configure(device, dev);
    if (Mpi::Root()) { backend.Print(); }
    backend.SetGPUAwareMPI(gpu_aware_mpi);
+
+   // Report fallback kernels.
+   if (myid == 0) { KernelReporter::Enable(); }
+   using TENS = QuadratureInterpolator::TensorEvalKernels;
+   using DET  = QuadratureInterpolator::DetKernels;
+   using GRAD = QuadratureInterpolator::GradKernels;
+   // 3D Q1Q0.
+   TENS::Specialization<3,QVectorLayout::byNODES,1,1,2>::Opt<1>::Add();
+   TENS::Specialization<3,QVectorLayout::byVDIM,1,1,2>::Opt<1>::Add();
+   DET::Specialization<3,3,2,2>::Add();
+   GRAD::Specialization<3,QVectorLayout::byNODES,0,3,2,2>::Add();
+   GRAD::Specialization<3,QVectorLayout::byVDIM,0,3,2,2>::Add();
+   MassIntegrator::AddSpecialization<3,1,2>();
+   // 3D Q3Q2.
+   TENS::Specialization<3,QVectorLayout::byVDIM,3,3,4>::Opt<1>::Add();
+   DET::Specialization<3,3,3,4>::Add();
+   MassIntegrator::AddSpecialization<3,2,4>();
+   // 3D Q4Q3.
+   TENS::Specialization<3,QVectorLayout::byVDIM,3,5,8>::Opt<1>::Add();
+   DET::Specialization<3,3,5,8>::Add();
+   GRAD::Specialization<3,QVectorLayout::byNODES,0,3,5,8>::Add();
+   MassIntegrator::AddSpecialization<3,4,8>();
+   // 3D Q8Q7.
+   TENS::Specialization<3,QVectorLayout::byNODES,1,8,16>::Opt<1>::Add();
+   TENS::Specialization<3,QVectorLayout::byVDIM,1,8,16>::Opt<1>::Add();
+   TENS::Specialization<3,QVectorLayout::byVDIM,3,9,16>::Opt<1>::Add();
+   DET::Specialization<3,3,9,16>::Add();
+   GRAD::Specialization<3,QVectorLayout::byNODES,0,3,9,16>::Add();
+   GRAD::Specialization<3,QVectorLayout::byVDIM,0,3,9,16>::Add();
+   MassIntegrator::AddSpecialization<3,8,16>();
+   MassIntegrator::AddSpecialization<3,9,16>();
 
    // On all processors, use the default builtin 1D/2D/3D mesh or read the
    // serial one given on the command line.

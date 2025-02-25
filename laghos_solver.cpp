@@ -164,6 +164,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
       VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
       EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
+
       // Inside the above constructors for mass, there is reordering of the mesh
       // nodes which is performed on the host. Since the mesh nodes are a
       // subvector, so we need to sync with the rest of the base vector (which
@@ -1319,10 +1320,18 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    static std::unordered_map<int, fQKernel> qupdate =
    {
       // 2D.
-      {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>},
-      {0x28,&QKernel<2,8>}, {0x2A,&QKernel<2,10>},
+      {0x22,&QKernel<2,2>},  // Q1Q0 (2 qp)
+      {0x24,&QKernel<2,4>},  // Q2Q1
+      {0x26,&QKernel<2,6>},  // Q3Q2
+      {0x28,&QKernel<2,8>},  // Q4Q3
+      {0x2A,&QKernel<2,10>}, // Q5Q4
+      {0x20,&QKernel<2,16>}, // Q8Q7 (16 qp)
       // 3D.
-      {0x34,&QKernel<3,4>}, {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
+      {0x32,&QKernel<3,2>},  // Q1Q0
+      {0x34,&QKernel<3,4>},  // Q2Q1
+      {0x36,&QKernel<3,6>},  // Q3Q2
+      {0x38,&QKernel<3,8>},  // Q4Q3
+      {0x30,&QKernel<3,16>}  // Q8Q7
    };
    if (!qupdate[id])
    {

@@ -535,14 +535,18 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
    static std::unordered_map<int, fForceMult> call =
    {
       // 2D
-      {0x234,&ForceMult2D<2,3,4,2>},
-      {0x246,&ForceMult2D<2,4,6,3>},
-      {0x258,&ForceMult2D<2,5,8,4>},
-      {0x26A,&ForceMult2D<2,6,10,5>},
+      {0x222,&ForceMult2D<2,2,2,1>},  // Q1Q0 (2 qp)
+      {0x234,&ForceMult2D<2,3,4,2>},  // Q2Q1
+      {0x246,&ForceMult2D<2,4,6,3>},  // Q3Q2
+      {0x258,&ForceMult2D<2,5,8,4>},  // Q4Q3
+      {0x26A,&ForceMult2D<2,6,10,5>}, // Q5Q4
+      {0x290,&ForceMult2D<2,9,16,8>}, // Q8Q7 (16 qp)
       // 3D
-      {0x334,&ForceMult3D<3,3,4,2>},
-      {0x346,&ForceMult3D<3,4,6,3>},
-      {0x358,&ForceMult3D<3,5,8,4>},
+      {0x322,&ForceMult3D<3,2,2,1>},  // Q1Q0
+      {0x334,&ForceMult3D<3,3,4,2>},  // Q2Q1
+      {0x346,&ForceMult3D<3,4,6,3>},  // Q3Q2
+      {0x358,&ForceMult3D<3,5,8,4>},  // Q4Q3
+      {0x390,&ForceMult3D<3,9,16,8>}  // Q8Q7
    };
    if (!call[id])
    {
@@ -942,13 +946,19 @@ static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
    const int id = ((DIM)<<8)|(D1D)<<4|(Q1D);
    static std::unordered_map<int, fForceMultTranspose> call =
    {
-      {0x234,&ForceMultTranspose2D<2,3,4,2>},
-      {0x246,&ForceMultTranspose2D<2,4,6,3>},
-      {0x258,&ForceMultTranspose2D<2,5,8,4>},
-      {0x26A,&ForceMultTranspose2D<2,6,10,5>},
-      {0x334,&ForceMultTranspose3D<3,3,4,2>},
-      {0x346,&ForceMultTranspose3D<3,4,6,3>},
-      {0x358,&ForceMultTranspose3D<3,5,8,4>}
+      // 2D.
+      {0x222,&ForceMultTranspose2D<2,2,2,1>},   // Q1Q0 (2 qp)
+      {0x234,&ForceMultTranspose2D<2,3,4,2>},   // Q2Q1
+      {0x246,&ForceMultTranspose2D<2,4,6,3>},   // Q3Q2
+      {0x258,&ForceMultTranspose2D<2,5,8,4>},   // Q4Q3
+      {0x26A,&ForceMultTranspose2D<2,6,10,5>},  // Q5Q4
+      {0x290,&ForceMultTranspose2D<2,9,16,8>},  // Q8Q7 (16 qp)
+      // 3D.
+      {0x322,&ForceMultTranspose3D<3,2,2,1>},   // Q1Q0
+      {0x334,&ForceMultTranspose3D<3,3,4,2>},   // Q2Q1
+      {0x346,&ForceMultTranspose3D<3,4,6,3>},   // Q3Q2
+      {0x358,&ForceMultTranspose3D<3,5,8,4>},   // Q4Q3
+      {0x390,&ForceMultTranspose3D<3,9,16,8>}   // Q8Q7
    };
    if (!call[id])
    {
