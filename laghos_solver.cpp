@@ -667,7 +667,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    mydata[0] = timer.L2dof * timer.L2iter;
    mydata[1] = timer.quad_tstep;
    mydata[2] = NE;
-   MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_INT, MPI_SUM, 0, com);
+   MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_BIG_INT, MPI_SUM, 0, com);
 
    if (IamRoot)
    {
