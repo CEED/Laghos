@@ -293,7 +293,7 @@ void ForceMult2D(const int NE,
    });
 }
 
-template<int DIM, int D1D, int Q1D, int L1D> static
+template<int DIM, int D1D, int Q1D, int L1D, bool USE_SMEM = true> static
 void ForceMult3D(const int NE,
                  const Array<double> &B_,
                  const Array<double> &Bt_,
@@ -301,17 +301,29 @@ void ForceMult3D(const int NE,
                  const DenseTensor &sJit_,
                  const Vector &x, Vector &y)
 {
-   auto b = Reshape(B_.Read(), Q1D, L1D);
-   auto bt = Reshape(Bt_.Read(), D1D, Q1D);
-   auto gt = Reshape(Gt_.Read(), D1D, Q1D);
+   const auto b = Reshape(B_.Read(), Q1D, L1D);
+   const auto bt = Reshape(Bt_.Read(), D1D, Q1D);
+   const auto gt = Reshape(Gt_.Read(), D1D, Q1D);
    const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
-   auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
-   auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
+   const auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
+   const auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
    const double eps1 = std::numeric_limits<double>::epsilon();
    const double eps2 = eps1*eps1;
    auto velocity = Reshape(y.Write(), D1D, D1D, D1D, DIM, NE);
 
-   MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+   static constexpr int MSZ = 3 * Q1D * Q1D * Q1D;
+   static constexpr int GRID = USE_SMEM ? 0 : 128;
+
+   Vector vm(USE_SMEM ? 0 : (2 * MSZ) * GRID);
+   real_t *gm = nullptr;
+   if (USE_SMEM) { vm.UseDevice(true); vm.Write();}
+
+   mfem::forall_3D_grid(NE,
+                        Q1D>8 ? 8 : Q1D,
+                        Q1D>8 ? 8 : Q1D,
+                        Q1D>8 ? 8 : Q1D,
+                        GRID,
+                        [=] MFEM_HOST_DEVICE (int e)
    {
       const int z = MFEM_THREAD_ID(z);
 
@@ -321,8 +333,14 @@ void ForceMult3D(const int NE,
 
       MFEM_SHARED double E[L1D][L1D][L1D];
 
-      MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
-      MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
+      // MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
+      // MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
+      MFEM_SHARED double sm0[USE_SMEM ? MSZ : 1];
+      MFEM_SHARED double sm1[USE_SMEM ? MSZ : 1];
+
+      const int bid = MFEM_BLOCK_ID(x);
+      real_t *lm0 = USE_SMEM ? sm0 : gm + MSZ*bid;
+      real_t *lm1 = USE_SMEM ? sm1 : gm + MSZ*(GRID+bid);
 
       double (*MMQ0)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+0);
       double (*MMQ1)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+1);
@@ -546,7 +564,7 @@ static void ForceMult(const int DIM, const int D1D, const int Q1D,
       {0x334,&ForceMult3D<3,3,4,2>},  // Q2Q1
       {0x346,&ForceMult3D<3,4,6,3>},  // Q3Q2
       {0x358,&ForceMult3D<3,5,8,4>},  // Q4Q3
-      {0x390,&ForceMult3D<3,9,16,8>}  // Q8Q7
+      {0x390,&ForceMult3D<3,9,16,8,false>}  // Q8Q7
    };
    if (!call[id])
    {
@@ -714,7 +732,7 @@ void ForceMultTranspose2D(const int NE,
    });
 }
 
-template<int DIM, int D1D, int Q1D, int L1D> static
+template<int DIM, int D1D, int Q1D, int L1D, bool USE_SMEM = true> static
 void ForceMultTranspose3D(const int NE,
                           const Array<double> &Bt_,
                           const Array<double> &B_,
@@ -731,7 +749,19 @@ void ForceMultTranspose3D(const int NE,
    auto velocity = Reshape(v_.Read(), D1D, D1D, D1D, DIM, NE);
    auto energy = Reshape(e_.Write(), L1D, L1D, L1D, NE);
 
-   MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+   static constexpr int MSZ = 3 * Q1D * Q1D * Q1D;
+   static constexpr int GRID = USE_SMEM ? 0 : 128;
+
+   Vector vm(USE_SMEM ? 0 : (2 * MSZ) * GRID);
+   real_t *gm = nullptr;
+   if (USE_SMEM) { vm.UseDevice(true); vm.Write();}
+
+   mfem::forall_3D_grid(NE,
+                        Q1D>8 ? 8 : Q1D,
+                        Q1D>8 ? 8 : Q1D,
+                        Q1D>8 ? 8 : Q1D,
+                        GRID,
+                        [=] MFEM_HOST_DEVICE (int e)
    {
       const int z = MFEM_THREAD_ID(z);
 
@@ -739,9 +769,14 @@ void ForceMultTranspose3D(const int NE,
       MFEM_SHARED double B[Q1D][D1D];
       MFEM_SHARED double G[Q1D][D1D];
 
-      MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
-      MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
-      double (*V)[D1D][D1D]    = (double (*)[D1D][D1D]) (sm0+0);
+      MFEM_SHARED double sm0[USE_SMEM ? MSZ : 1];
+      MFEM_SHARED double sm1[USE_SMEM ? MSZ : 1];
+
+      const int bid = MFEM_BLOCK_ID(x);
+      real_t *lm0 = USE_SMEM ? sm0 : gm + MSZ*bid;
+      real_t *lm1 = USE_SMEM ? sm1 : gm + MSZ*(GRID+bid);
+
+      double (*V)[D1D][D1D]    = (double (*)[D1D][D1D]) (lm0+0);
       double (*MMQ0)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+1);
       double (*MMQ1)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+2);
 
@@ -958,7 +993,7 @@ static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
       {0x334,&ForceMultTranspose3D<3,3,4,2>},   // Q2Q1
       {0x346,&ForceMultTranspose3D<3,4,6,3>},   // Q3Q2
       {0x358,&ForceMultTranspose3D<3,5,8,4>},   // Q4Q3
-      {0x390,&ForceMultTranspose3D<3,9,16,8>}   // Q8Q7
+      {0x390,&ForceMultTranspose3D<3,9,16,8, false>}   // Q8Q7
    };
    if (!call[id])
    {

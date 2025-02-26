@@ -64,10 +64,14 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 #include "laghos_mesh.hpp"
-#include "fem/qinterp/eval.hpp"
-#include "fem/qinterp/det.cpp"
-#include "fem/qinterp/grad.hpp"
-#include "fem/integ/bilininteg_mass_kernels.hpp"
+// #include "fem/qinterp/eval.hpp"
+#include "laghos_eval.hpp"
+// #include "fem/qinterp/det.cpp"
+#include "laghos_det3d.hpp"
+// #include "fem/qinterp/grad.hpp"
+#include "laghos_grad.hpp"
+// #include "fem/integ/bilininteg_mass_kernels.hpp"
+#include "laghos_mass.hpp"
 
 using std::cout;
 using std::endl;
