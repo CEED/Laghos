@@ -64,6 +64,8 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 
+#include <chrono>
+
 using std::cout;
 using std::endl;
 using namespace mfem;
@@ -452,8 +454,8 @@ int main(int argc, char *argv[])
          return 3;
    }
 
-   const HYPRE_Int glob_size_l2 = L2FESpace.GlobalTrueVSize();
-   const HYPRE_Int glob_size_h1 = H1FESpace.GlobalTrueVSize();
+   const HYPRE_BigInt glob_size_l2 = L2FESpace.GlobalTrueVSize();
+   const HYPRE_BigInt glob_size_h1 = H1FESpace.GlobalTrueVSize();
    if (Mpi::Root())
    {
       cout << "Number of kinematic (position, velocity) dofs: "
@@ -637,6 +639,8 @@ int main(int argc, char *argv[])
    //      }
    //      cout << endl;
    //   }
+   std::chrono::high_resolution_clock timer;
+   auto last = timer.now();
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -699,6 +703,7 @@ int main(int argc, char *argv[])
          if (Mpi::Root())
          {
             const double sqrt_norm = sqrt(norm);
+            auto curr = timer.now();
 
             cout << std::fixed;
             cout << "step " << std::setw(5) << ti
@@ -706,6 +711,9 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
+            cout << ", walltime = " << (curr - last).count() * 1e-9 << " s";
+            last = curr;
+
             //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
             //  << internal_energy
             //   << ",\t|KE| = " << std::setprecision(10) << std::scientific
