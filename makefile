@@ -55,6 +55,8 @@ make style
 
 endef
 
+-include user.mk
+
 NPROC = $(shell getconf _NPROCESSORS_ONLN)
 GOALS = help clean distclean style setup mfem metis hypre
 
