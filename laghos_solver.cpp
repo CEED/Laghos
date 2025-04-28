@@ -1341,6 +1341,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    static std::unordered_map<int, fQKernel> qupdate =
    {
       // 2D.
+      {0x22,&QKernel<2,2>},
       {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>},
       {0x28,&QKernel<2,8>}, {0x2A,&QKernel<2,10>},
       // 3D.
