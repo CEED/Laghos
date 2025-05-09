@@ -680,7 +680,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    my_rt[2] = timer.sw_force.RealTime();
    my_rt[3] = timer.sw_qdata.RealTime();
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
-   MPI_Reduce(my_rt, T, 6, MPI_DOUBLE, MPI_MAX, 0, com);
+   MPI_Reduce(my_rt, T, 5, MPI_DOUBLE, MPI_MAX, 0, com);
 
    HYPRE_BigInt mydata[3], alldata[3];
    mydata[0] = static_cast<HYPRE_BigInt>(timer.L2dof) * static_cast<HYPRE_BigInt>(timer.L2iter);
