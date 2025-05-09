@@ -271,7 +271,10 @@ int main(int argc, char *argv[])
 
    if (enable_nc && dim > 1)
    {
-      cout << "Using non-conforming mesh." << endl;
+      if (Mpi::Root())
+      {
+         cout << "Using non-conforming mesh." << endl;
+      }
       mesh->EnsureNCMesh();
    }
 
