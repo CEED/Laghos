@@ -298,7 +298,7 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
    LAGHOS_DEVICE_SYNC;
-   sw_step.Start();
+   timer.sw_step.Start();
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
@@ -317,7 +317,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
    LAGHOS_DEVICE_SYNC;
-   sw_step.Stop();
+   timer.sw_step.Stop();
 }
 
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
@@ -678,7 +678,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
                                               const bool fom) const
 {
    const MPI_Comm com = H1.GetComm();
-   double my_rt[5], T[6];
+   double my_rt[6], T[6];
    my_rt[0] = timer.sw_cgH1.RealTime();
    my_rt[1] = timer.sw_cgL2.RealTime();
    my_rt[2] = timer.sw_force.RealTime();
@@ -688,7 +688,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    MPI_Reduce(my_rt, T, 6, MPI_DOUBLE, MPI_MAX, 0, com);
 
    HYPRE_BigInt mydata[3], alldata[3];
-   mydata[0] = static_cast<HYPRE_BigInt>(timer.L2dof) * static_cast<HYPER_BigInt>(timer.L2iter);
+   mydata[0] = static_cast<HYPRE_BigInt>(timer.L2dof) * static_cast<HYPRE_BigInt>(timer.L2iter);
    mydata[1] = timer.quad_tstep;
    mydata[2] = NE;
    MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_BIG_INT, MPI_SUM, 0, com);
