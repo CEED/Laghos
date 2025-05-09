@@ -421,7 +421,7 @@ int main(int argc, char *argv[])
 
    if (!cartesian_partitioning && enable_nc && dim > 1)
    {
-      cout << "Rebalancing mesh" << endl;
+      if (myid == 0) { cout << "Rebalancing mesh" << endl; }
       pmesh->Rebalance();
    }
 
