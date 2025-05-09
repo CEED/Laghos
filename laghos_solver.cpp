@@ -297,8 +297,6 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
 {
-   LAGHOS_DEVICE_SYNC;
-   timer.sw_step.Start();
    // Make sure that the mesh positions correspond to the ones in S. This is
    // needed only because some mfem time integrators don't update the solution
    // vector at every intermediate stage (hence they don't change the mesh).
@@ -316,8 +314,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dS_dt) const
    SolveVelocity(S, dS_dt);
    SolveEnergy(S, v, dS_dt);
    qdata_is_current = false;
-   LAGHOS_DEVICE_SYNC;
-   timer.sw_step.Stop();
 }
 
 void LagrangianHydroOperator::SolveVelocity(const Vector &S,
@@ -678,13 +674,12 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
                                               const bool fom) const
 {
    const MPI_Comm com = H1.GetComm();
-   double my_rt[6], T[6];
+   double my_rt[5], T[5];
    my_rt[0] = timer.sw_cgH1.RealTime();
    my_rt[1] = timer.sw_cgL2.RealTime();
    my_rt[2] = timer.sw_force.RealTime();
    my_rt[3] = timer.sw_qdata.RealTime();
    my_rt[4] = my_rt[0] + my_rt[2] + my_rt[3];
-   my_rt[5] = timer.sw_step.RealTime();
    MPI_Reduce(my_rt, T, 6, MPI_DOUBLE, MPI_MAX, 0, com);
 
    HYPRE_BigInt mydata[3], alldata[3];
@@ -703,7 +698,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       const double FOM3 = 1e-6 * alldata[1] * ir.GetNPoints() / T[3];
       const double FOM = (FOM1 * T[0] + FOM2 * T[2] + FOM3 * T[3]) / T[4];
       const double FOM0 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / T[4];
-      const double FOM_tot = 1e-6 * steps * (H1GTVSize + L2GTVSize) / T[5];
       cout << endl;
       cout << "CG (H1) total time: " << T[0] << endl;
       cout << "CG (H1) rate (megadofs x cg_iterations / second): "
@@ -724,9 +718,6 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
       cout << "Major kernels total time (seconds): " << T[4] << endl;
       cout << "Major kernels total rate (megadofs x time steps / second): "
            << FOM << endl;
-      cout << "Overall total RK stage time (seconds): " << T[5] << endl;
-      cout << "Overall total rate (megadofs x time steps / second): "
-           << FOM_tot << endl;
       if (!fom) { return; }
       const int QPT = ir.GetNPoints();
       const HYPRE_Int GNZones = alldata[2];
