@@ -103,10 +103,10 @@ protected:
    // FE spaces local and global sizes
    const int H1Vsize;
    const int H1TVSize;
-   const HYPRE_Int H1GTVSize;
+   const HYPRE_BigInt H1GTVSize;
    const int L2Vsize;
    const int L2TVSize;
-   const HYPRE_Int L2GTVSize;
+   const HYPRE_BigInt L2GTVSize;
    Array<int> block_offsets;
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
