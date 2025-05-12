@@ -64,8 +64,6 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 
-#include <chrono>
-
 using std::cout;
 using std::endl;
 using namespace mfem;
@@ -126,6 +124,9 @@ int main(int argc, char *argv[])
    int dev = 0;
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
+
+   bool enable_nc = true;
+   bool enable_rebalance = true;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -194,6 +195,13 @@ int main(int argc, char *argv[])
                   "Enable figure of merit output.");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
+   args.AddOption(&enable_nc, "-nc", "--nonconforming", "-no-nc",
+                  "--conforming",
+                  "Use non-conforming meshes. Requires a 2D or 3D mesh.");
+   args.AddOption(&enable_rebalance, "-b", "--balance", "-no-b",
+                  "--no-rebalance",
+                  "Perform a rebalance after parallel refinement. Only enabled \n\t"
+                  "for non-conforming meshes with Metis partitioning.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.Parse();
    if (!args.Good())
@@ -259,6 +267,15 @@ int main(int argc, char *argv[])
       {
          cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
+   }
+
+   if (enable_nc && dim > 1)
+   {
+      if (Mpi::Root())
+      {
+         cout << "Using non-conforming mesh." << endl;
+      }
+      mesh->EnsureNCMesh();
    }
 
    // Refine the mesh in serial to increase the resolution.
@@ -401,6 +418,12 @@ int main(int argc, char *argv[])
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
+
+   if (!cartesian_partitioning && enable_nc && dim > 1)
+   {
+      if (myid == 0) { cout << "Rebalancing mesh" << endl; }
+      pmesh->Rebalance();
+   }
 
    int NE = pmesh->GetNE(), ne_min, ne_max;
    MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
@@ -639,8 +662,6 @@ int main(int argc, char *argv[])
    //      }
    //      cout << endl;
    //   }
-   std::chrono::high_resolution_clock timer;
-   auto last = timer.now();
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -703,7 +724,6 @@ int main(int argc, char *argv[])
          if (Mpi::Root())
          {
             const double sqrt_norm = sqrt(norm);
-            auto curr = timer.now();
 
             cout << std::fixed;
             cout << "step " << std::setw(5) << ti
@@ -711,9 +731,6 @@ int main(int argc, char *argv[])
                  << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
                  << ",\t|e| = " << std::setprecision(10) << std::scientific
                  << sqrt_norm;
-            cout << ", walltime = " << (curr - last).count() * 1e-9 << " s";
-            last = curr;
-
             //  << ",\t|IE| = " << std::setprecision(10) << std::scientific
             //  << internal_energy
             //   << ",\t|KE| = " << std::setprecision(10) << std::scientific

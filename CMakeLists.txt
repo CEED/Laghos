@@ -61,6 +61,8 @@ endif()
 
 add_executable(laghos ${SOURCES})
 
+target_include_directories(laghos PUBLIC "${MFEM_DIR}/../../../include/mfem")
+
 target_link_libraries(laghos
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX

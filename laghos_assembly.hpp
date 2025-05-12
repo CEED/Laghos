@@ -18,8 +18,8 @@
 #define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
-#include "mfem/general/forall.hpp"
-#include "mfem/linalg/dtensor.hpp"
+#include "general/forall.hpp"
+#include "linalg/dtensor.hpp"
 
 namespace mfem
 {

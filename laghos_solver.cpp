@@ -14,15 +14,15 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "mfem/general/forall.hpp"
+#include "general/forall.hpp"
 #include "laghos_solver.hpp"
-#include "mfem/linalg/kernels.hpp"
+#include "linalg/kernels.hpp"
 #include <unordered_map>
 
-// used only for benchmark timing purposes; for a regular run this can be a no-op
-#define LAGHOS_DEVICE_SYNC MFEM_DEVICE_SYNC
-
 #ifdef MFEM_USE_MPI
+
+// for benchmark timing purposes; for a regular run this can be a no-op
+#define LAGHOS_DEVICE_SYNC MFEM_DEVICE_SYNC
 
 namespace mfem
 {
