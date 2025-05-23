@@ -68,6 +68,8 @@
 // mpirun -np 4 laghos -m data/square01_quad.mesh -p 1 -rs 3 -tf 0.8 -s 7 -fa -vs 20 -vis
 // 2D trapezoid:
 // mpirun -np 4 laghos -m data/trapezoid_quad.mesh -p 1 -rs 2 -tf 1.5 -s 7 -fa -vs 20 -vis
+// 2D square rotated hole:
+// mpirun -np 4 laghos -m data/square_hole.msh -p 1 -rs 0 -tf 0.8 -s 7 -fa -vs 20 -vis
 // 2D circular hole:
 // mpirun -np 4 laghos -m data/refined.mesh -p 1 -rs 2 -tf 0.8 -s 7 -fa -vs 20 -vis
 // 2D disc (inside):
