@@ -78,8 +78,8 @@ TEST_MK = $(MFEM_TEST_MK)
 MFEM_LIB_FILE = mfem_is_not_built
 ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
    -include $(CONFIG_MK)
-   ifneq ($(realpath $(MFEM_DIR)),$(MFEM_SOURCE_DIR))
-      ifneq ($(realpath $(MFEM_DIR)),$(MFEM_INSTALL_DIR))
+   ifneq ($(realpath $(MFEM_DIR)),$(realpath $(MFEM_SOURCE_DIR)))
+      ifneq ($(realpath $(MFEM_DIR)),$(realpath $(MFEM_INSTALL_DIR)))
          MFEM_BUILD_DIR := $(MFEM_DIR)
          override MFEM_DIR := $(MFEM_SOURCE_DIR)
       endif

@@ -24,6 +24,9 @@
 
 #ifdef MFEM_USE_MPI
 
+// for benchmark timing purposes; for a regular run this can be a no-op
+#define LAGHOS_DEVICE_SYNC MFEM_DEVICE_SYNC
+
 namespace mfem
 {
 

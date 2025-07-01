@@ -127,6 +127,9 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
 
+   bool enable_nc = true;
+   bool enable_rebalance = true;
+
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
@@ -194,6 +197,13 @@ int main(int argc, char *argv[])
                   "Enable figure of merit output.");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
+   args.AddOption(&enable_nc, "-nc", "--nonconforming", "-no-nc",
+                  "--conforming",
+                  "Use non-conforming meshes. Requires a 2D or 3D mesh.");
+   args.AddOption(&enable_rebalance, "-b", "--balance", "-no-b",
+                  "--no-rebalance",
+                  "Perform a rebalance after parallel refinement. Only enabled \n\t"
+                  "for non-conforming meshes with Metis partitioning.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.Parse();
    if (!args.Good())
@@ -259,6 +269,15 @@ int main(int argc, char *argv[])
       {
          cout << "Laghos does not support PA in 1D. Switching to FA." << endl;
       }
+   }
+
+   if (enable_nc && dim > 1)
+   {
+      if (Mpi::Root())
+      {
+         cout << "Using non-conforming mesh." << endl;
+      }
+      mesh->EnsureNCMesh();
    }
 
    // Refine the mesh in serial to increase the resolution.
@@ -401,6 +420,12 @@ int main(int argc, char *argv[])
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
+
+   if (!cartesian_partitioning && enable_nc && dim > 1)
+   {
+      if (myid == 0) { cout << "Rebalancing mesh" << endl; }
+      pmesh->Rebalance();
+   }
 
    int NE = pmesh->GetNE(), ne_min, ne_max;
    MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
