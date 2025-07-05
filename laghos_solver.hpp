@@ -145,7 +145,7 @@ protected:
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
    // right-hand sides for momentum and specific internal energy.
-   mutable MixedBilinearForm Force, Force_be;
+  mutable MixedBilinearForm Force, Force_be, Force_be_T;
 
    double wall_bc_penalty, C_I;
    double rho0_max, perimeter;

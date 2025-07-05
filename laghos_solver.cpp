@@ -143,7 +143,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    bdr_force_coeff(qdata), bdr_mass_coeff(qdata),
    qdata_is_current(false),
    forcemat_is_assembled(false),
-   Force(&L2, &H1), Force_be(&L2, &H1),
+   Force(&L2, &H1), Force_be(&L2, &H1), Force_be_T(&H1, &L2),
    wall_bc_penalty(bc_penalty), C_I(0.0),
    rho0_max(rho0_gf.Max()), perimeter(perimeter),
    ForcePA(nullptr), VMassPA(nullptr), EMassPA(nullptr),
@@ -368,15 +368,24 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	  auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
 	  vpb->SetIntRule(&b_ir);
 	  Force_be.AddBdrFaceIntegrator(vpb, ess_bdr_bf);
+	  auto vpb_T = new BoundaryMixedForceTIntegrator(bdr_force_coeff);
+	  vpb_T->SetIntRule(&b_ir);
+	  Force_be_T.AddBdrFaceIntegrator(vpb_T, ess_bdr_bf);
 	  // Make a dummy assembly to figure out the sparsity.
 	  if (analyticalSurface != nullptr)
 	    {
 	      auto vpb_sbm = new BoundaryMixedForceIntegrator(bdr_force_coeff);
 	      vpb_sbm->SetIntRule(&b_ir);
 	      Force_be.AddBdrFaceIntegrator(vpb_sbm, ess_bdr_sbm);
+	      auto vpb_sbm_T = new BoundaryMixedForceTIntegrator(bdr_force_coeff);
+	      vpb_sbm_T->SetIntRule(&b_ir);
+	      Force_be_T.AddBdrFaceIntegrator(vpb_sbm_T, ess_bdr_sbm);
+
 	    }
 	  Force_be.Assemble(0);
 	  Force_be.Finalize(0);
+	  Force_be_T.Assemble(0);
+	  Force_be_T.Finalize(0);
 	}
    }
 }
@@ -559,7 +568,7 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    {
       timer.sw_force.Start();
       Force.MultTranspose(v, e_rhs);
-      if (BC_strong == false) { Force_be.AddMultTranspose(v, e_rhs); }
+      if (BC_strong == false) { Force_be_T.AddMult(v, e_rhs); }
       timer.sw_force.Stop();
 
       if (e_source) { e_rhs += *e_source; }
@@ -1595,10 +1604,11 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
 
    Force = 0.0;
    Force_be = 0.0;
+   Force_be_T = 0.0;
 
    timer.sw_force.Start();
    Force.Assemble();
-   if (BC_strong == false) { Force_be.Assemble(); }
+   if (BC_strong == false) { Force_be.Assemble(); Force_be_T.Assemble(); }
    timer.sw_force.Stop();
 
    forcemat_is_assembled = true;

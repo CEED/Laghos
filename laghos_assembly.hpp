@@ -135,6 +135,30 @@ public:
                                        DenseMatrix &elmat);
 };
 
+/** Integrates (Q*u, v) over boundary faces, where u=(u1,...,un) is a vector
+    trial function (each component is a scalar FE), Q is a VectorCoefficient,
+    Q*u is the Hadamard product, and v is a scalar test function.
+
+    - SetIntRule() is expected to take a face-based quadrature rule.
+    - The VectorCoefficient Q is evaluated through a FaceElementTransformation,
+      allowing to utilize both face-based information (e.g. face normals) and
+      volumetric element information (e.g. volumetric deformation). */
+class BoundaryMixedForceTIntegrator : public BilinearFormIntegrator
+{
+protected:
+   VectorCoefficient &Q;
+
+public:
+   BoundaryMixedForceTIntegrator(VectorCoefficient &vc) : Q(vc) { }
+
+   /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
+   /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.
+  void AssembleFaceMatrix(const FiniteElement &trial_fe,
+                          const FiniteElement &test_fe,
+                          FaceElementTransformations &Tr,
+                          DenseMatrix &elmat) override;
+};
+
 // Performs partial assembly for the force operator.
 class ForcePAOperator : public Operator
 {

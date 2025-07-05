@@ -23,6 +23,44 @@ namespace mfem
 namespace hydrodynamics
 {
 
+void BoundaryMixedForceTIntegrator::
+AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
+                   FaceElementTransformations &Tr, DenseMatrix &elmat)
+{
+   const IntegrationRule *ir = IntRule;
+   if (ir == nullptr)
+   {
+      int order = trial_fe.GetOrder() + test_fe.GetOrder();
+      ir = &IntRules.Get(Tr.GetGeometryType(), order);
+   }
+
+   const int nqp_face  = IntRule->GetNPoints();
+   const int vdim      = Q.GetVDim();
+   const int dof_trial = trial_fe.GetDof();
+   const int dof_test  = test_fe.GetDof();
+
+   elmat.SetSize(dof_test, dof_trial * vdim);
+   elmat = 0.0;
+   DenseMatrix loc_force(dof_trial, vdim);
+   Vector shape_trial(dof_trial), shape_test(dof_test),
+          Vloc_force(loc_force.Data(), dof_trial * vdim);
+   Vector qcoeff(vdim);
+
+   for (int q = 0; q < nqp_face; q++)
+   {
+      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      Tr.SetAllIntPoints(&ip_f);
+      const IntegrationPoint &ip_e = Tr.GetElement1IntPoint();
+
+      test_fe.CalcShape(ip_e, shape_test);
+      trial_fe.CalcShape(ip_e, shape_trial);
+      Q.Eval(qcoeff, Tr, ip_f);
+
+      MultVWt(shape_trial, qcoeff, loc_force);
+      AddMultVWt(shape_test, Vloc_force, elmat);
+   }
+}
+
 void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
                                                ElementTransformation &Tr,
                                                Vector &elvect)
