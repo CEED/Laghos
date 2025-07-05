@@ -323,7 +323,7 @@ int main(int argc, char *argv[])
    Array<int> cond_attr;
    Array<int> submesh_elems;
    int max_attr = mesh->attributes.Max();
-   int submesh_attr = max_attr + 1;	   
+   int submesh_attr = max_attr + 1; 
    if (useEmbedded)
      {
        analyticalSurface = new AnalyticalSurface(geometricShape, mesh);
@@ -489,7 +489,47 @@ int main(int argc, char *argv[])
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
    ParSubMesh pmesh_cond(ParSubMesh::CreateFromDomain(*pmesh, cond_attr));
- 
+
+   double volume0 = pmesh_cond.GetElementVolume(0);
+   double h0;
+   switch (pmesh->GetElementBaseGeometry(0))
+   {
+      case Geometry::SEGMENT: h0 = volume0; break;
+      case Geometry::SQUARE: h0 = sqrt(volume0); break;
+      case Geometry::TRIANGLE: h0 = sqrt(2.0 * volume0); break;
+      case Geometry::CUBE: h0 = pow(volume0, 1./3.); break;
+      case Geometry::TETRAHEDRON: h0 = pow(6.0 * volume0, 1./3.); break;
+      default: MFEM_ABORT("Unknown zone type!");
+   }
+   h0 /= (double) order_v; 
+   int max_bdr_attr = pmesh_cond.bdr_attributes.Max();
+   for (int i = 0; i < pmesh_cond.GetNBE(); i++)
+     {
+       Element* bdr_elem = pmesh_cond.GetBdrElement(i);
+       Array<int> bdr_vertices;
+       bdr_elem->GetVertices(bdr_vertices);
+       bool isImmersed = true;
+       for (int j = 0; j < bdr_vertices.Size(); j++)
+	 {
+	   double* coord = pmesh_cond.GetVertex(bdr_vertices[j]);
+	   Vector d(3), tn(3), coord_vec(3);
+	   d = 0.0, tn = 0.0;
+	   coord_vec(0) = coord[0], coord_vec(1) = coord[1], coord_vec(2) = coord[2];
+	   analyticalSurface->ComputeDistanceAndNormal(coord_vec, d, tn);
+	   double norm_d = d.Norml2();
+	   if (norm_d > 2 * h0)
+	     {
+	       isImmersed = false;
+	       break;
+	     }
+	 }
+       if (isImmersed)
+	 {
+	   pmesh_cond.SetBdrAttribute(i, max_bdr_attr + 1);
+	 }
+     }
+     pmesh_cond.SetAttributes();
+       
    int NE = pmesh_cond.GetNE(), ne_min, ne_max;
    MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh_cond.GetComm());
    MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh_cond.GetComm());
