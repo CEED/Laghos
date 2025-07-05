@@ -175,7 +175,15 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
       Tr.SetAllIntPoints(&ip_f);
 
       MQ->Eval(mcoeff, Tr, ip_f);
-      el1.CalcShape(Tr.GetElement1IntPoint(), shape);
+      const IntegrationPoint &eip1 = Tr.GetElement1IntPoint();
+
+      Vector position;
+      Tr.Transform(eip1, position);
+      Vector dist;
+      Vector true_n;
+      geom.ComputeDistanceAndNormal(position, dist, true_n);
+      shift_shape(H1, H1, Tr.ElementNo, eip1, dist, 0, shape);
+
       MultVVt(shape, partelmat);
 
       for (int i = 0; i < vdim; i++)
