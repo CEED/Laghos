@@ -268,7 +268,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
 	 if (analyticalSurface != nullptr)
 	   {
-	     auto nvmi_sbm = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
+	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_mass_coeff);
 	     nvmi_sbm->SetIntRule(&b_ir);
 	     Mv.AddBdrFaceIntegrator(nvmi_sbm, ess_bdr_sbm);
 	   }
@@ -374,13 +374,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	  // Make a dummy assembly to figure out the sparsity.
 	  if (analyticalSurface != nullptr)
 	    {
-	      auto vpb_sbm = new BoundaryMixedForceIntegrator(bdr_force_coeff);
+	      auto vpb_sbm = new SBM_BoundaryMixedForceIntegrator(bdr_force_coeff);
 	      vpb_sbm->SetIntRule(&b_ir);
 	      Force_be.AddBdrFaceIntegrator(vpb_sbm, ess_bdr_sbm);
-	      auto vpb_sbm_T = new BoundaryMixedForceTIntegrator(bdr_force_coeff);
+	      auto vpb_sbm_T = new SBM_BoundaryMixedForceTIntegrator(bdr_force_coeff);
 	      vpb_sbm_T->SetIntRule(&b_ir);
 	      Force_be_T.AddBdrFaceIntegrator(vpb_sbm_T, ess_bdr_sbm);
-
 	    }
 	  Force_be.Assemble(0);
 	  Force_be.Finalize(0);
