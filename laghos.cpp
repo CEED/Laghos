@@ -317,6 +317,43 @@ int main(int argc, char *argv[])
       cout << "Number of zones in the serial mesh: " << mesh_NE << endl;
    }
 
+   
+   // embedded
+   AnalyticalSurface *analyticalSurface = NULL;
+   Array<int> cond_attr;
+   Array<int> submesh_elems;
+   int max_attr = mesh->attributes.Max();
+   int submesh_attr = max_attr + 1;	   
+   if (useEmbedded)
+     {
+       analyticalSurface = new AnalyticalSurface(geometricShape, mesh);
+       analyticalSurface->SetupElementStatus();
+       
+       GridFunction &alpha = analyticalSurface->GetAlpha();
+       for (int e = 0; e < mesh->GetNE(); e++)
+	 {
+	   double volfrac = alpha[e];
+	   if (volfrac == 1)
+	     {
+	       submesh_elems.Append(e);
+	     }
+	 }
+
+       if (cond_attr.Size() == 0 && submesh_elems.Size() > 0)
+	 {	   
+	   for (int i=0; i<submesh_elems.Size(); i++)
+	     {
+	       mesh->SetAttribute(submesh_elems[i], submesh_attr);
+	     }
+	   mesh->SetAttributes();
+	   
+	   if (cond_attr.Size() == 0)
+	     {
+	       cond_attr.Append(submesh_attr);
+	     }
+	 }
+     }
+
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = nullptr;
    const int num_tasks = Mpi::WorldSize(); int unit = 1;
@@ -450,42 +487,6 @@ int main(int argc, char *argv[])
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
-
-   // embedded
-   AnalyticalSurface *analyticalSurface = NULL;
-   Array<int> cond_attr;
-   Array<int> submesh_elems;
-   int max_attr = pmesh->attributes.Max();
-   int submesh_attr = max_attr + 1;	   
-   if (useEmbedded)
-     {
-       analyticalSurface = new AnalyticalSurface(geometricShape, pmesh);
-       analyticalSurface->SetupElementStatus();
-       
-       ParGridFunction &alpha = analyticalSurface->GetAlpha();
-       for (int e = 0; e < pmesh->GetNE(); e++)
-	 {
-	   double volfrac = alpha[e];
-	   if (volfrac == 1)
-	     {
-	       submesh_elems.Append(e);
-	     }
-	 }
-
-       if (cond_attr.Size() == 0 && submesh_elems.Size() > 0)
-	 {	   
-	   for (int i=0; i<submesh_elems.Size(); i++)
-	     {
-	       pmesh->SetAttribute(submesh_elems[i], submesh_attr);
-	     }
-	   pmesh->SetAttributes();
-	   
-	   if (cond_attr.Size() == 0)
-	     {
-	       cond_attr.Append(submesh_attr);
-	     }
-	 }
-     }
 
    ParSubMesh pmesh_cond(ParSubMesh::CreateFromDomain(*pmesh, cond_attr));
  

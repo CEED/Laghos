@@ -31,17 +31,17 @@ namespace mfem
     
   protected:
     int geometryType;
-    ParGridFunction alpha;
+    GridFunction alpha;
     AnalyticalGeometricShape *geometry;
-    ParMesh *pmesh;
+    Mesh *mesh;
     L2_FECollection L2FEC_0;
-    ParFiniteElementSpace L2_fes_0;
+    FiniteElementSpace L2_fes_0;
     
   public:
-  AnalyticalSurface(int geometryType, ParMesh *pmesh);
+  AnalyticalSurface(int geometryType, Mesh *mesh);
   void SetupElementStatus();
   void ResetData();
-  ParGridFunction& GetAlpha();
+  GridFunction& GetAlpha();
   AnalyticalGeometricShape& GetAnalyticalGeometricShape();
   void ComputeDistanceAndNormal(const Vector& x_ip, Vector& dist, Vector& tn) const;
   ~AnalyticalSurface();

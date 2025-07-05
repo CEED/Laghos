@@ -28,10 +28,10 @@ namespace mfem
     
   public: 
  
-    Line(ParMesh* pmesh);
+    Line(Mesh* pmesh);
     ~Line();
 
-    void SetupElementStatus(ParGridFunction& alpha);
+    void SetupElementStatus(GridFunction& alpha);
 
     void ComputeDistanceAndNormal(const Vector& x_ip, Vector& dist, Vector& tn) const;
 

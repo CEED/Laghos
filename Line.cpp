@@ -19,23 +19,23 @@
 
 namespace mfem{
 
-  Line::Line(ParMesh* pmesh):
-    AnalyticalGeometricShape(pmesh),
+  Line::Line(Mesh* mesh):
+    AnalyticalGeometricShape(mesh),
     slope(0),
     yIntercept(1.51)
   { }
 
   Line::~Line(){}
   
-  void Line::SetupElementStatus(ParGridFunction& alpha)
+  void Line::SetupElementStatus(GridFunction& alpha)
   {
     int activeCount = 0;
     int inactiveCount = 0;
     int cutCount = 0;
     IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
-    auto fes = alpha.ParFESpace();
+    auto fes = alpha.FESpace();
     const IntegrationRule &ir = IntRulesLo.Get(fes->GetFE(0)->GetGeomType(), 20);
-    const int NE = alpha.ParFESpace()->GetNE(), nqp = ir.GetNPoints();
+    const int NE = fes->GetNE(), nqp = ir.GetNPoints();
     
     // Check elements on the current MPI rank
     for (int e = 0; e < NE; e++)
@@ -70,7 +70,6 @@ namespace mfem{
 	    alpha(e) = 0.0;
 	  }
       }
-    alpha.ExchangeFaceNbrData();
     std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
   }
 

@@ -19,21 +19,20 @@
 namespace mfem
 {
 
-  AnalyticalSurface::AnalyticalSurface(int geometryType, ParMesh *pmesh):
+  AnalyticalSurface::AnalyticalSurface(int geometryType, Mesh *mesh):
     geometryType(geometryType),
-    pmesh(pmesh),
-    L2FEC_0(0, pmesh->Dimension()),
-    L2_fes_0(pmesh, &L2FEC_0),
+    mesh(mesh),
+    L2FEC_0(0, mesh->Dimension()),
+    L2_fes_0(mesh, &L2FEC_0),
     geometry(NULL)
   {
     alpha.SetSpace(&L2_fes_0),
     alpha = 0.0;
-    alpha.ExchangeFaceNbrData();
     
     switch (geometryType)
       {
-      case 1: geometry = new Line(pmesh); break;
-      case 2: geometry = new Circle(pmesh); break;
+      case 1: geometry = new Line(mesh); break;
+      case 2: geometry = new Circle(mesh); break;
       default:
 	out << "Unknown geometry type: " << geometryType << '\n';
 	break;
@@ -52,10 +51,9 @@ namespace mfem
   void AnalyticalSurface::ResetData()
   {
     alpha = 0.0;
-    alpha.ExchangeFaceNbrData();
   }
 
-  ParGridFunction& AnalyticalSurface::GetAlpha()
+  GridFunction& AnalyticalSurface::GetAlpha()
   {
     return alpha;
   }

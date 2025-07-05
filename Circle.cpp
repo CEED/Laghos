@@ -19,7 +19,7 @@
 
 namespace mfem{
 
-  Circle::Circle(ParMesh* pmesh): AnalyticalGeometricShape(pmesh), radius(0.2), center(2)
+  Circle::Circle(Mesh* mesh): AnalyticalGeometricShape(mesh), radius(0.2), center(2)
  {
    center(0) = 0.5;
    center(1) = 0.5;
@@ -28,17 +28,17 @@ namespace mfem{
   Circle::~Circle()
   {}
   
-  void Circle::SetupElementStatus(ParGridFunction& alpha)
+  void Circle::SetupElementStatus(GridFunction& alpha)
   {
-    const int max_elem_attr = (pmesh->attributes).Max();
+    const int max_elem_attr = (mesh->attributes).Max();
     int activeCount = 0;
     int inactiveCount = 0;
     int cutCount = 0;
     IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
     alpha = 0.0;
-    auto fes = alpha.ParFESpace();
+    auto fes = alpha.FESpace();
     const IntegrationRule &ir = IntRulesLo.Get(fes->GetFE(0)->GetGeomType(), 20);
-    const int NE = alpha.ParFESpace()->GetNE(), nqp = ir.GetNPoints();
+    const int NE = fes->GetNE(), nqp = ir.GetNPoints();
     // Check elements on the current MPI rank
     for (int e = 0; e < NE; e++)
       {
@@ -66,17 +66,16 @@ namespace mfem{
 	  {
 	    cutCount++;
 	    alpha(e) = 0.5;
-	    //  pmesh->SetAttribute(e, max_elem_attr+1);
+	    //  mesh->SetAttribute(e, max_elem_attr+1);
 	  }
 	else if (count == 0)
 	  {
 	    inactiveCount++;
 	    alpha(e) = 0.0;
-	    //	    pmesh->SetAttribute(e, max_elem_attr+1);
+	    //	    mesh->SetAttribute(e, max_elem_attr+1);
 	  }
       }
-    alpha.ExchangeFaceNbrData();
-    // pmesh->SetAttributes();
+    // mesh->SetAttributes();
     // std::cout << " active elemSta " << activeCount << " cut " << cutCount << " inacive " << inactiveCount <<  std::endl;
   }
   

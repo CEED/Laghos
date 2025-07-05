@@ -19,7 +19,7 @@
 namespace mfem
 {
 
-  AnalyticalGeometricShape::AnalyticalGeometricShape(ParMesh *pmesh): pmesh(pmesh){
+  AnalyticalGeometricShape::AnalyticalGeometricShape(Mesh *mesh): mesh(mesh){
 
 }
   AnalyticalGeometricShape::~AnalyticalGeometricShape(){

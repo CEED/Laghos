@@ -24,7 +24,7 @@ namespace mfem{
   class AnalyticalGeometricShape{
 
   protected:
-    ParMesh *pmesh;
+    Mesh *mesh;
     
 public:
     /// Element type related to shifted boundaries (not interfaces).
@@ -32,8 +32,8 @@ public:
    /// to discern between different level-sets.
     enum SBElementType {OUTSIDE = 0, INSIDE = 1, CUT = 2};
 
-    AnalyticalGeometricShape(ParMesh* pmesh);
-    virtual void SetupElementStatus(ParGridFunction& alpha) = 0;
+    AnalyticalGeometricShape(Mesh* mesh);
+    virtual void SetupElementStatus(GridFunction& alpha) = 0;
 
     virtual void ComputeDistanceAndNormal(const Vector& x_ip, Vector& dist, Vector& tn) const = 0;
 
