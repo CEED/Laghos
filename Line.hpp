@@ -13,38 +13,31 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
+#ifndef MFEM_LINE
+#define MFEM_LINE
 
-#ifndef MFEM_ANALYTICAL_SURFACE
-#define MFEM_ANALYTICAL_SURFACE
-
-#include "mfem.hpp"
-#include "general/forall.hpp"
-#include "linalg/dtensor.hpp"
-#include "Line.hpp"
-#include "Circle.hpp"
+#include "AnalyticalGeometricShape.hpp"
 
 namespace mfem
 {
+  class Line : public AnalyticalGeometricShape{
 
-  class AnalyticalSurface
-  {
-    
   protected:
-    int geometryType;
-    ParGridFunction alpha;
-    AnalyticalGeometricShape *geometry;
-    ParMesh *pmesh;
-    L2_FECollection L2FEC_0;
-    ParFiniteElementSpace L2_fes_0;
+    double slope;
+    double yIntercept;
     
-  public:
-  AnalyticalSurface(int geometryType, ParMesh *pmesh);
-  void SetupElementStatus();
-  void ResetData();
-  ParGridFunction& GetAlpha();
-  AnalyticalGeometricShape& GetAnalyticalGeometricShape();
-  void ComputeDistanceAndNormal(const Vector& x_ip, Vector& dist, Vector& tn) const;
-  ~AnalyticalSurface();
+  public: 
+ 
+    Line(ParMesh* pmesh);
+    ~Line();
+
+    void SetupElementStatus(ParGridFunction& alpha);
+
+    void ComputeDistanceAndNormal(const Vector& x_ip, Vector& dist, Vector& tn) const;
+
   };
+
 }
+
 #endif // MFEM_LAGHOS
+

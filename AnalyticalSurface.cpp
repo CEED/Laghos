@@ -32,7 +32,7 @@ namespace mfem
     
     switch (geometryType)
       {
-	//case 1: geometry = new Line(pmesh); break;
+      case 1: geometry = new Line(pmesh); break;
       case 2: geometry = new Circle(pmesh); break;
       default:
 	out << "Unknown geometry type: " << geometryType << '\n';
