@@ -41,13 +41,15 @@ void get_shifted_value(const ParGridFunction &g, int e_id,
 class SBM_BoundaryVectorMassIntegrator : public VectorMassIntegrator
 {
 protected:
-   int nf;
+   const ParFiniteElementSpace &H1; 
+   const AnalyticalGeometricShape& geom;
+   int num_taylor = 1;
 
 public:
    /// The given MatrixCoefficient fully couples the vector components, i.e.,
    /// the local (dof x vdim) matrices have no zero blocks.
-   SBM_BoundaryVectorMassIntegrator(MatrixCoefficient &mc)
-      : VectorMassIntegrator(mc) { }
+  SBM_BoundaryVectorMassIntegrator(MatrixCoefficient &mc, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor)
+    : VectorMassIntegrator(mc), H1(H1), geom(geom), num_taylor(num_taylor) { }
 
    /// Expected use is with BilinearForm::AddBdrFaceIntegrator(), where @a el1
    /// is for the volumetric neighbor of the boundary face, @a el2 is not used.
