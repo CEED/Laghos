@@ -106,7 +106,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  double ftz,
                                                  const int oq,
                                                  double bc_penalty,
-                                                 double perimeter) :
+                                                 double perimeter,
+						 AnalyticalSurface* analyticalSurface) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -157,8 +158,18 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    rhs(H1Vsize),
    e_rhs(L2Vsize),
    rhs_c_gf(&H1c),
-   dvc_gf(&H1c)
+   dvc_gf(&H1c),
+   analyticalSurface(analyticalSurface)
 {
+ 
+  const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
+  ess_bdr_bf.SetSize(bdr_attr_max), ess_bdr_sbm.SetSize(bdr_attr_max);
+  ess_bdr_bf = 1; ess_bdr_sbm = 0;
+  if (analyticalSurface != nullptr)
+    {
+      ess_bdr_bf[bdr_attr_max-1] = 0;
+      ess_bdr_sbm[bdr_attr_max-1] = 1;
+    }
 //   H1.ExchangeFaceNbrData();
 //   int n_bdr = 0;
 //   for (int be = 0; be < NBE; be++)
@@ -255,9 +266,14 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       {
          auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
          nvmi->SetIntRule(&b_ir);
-         Mv.AddBdrFaceIntegrator(nvmi);
+         Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
+	 if (analyticalSurface != nullptr)
+	   {
+	     auto nvmi_sbm = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
+	     nvmi_sbm->SetIntRule(&b_ir);
+	     Mv.AddBdrFaceIntegrator(nvmi_sbm, ess_bdr_sbm);
+	   }
       }
-
       Mv.Assemble();
       Mv_spmat_copy = Mv.SpMat();
    }
@@ -348,12 +364,21 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       Force.Assemble(0);
       Force.Finalize(0);
 
-      auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
-      vpb->SetIntRule(&b_ir);
-      Force_be.AddBdrFaceIntegrator(vpb);
-      // Make a dummy assembly to figure out the sparsity.
-      Force_be.Assemble(0);
-      Force_be.Finalize(0);
+      if (BC_strong == false)
+	{
+	  auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
+	  vpb->SetIntRule(&b_ir);
+	  Force_be.AddBdrFaceIntegrator(vpb, ess_bdr_bf);
+	  // Make a dummy assembly to figure out the sparsity.
+	  if (analyticalSurface != nullptr)
+	    {
+	      auto vpb_sbm = new BoundaryMixedForceIntegrator(bdr_force_coeff);
+	      vpb_sbm->SetIntRule(&b_ir);
+	      Force_be.AddBdrFaceIntegrator(vpb_sbm, ess_bdr_sbm);
+	    }
+	  Force_be.Assemble(0);
+	  Force_be.Finalize(0);
+	}
    }
 }
 

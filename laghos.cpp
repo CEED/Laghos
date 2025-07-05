@@ -84,7 +84,6 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
-#include "AnalyticalSurface.hpp"
 
 using std::cout;
 using std::endl;
@@ -697,7 +696,8 @@ int main(int argc, char *argv[])
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q, pen_param, perimeter);
+                                                order_q, pen_param, perimeter,
+						analyticalSurface);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";

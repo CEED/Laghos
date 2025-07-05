@@ -19,6 +19,7 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include "AnalyticalSurface.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -111,6 +112,8 @@ protected:
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
+   Array<int> ess_bdr_bf;
+   Array<int> ess_bdr_sbm;
    bool BC_strong;
 
    const int dim, NE, NBE, l2dofs_cnt, h1dofs_cnt, source_type;
@@ -145,7 +148,7 @@ protected:
 
    double wall_bc_penalty, C_I;
    double rho0_max, perimeter;
-
+   AnalyticalSurface* analyticalSurface;
    // Same as above, but done through partial assembly.
    ForcePAOperator *ForcePA;
    // Mass matrices done through partial assembly:
@@ -188,7 +191,8 @@ public:
                            const bool visc, const bool vort, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
                            const int order_q,
-                           double bc_penalty, double perimeter);
+                           double bc_penalty, double perimeter,
+			   AnalyticalSurface* analyticalSurface = NULL);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
