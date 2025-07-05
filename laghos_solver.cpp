@@ -159,10 +159,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    e_rhs(L2Vsize),
    rhs_c_gf(&H1c),
    dvc_gf(&H1c),
+   bdr_attr_max( H1.GetMesh()->bdr_attributes.Max()),
    analyticalSurface(analyticalSurface)
 {
- 
-  const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
   ess_bdr_bf.SetSize(bdr_attr_max), ess_bdr_sbm.SetSize(bdr_attr_max);
   ess_bdr_bf = 1; ess_bdr_sbm = 0;
   if (analyticalSurface != nullptr)
@@ -1100,34 +1099,76 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
    {
       auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
       if (b_face_tr == nullptr) { continue; }
-
-      for (int q = 0; q < nqp_be; q++)
-      {
-         const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-         b_face_tr->SetAllIntPoints(&ip_f);
-         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
-
-         double penalty_mass  = wall_bc_penalty * C_I * perimeter /
-                                std::pow(tr_el.Weight(), 1.0/dim);
-         penalty_mass *= rho0_max * perimeter;
-
-         Vector nor(dim);
-         CalcOrtho(b_face_tr->Jacobian(), nor);
-         double nor_norm = sqrt(nor * nor);
-
-         Vector tn(nor);
-         tn /= nor_norm;
-
-         for (int dx = 0; dx < dim; dx++)
-         {
-            for (int dy = 0; dy < dim; dy++)
-            {
-               qdata.be_mass_data(dx, dy, be * nqp_be + q) =
-                     ip_f.weight * nor_norm *
-                     tn(dx) * tn(dy) * penalty_mass;
-            }
-         }
-      }
+      int attr = pmesh->GetBdrAttribute(be);
+      if (attr != bdr_attr_max)
+	{
+	  for (int q = 0; q < nqp_be; q++)
+	    {
+	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	      b_face_tr->SetAllIntPoints(&ip_f);
+	      ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+	      
+	      double penalty_mass  = wall_bc_penalty * C_I * perimeter /
+		std::pow(tr_el.Weight(), 1.0/dim);
+	      penalty_mass *= rho0_max * perimeter;
+	      
+	      Vector nor(dim);
+	      CalcOrtho(b_face_tr->Jacobian(), nor);
+	      double nor_norm = sqrt(nor * nor);
+	      
+	      Vector tn(nor);
+	      tn /= nor_norm;
+	      
+	      for (int dx = 0; dx < dim; dx++)
+		{
+		  for (int dy = 0; dy < dim; dy++)
+		    {
+		      qdata.be_mass_data(dx, dy, be * nqp_be + q) =
+			ip_f.weight * nor_norm *
+			tn(dx) * tn(dy) * penalty_mass;
+		    }
+		}
+	    }
+	}
+      else
+	{
+	  for (int q = 0; q < nqp_be; q++)
+	    {
+	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	      b_face_tr->SetAllIntPoints(&ip_f);
+	      ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+      
+	      double penalty_mass  = wall_bc_penalty * C_I * perimeter /
+		std::pow(tr_el.Weight(), 1.0/dim);
+	      penalty_mass *= rho0_max * perimeter;
+	      
+	      Vector nor(dim);
+	      CalcOrtho(b_face_tr->Jacobian(), nor);
+	      double nor_norm = sqrt(nor * nor);
+	      
+	      Vector tn(nor);
+	      tn /= nor_norm;
+	      const IntegrationPoint &ip_e1 = b_face_tr->GetElement1IntPoint();
+	      Vector position;
+	      tr_el.SetIntPoint(&ip_e1);	 
+	      tr_el.Transform(ip_e1, position);
+	      Vector dist;
+	      Vector true_n;
+	      analyticalSurface->ComputeDistanceAndNormal(position, dist, true_n);
+	      true_n = tn;
+	      double nDotNtilda = true_n * tn;
+	      
+	      for (int dx = 0; dx < dim; dx++)
+		{
+		  for (int dy = 0; dy < dim; dy++)
+		    {
+		      qdata.be_mass_data(dx, dy, be * nqp_be + q) =
+			ip_f.weight * nor_norm *
+			true_n(dx) * true_n(dy) * penalty_mass * std::pow(nDotNtilda, 2.0);
+		    }
+		}
+	    }
+	}
    }
 }
 

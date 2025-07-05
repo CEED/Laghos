@@ -112,6 +112,7 @@ protected:
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
+   int bdr_attr_max;
    Array<int> ess_bdr_bf;
    Array<int> ess_bdr_sbm;
    bool BC_strong;
