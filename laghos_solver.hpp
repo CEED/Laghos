@@ -20,6 +20,7 @@
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 #include "AnalyticalSurface.hpp"
+#include "laghos_shift.hpp"
 
 #ifdef MFEM_USE_MPI
 

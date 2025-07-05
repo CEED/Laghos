@@ -135,64 +135,13 @@ public:
                                        DenseMatrix &elmat);
 };
 
-class SBM_BoundaryVectorMassIntegrator : public VectorMassIntegrator
-{
-protected:
-   int nf;
-
-public:
-   /// The given MatrixCoefficient fully couples the vector components, i.e.,
-   /// the local (dof x vdim) matrices have no zero blocks.
-   SBM_BoundaryVectorMassIntegrator(MatrixCoefficient &mc)
-      : VectorMassIntegrator(mc) { }
-
-   /// Expected use is with BilinearForm::AddBdrFaceIntegrator(), where @a el1
-   /// is for the volumetric neighbor of the boundary face, @a el2 is not used.
-   void AssembleFaceMatrix(const FiniteElement &el1,
-                           const FiniteElement &el2,
-                           FaceElementTransformations &Tr,
-                           DenseMatrix &elmat) override;
-};
-
-class SBM_BoundaryMixedForceIntegrator : public BilinearFormIntegrator
-{
-protected:
-   VectorCoefficient &Q;
-
-public:
-   SBM_BoundaryMixedForceIntegrator(VectorCoefficient &vc) : Q(vc) { }
-
-   /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
-   /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.
-  void AssembleFaceMatrix(const FiniteElement &trial_fe,
-                          const FiniteElement &test_fe,
-                          FaceElementTransformations &Tr,
-                          DenseMatrix &elmat) override;
-};
-
-  class BoundaryMixedForceTIntegrator : public BilinearFormIntegrator
+class BoundaryMixedForceTIntegrator : public BilinearFormIntegrator
 {
 protected:
    VectorCoefficient &Q;
 
 public:
    BoundaryMixedForceTIntegrator(VectorCoefficient &vc) : Q(vc) { }
-
-   /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
-   /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.
-  void AssembleFaceMatrix(const FiniteElement &trial_fe,
-                          const FiniteElement &test_fe,
-                          FaceElementTransformations &Tr,
-                          DenseMatrix &elmat) override;
-};
-
-  class SBM_BoundaryMixedForceTIntegrator : public BilinearFormIntegrator
-{
-protected:
-   VectorCoefficient &Q;
-
-public:
-   SBM_BoundaryMixedForceTIntegrator(VectorCoefficient &vc) : Q(vc) { }
 
    /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
    /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.
