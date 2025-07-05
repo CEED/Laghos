@@ -84,6 +84,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#include "AnalyticalSurface.hpp"
 
 using std::cout;
 using std::endl;
@@ -145,6 +146,8 @@ int main(int argc, char *argv[])
    int dev = 0;
    double blast_energy = 0.25;
    double blast_position[] = {0.0, 0.0, 0.0};
+   bool useEmbedded = false;
+   int geometricShape = 0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -214,12 +217,22 @@ int main(int argc, char *argv[])
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
+   args.AddOption(&useEmbedded, "-emb", "--use-embedded", "-no-emb",
+                  "--no-embedded",
+                  "Use Embedded when there is surface that will be embedded in a pre-existing mesh");
+   args.AddOption(&geometricShape, "-gS", "--geometricShape",
+                  "Shape of the embedded geometry that will be embedded");
    args.Parse();
    if (!args.Good())
    {
       if (Mpi::Root()) { args.PrintUsage(cout); }
       return 1;
    }
+   if (useEmbedded)
+     {
+       p_assembly = false;
+     }
+   
    if (Mpi::Root()) { args.PrintOptions(cout); }
 
    if (strcmp(mesh_file, "data/disc-nurbs.mesh") == 0)
@@ -438,9 +451,47 @@ int main(int argc, char *argv[])
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
-   int NE = pmesh->GetNE(), ne_min, ne_max;
-   MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh->GetComm());
-   MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh->GetComm());
+   // embedded
+   AnalyticalSurface *analyticalSurface = NULL;
+   Array<int> cond_attr;
+   Array<int> submesh_elems;
+   int max_attr = pmesh->attributes.Max();
+   int submesh_attr = max_attr + 1;	   
+   if (useEmbedded)
+     {
+       analyticalSurface = new AnalyticalSurface(geometricShape, pmesh);
+       analyticalSurface->SetupElementStatus();
+       
+       ParGridFunction &alpha = analyticalSurface->GetAlpha();
+       for (int e = 0; e < pmesh->GetNE(); e++)
+	 {
+	   double volfrac = alpha[e];
+	   if (volfrac == 1)
+	     {
+	       submesh_elems.Append(e);
+	     }
+	 }
+
+       if (cond_attr.Size() == 0 && submesh_elems.Size() > 0)
+	 {	   
+	   for (int i=0; i<submesh_elems.Size(); i++)
+	     {
+	       pmesh->SetAttribute(submesh_elems[i], submesh_attr);
+	     }
+	   pmesh->SetAttributes();
+	   
+	   if (cond_attr.Size() == 0)
+	     {
+	       cond_attr.Append(submesh_attr);
+	     }
+	 }
+     }
+
+   ParSubMesh pmesh_cond(ParSubMesh::CreateFromDomain(*pmesh, cond_attr));
+ 
+   int NE = pmesh_cond.GetNE(), ne_min, ne_max;
+   MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh_cond.GetComm());
+   MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh_cond.GetComm());
    if (myid == 0)
    { cout << "Zones min/max: " << ne_min << " " << ne_max << endl; }
 
@@ -449,8 +500,8 @@ int main(int argc, char *argv[])
    // - L2 (Bernstein, discontinuous) for specific internal energy.
    L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
-   ParFiniteElementSpace L2FESpace(pmesh, &L2FEC);
-   ParFiniteElementSpace H1FESpace(pmesh, &H1FEC, pmesh->Dimension());
+   ParFiniteElementSpace L2FESpace(&pmesh_cond, &L2FEC);
+   ParFiniteElementSpace H1FESpace(&pmesh_cond, &H1FEC, pmesh_cond.Dimension());
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
@@ -458,8 +509,8 @@ int main(int argc, char *argv[])
    const bool BC_strong = false;
    if (BC_strong)
    {
-      Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-      for (int d = 0; d < pmesh->Dimension(); d++)
+      Array<int> ess_bdr(pmesh_cond.bdr_attributes.Max()), dofs_marker, dofs_list;
+      for (int d = 0; d < pmesh_cond.Dimension(); d++)
       {
          // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
          // i.e., we must enforce v_x/y/z = 0 for the velocity components.
@@ -487,7 +538,6 @@ int main(int argc, char *argv[])
          {
             cout << "Unknown ODE solver type: " << ode_solver_type << '\n';
          }
-         delete pmesh;
          MPI_Finalize();
          return 3;
    }
@@ -525,12 +575,12 @@ int main(int argc, char *argv[])
    e_gf.MakeRef(&L2FESpace, S, offset[2]);
 
    // Initialize x_gf using the starting mesh coordinates.
-   pmesh->SetNodalGridFunction(&x_gf);
+   pmesh_cond.SetNodalGridFunction(&x_gf);
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
    // Initialize the velocity.
-   VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
+   VectorFunctionCoefficient v_coeff(pmesh_cond.Dimension(), v0);
    v_gf.ProjectCoefficient(v_coeff);
    for (int i = 0; i < ess_vdofs.Size(); i++)
    {
@@ -547,8 +597,8 @@ int main(int argc, char *argv[])
    // time evolution.
    ParGridFunction rho0_gf(&L2FESpace);
    FunctionCoefficient rho0_coeff(rho0);
-   L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
+   L2_FECollection l2_fec(order_e, pmesh_cond.Dimension());
+   ParFiniteElementSpace l2_fes(&pmesh_cond, &l2_fec);
    ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
@@ -570,8 +620,8 @@ int main(int argc, char *argv[])
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on function that's constant on the moving mesh.
-   L2_FECollection mat_fec(0, pmesh->Dimension());
-   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
+   L2_FECollection mat_fec(0, pmesh_cond.Dimension());
+   ParFiniteElementSpace mat_fes(&pmesh_cond, &mat_fec);
    ParGridFunction mat_gf(&mat_fes);
    FunctionCoefficient mat_coeff(gamma_func);
    mat_gf.ProjectCoefficient(mat_coeff);
@@ -580,7 +630,7 @@ int main(int argc, char *argv[])
    int source = 0; bool visc = true, vorticity = false;
    switch (problem)
    {
-      case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
+      case 0: if (pmesh_cond.Dimension() == 2) { source = 1; } visc = false; break;
       case 1: visc = true; break;
       case 2: visc = true; break;
       case 3: visc = true; S.HostRead(); break;
@@ -592,11 +642,16 @@ int main(int argc, char *argv[])
    }
    if (impose_visc) { visc = true; }
 
+   if (useEmbedded)
+   {
+     ess_vdofs.SetSize(0);
+   }
+   //
    const double pen_param = 20.0,
                 perimeter = 12.0; // TODO fix this.
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace,
-                                                ess_tdofs, BC_strong,
+                                                ess_vdofs, BC_strong,
                                                 rho0_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
@@ -617,7 +672,7 @@ int main(int argc, char *argv[])
    {
       // Make sure all MPI ranks have sent their 'v' solution before initiating
       // another set of GLVis connections (one from each rank):
-      MPI_Barrier(pmesh->GetComm());
+      MPI_Barrier(pmesh_cond.GetComm());
       vis_rho.precision(8);
       vis_v.precision(8);
       vis_e.precision(8);
@@ -638,7 +693,7 @@ int main(int argc, char *argv[])
    }
 
    // Save data for VisIt visualization.
-   VisItDataCollection visit_dc(basename, pmesh);
+   VisItDataCollection visit_dc(basename, &pmesh_cond);
    if (visit)
    {
       visit_dc.RegisterField("Density",  &rho_gf);
@@ -726,17 +781,17 @@ int main(int argc, char *argv[])
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
       // and the oper object might have redirected the mesh positions to those.
-      pmesh->NewNodes(x_gf, false);
+      pmesh_cond.NewNodes(x_gf, false);
 
       if (last_step || (ti % vis_steps) == 0)
       {
          double lnorm = e_gf * e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh_cond.GetComm());
          if (mem_usage)
          {
             mem = GetMaxRssMB();
-            MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-            MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+            MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh_cond.GetComm());
+            MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh_cond.GetComm());
          }
          // const double internal_energy = hydro.InternalEnergy(e_gf);
          // const double kinetic_energy = hydro.KineticEnergy(v_gf);
@@ -766,7 +821,7 @@ int main(int argc, char *argv[])
 
          // Make sure all ranks have sent their 'v' solution before initiating
          // another set of GLVis connections (one from each rank):
-         MPI_Barrier(pmesh->GetComm());
+         MPI_Barrier(pmesh_cond.GetComm());
 
          if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
          if (visualization)
@@ -805,7 +860,7 @@ int main(int argc, char *argv[])
 
             std::ofstream mesh_ofs(mesh_name.str().c_str());
             mesh_ofs.precision(8);
-            pmesh->PrintAsOne(mesh_ofs);
+            pmesh_cond.PrintAsOne(mesh_ofs);
             mesh_ofs.close();
 
             std::ofstream rho_ofs(rho_name.str().c_str());
@@ -829,7 +884,7 @@ int main(int argc, char *argv[])
       if (check)
       {
          double lnorm = e_gf * e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh_cond.GetComm());
          const double e_norm = sqrt(norm);
          MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
          MFEM_VERIFY(order_v==2, "check: order_v");
@@ -858,8 +913,8 @@ int main(int argc, char *argv[])
    if (mem_usage)
    {
       mem = GetMaxRssMB();
-      MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
-      MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+      MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh_cond.GetComm());
+      MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh_cond.GetComm());
    }
 
    const double energy_final = hydro.InternalEnergy(e_gf) +
@@ -880,15 +935,15 @@ int main(int argc, char *argv[])
    }
 
    // Position errors w.r.t. a perfect circle.
-   pmesh->ExchangeFaceNbrData();
+   pmesh_cond.ExchangeFaceNbrData();
    if (strcmp(mesh_file, "data/refined.mesh") == 0)
    {
       auto ir = IntRules.Get(Geometry::SEGMENT, 12);
 
       double perim = 0.0, pos_error = 0.0;
-      for (int i = 0; i < pmesh->GetNBE(); i++)
+      for (int i = 0; i < pmesh_cond.GetNBE(); i++)
       {
-         auto Tr = pmesh->GetBdrFaceTransformations(i);
+         auto Tr = pmesh_cond.GetBdrFaceTransformations(i);
          if (Tr == NULL) { continue; }
 
          auto ip_c = Geometries.GetCenter(Geometry::SEGMENT);
@@ -916,8 +971,8 @@ int main(int argc, char *argv[])
          }
       }
 
-      MPI_Allreduce(MPI_IN_PLACE, &perim, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-      MPI_Allreduce(MPI_IN_PLACE, &pos_error, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+      MPI_Allreduce(MPI_IN_PLACE, &perim, 1, MPI_DOUBLE, MPI_SUM, pmesh_cond.GetComm());
+      MPI_Allreduce(MPI_IN_PLACE, &pos_error, 1, MPI_DOUBLE, MPI_SUM, pmesh_cond.GetComm());
 
       if (Mpi::Root())
       {
@@ -928,15 +983,15 @@ int main(int argc, char *argv[])
    }
 
    // Position errors w.r.t. a perfect sphere.
-   pmesh->ExchangeFaceNbrData();
+   pmesh_cond.ExchangeFaceNbrData();
    if (strcmp(mesh_file, "data/sphere_hole_V4.msh") == 0)
    {
       auto ir = IntRules.Get(Geometry::SQUARE, 12);
 
       double perim = 0.0, pos_error = 0.0;
-      for (int i = 0; i < pmesh->GetNBE(); i++)
+      for (int i = 0; i < pmesh_cond.GetNBE(); i++)
       {
-         auto Tr = pmesh->GetBdrFaceTransformations(i);
+         auto Tr = pmesh_cond.GetBdrFaceTransformations(i);
          if (Tr == NULL) { continue; }
 
          auto ip_c = Geometries.GetCenter(Geometry::SQUARE);
@@ -966,8 +1021,8 @@ int main(int argc, char *argv[])
          }
       }
 
-      MPI_Allreduce(MPI_IN_PLACE, &perim, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-      MPI_Allreduce(MPI_IN_PLACE, &pos_error, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
+      MPI_Allreduce(MPI_IN_PLACE, &perim, 1, MPI_DOUBLE, MPI_SUM, pmesh_cond.GetComm());
+      MPI_Allreduce(MPI_IN_PLACE, &pos_error, 1, MPI_DOUBLE, MPI_SUM, pmesh_cond.GetComm());
 
       if (Mpi::Root())
       {
@@ -1000,7 +1055,6 @@ int main(int argc, char *argv[])
 
    // Free the used memory.
    delete ode_solver;
-   delete pmesh;
 
    return 0;
 }
