@@ -1053,49 +1053,131 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    {
       auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
       if (b_face_tr == nullptr) { continue; }
+      int attr = pmesh->GetBdrAttribute(be);
+      if (attr != bdr_attr_max)
+	{
+	  for (int q = 0; q < nqp_be; q++)
+	    {
+	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	      b_face_tr->SetAllIntPoints(&ip_f);
+	      ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+	      const int z_id = tr_el.ElementNo;
 
-      for (int q = 0; q < nqp_be; q++)
-      {
-         const IntegrationPoint &ip_f = b_ir.IntPoint(q);
-         b_face_tr->SetAllIntPoints(&ip_f);
-         ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
-         const int z_id = tr_el.ElementNo;
+	      double en  = fmax(0.0, e.GetValue(tr_el));
+	      double rho = qdata.rho0DetJ0_be(be * nqp_be + q) / tr_el.Weight();
+	      double p   = (gamma_gf(z_id) - 1.0) * rho * en;
+	      double cs  = sqrt(gamma_gf(z_id) * (gamma_gf(z_id) - 1.0) * en);
+	      double pen_scale = (gamma_gf(z_id) - 1.0) * rho * sqrt(en) / sqrt(gamma_gf(z_id) * (gamma_gf(z_id) - 1.0));
+	      
+	      //double penalty_force = wall_bc_penalty * C_I * rho * cs;
+	      double penalty_force = 0.0;
+	      // sign of (sigma n). n
+	      penalty_force = wall_bc_penalty * C_I * pen_scale;
 
-         double en  = fmax(0.0, e.GetValue(tr_el));
-         double rho = qdata.rho0DetJ0_be(be * nqp_be + q) / tr_el.Weight();
-         double p   = (gamma_gf(z_id) - 1.0) * rho * en;
-         double cs  = sqrt(gamma_gf(z_id) * (gamma_gf(z_id) - 1.0) * en);
+	      Vector nor(dim);
+	      CalcOrtho(b_face_tr->Jacobian(), nor);
+	      double nor_norm = sqrt(nor * nor);
 
-         double penalty_force = wall_bc_penalty * C_I * rho * cs;
+	      Vector tn(nor);
+	      tn /= nor_norm;
+	      
+	      Vector vShape;
+	      v.GetVectorValue(tr_el, tr_el.GetIntPoint(), vShape);
+	      double vDotn = 0.0;
+	      for (int d = 0; d < dim; d++)
+		{
+		  vDotn += vShape(d) * nor(d) / nor_norm;
+		}
+	      
+	      DenseMatrix stress(dim);
+	      stress = 0.0;
+	      for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
+	      Vector weightedNormalStress(dim);
+	      stress.Mult(tn, weightedNormalStress);
+	      
+	      for (int d = 0; d < dim; d++)
+		{
+		  qdata.be_force_data(be, q, d) =
+		    ip_f.weight * nor_norm *
+		    (vDotn * tn(d) * penalty_force - weightedNormalStress(d));
+		}
+	    }
+	}
+      else
+	{
+	  for (int q = 0; q < nqp_be; q++)
+	    {
+	      const IntegrationPoint &ip_f = b_ir.IntPoint(q);
+	      b_face_tr->SetAllIntPoints(&ip_f);
+	      ElementTransformation &tr_el = b_face_tr->GetElement1Transformation();
+	      const int z_id = tr_el.ElementNo;
 
-         Vector nor(dim);
-         CalcOrtho(b_face_tr->Jacobian(), nor);
-         double nor_norm = sqrt(nor * nor);
+	      double en  = fmax(0.0, e.GetValue(tr_el));
+	      double rho = qdata.rho0DetJ0_be(be * nqp_be + q) / tr_el.Weight();
+	      double p   = (gamma_gf(z_id) - 1.0) * rho * en;
+	      double cs  = sqrt(gamma_gf(z_id) * (gamma_gf(z_id) - 1.0) * en);
+	      double pen_scale = (gamma_gf(z_id) - 1.0) * rho * sqrt(en) / sqrt(gamma_gf(z_id) * (gamma_gf(z_id) - 1.0));
 
-         Vector tn(nor);
-         tn /= nor_norm;
+	      //double penalty_force = wall_bc_penalty * C_I * rho * cs;
+	      
+	      double penalty_force = 0.0;
+	      // sign of (sigma n). n
+	      penalty_force = wall_bc_penalty * C_I * pen_scale;
+	
+	      Vector nor(dim);
+	      CalcOrtho(b_face_tr->Jacobian(), nor);
+	      double nor_norm = sqrt(nor * nor);
 
-         Vector vShape;
-         v.GetVectorValue(tr_el, tr_el.GetIntPoint(), vShape);
-         double vDotn = 0.0;
-         for (int d = 0; d < dim; d++)
-         {
-            vDotn += vShape(d) * nor(d) / nor_norm;
-         }
+	      Vector tn(nor);
+	      tn /= nor_norm;
 
-         DenseMatrix stress(dim);
-         stress = 0.0;
-         for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
-         Vector weightedNormalStress(dim);
-         stress.Mult(tn, weightedNormalStress);
-
-         for (int d = 0; d < dim; d++)
-         {
-            qdata.be_force_data(be, q, d) =
-                  ip_f.weight * nor_norm *
-                  (vDotn * tn(d) * penalty_force - weightedNormalStress(d));
-         }
-      }
+	      /* Shifted */
+	      const IntegrationPoint &eip1 = b_face_tr->GetElement1IntPoint();
+	      Vector position;
+	      tr_el.Transform(eip1, position);
+	      Vector dist;
+	      Vector true_n;
+	      analyticalSurface->ComputeDistanceAndNormal(position, dist, true_n);
+	      true_n = tn;
+	      
+	      double ndotNtilda = true_n * tn;
+	      
+	      Vector vShape(dim);
+	      vShape = 0.0;
+	      //get_shifted_value(v, z_id, eip1, dist, H1.GetElementOrder(0), vShape);
+	      get_shifted_value(v, z_id, eip1, dist, 0, vShape);
+		  
+	      double vDotn = vShape * true_n;
+	      DenseMatrix stress(dim);
+	      stress = 0.0;
+	      for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
+	      Vector weightedNormalStress(dim);
+	      stress.Mult(tn, weightedNormalStress);
+	      // (sigma ntilda).n
+	      double sigmaNDotTrueN = weightedNormalStress * true_n;	   
+		   
+	      /*   Vector vShape;
+	      v.GetVectorValue(tr_el, tr_el.GetIntPoint(), vShape);
+	      double vDotn = 0.0;
+	      for (int d = 0; d < dim; d++)
+		{
+		  vDotn += vShape(d) * nor(d) / nor_norm;
+		}
+	      
+	      DenseMatrix stress(dim);
+	      stress = 0.0;
+	      for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
+	      Vector weightedNormalStress(dim);
+	      stress.Mult(tn, weightedNormalStress);
+	  */    
+	      for (int d = 0; d < dim; d++)
+		{
+		  qdata.be_force_data(be, q, d) =
+		    ip_f.weight * nor_norm *
+		    (vDotn * true_n(d) * penalty_force * std::pow(ndotNtilda, 1.0) - weightedNormalStress(d));
+		}
+	    }
+	}
    }
 }
 
