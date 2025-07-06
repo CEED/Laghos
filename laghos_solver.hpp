@@ -140,7 +140,8 @@ protected:
    const int Q1D;
    mutable QuadratureData qdata;
    BdrForceCoefficient bdr_force_coeff;
-   BdrEnergyForceCoefficient bdr_en_force_coeff;
+   BdrEnergyForceCoefficientIBP bdr_en_ibp_force_coeff;
+   BdrEnergyForceCoefficientPen bdr_en_pen_force_coeff;
    BdrMassCoefficient  bdr_mass_coeff;
    mutable bool qdata_is_current, forcemat_is_assembled;
 
