@@ -62,10 +62,14 @@ public:
 class SBM_BoundaryMixedForceIntegrator : public BilinearFormIntegrator
 {
 protected:
-   VectorCoefficient &Q;
+   VectorCoefficient &Q_ibp;
+   VectorCoefficient &Q_pen;
+   const ParFiniteElementSpace &H1; 
+   const AnalyticalGeometricShape& geom;
+   int num_taylor = 1;
 
 public:
-   SBM_BoundaryMixedForceIntegrator(VectorCoefficient &vc) : Q(vc) { }
+   SBM_BoundaryMixedForceIntegrator(VectorCoefficient &vc_ibp, VectorCoefficient &vc_pen, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor) :  Q_ibp(vc_ibp), Q_pen(vc_pen), H1(H1), geom(geom), num_taylor(num_taylor) { }
 
    /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
    /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.

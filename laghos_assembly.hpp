@@ -40,8 +40,12 @@ struct QuadratureData
    // It must be recomputed in every time step.
    DenseTensor stressJinvT;
 
-   // Quadrature data for the boundary force;
+   // Quadrature data for the boundary force: integration by part;
    DenseTensor be_force_data;
+   // Quadrature data for the boundary force: integration by part;
+   DenseTensor be_force_data_ibp;
+   // Quadrature data for the boundary force: penalty term;
+   DenseTensor be_force_data_pen;
    // Quadrature data for the boundary mass matrix;
    DenseTensor be_mass_data;
    // Quadrature data for the boundary energy force: integration by part;
@@ -68,7 +72,9 @@ struct QuadratureData
    QuadratureData(int dim, int NE, int quads_per_el, int NBE, int quads_per_be)
       : Jac0inv(dim, dim, NE * quads_per_el),
         stressJinvT(NE * quads_per_el, dim, dim),
-        be_force_data(NBE, quads_per_be, dim),
+	be_force_data(NBE, quads_per_be, dim),
+        be_force_data_ibp(NBE, quads_per_be, dim),
+	be_force_data_pen(NBE, quads_per_be, dim),
 	fe_force_data_ibp(NBE, quads_per_be, dim),
 	fe_force_data_pen(NBE, quads_per_be, dim),
         be_mass_data(dim, dim, NBE * quads_per_be),
@@ -95,7 +101,45 @@ public:
    }
 };
 
-  class BdrEnergyForceCoefficientIBP : public VectorCoefficient
+class BdrForceCoefficientIBP : public VectorCoefficient
+{
+private:
+   const QuadratureData &qdata;
+
+public:
+   BdrForceCoefficientIBP(const QuadratureData &qd)
+      : VectorCoefficient(qd.Jac0inv.SizeI()), qdata(qd) { }
+
+   void Eval(Vector &V, ElementTransformation &Tr_f,
+             const IntegrationPoint &ip_f) override
+   {
+     for (int d = 0; d < vdim; d++)
+     {
+        V(d) = qdata.be_force_data_ibp(Tr_f.ElementNo, ip_f.index, d);
+     }
+   }
+};
+
+class BdrForceCoefficientPen : public VectorCoefficient
+{
+private:
+   const QuadratureData &qdata;
+
+public:
+   BdrForceCoefficientPen(const QuadratureData &qd)
+      : VectorCoefficient(qd.Jac0inv.SizeI()), qdata(qd) { }
+
+   void Eval(Vector &V, ElementTransformation &Tr_f,
+             const IntegrationPoint &ip_f) override
+   {
+     for (int d = 0; d < vdim; d++)
+     {
+        V(d) = qdata.be_force_data_pen(Tr_f.ElementNo, ip_f.index, d);
+     }
+   }
+};
+
+class BdrEnergyForceCoefficientIBP : public VectorCoefficient
 {
 private:
    const QuadratureData &qdata;
@@ -114,7 +158,7 @@ public:
    }
 };
 
-    class BdrEnergyForceCoefficientPen : public VectorCoefficient
+class BdrEnergyForceCoefficientPen : public VectorCoefficient
 {
 private:
    const QuadratureData &qdata;

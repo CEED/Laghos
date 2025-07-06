@@ -140,6 +140,8 @@ protected:
    const int Q1D;
    mutable QuadratureData qdata;
    BdrForceCoefficient bdr_force_coeff;
+   BdrForceCoefficientIBP bdr_force_ibp_coeff;
+   BdrForceCoefficientPen bdr_force_pen_coeff;
    BdrEnergyForceCoefficientIBP bdr_en_ibp_force_coeff;
    BdrEnergyForceCoefficientPen bdr_en_pen_force_coeff;
    BdrMassCoefficient  bdr_mass_coeff;

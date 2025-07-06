@@ -208,29 +208,46 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
    }
 
    const int nqp_face  = IntRule->GetNPoints();
-   const int vdim      = Q.GetVDim();
+   const int vdim      = Q_ibp.GetVDim();
    const int dof_trial = trial_fe.GetDof();
    const int dof_test  = test_fe.GetDof();
 
    elmat.SetSize(dof_test * vdim, dof_trial);
    elmat = 0.0;
-   DenseMatrix loc_force(dof_test, vdim);
+   DenseMatrix loc_force_ibp(dof_test, vdim);
+   DenseMatrix loc_force_pen(dof_test, vdim);
+   
    Vector shape_trial(dof_trial), shape_test(dof_test),
-          Vloc_force(loc_force.Data(), dof_test * vdim);
-   Vector qcoeff(vdim);
+          sbm_shape_test(dof_test),
+          Vloc_force_ibp(loc_force_ibp.Data(), dof_test * vdim),
+          Vloc_force_pen(loc_force_pen.Data(), dof_test * vdim);
+
+   Vector qcoeff_ibp(vdim);
+   Vector qcoeff_pen(vdim);
 
    for (int q = 0; q < nqp_face; q++)
    {
       const IntegrationPoint &ip_f = IntRule->IntPoint(q);
       Tr.SetAllIntPoints(&ip_f);
-      const IntegrationPoint &ip_e = Tr.GetElement1IntPoint();
+      Q_ibp.Eval(qcoeff_ibp, Tr, ip_f);
+      Q_pen.Eval(qcoeff_pen, Tr, ip_f);
+      const IntegrationPoint &eip1 = Tr.GetElement1IntPoint();
 
-      test_fe.CalcShape(ip_e, shape_test);
-      trial_fe.CalcShape(ip_e, shape_trial);
-      Q.Eval(qcoeff, Tr, ip_f);
+      Vector position;
+      Tr.Transform(eip1, position);
+      Vector dist;
+      Vector true_n;
+      geom.ComputeDistanceAndNormal(position, dist, true_n);
+      shift_shape(H1, H1, Tr.ElementNo, eip1, dist, 0, shape_test);
+      shift_shape(H1, H1, Tr.ElementNo, eip1, dist, 0, sbm_shape_test);
 
-      MultVWt(shape_test, qcoeff, loc_force);
-      AddMultVWt(Vloc_force, shape_trial, elmat);
+      trial_fe.CalcShape(eip1, shape_trial);
+
+      MultVWt(sbm_shape_test, qcoeff_ibp, loc_force_ibp);
+      MultVWt(shape_test, qcoeff_pen, loc_force_pen);
+
+      loc_force_ibp += loc_force_pen;
+      AddMultVWt(Vloc_force_ibp, shape_trial, elmat);
    }
 }
 

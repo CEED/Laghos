@@ -140,7 +140,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                      3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints(), NBE, b_ir.GetNPoints()),
-   bdr_force_coeff(qdata), bdr_mass_coeff(qdata),
+   bdr_force_coeff(qdata), bdr_force_ibp_coeff(qdata), bdr_force_pen_coeff(qdata),
+   bdr_mass_coeff(qdata),
    bdr_en_ibp_force_coeff(qdata), bdr_en_pen_force_coeff(qdata),
    qdata_is_current(false),
    forcemat_is_assembled(false),
@@ -375,7 +376,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	  // Make a dummy assembly to figure out the sparsity.
 	  if (analyticalSurface != nullptr)
 	    {
-	      auto vpb_sbm = new SBM_BoundaryMixedForceIntegrator(bdr_force_coeff);
+	      auto vpb_sbm = new SBM_BoundaryMixedForceIntegrator(bdr_force_ibp_coeff, bdr_force_pen_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0));
 	      vpb_sbm->SetIntRule(&b_ir);
 	      Force_be.AddBdrFaceIntegrator(vpb_sbm, ess_bdr_sbm);
 	      auto vpb_sbm_T = new SBM_BoundaryMixedForceTIntegrator(bdr_en_ibp_force_coeff, bdr_en_pen_force_coeff,  H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0));
@@ -1157,19 +1158,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 	      // (sigma ntilda).n
 	      double sigmaNDotTrueN = weightedNormalStress * true_n;	   
 		   
-	      /*   Vector vShape;
-	      v.GetVectorValue(tr_el, tr_el.GetIntPoint(), vShape);
-	      double vDotn = 0.0;
 	      for (int d = 0; d < dim; d++)
 		{
-		  vDotn += vShape(d) * nor(d) / nor_norm;
-		}
-	  */    
-	      for (int d = 0; d < dim; d++)
-		{
-		  qdata.be_force_data(be, q, d) =
+		  qdata.be_force_data_ibp(be, q, d) =
+		    -ip_f.weight * nor_norm * weightedNormalStress(d);
+		  qdata.be_force_data_pen(be, q, d) =
 		    ip_f.weight * nor_norm *
-		    (vDotn * true_n(d) * penalty_force * std::abs(ndotNtilda) - weightedNormalStress(d));
+		    vDotn * true_n(d) * penalty_force * std::abs(ndotNtilda);
 		  qdata.fe_force_data_ibp(be, q, d) =
 		    - ip_f.weight * nor_norm * sigmaNDotTrueN * true_n(d);
 		  qdata.fe_force_data_pen(be, q, d) =
