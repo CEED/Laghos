@@ -253,25 +253,39 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
 
    elmat.SetSize(dof_test, dof_trial * vdim);
    elmat = 0.0;
-   DenseMatrix loc_force(dof_trial, vdim);
-   Vector shape_trial(dof_trial), shape_test(dof_test),
-          Vloc_force(loc_force.Data(), dof_trial * vdim);
+   DenseMatrix loc_force_ibp(dof_trial, vdim);
+   DenseMatrix loc_force_pen(dof_trial, vdim);
+
+   Vector shape_trial(dof_trial), sbm_shape_trial(dof_trial), shape_test(dof_test),
+     Vloc_force_ibp(loc_force_ibp.Data(), dof_trial * vdim),
+     Vloc_force_pen(loc_force_pen.Data(), dof_trial * vdim);
+
    Vector qcoeff_ibp(vdim);
    Vector qcoeff_pen(vdim);
-
+  
    for (int q = 0; q < nqp_face; q++)
    {
       const IntegrationPoint &ip_f = IntRule->IntPoint(q);
       Tr.SetAllIntPoints(&ip_f);
-      const IntegrationPoint &ip_e = Tr.GetElement1IntPoint();
-
-      test_fe.CalcShape(ip_e, shape_test);
-      trial_fe.CalcShape(ip_e, shape_trial);
       Q_ibp.Eval(qcoeff_ibp, Tr, ip_f);
       Q_pen.Eval(qcoeff_pen, Tr, ip_f);
-      qcoeff_ibp += qcoeff_pen;
-      MultVWt(shape_trial, qcoeff_ibp, loc_force);
-      AddMultVWt(shape_test, Vloc_force, elmat);
+      const IntegrationPoint &eip1 = Tr.GetElement1IntPoint();
+
+      Vector position;
+      Tr.Transform(eip1, position);
+      Vector dist;
+      Vector true_n;
+      geom.ComputeDistanceAndNormal(position, dist, true_n);
+      shift_shape(H1, H1, Tr.ElementNo, eip1, dist, 0, shape_trial);
+      shift_shape(H1, H1, Tr.ElementNo, eip1, dist, 0, sbm_shape_trial);
+      
+      test_fe.CalcShape(eip1, shape_test);
+
+      MultVWt(sbm_shape_trial, qcoeff_ibp, loc_force_ibp);
+      MultVWt(shape_trial, qcoeff_pen, loc_force_pen);
+
+      loc_force_ibp += loc_force_pen;
+      AddMultVWt(shape_test, Vloc_force_ibp, elmat);
    }
 }
 
