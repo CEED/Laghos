@@ -140,7 +140,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                      3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints(), NBE, b_ir.GetNPoints()),
-   bdr_force_coeff(qdata), bdr_mass_coeff(qdata),
+   bdr_force_coeff(qdata), bdr_mass_coeff(qdata), bdr_en_force_coeff(qdata),
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1), Force_be(&L2, &H1), Force_be_T(&H1, &L2),
@@ -377,7 +377,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 	      auto vpb_sbm = new SBM_BoundaryMixedForceIntegrator(bdr_force_coeff);
 	      vpb_sbm->SetIntRule(&b_ir);
 	      Force_be.AddBdrFaceIntegrator(vpb_sbm, ess_bdr_sbm);
-	      auto vpb_sbm_T = new SBM_BoundaryMixedForceTIntegrator(bdr_force_coeff);
+	      auto vpb_sbm_T = new SBM_BoundaryMixedForceTIntegrator(bdr_en_force_coeff);
 	      vpb_sbm_T->SetIntRule(&b_ir);
 	      Force_be_T.AddBdrFaceIntegrator(vpb_sbm_T, ess_bdr_sbm);
 	    }
@@ -1163,18 +1163,16 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 		{
 		  vDotn += vShape(d) * nor(d) / nor_norm;
 		}
-	      
-	      DenseMatrix stress(dim);
-	      stress = 0.0;
-	      for (int d = 0; d < dim; d++) { stress(d, d) = - p; }
-	      Vector weightedNormalStress(dim);
-	      stress.Mult(tn, weightedNormalStress);
 	  */    
 	      for (int d = 0; d < dim; d++)
 		{
 		  qdata.be_force_data(be, q, d) =
 		    ip_f.weight * nor_norm *
 		    (vDotn * true_n(d) * penalty_force * std::pow(ndotNtilda, 1.0) - weightedNormalStress(d));
+		  qdata.fe_force_data(be, q, d) =
+		    ip_f.weight * nor_norm *
+		    (vDotn * true_n(d) * penalty_force * std::pow(ndotNtilda, 1.0) - weightedNormalStress(d));
+		  
 		}
 	    }
 	}

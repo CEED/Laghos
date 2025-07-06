@@ -44,6 +44,8 @@ struct QuadratureData
    DenseTensor be_force_data;
    // Quadrature data for the boundary mass matrix;
    DenseTensor be_mass_data;
+   // Quadrature data for the boundary energy force;
+   DenseTensor fe_force_data;
 
    // Quadrature data used for full/partial assembly of the mass matrices.
    // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
@@ -65,6 +67,7 @@ struct QuadratureData
       : Jac0inv(dim, dim, NE * quads_per_el),
         stressJinvT(NE * quads_per_el, dim, dim),
         be_force_data(NBE, quads_per_be, dim),
+	fe_force_data(NBE, quads_per_be, dim),
         be_mass_data(dim, dim, NBE * quads_per_be),
         rho0DetJ0w(NE * quads_per_el),
         rho0DetJ0_be(NBE * quads_per_be) { }
@@ -85,6 +88,25 @@ public:
      for (int d = 0; d < vdim; d++)
      {
         V(d) = qdata.be_force_data(Tr_f.ElementNo, ip_f.index, d);
+     }
+   }
+};
+
+  class BdrEnergyForceCoefficient : public VectorCoefficient
+{
+private:
+   const QuadratureData &qdata;
+
+public:
+   BdrEnergyForceCoefficient(const QuadratureData &qd)
+      : VectorCoefficient(qd.Jac0inv.SizeI()), qdata(qd) { }
+
+   void Eval(Vector &V, ElementTransformation &Tr_f,
+             const IntegrationPoint &ip_f) override
+   {
+     for (int d = 0; d < vdim; d++)
+     {
+        V(d) = qdata.fe_force_data(Tr_f.ElementNo, ip_f.index, d);
      }
    }
 };
