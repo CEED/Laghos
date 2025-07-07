@@ -243,8 +243,8 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
 
       trial_fe.CalcShape(eip1, shape_trial);
 
-      MultVWt(sbm_shape_test, qcoeff_ibp, loc_force_ibp);
-      MultVWt(shape_test, qcoeff_pen, loc_force_pen);
+      MultVWt(shape_test, qcoeff_ibp, loc_force_ibp);
+      MultVWt(sbm_shape_test, qcoeff_pen, loc_force_pen);
 
       loc_force_ibp += loc_force_pen;
       AddMultVWt(Vloc_force_ibp, shape_trial, elmat);
