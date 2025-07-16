@@ -1256,6 +1256,27 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
    }
 }
 
+void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
+{
+   // Assumption is Mv was connected to the same Coefficient from the input.
+   Mv.Update();
+   Mv.BilinearForm::operator=(0.0);
+   Mv.Assemble();
+   Mv_spmat_copy = Mv.SpMat();
+
+   MassIntegrator mi(rho_coeff, &ir);
+   for (int e = 0; e < NE; e++)
+   {
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+      const int attr = pmesh->GetAttribute(e);
+      mi.AssembleElementMatrix(fe, Tr, Me(e));
+      DenseMatrixInverse inv(&Me(e));
+      inv.Factor();
+      inv.GetInverseMatrix(Me_inv(e));
+   }
+}
+  
 /// Trace of a square matrix
 template<int H, int W, typename T>
 MFEM_HOST_DEVICE inline

@@ -210,7 +210,8 @@ public:
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
-
+   void UpdateMassMatrices(Coefficient &rho_coeff);
+  
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;

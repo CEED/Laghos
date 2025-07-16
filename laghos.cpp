@@ -824,6 +824,8 @@ int main(int argc, char *argv[])
       // and the oper object might have redirected the mesh positions to those.
       pmesh_cond.NewNodes(x_gf, false);
 
+      //hydro.UpdateMassMatrices(rho0_coeff);
+      
       if (last_step || (ti % vis_steps) == 0)
       {
          double lnorm = e_gf * e_gf, norm;
