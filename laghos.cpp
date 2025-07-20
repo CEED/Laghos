@@ -352,6 +352,10 @@ int main(int argc, char *argv[])
 	     }
 	 }
      }
+   else
+     {
+       cond_attr.Append(1);
+     }
 
    // Parallel partitioning of the mesh.
    ParMesh *pmesh = nullptr;

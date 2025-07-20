@@ -1234,7 +1234,6 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
 	      tn /= nor_norm;
 	      const IntegrationPoint &ip_e1 = b_face_tr->GetElement1IntPoint();
 	      Vector position;
-	      tr_el.SetIntPoint(&ip_e1);	 
 	      tr_el.Transform(ip_e1, position);
 	      Vector dist;
 	      Vector true_n;
