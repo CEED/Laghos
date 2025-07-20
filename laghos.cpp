@@ -297,7 +297,6 @@ int main(int argc, char *argv[])
       }
    }
    dim = mesh->Dimension();
-
    // 1D vs partial assembly sanity check.
    if (p_assembly && dim == 1)
    {
@@ -493,7 +492,7 @@ int main(int argc, char *argv[])
 
    ParSubMesh pmesh_cond(ParSubMesh::CreateFromDomain(*pmesh, cond_attr));
 
-   double volume0 = pmesh_cond.GetElementVolume(0);
+   /*double volume0 = pmesh_cond.GetElementVolume(0);
    double h0;
    switch (pmesh->GetElementBaseGeometry(0))
    {
@@ -532,7 +531,7 @@ int main(int argc, char *argv[])
 	 }
      }
      pmesh_cond.SetAttributes();
-       
+       */
    int NE = pmesh_cond.GetNE(), ne_min, ne_max;
    MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh_cond.GetComm());
    MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh_cond.GetComm());
