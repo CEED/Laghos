@@ -21,6 +21,7 @@
 #include "laghos_assembly.hpp"
 #include "AnalyticalSurface.hpp"
 #include "laghos_shift.hpp"
+#include "laghos_mass_integrators.hpp"
 
 #ifdef MFEM_USE_MPI
 
@@ -144,7 +145,8 @@ protected:
    BdrForceCoefficientPen bdr_force_pen_coeff;
    BdrEnergyForceCoefficientIBP bdr_en_ibp_force_coeff;
    BdrEnergyForceCoefficientPen bdr_en_pen_force_coeff;
-   BdrMassCoefficient  bdr_mass_coeff;
+   BdrMassCoefficient bdr_mass_coeff;
+   InteriorMassCoefficient mass_coeff;
    mutable bool qdata_is_current, forcemat_is_assembled;
 
    // Force matrix that combines the kinematic and thermodynamic spaces. It is

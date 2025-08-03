@@ -142,6 +142,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata(dim, NE, ir.GetNPoints(), NBE, b_ir.GetNPoints()),
    bdr_force_coeff(qdata), bdr_force_ibp_coeff(qdata), bdr_force_pen_coeff(qdata),
    bdr_mass_coeff(qdata),
+   mass_coeff(qdata),
    bdr_en_ibp_force_coeff(qdata), bdr_en_pen_force_coeff(qdata),
    qdata_is_current(false),
    forcemat_is_assembled(false),
@@ -212,73 +213,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    MPI_Allreduce(MPI_IN_PLACE, &rho0_max, 1,
                  MPI_DOUBLE, MPI_MAX, pmesh->GetComm());
 
-   UpdateBdrQuadratureData();
-
-   if (p_assembly)
-   {
-      qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
-                            &timer, gamma_gf, ir, H1, L2);
-      ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
-      VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
-      EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
-      // Inside the above constructors for mass, there is reordering of the mesh
-      // nodes which is performed on the host. Since the mesh nodes are a
-      // subvector, so we need to sync with the rest of the base vector (which
-      // is assumed to be in the memory space used by the mfem::Device).
-      H1.GetParMesh()->GetNodes()->ReadWrite();
-      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-      // we must enforce v_x/y/z = 0 for the velocity components.
-      const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
-      Array<int> ess_bdr(bdr_attr_max);
-      for (int c = 0; c < dim; c++)
-      {
-         ess_bdr = 0;
-         ess_bdr[c] = 1;
-         H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-         c_tdofs[c].Read();
-      }
-      X.UseDevice(true);
-      B.UseDevice(true);
-      rhs.UseDevice(true);
-      e_rhs.UseDevice(true);
-   }
-   else
-   {
-      // Standard local assembly and inversion for energy mass matrices.
-      // 'Me' is used in the computation of the internal energy
-      // which is used twice: once at the start and once at the end of the run.
-      MassIntegrator mi(rho0_coeff, &ir);
-      for (int e = 0; e < NE; e++)
-      {
-         DenseMatrixInverse inv(&Me(e));
-         const FiniteElement &fe = *L2.GetFE(e);
-         ElementTransformation &Tr = *L2.GetElementTransformation(e);
-         mi.AssembleElementMatrix(fe, Tr, Me(e));
-         inv.Factor();
-         inv.GetInverseMatrix(Me_inv(e));
-      }
-      // Standard assembly for the velocity mass matrix.
-      VectorMassIntegrator *vmi = new VectorMassIntegrator(rho0_coeff, &ir);
-      Mv.AddDomainIntegrator(vmi);
-
-      Mv.BilinearForm::operator=(0.0);
-
-      if (BC_strong == false)
-      {
-         auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
-         nvmi->SetIntRule(&b_ir);
-         Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
-	 if (analyticalSurface != nullptr)
-	   {
-	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_mass_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0));
-	     nvmi_sbm->SetIntRule(&b_ir);
-	     Mv.AddBdrFaceIntegrator(nvmi_sbm, ess_bdr_sbm);
-	   }
-      }
-      Mv.Assemble();
-      Mv_spmat_copy = Mv.SpMat();
-   }
-
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
    int Ne, ne = NE;
@@ -334,6 +268,74 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       default: MFEM_ABORT("Unknown zone type!");
    }
    qdata.h0 /= (double) H1.GetOrder(0); 
+
+   UpdateBdrQuadratureData();
+
+   if (p_assembly)
+   {
+      qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
+                            &timer, gamma_gf, ir, H1, L2);
+      ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
+      VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
+      EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
+      // Inside the above constructors for mass, there is reordering of the mesh
+      // nodes which is performed on the host. Since the mesh nodes are a
+      // subvector, so we need to sync with the rest of the base vector (which
+      // is assumed to be in the memory space used by the mfem::Device).
+      H1.GetParMesh()->GetNodes()->ReadWrite();
+      // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
+      // we must enforce v_x/y/z = 0 for the velocity components.
+      const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
+      Array<int> ess_bdr(bdr_attr_max);
+      for (int c = 0; c < dim; c++)
+      {
+         ess_bdr = 0;
+         ess_bdr[c] = 1;
+         H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
+         c_tdofs[c].Read();
+      }
+      X.UseDevice(true);
+      B.UseDevice(true);
+      rhs.UseDevice(true);
+      e_rhs.UseDevice(true);
+   }
+   else
+   {
+      // Standard local assembly and inversion for energy mass matrices.
+      // 'Me' is used in the computation of the internal energy
+      // which is used twice: once at the start and once at the end of the run.
+      MassIntegrator mi(rho0_coeff, &ir);
+      for (int e = 0; e < NE; e++)
+      {
+         DenseMatrixInverse inv(&Me(e));
+         const FiniteElement &fe = *L2.GetFE(e);
+         ElementTransformation &Tr = *L2.GetElementTransformation(e);
+         mi.AssembleElementMatrix(fe, Tr, Me(e));
+         inv.Factor();
+         inv.GetInverseMatrix(Me_inv(e));
+      }
+      // Standard assembly for the velocity mass matrix.
+      int int_order = (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1;
+      InteriorVectorMassIntegrator *vmi = new InteriorVectorMassIntegrator(mass_coeff, &ir, int_order);
+      Mv.AddDomainIntegrator(vmi);
+
+      Mv.BilinearForm::operator=(0.0);
+
+      if (BC_strong == false)
+      {
+         auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
+         nvmi->SetIntRule(&b_ir);
+         Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
+	 if (analyticalSurface != nullptr)
+	   {
+	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_mass_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0));
+	     nvmi_sbm->SetIntRule(&b_ir);
+	     Mv.AddBdrFaceIntegrator(nvmi_sbm, ess_bdr_sbm);
+	   }
+      }
+      Mv.Assemble();
+      Mv_spmat_copy = Mv.SpMat();
+   }
 
    if (p_assembly)
    {
@@ -1056,7 +1058,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
       if (b_face_tr == nullptr) { continue; }
       int attr = pmesh->GetBdrAttribute(be);
-      if (attr != bdr_attr_max)
+      if (attr != bdr_attr_max || analyticalSurface == NULL)
 	{
 	  for (int q = 0; q < nqp_be; q++)
 	    {
@@ -1184,7 +1186,7 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
       auto b_face_tr = pmesh->GetBdrFaceTransformations(be);
       if (b_face_tr == nullptr) { continue; }
       int attr = pmesh->GetBdrAttribute(be);
-      if (attr != bdr_attr_max)
+      if (attr != bdr_attr_max || analyticalSurface == NULL)
 	{
 	  for (int q = 0; q < nqp_be; q++)
 	    {

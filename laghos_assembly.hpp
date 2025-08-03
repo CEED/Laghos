@@ -69,6 +69,8 @@ struct QuadratureData
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
 
+   int quads_per_el;
+  
    QuadratureData(int dim, int NE, int quads_per_el, int NBE, int quads_per_be)
       : Jac0inv(dim, dim, NE * quads_per_el),
         stressJinvT(NE * quads_per_el, dim, dim),
@@ -79,7 +81,8 @@ struct QuadratureData
 	fe_force_data_pen(NBE, quads_per_be, dim),
         be_mass_data(dim, dim, NBE * quads_per_be),
         rho0DetJ0w(NE * quads_per_el),
-        rho0DetJ0_be(NBE * quads_per_be) { }
+        rho0DetJ0_be(NBE * quads_per_be),
+	quads_per_el(quads_per_el){ }
 };
 
 class BdrForceCoefficient : public VectorCoefficient
@@ -194,6 +197,22 @@ public:
       K.Set(1.0, qdata.be_mass_data(Tr_f.ElementNo * nqp_per_face + ip.index));
    }
 };
+
+class InteriorMassCoefficient : public Coefficient
+{
+private:
+   const QuadratureData &qdata;
+  
+public:
+   InteriorMassCoefficient(const QuadratureData &qd)
+      : qdata(qd) { }
+
+   real_t Eval(ElementTransformation &Tr_f, const IntegrationPoint &ip) override
+   {
+      return qdata.rho0DetJ0w(Tr_f.ElementNo * qdata.quads_per_el + ip.index);
+   }
+};
+  
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.
