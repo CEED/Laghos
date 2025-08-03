@@ -146,6 +146,7 @@ protected:
    BdrEnergyForceCoefficientIBP bdr_en_ibp_force_coeff;
    BdrEnergyForceCoefficientPen bdr_en_pen_force_coeff;
    BdrMassCoefficient bdr_mass_coeff;
+   BdrJacobianCoefficient bdr_j_coeff;
    InteriorMassCoefficient mass_coeff;
    mutable bool qdata_is_current, forcemat_is_assembled;
 

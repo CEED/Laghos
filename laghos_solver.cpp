@@ -142,6 +142,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata(dim, NE, ir.GetNPoints(), NBE, b_ir.GetNPoints()),
    bdr_force_coeff(qdata), bdr_force_ibp_coeff(qdata), bdr_force_pen_coeff(qdata),
    bdr_mass_coeff(qdata),
+   bdr_j_coeff(qdata),
    mass_coeff(qdata),
    bdr_en_ibp_force_coeff(qdata), bdr_en_pen_force_coeff(qdata),
    qdata_is_current(false),
@@ -323,7 +324,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
       if (BC_strong == false)
       {
-         auto nvmi = new BoundaryVectorMassIntegrator(bdr_mass_coeff);
+	auto nvmi = new BoundaryVectorMassIntegratorV2(bdr_j_coeff, &b_ir, int_order);
          nvmi->SetIntRule(&b_ir);
          Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
 	 if (analyticalSurface != nullptr)

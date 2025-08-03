@@ -70,6 +70,8 @@ struct QuadratureData
    double dt_est;
 
    int quads_per_el;
+
+   int quads_per_be;
   
    QuadratureData(int dim, int NE, int quads_per_el, int NBE, int quads_per_be)
       : Jac0inv(dim, dim, NE * quads_per_el),
@@ -82,7 +84,8 @@ struct QuadratureData
         be_mass_data(dim, dim, NBE * quads_per_be),
         rho0DetJ0w(NE * quads_per_el),
         rho0DetJ0_be(NBE * quads_per_be),
-	quads_per_el(quads_per_el){ }
+	quads_per_el(quads_per_el),
+        quads_per_be(quads_per_be){ }
 };
 
 class BdrForceCoefficient : public VectorCoefficient
@@ -212,7 +215,22 @@ public:
       return qdata.rho0DetJ0w(Tr_f.ElementNo * qdata.quads_per_el + ip.index);
    }
 };
+
+class BdrJacobianCoefficient : public Coefficient
+{
+private:
+   const QuadratureData &qdata;
   
+public:
+   BdrJacobianCoefficient(const QuadratureData &qd)
+      : qdata(qd) { }
+
+   real_t Eval(ElementTransformation &Tr_f, const IntegrationPoint &ip) override
+   {
+      return qdata.rho0DetJ0_be(Tr_f.ElementNo * qdata.quads_per_be + ip.index);
+   }
+};
+
 // This class is used only for visualization. It assembles (rho, phi) in each
 // zone, which is used by LagrangianHydroOperator::ComputeDensity to do an L2
 // projection of the density.
