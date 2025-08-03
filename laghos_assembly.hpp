@@ -252,21 +252,37 @@ class ForceIntegrator : public BilinearFormIntegrator
 {
 private:
    const QuadratureData &qdata;
+   int order;
 public:
-   ForceIntegrator(QuadratureData &qdata) : qdata(qdata) { }
+  ForceIntegrator(QuadratureData &qdata, int order) : qdata(qdata), order(order) { }
    virtual void AssembleElementMatrix2(const FiniteElement &trial_fe,
                                        const FiniteElement &test_fe,
                                        ElementTransformation &Tr,
                                        DenseMatrix &elmat);
 };
 
+class BoundaryMixedForceIntegratorV2 : public BilinearFormIntegrator
+{
+protected:
+   VectorCoefficient &Q;
+   int order;
+
+public:
+  BoundaryMixedForceIntegratorV2(VectorCoefficient &vc, int order) : Q(vc), order(order) { }
+    
+  void AssembleFaceMatrix(const FiniteElement &trial_fe,
+                          const FiniteElement &test_fe,
+                          FaceElementTransformations &Tr,
+                          DenseMatrix &elmat) override;
+};
+
 class BoundaryMixedForceTIntegrator : public BilinearFormIntegrator
 {
 protected:
    VectorCoefficient &Q;
-
+   int order;
 public:
-   BoundaryMixedForceTIntegrator(VectorCoefficient &vc) : Q(vc) { }
+  BoundaryMixedForceTIntegrator(VectorCoefficient &vc, int order) : Q(vc), order(order) { }
 
    /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
    /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.

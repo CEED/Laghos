@@ -153,12 +153,7 @@ void SBM_BoundaryVectorMassIntegrator::
 AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
                    FaceElementTransformations &Tr, DenseMatrix &elmat)
 {
-   const IntegrationRule *ir = IntRule;
-   if (ir == nullptr)
-   {
-      int order = 2 * el1.GetOrder();
-      ir = &IntRules.Get(Tr.GetGeometryType(), order);
-   }
+   const IntegrationRule *ir = &IntRules.Get(Tr.GetGeometryType(), int_order);
 
    const int nqp_face = IntRule->GetNPoints();
    const int dof = el1.GetDof();
@@ -170,7 +165,7 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
    partelmat.SetSize(dof);
    for (int q = 0; q < nqp_face; q++)
    {
-      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
       // Set the integration point in the face and the neighboring elements
       Tr.SetAllIntPoints(&ip_f);
 
@@ -201,12 +196,7 @@ void SBM_BoundaryMixedForceIntegrator::
 AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
                    FaceElementTransformations &Tr, DenseMatrix &elmat)
 {
-   const IntegrationRule *ir = IntRule;
-   if (ir == nullptr)
-   {
-      int order = trial_fe.GetOrder() + test_fe.GetOrder();
-      ir = &IntRules.Get(Tr.GetGeometryType(), order);
-   }
+   const IntegrationRule *ir = &IntRules.Get(Tr.GetGeometryType(), int_order);
 
    const int nqp_face  = IntRule->GetNPoints();
    const int vdim      = Q_ibp.GetVDim();
@@ -228,7 +218,7 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
 
    for (int q = 0; q < nqp_face; q++)
    {
-      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
       Tr.SetAllIntPoints(&ip_f);
       Q_ibp.Eval(qcoeff_ibp, Tr, ip_f);
       Q_pen.Eval(qcoeff_pen, Tr, ip_f);
@@ -258,12 +248,7 @@ void SBM_BoundaryMixedForceTIntegrator::
 AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
                    FaceElementTransformations &Tr, DenseMatrix &elmat)
 {
-   const IntegrationRule *ir = IntRule;
-   if (ir == nullptr)
-   {
-      int order = trial_fe.GetOrder() + test_fe.GetOrder();
-      ir = &IntRules.Get(Tr.GetGeometryType(), order);
-   }
+   const IntegrationRule *ir = &IntRules.Get(Tr.GetGeometryType(), int_order);
 
    const int nqp_face  = IntRule->GetNPoints();
    const int vdim      = Q_ibp.GetVDim();
@@ -284,7 +269,7 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
   
    for (int q = 0; q < nqp_face; q++)
    {
-      const IntegrationPoint &ip_f = IntRule->IntPoint(q);
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
       Tr.SetAllIntPoints(&ip_f);
       Q_ibp.Eval(qcoeff_ibp, Tr, ip_f);
       Q_pen.Eval(qcoeff_pen, Tr, ip_f);

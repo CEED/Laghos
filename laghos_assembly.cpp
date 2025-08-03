@@ -22,17 +22,45 @@ namespace mfem
 
 namespace hydrodynamics
 {
-  
+
+  void BoundaryMixedForceIntegratorV2::
+AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
+                   FaceElementTransformations &Tr, DenseMatrix &elmat)
+{
+   const IntegrationRule *ir = &IntRules.Get(Tr.GetGeometryType(), order);
+
+   const int nqp_face  = IntRule->GetNPoints();
+   const int vdim      = Q.GetVDim();
+   const int dof_trial = trial_fe.GetDof();
+   const int dof_test  = test_fe.GetDof();
+
+   elmat.SetSize(dof_test * vdim, dof_trial);
+   elmat = 0.0;
+   DenseMatrix loc_force(dof_test, vdim);
+   Vector shape_trial(dof_trial), shape_test(dof_test),
+          Vloc_force(loc_force.Data(), dof_test * vdim);
+   Vector qcoeff(vdim);
+
+   for (int q = 0; q < nqp_face; q++)
+   {
+      const IntegrationPoint &ip_f = ir->IntPoint(q);
+      Tr.SetAllIntPoints(&ip_f);
+      const IntegrationPoint &ip_e = Tr.GetElement1IntPoint();
+
+      test_fe.CalcShape(ip_e, shape_test);
+      trial_fe.CalcShape(ip_e, shape_trial);
+      Q.Eval(qcoeff, Tr, ip_f);
+
+      MultVWt(shape_test, qcoeff, loc_force);
+      AddMultVWt(Vloc_force, shape_trial, elmat);
+   }
+}
+
 void BoundaryMixedForceTIntegrator::
 AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
                    FaceElementTransformations &Tr, DenseMatrix &elmat)
 {
-   const IntegrationRule *ir = IntRule;
-   if (ir == nullptr)
-   {
-      int order = trial_fe.GetOrder() + test_fe.GetOrder();
-      ir = &IntRules.Get(Tr.GetGeometryType(), order);
-   }
+   const IntegrationRule *ir = &IntRules.Get(trial_fe.GetGeomType(), order);
 
    const int nqp_face  = IntRule->GetNPoints();
    const int vdim      = Q.GetVDim();
@@ -92,9 +120,11 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    elmat = 0.0;
    DenseMatrix vshape(h1dofs_cnt, dim), loc_force(h1dofs_cnt, dim);
    Vector shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
+   const IntegrationRule *ir = &IntRules.Get(trial_fe.GetGeomType(), order);
+   
    for (int q = 0; q < nqp; q++)
    {
-      const IntegrationPoint &ip = IntRule->IntPoint(q);
+      const IntegrationPoint &ip = ir->IntPoint(q);
       // Form stress:grad_shape at the current point.
       test_fe.CalcDShape(ip, vshape);
       for (int i = 0; i < h1dofs_cnt; i++)
@@ -106,7 +136,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             {
                const int eq = e*nqp + q;
                const double stressJinvT = qdata.stressJinvT(vd)(eq, gd);
-               loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
+               loc_force(i, vd) += stressJinvT * vshape(i,gd);
             }
          }
       }

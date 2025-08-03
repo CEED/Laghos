@@ -137,7 +137,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
                    (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
    b_ir(IntRules.Get(pmesh->GetBdrElementBaseGeometry(0),
-                     3 * H1.GetOrder(0) + L2.GetOrder(0) - 1 )),
+                     (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
    qdata(dim, NE, ir.GetNPoints(), NBE, b_ir.GetNPoints()),
    bdr_force_coeff(qdata), bdr_force_ibp_coeff(qdata), bdr_force_pen_coeff(qdata),
@@ -271,7 +271,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    qdata.h0 /= (double) H1.GetOrder(0); 
 
    UpdateBdrQuadratureData();
-
+   int int_order = (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1;
+     
    if (p_assembly)
    {
       qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
@@ -316,7 +317,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          inv.GetInverseMatrix(Me_inv(e));
       }
       // Standard assembly for the velocity mass matrix.
-      int int_order = (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1;
       InteriorVectorMassIntegrator *vmi = new InteriorVectorMassIntegrator(mass_coeff, &ir, int_order);
       Mv.AddDomainIntegrator(vmi);
 
@@ -324,12 +324,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
       if (BC_strong == false)
       {
-	auto nvmi = new BoundaryVectorMassIntegratorV2(bdr_j_coeff, &b_ir, int_order);
+	auto nvmi = new BoundaryVectorMassIntegratorV2(bdr_j_coeff, &b_ir, int_order, wall_bc_penalty, C_I, perimeter);
          nvmi->SetIntRule(&b_ir);
          Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
 	 if (analyticalSurface != nullptr)
 	   {
-	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_mass_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0));
+	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_mass_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0), int_order);
 	     nvmi_sbm->SetIntRule(&b_ir);
 	     Mv.AddBdrFaceIntegrator(nvmi_sbm, ess_bdr_sbm);
 	   }
@@ -361,7 +361,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    }
    else
    {
-      ForceIntegrator *fi = new ForceIntegrator(qdata);
+     ForceIntegrator *fi = new ForceIntegrator(qdata, int_order);
       fi->SetIntRule(&ir);
       Force.AddDomainIntegrator(fi);
       // Make a dummy assembly to figure out the sparsity.
@@ -370,19 +370,19 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
       if (BC_strong == false)
 	{
-	  auto vpb = new BoundaryMixedForceIntegrator(bdr_force_coeff);
+	  auto vpb = new BoundaryMixedForceIntegratorV2(bdr_force_coeff, int_order);
 	  vpb->SetIntRule(&b_ir);
 	  Force_be.AddBdrFaceIntegrator(vpb, ess_bdr_bf);
-	  auto vpb_T = new BoundaryMixedForceTIntegrator(bdr_force_coeff);
+	  auto vpb_T = new BoundaryMixedForceTIntegrator(bdr_force_coeff, int_order);
 	  vpb_T->SetIntRule(&b_ir);
 	  Force_be_T.AddBdrFaceIntegrator(vpb_T, ess_bdr_bf);
 	  // Make a dummy assembly to figure out the sparsity.
 	  if (analyticalSurface != nullptr)
 	    {
-	      auto vpb_sbm = new SBM_BoundaryMixedForceIntegrator(bdr_force_ibp_coeff, bdr_force_pen_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0));
+	      auto vpb_sbm = new SBM_BoundaryMixedForceIntegrator(bdr_force_ibp_coeff, bdr_force_pen_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0), int_order);
 	      vpb_sbm->SetIntRule(&b_ir);
 	      Force_be.AddBdrFaceIntegrator(vpb_sbm, ess_bdr_sbm);
-	      auto vpb_sbm_T = new SBM_BoundaryMixedForceTIntegrator(bdr_en_ibp_force_coeff, bdr_en_pen_force_coeff,  H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0));
+	      auto vpb_sbm_T = new SBM_BoundaryMixedForceTIntegrator(bdr_en_ibp_force_coeff, bdr_en_pen_force_coeff,  H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0), int_order);
 	      vpb_sbm_T->SetIntRule(&b_ir);
 	      Force_be_T.AddBdrFaceIntegrator(vpb_sbm_T, ess_bdr_sbm);
 	    }

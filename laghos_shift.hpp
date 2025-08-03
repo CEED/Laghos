@@ -44,12 +44,12 @@ protected:
    const ParFiniteElementSpace &H1; 
    const AnalyticalGeometricShape& geom;
    int num_taylor = 1;
-
+  int int_order;
 public:
    /// The given MatrixCoefficient fully couples the vector components, i.e.,
    /// the local (dof x vdim) matrices have no zero blocks.
-  SBM_BoundaryVectorMassIntegrator(MatrixCoefficient &mc, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor)
-    : VectorMassIntegrator(mc), H1(H1), geom(geom), num_taylor(num_taylor) { }
+  SBM_BoundaryVectorMassIntegrator(MatrixCoefficient &mc, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor, int int_order)
+    : VectorMassIntegrator(mc), H1(H1), geom(geom), num_taylor(num_taylor), int_order(int_order) { }
 
    /// Expected use is with BilinearForm::AddBdrFaceIntegrator(), where @a el1
    /// is for the volumetric neighbor of the boundary face, @a el2 is not used.
@@ -67,9 +67,9 @@ protected:
    const ParFiniteElementSpace &H1; 
    const AnalyticalGeometricShape& geom;
    int num_taylor = 1;
-
+  int int_order;
 public:
-   SBM_BoundaryMixedForceIntegrator(VectorCoefficient &vc_ibp, VectorCoefficient &vc_pen, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor) :  Q_ibp(vc_ibp), Q_pen(vc_pen), H1(H1), geom(geom), num_taylor(num_taylor) { }
+   SBM_BoundaryMixedForceIntegrator(VectorCoefficient &vc_ibp, VectorCoefficient &vc_pen, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor, int int_order) :  Q_ibp(vc_ibp), Q_pen(vc_pen), H1(H1), geom(geom), num_taylor(num_taylor), int_order(int_order) { }
 
    /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
    /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.
@@ -88,9 +88,9 @@ protected:
    const ParFiniteElementSpace &H1; 
    const AnalyticalGeometricShape& geom;
    int num_taylor = 1;
-
+  int int_order;
 public:
-  SBM_BoundaryMixedForceTIntegrator(VectorCoefficient &vc_ibp, VectorCoefficient &vc_pen, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor) : Q_ibp(vc_ibp), Q_pen(vc_pen), H1(H1), geom(geom), num_taylor(num_taylor) { }
+  SBM_BoundaryMixedForceTIntegrator(VectorCoefficient &vc_ibp, VectorCoefficient &vc_pen, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor, int int_order) : Q_ibp(vc_ibp), Q_pen(vc_pen), H1(H1), geom(geom), num_taylor(num_taylor), int_order(int_order) { }
 
    /// Expected use is with MixedBilinearForm::AddBdrFaceIntegrator(), where
    /// @a el1 and @a el2 are for the (mixed) volumetric neighbor of the face.
