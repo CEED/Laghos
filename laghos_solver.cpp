@@ -329,7 +329,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
 	 if (analyticalSurface != nullptr)
 	   {
-	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_mass_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0), int_order);
+	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_j_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0), int_order, wall_bc_penalty, C_I, perimeter);
 	     nvmi_sbm->SetIntRule(&b_ir);
 	     Mv.AddBdrFaceIntegrator(nvmi_sbm, ess_bdr_sbm);
 	   }

@@ -44,12 +44,16 @@ protected:
    const ParFiniteElementSpace &H1; 
    const AnalyticalGeometricShape& geom;
    int num_taylor = 1;
-  int int_order;
+   int int_order;
+   double wall_bc_penalty;
+   double C_I;
+   double perimeter;
+
 public:
    /// The given MatrixCoefficient fully couples the vector components, i.e.,
    /// the local (dof x vdim) matrices have no zero blocks.
-  SBM_BoundaryVectorMassIntegrator(MatrixCoefficient &mc, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor, int int_order)
-    : VectorMassIntegrator(mc), H1(H1), geom(geom), num_taylor(num_taylor), int_order(int_order) { }
+  SBM_BoundaryVectorMassIntegrator(Coefficient &Q, const ParFiniteElementSpace &H1, const AnalyticalGeometricShape& geom, int num_taylor, int int_order,  double wall_bc_penalty, double C_I, double perimeter)
+    : VectorMassIntegrator(Q), H1(H1), geom(geom), num_taylor(num_taylor), int_order(int_order), wall_bc_penalty(wall_bc_penalty), C_I(C_I), perimeter(perimeter) { }
 
    /// Expected use is with BilinearForm::AddBdrFaceIntegrator(), where @a el1
    /// is for the volumetric neighbor of the boundary face, @a el2 is not used.

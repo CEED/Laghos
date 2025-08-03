@@ -153,14 +153,15 @@ void SBM_BoundaryVectorMassIntegrator::
 AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
                    FaceElementTransformations &Tr, DenseMatrix &elmat)
 {
-   const IntegrationRule *ir = &IntRules.Get(Tr.GetGeometryType(), int_order);
+   const IntegrationRule *ir = &IntRules.Get(el1.GetGeomType(), int_order);
 
-   const int nqp_face = IntRule->GetNPoints();
+   const int nqp_face = ir->GetNPoints();
    const int dof = el1.GetDof();
+   int vdim = Tr.GetSpaceDim() + 1;
+
    elmat.SetSize(dof * vdim);
    elmat = 0.0;
 
-   mcoeff.SetSize(vdim);
    shape.SetSize(dof);
    partelmat.SetSize(dof);
    for (int q = 0; q < nqp_face; q++)
@@ -169,24 +170,35 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
       // Set the integration point in the face and the neighboring elements
       Tr.SetAllIntPoints(&ip_f);
 
-      MQ->Eval(mcoeff, Tr, ip_f);
+      double coeff = Q->Eval(Tr, ip_f);
       const IntegrationPoint &eip1 = Tr.GetElement1IntPoint();
-
       ElementTransformation& Trans_el1 = Tr.GetElement1Transformation();
+
+      Vector nor(vdim);
+      CalcOrtho(Tr.Jacobian(), nor);
+
+      double nor_norm = sqrt(nor * nor);
+      Vector tn(nor);
+      tn /= nor_norm;
+      
       Vector position;
       Trans_el1.Transform(eip1, position);
       Vector dist;
       Vector true_n;
       geom.ComputeDistanceAndNormal(position, dist, true_n);
       shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, 0, shape);
-
+      true_n = tn;
+      double nDotNtilda = true_n * tn;
+      double detJ = Trans_el1.Jacobian().Det();
+      coeff /= detJ;
       MultVVt(shape, partelmat);
-
+      double penalty_mass = std::pow(el1.GetOrder(),2.0) * 1.0 / std::pow(Trans_el1.Weight(), 1.0/vdim) * perimeter * C_I * wall_bc_penalty;
       for (int i = 0; i < vdim; i++)
       {
          for (int j = 0; j < vdim; j++)
          {
-            elmat.AddMatrix(mcoeff(i,j), partelmat, dof*i, dof*j);
+	   double mcoeff = coeff * true_n(i) * true_n(j) * nor_norm * ip_f.weight * penalty_mass;
+            elmat.AddMatrix(mcoeff, partelmat, dof*i, dof*j);
          }
       }
    }
@@ -198,7 +210,7 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
 {
    const IntegrationRule *ir = &IntRules.Get(Tr.GetGeometryType(), int_order);
 
-   const int nqp_face  = IntRule->GetNPoints();
+   const int nqp_face  = ir->GetNPoints();
    const int vdim      = Q_ibp.GetVDim();
    const int dof_trial = trial_fe.GetDof();
    const int dof_test  = test_fe.GetDof();
@@ -250,7 +262,7 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
 {
    const IntegrationRule *ir = &IntRules.Get(Tr.GetGeometryType(), int_order);
 
-   const int nqp_face  = IntRule->GetNPoints();
+   const int nqp_face  = ir->GetNPoints();
    const int vdim      = Q_ibp.GetVDim();
    const int dof_trial = trial_fe.GetDof();
    const int dof_test  = test_fe.GetDof();
