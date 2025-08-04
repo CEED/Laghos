@@ -197,7 +197,7 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
       {
          for (int j = 0; j < vdim; j++)
          {
-	   double mcoeff = coeff * true_n(i) * true_n(j) * nor_norm * ip_f.weight * penalty_mass;
+	   double mcoeff = coeff * true_n(i) * true_n(j) * nor_norm * ip_f.weight * penalty_mass * std::pow(nDotNtilda, 2.0);
             elmat.AddMatrix(mcoeff, partelmat, dof*i, dof*j);
          }
       }
