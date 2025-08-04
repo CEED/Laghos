@@ -329,7 +329,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
          Mv.AddBdrFaceIntegrator(nvmi, ess_bdr_bf);
 	 if (analyticalSurface != nullptr)
 	   {
-	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_j_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0), int_order, wall_bc_penalty, C_I, perimeter);
+	     auto nvmi_sbm = new SBM_BoundaryVectorMassIntegrator(bdr_j_coeff, H1, analyticalSurface->GetAnalyticalGeometricShape(), H1.GetElementOrder(0), int_order, wall_bc_penalty, C_I, perimeter, rho0_max);
 	     nvmi_sbm->SetIntRule(&b_ir);
 	     Mv.AddBdrFaceIntegrator(nvmi_sbm, ess_bdr_sbm);
 	   }
@@ -1309,7 +1309,7 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
 		       for (int dy = 0; dy < dim; dy++)
 			 {
 			   qdata.be_mass_data(dx, dy, be * nqp_be + q) =
-			ip_f.weight * nor_norm *
+			     ip_f.weight * nor_norm *
 			     true_n(dx) * true_n(dy) * penalty_mass * std::pow(nDotNtilda, 2.0);
 			 }
 		     }

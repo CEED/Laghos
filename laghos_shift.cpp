@@ -171,6 +171,7 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
       Tr.SetAllIntPoints(&ip_f);
 
       double coeff = Q->Eval(Tr, ip_f);
+      //double coeff = rho0_max;
       const IntegrationPoint &eip1 = Tr.GetElement1IntPoint();
       ElementTransformation& Trans_el1 = Tr.GetElement1Transformation();
 
@@ -190,9 +191,9 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
       true_n = tn;
       double nDotNtilda = true_n * tn;
       double detJ = Trans_el1.Jacobian().Det();
-      coeff /= detJ;
+      coeff /= std::abs(detJ);
       MultVVt(shape, partelmat);
-      double penalty_mass = std::pow(el1.GetOrder(),2.0) * 1.0 / std::pow(Trans_el1.Weight(), 1.0/vdim) * perimeter * C_I * wall_bc_penalty;
+      double penalty_mass = (1.0 / std::pow(Trans_el1.Weight(), 1.0/vdim)) * perimeter * C_I * wall_bc_penalty;
       for (int i = 0; i < vdim; i++)
       {
          for (int j = 0; j < vdim; j++)
