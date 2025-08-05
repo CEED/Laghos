@@ -94,7 +94,7 @@ void BoundaryVectorMassIntegratorV2::AssembleFaceMatrix(const FiniteElement &el1
       coeff /= detJ;
       
       MultVVt(shape, partelmat);
-      double penalty_mass = std::pow(el1.GetOrder(),2.0) * 1.0 / std::pow(Trans_el1.Weight(), 1.0/vdim) * perimeter * C_I * wall_bc_penalty;
+      double penalty_mass = (1.0 / std::pow(Trans_el1.Weight(), 1.0/vdim)) * perimeter * C_I * wall_bc_penalty * perimeter;
 
       for (int dx = 0; dx < vdim; dx++)
 	{
