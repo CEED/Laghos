@@ -1145,14 +1145,14 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 		   Vector dist;
 		   Vector true_n;
 		   analyticalSurface->ComputeDistanceAndNormal(position, dist, true_n);
-		   true_n = tn;
+		   //true_n = tn;
 		   
 		   double ndotNtilda = true_n * tn;
 		   
 		   Vector vShape(dim);
 		   vShape = 0.0;
-		   //get_shifted_value(v, z_id, eip1, dist, H1.GetElementOrder(0), vShape);
-		   get_shifted_value(v, z_id, eip1, dist, 0, vShape);
+		   get_shifted_value(v, z_id, eip1, dist, H1.GetElementOrder(0), vShape);
+		   //get_shifted_value(v, z_id, eip1, dist, 0, vShape);
 		   
 		   double vDotn = vShape * true_n;
 		   DenseMatrix stress(dim);

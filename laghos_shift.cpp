@@ -187,8 +187,8 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
       Vector dist;
       Vector true_n;
       geom.ComputeDistanceAndNormal(position, dist, true_n);
-      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, 0, shape);
-      true_n = tn;
+      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, H1.GetElementOrder(0), shape);
+      //true_n = tn;
       double nDotNtilda = true_n * tn;
       double detJ = Trans_el1.Jacobian().Det();
       coeff /= std::abs(detJ);
@@ -244,7 +244,7 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
       Vector true_n;
       geom.ComputeDistanceAndNormal(position, dist, true_n);
       shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, 0, shape_test);
-      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, 0, sbm_shape_test);
+      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, H1.GetElementOrder(0), sbm_shape_test);
 
       trial_fe.CalcShape(eip1, shape_trial);
 
@@ -294,8 +294,8 @@ AssembleFaceMatrix(const FiniteElement &trial_fe, const FiniteElement &test_fe,
       Vector dist;
       Vector true_n;
       geom.ComputeDistanceAndNormal(position, dist, true_n);
-      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, 0, shape_trial);
-      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, 0, sbm_shape_trial);
+      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, H1.GetElementOrder(0), shape_trial);
+      shift_shape(H1, H1, Trans_el1.ElementNo, eip1, dist, H1.GetElementOrder(0), sbm_shape_trial);
       
       test_fe.CalcShape(eip1, shape_test);
 
