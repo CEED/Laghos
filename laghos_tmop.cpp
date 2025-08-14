@@ -51,15 +51,23 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
 {
    const int myid = x.ParFESpace()->GetMyRank();
 
-   const int    solver_type  = 0,
-                solver_iter  = 1000;
-   const double solver_rtol  = 1e-6;
-   const int    precond      = 2;
-   const int    art_type     = 0;
-   const int    max_lin_iter = 100;
-   const int    quad_order   = 8;
-   const double surface_fit_const = 10000.0;
-   const bool   fix_interface     = true;
+   //
+   // Setup.
+   //
+   const bool   fix_interface  = false;
+   const int    solver_type    = 0,
+                solver_iter    = 1000;
+   const double solver_rtol    = 1e-6;
+   const int    precond        = 2;
+   const int    max_lin_iter   = 100;
+   const int    quad_order     = 8;
+
+   // Surface fitting.
+   const double surface_fit_const = 0.0;
+
+   // Adaptive limiting.
+   real_t adapt_lim_const   = 1000.0;
+
 
    ParFiniteElementSpace *pfespace = x.ParFESpace();
    ParMesh *pmesh = pfespace->GetParMesh();
@@ -72,21 +80,50 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const int dim = pfespace->GetMesh()->Dimension();
 
    // Metric.
-   TMOP_QualityMetric *metric  = new TMOP_Metric_080(0.5);
-   //TMOP_QualityMetric *metric  = new TMOP_Metric_002;
+   //TMOP_QualityMetric *metric  = new TMOP_Metric_080(0.5);
+   TMOP_QualityMetric *metric  = new TMOP_Metric_002;
    //TMOP_QualityMetric *metric  = new TMOP_Metric_009;
    //TMOP_QualityMetric *metric  = new TMOP_Metric_302;
    // 328, 333, 334
    //TMOP_QualityMetric *metric  = new TMOP_Metric_334(0.5);
    // Target.
-   auto ttype = TargetConstructor::IDEAL_SHAPE_GIVEN_SIZE;
    //auto ttype = TargetConstructor::IDEAL_SHAPE_EQUAL_SIZE;
-   //auto ttype = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE;
+   auto ttype = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE;
    TargetConstructor *target_c = new TargetConstructor(ttype, MPI_COMM_WORLD);
    target_c->SetNodes(x0);
    // Integrator.
    TMOP_Integrator *he_nlf_integ= new TMOP_Integrator(metric, target_c);
    he_nlf_integ->SetIntegrationRules(*irules, quad_order);
+
+   // Setup marker Array.
+   Array<bool> marker(interface_ls.Size());
+   ParGridFunction marker_gf(interface_ls.ParFESpace());
+   for (int j = 0; j < marker.Size(); j++)
+   {
+      if (interface_ls(j) == 0.0) { marker[j] = true;  marker_gf(j) = 1.0; }
+      else                        { marker[j] = false; marker_gf(j) = 0.0; }
+   }
+   {
+      // Visualize surface DOFs.
+      socketstream vis;
+      hydrodynamics::VisualizeField(vis, "localhost", 19916, marker_gf,
+                                         "Surface DOFs", 0, 0, 300, 300);
+   }
+
+   // Adaptive limiting.
+   ParGridFunction adapt_lim_gf0(interface_ls);
+   InterpolatorFP adapt_lim_eval;
+   ConstantCoefficient adapt_lim_coeff(adapt_lim_const);
+   if (adapt_lim_const > 0.0)
+   {
+      socketstream vis1;
+      hydrodynamics::VisualizeField(vis1, "localhost", 19916, adapt_lim_gf0,
+                                    "Adaptive Region GF",
+                                    300, 0, 300, 300);
+
+      he_nlf_integ->EnableAdaptiveLimiting(adapt_lim_gf0, adapt_lim_coeff,
+                                           adapt_lim_eval);
+   }
 
    // Surface fitting.
    L2_FECollection mat_coll(0, dim);
@@ -94,9 +131,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    ParFiniteElementSpace sigma_fes(pmesh, &sigma_fec);
    ParFiniteElementSpace mat_fes(pmesh, &mat_coll);
    ParGridFunction mat(&mat_fes);
-   ParGridFunction marker_gf(&sigma_fes);
    ParGridFunction ls_0(&sigma_fes);
-   Array<bool> marker(ls_0.Size());
    ConstantCoefficient coef_ls(surface_fit_const);
    AdaptivityEvaluator *adapt_surface = NULL;
    Array<int> extra_vdofs(0);
@@ -118,16 +153,9 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
          //if (marker_gf(j) > 0.1 && marker_gf(j) < 0.9)
          if (interface_ls(j) == 0.0)
          {
-            marker[j] = true;
-            marker_gf(j) = 1.0;
             extra_vdofs.Append(j);
             extra_vdofs.Append(j + marker.Size());
             if (dim == 3) { extra_vdofs.Append(j + 2 * marker.Size()); }
-         }
-         else
-         {
-            marker[j] = false;
-            marker_gf(j) = 0.0;
          }
       }
 
@@ -141,9 +169,6 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
       hydrodynamics::VisualizeField(vis2, "localhost", 19916, mat,
                                     "Materials",
                                     600, 600, 300, 300);
-      hydrodynamics::VisualizeField(vis3, "localhost", 19916, marker_gf,
-                                    "Surface DOF",
-                                    900, 600, 300, 300);
    }
 
    he_nlf_integ->ParEnableNormalization(x0);
@@ -151,19 +176,9 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    // Objective.
    ParNonlinearForm a(pfespace);
    a.AddDomainIntegrator(he_nlf_integ);
+
+   // Fix interface if required.
    if (fix_interface) { ess_vdofs.Append(extra_vdofs); }
-   if (myid == 0)
-   {
-      //ess_vdofs.Append(14);
-      //ess_vdofs.Append(14 + marker.Size());
-   }
-   /*
-   if (myid == 2)
-   {
-      ess_vdofs.Append(15);
-      ess_vdofs.Append(15 + marker.Size());
-   }
-   */
    a.SetEssentialVDofs(ess_vdofs);
 
    // Initial energy.
@@ -213,11 +228,14 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    solver.SetRelTol(solver_rtol);
    solver.SetAbsTol(0.0);
    solver.SetPrintLevel(1);
-   if (art_type > 0)
-   {
-      solver.SetAdaptiveLinRtol(art_type, 0.5, 0.9);
-   }
    solver.SetOperator(a);
+
+   // Adaptive fitting.
+   if (surface_fit_const > 0)
+   {
+      solver.SetAdaptiveSurfaceFittingScalingFactor(2.0);
+      solver.SetSurfaceFittingMaxErrorLimit(1e-5);
+   }
 
    // Solve.
    Vector b(0);
@@ -231,9 +249,6 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
       hydrodynamics::VisualizeField(vis2, "localhost", 19916, mat,
                                     "Materials (Optimized)",
                                      600, 900, 300, 300);
-      hydrodynamics::VisualizeField(vis3, "localhost", 19916, marker_gf,
-                                    "Surface DOF (Optimized)",
-                                     900, 900, 300, 300);
    }
 
    // Final energy
@@ -257,12 +272,23 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
       cout << "The strain energy decreased by: "
            << (init_m_energy - fin_metric_energy) * 100.0 / init_m_energy << " %." << endl;
    }
-   double err_avg, err_max;
-   he_nlf_integ->GetSurfaceFittingErrors(err_avg, err_max);
-   if (myid == 0)
+
+   if (surface_fit_const > 0.0)
    {
-      cout << "Fitting error max: " << err_max << endl
-           << "Fitting error avg: " << err_avg << endl;
+      double err_avg, err_max;
+      he_nlf_integ->GetSurfaceFittingErrors(x, err_avg, err_max);
+      if (myid == 0)
+      {
+         cout << "Fitting error max: " << err_max << endl
+              << "Fitting error avg: " << err_avg << endl;
+      }
+   }
+
+   // Visualize surface DOFs.
+   {
+      socketstream vis;
+      VisualizeField(vis, "localhost", 19916, marker_gf,
+                          "Surface DOFs", 0, 400, 300, 300);
    }
 
    // Visualize the displacement.
@@ -279,9 +305,9 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    {
       sock << "window_title 'Displacements'\n"
               << "window_geometry "
-              << 300 << " " << 900 << " " << 300 << " " << 300 << "\n"
+              << 300 << " " << 400 << " " << 300 << " " << 300 << "\n"
               << "keys jRmclA" << endl;
-   }
+   }   
 
    // Print the final mesh in a file.
    {
