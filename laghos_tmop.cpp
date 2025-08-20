@@ -24,6 +24,8 @@ namespace mfem
 namespace hydrodynamics
 {
 
+void ExtendRefinementListToNeighbors(ParMesh &pmesh, Array<int> &intel);
+
 int material_id(int el_id, const GridFunction &g)
 {
    const FiniteElementSpace *fes = g.FESpace();
@@ -61,12 +63,16 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const int    precond        = 2;
    const int    max_lin_iter   = 100;
    const int    quad_order     = 8;
+   const bool   normalization   = false;
 
    // Surface fitting.
-   const double surface_fit_const = 0.0;
+   const double surface_fit_const = 1e3;
 
    // Adaptive limiting.
-   real_t adapt_lim_const   = 1000.0;
+   real_t adapt_lim_const   = 0.0;
+
+   // Limiting the node movement.
+   real_t lim_const         = 0.0;
 
 
    ParFiniteElementSpace *pfespace = x.ParFESpace();
@@ -132,8 +138,11 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    ParFiniteElementSpace mat_fes(pmesh, &mat_coll);
    ParGridFunction mat(&mat_fes);
    ParGridFunction ls_0(&sigma_fes);
+   ParGridFunction surf_fit_mat_gf(&sigma_fes);
    ConstantCoefficient coef_ls(surface_fit_const);
    AdaptivityEvaluator *adapt_surface = NULL;
+   AdaptivityEvaluator *adapt_grad_surface = NULL;
+   AdaptivityEvaluator *adapt_hess_surface = NULL;
    Array<int> extra_vdofs(0);
    if (surface_fit_const > 0.0)
    {
@@ -141,17 +150,96 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
 
       for (int i = 0; i < pmesh->GetNE(); i++)
       {
-         mat(i) = material_id(i, ls_0);
-         pmesh->SetAttribute(i, mat(i) + 1);
+         mat(i) = pmesh->GetAttribute(i)-1;
       }
-      pmesh->SetAttributes();
+      mat.ExchangeFaceNbrData();
+      marker_gf = 0.0;
 
-      GridFunctionCoefficient coeff_mat(&mat);
-      marker_gf.ProjectDiscCoefficient(coeff_mat, GridFunction::ARITHMETIC);
+      {
+         const Vector &FaceNbrData = mat.FaceNbrData();
+         Array<int> dof_list;
+         Array<int> dofs;
+         Array<int> int_el_list;
+
+         for (int i = 0; i < pmesh->GetNumFaces(); i++)
+         {
+            auto tr = pmesh->GetInteriorFaceTransformations(i);
+            if (tr != NULL)
+            {
+               int mat1 = mat(tr->Elem1No);
+               int mat2 = mat(tr->Elem2No);
+               if (mat1 != mat2)
+               {
+                  ls_0.ParFESpace()->GetFaceDofs(i, dofs);
+                  dof_list.Append(dofs);
+                  int_el_list.Append(tr->Elem1No);
+                  int_el_list.Append(tr->Elem2No);
+               }
+            }
+         }
+         for (int i = 0; i < pmesh->GetNSharedFaces(); i++)
+         {
+            auto tr = pmesh->GetSharedFaceTransformations(i);
+            if (tr != NULL)
+            {
+               int faceno = pmesh->GetSharedFace(i);
+               int mat1 = mat(tr->Elem1No);
+               int mat2 = FaceNbrData(tr->Elem2No-pmesh->GetNE());
+               if (mat1 != mat2)
+               {
+                  ls_0.ParFESpace()->GetFaceDofs(faceno, dofs);
+                  dof_list.Append(dofs);
+                  int_el_list.Append(tr->Elem1No);
+               }
+            }
+         }
+         for (int i = 0; i < dof_list.Size(); i++)
+         {
+            marker[dof_list[i]] = true;
+            marker_gf(dof_list[i]) = 1.0;
+         }
+
+         // Unify marker across processor boundary
+         marker_gf.ExchangeFaceNbrData();
+         {
+            GroupCommunicator &gcomm = marker_gf.ParFESpace()->GroupComm();
+            Array<real_t> gf_array(marker_gf.GetData(),
+                                 marker_gf.Size());
+            gcomm.Reduce<real_t>(gf_array, GroupCommunicator::Max);
+            gcomm.Bcast(gf_array);
+         }
+         marker_gf.ExchangeFaceNbrData();
+
+         for (int i = 0; i < surf_fit_mat_gf.Size(); i++)
+         {
+            marker[i] = marker_gf(i) == 1.0;
+         }
+
+         // set level set based on element connectivity distance from interface
+         int el_layers = 0;
+         if (el_layers > 0)
+         {
+            ls_0 = 0.0;
+            Array<int> active_list = int_el_list;
+            for (int i = 0; i < el_layers - 1;i++)
+            {
+               ExtendRefinementListToNeighbors(*pmesh, active_list);
+            }
+            for (int i = 0; i < active_list.Size(); i++)
+            {
+               int el = active_list[i];
+               ls_0.FESpace()->GetElementDofs(el, dofs);
+               for (int j = 0; j < dofs.Size(); j++)
+               {
+                  ls_0(dofs[j]) = 1.0;
+               }
+            }
+         }
+      }
+
       for (int j = 0; j < marker.Size(); j++)
       {
-         //if (marker_gf(j) > 0.1 && marker_gf(j) < 0.9)
-         if (interface_ls(j) == 0.0)
+         if (marker_gf(j) == 1.0)
          {
             extra_vdofs.Append(j);
             extra_vdofs.Append(j + marker.Size());
@@ -160,18 +248,43 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
       }
 
       adapt_surface = new InterpolatorFP;
+      adapt_grad_surface = new InterpolatorFP;
+      adapt_hess_surface = new InterpolatorFP;
 
-      he_nlf_integ->EnableSurfaceFitting(ls_0, marker, coef_ls, *adapt_surface);
+      he_nlf_integ->EnableSurfaceFitting(ls_0, marker, coef_ls,
+         *adapt_surface, adapt_grad_surface, adapt_hess_surface);
       socketstream vis1, vis2, vis3;
       hydrodynamics::VisualizeField(vis1, "localhost", 19916, ls_0,
                                     "Level Set 0",
                                     300, 600, 300, 300);
       hydrodynamics::VisualizeField(vis2, "localhost", 19916, mat,
                                     "Materials",
-                                    600, 600, 300, 300);
+                                    600, 600, 300, 300, false, "ppppp");
    }
 
-   he_nlf_integ->ParEnableNormalization(x0);
+
+   // Visualize surface DOFs.
+   {
+      socketstream vis;
+      VisualizeField(vis, "localhost", 19916, marker_gf,
+                          "Surface DOFs final", 0, 400, 300, 300);
+   }
+
+   // Limit the node movement.
+   // The limiting distances can be given by a general function of space.
+   ParFiniteElementSpace dist_pfespace(pmesh, &sigma_fec); // scalar space
+   ParGridFunction dist(&dist_pfespace);
+   dist = 0.1;
+   ConstantCoefficient lim_coeff(lim_const);
+   if (lim_const != 0.0)
+   {
+      he_nlf_integ->EnableLimiting(x0, dist, lim_coeff);
+   }
+
+   if (normalization)
+   {
+      he_nlf_integ->ParEnableNormalization(x0);
+   }
 
    // Objective.
    ParNonlinearForm a(pfespace);
@@ -194,10 +307,10 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    // Print the initial mesh in a file.
    {
       std::ostringstream mesh_name;
-      mesh_name << "initial" << "_" << "mesh";
+      mesh_name << "initial" << "_" << "mesh.mesh";
       std::ofstream mesh_ofs(mesh_name.str().c_str());
       mesh_ofs.precision(8);
-      pmesh->PrintAsOne(mesh_ofs);
+      pmesh->PrintAsSerial(mesh_ofs);
       mesh_ofs.close();
    }
 
@@ -221,6 +334,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
          HypreSmoother *hs = new HypreSmoother;
          hs->SetType((precond == 1) ? HypreSmoother::Jacobi
                                     : HypreSmoother::l1Jacobi, 1);
+         hs->SetPositiveDiagonal(true);
          minres->SetPreconditioner(*hs);
       }
    }
@@ -233,7 +347,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    // Adaptive fitting.
    if (surface_fit_const > 0)
    {
-      solver.SetAdaptiveSurfaceFittingScalingFactor(2.0);
+      // solver.SetAdaptiveSurfaceFittingScalingFactor(2.0);
       solver.SetSurfaceFittingMaxErrorLimit(1e-5);
    }
 
@@ -248,7 +362,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
       socketstream vis2, vis3;
       hydrodynamics::VisualizeField(vis2, "localhost", 19916, mat,
                                     "Materials (Optimized)",
-                                     600, 900, 300, 300);
+                                     900, 600, 300, 300, false, "ppppp");
    }
 
    // Final energy
@@ -307,17 +421,59 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
               << "window_geometry "
               << 300 << " " << 400 << " " << 300 << " " << 300 << "\n"
               << "keys jRmclA" << endl;
-   }   
+   }
 
    // Print the final mesh in a file.
    {
       std::ostringstream mesh_name;
-      mesh_name << "result" << "_" << "mesh";
+      mesh_name << "result" << "_" << "mesh.mesh";
       std::ofstream mesh_ofs(mesh_name.str().c_str());
       mesh_ofs.precision(8);
-      pmesh->PrintAsOne(mesh_ofs);
+      pmesh->PrintAsSerial(mesh_ofs);
       mesh_ofs.close();
    }
+}
+
+void ExtendRefinementListToNeighbors(ParMesh &pmesh, Array<int> &intel)
+{
+   mfem::L2_FECollection l2fec(0, pmesh.Dimension());
+   mfem::ParFiniteElementSpace l2fespace(&pmesh, &l2fec);
+   mfem::ParGridFunction el_to_refine(&l2fespace);
+   const int quad_order = 4;
+
+   el_to_refine = 0.0;
+
+   for (int i = 0; i < intel.Size(); i++)
+   {
+      el_to_refine(intel[i]) = 1.0;
+   }
+
+   mfem::H1_FECollection lhfec(1, pmesh.Dimension());
+   mfem::ParFiniteElementSpace lhfespace(&pmesh, &lhfec);
+   mfem::ParGridFunction lhx(&lhfespace);
+
+   el_to_refine.ExchangeFaceNbrData();
+   GridFunctionCoefficient field_in_dg(&el_to_refine);
+   lhx.ProjectDiscCoefficient(field_in_dg, GridFunction::ARITHMETIC);
+
+   IntegrationRules irRules = IntegrationRules(0, Quadrature1D::GaussLobatto);
+   for (int e = 0; e < pmesh.GetNE(); e++)
+   {
+      Array<int> dofs;
+      Vector x_vals;
+      lhfespace.GetElementDofs(e, dofs);
+      const IntegrationRule &ir =
+         irRules.Get(pmesh.GetElementGeometry(e), quad_order);
+      lhx.GetValues(e, ir, x_vals);
+      double max_val = x_vals.Max();
+      if (max_val > 0)
+      {
+         intel.Append(e);
+      }
+   }
+
+   intel.Sort();
+   intel.Unique();
 }
 
 } // namespace hydrodynamics

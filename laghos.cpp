@@ -59,6 +59,8 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
+// mpirun -np 6 ./laghos -p 7 -m data/rt2D.mesh -tf 3.0 -rs 3 -ok 2 -ot 1 -pa
+
 #include <fstream>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -77,6 +79,7 @@ double e0(const Vector &);
 double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
+int attr_id(const Vector &);
 
 static long GetMaxRssMB();
 static void display_banner(std::ostream&);
@@ -526,6 +529,15 @@ int main(int argc, char *argv[])
    }
    delete [] nxyz;
    delete mesh;
+
+   for (int i = 0; i < pmesh->GetNE(); i++)
+   {
+      Vector center;
+      pmesh->GetElementCenter(i, center);
+      int attrib = attr_id(center);
+      pmesh->SetAttribute(i,attrib);
+   }
+   pmesh->SetAttributes();
 
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
@@ -1001,6 +1013,26 @@ int main(int argc, char *argv[])
    delete pmesh;
 
    return 0;
+}
+
+int attr_id(const Vector &x)
+{
+   if (problem == 1)
+   {
+      return x(0) <= 1.0 ? 1 : (x(1) >= 1.5 ? 2 : 3);
+   }
+   else if (problem == 4)
+   {
+      return x(0) <= 0.25 ? 1 : 2;
+   }
+   else if (problem == 7)
+   {
+      return x(1) >= 0.0 ? 1 : 2;
+   }
+   else
+   {
+      MFEM_ABORT("attr_id: problem not supported!");
+   }
 }
 
 double rho0(const Vector &x)
