@@ -60,6 +60,8 @@
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
 // mpirun -np 6 ./laghos -p 7 -m data/rt2D.mesh -tf 3.0 -rs 3 -ok 2 -ot 1 -pa
+// mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
+// mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 2 -ot 1 -tf 0.5 -s 7 -pa
 
 #include <fstream>
 #include <sys/time.h>
