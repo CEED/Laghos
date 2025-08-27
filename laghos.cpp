@@ -85,6 +85,38 @@ static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int dim, const int ti, const double norm, int &checks);
 
+int mat_id(const Vector &x)
+{
+   switch (problem)
+   {
+   case 0: return (x(0) < 0.5) ? 0 : 1;
+   case 3:
+   {
+      if (x(0) < 1.0) { return 0; }
+      return (x(1) > 1.5) ? 1 : 2;
+   }
+   case 4: return (x(0) < 0.25) ? 0 : 1;
+   case 7: return (x(1) < 0.0) ? 0 : 1;
+   default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
+   }
+}
+
+class IndicatorCoefficient : public Coefficient
+{
+protected:
+   int ind_id;
+
+public:
+   IndicatorCoefficient(int id) : ind_id(id) { }
+
+   virtual real_t Eval(ElementTransformation &T, const IntegrationPoint &ip)
+   {
+      Vector coord(T.GetDimension());
+      T.Transform(ip, coord);
+      return (mat_id(coord) == ind_id) ? 1.0 : 0.0;
+   }
+};
+
 double interface_rt(const Vector &x)
 {
    // 0 - Taylor-Green.
@@ -192,6 +224,16 @@ void SetInterfaces(const ParGridFunction &x, ParGridFunction &interfaces)
    {
       FunctionCoefficient coeff(interface_rt);
       interfaces.ProjectCoefficient(coeff);
+   }
+}
+
+// Assumes size and spaces are already set.
+void InitIndicators(std::vector<ParGridFunction> &ind)
+{
+   for (int k = 0; k < ind.size(); k++)
+   {
+      IndicatorCoefficient ic(k);
+      ind[k].ProjectCoefficient(ic);
    }
 }
 
@@ -686,6 +728,17 @@ int main(int argc, char *argv[])
    ParGridFunction interfaces(&interf_fes);
    SetInterfaces(x_gf, interfaces);
 
+   // Initialize material indicator functions.
+   L2_FECollection ind_fec(1, pmesh->Dimension(), BasisType::GaussLegendre);
+   ParFiniteElementSpace ind_fes(pmesh, &ind_fec);
+   int ind_cnt = -1;
+   if (problem == 0 || problem == 7 || problem == 4) { ind_cnt = 2; }
+   else if (problem == 3)            { ind_cnt = 3; }
+   else { MFEM_ABORT("problem not prepared for TMOP interface tests."); }
+   std::vector<ParGridFunction> ind_L2(ind_cnt);
+   for (int k = 0; k < ind_cnt; k++) { ind_L2[k].SetSpace(&ind_fes); }
+   InitIndicators(ind_L2);
+
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
    switch (problem)
@@ -999,8 +1052,37 @@ int main(int argc, char *argv[])
       }
    }
 
+   // Project indicators to H1+P1.
+   H1_FECollection ind_fec_H1(1, pmesh->Dimension());
+   ParFiniteElementSpace ind_fes_H1(pmesh, &ind_fec_H1);
+   std::vector<ParGridFunction> ind_H1(ind_cnt);
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      ind_H1[k].SetSpace(&ind_fes_H1);
+      GridFunctionCoefficient ic(&ind_L2[k]);
+      ind_H1[k].ProjectDiscCoefficient(ic, GridFunction::ARITHMETIC);
+   }
+
+   // Vis initial L2 indicators
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      socketstream vis;
+      hydrodynamics::VisualizeField(vis, "localhost", 19916, ind_L2[k],
+                                    "Materials - initial",
+                                    300*k, 0, 300, 300, false, "ppppp");
+   }
+
    // Finally, run a tmop mesh optimization.
-   hydrodynamics::OptimizeMesh(x_gf, ess_vdofs, interfaces);
+   hydrodynamics::OptimizeMesh(x_gf, ess_vdofs, interfaces, ind_H1);
+
+   // Vis final L2 indicators
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      socketstream vis;
+      hydrodynamics::VisualizeField(vis, "localhost", 19916, ind_L2[k],
+                                    "Materials - optimized",
+                                    300*k, 700, 300, 300, false, "ppppp");
+   }
 
    if (visualization)
    {
@@ -1017,7 +1099,7 @@ int main(int argc, char *argv[])
 
 int attr_id(const Vector &x)
 {
-   if (problem == 1)
+   if (problem == 1 || problem == 3)
    {
       return x(0) <= 1.0 ? 1 : (x(1) >= 1.5 ? 2 : 3);
    }
