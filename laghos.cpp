@@ -1104,6 +1104,7 @@ int main(int argc, char *argv[])
    // Copy energy and velocity.
    ParGridFunction e_0(&L2FESpace, ind_rho_e_v_0.GetBlock(2).GetData());
    e_0 = e_gf;
+   e_0 += 1e-12; // must be positive to avoid the e bounds check.
    ParGridFunction v_0(&H1FESpace, ind_rho_e_v_0.GetBlock(3).GetData());
    v_0 = v_gf;
    Array<bool> ind_0_bool_el, ind_0_bool_dofs;
@@ -1163,8 +1164,8 @@ int main(int argc, char *argv[])
       interpolator.SetVelocityFESpace(H1FESpace);
 
       BlockVector ind_rho_e(offset);
-      const int optimization_type = 5;
-      interpolator.RemapHydro(ind_rho_e_v_0, true, ind_0_bool_el, x_opt,
+      const int optimization_type = 0;
+      interpolator.RemapHydro(ind_rho_e_v_0, true, p_0, ind_0_bool_el, x_opt,
                               ind_rho_e, optimization_type);
 
       x_gf = x_opt;
