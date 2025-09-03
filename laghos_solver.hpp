@@ -128,7 +128,7 @@ protected:
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
-   mutable QuadratureData qdata;
+   QuadratureData &qdata;
    mutable bool qdata_is_current, forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
@@ -170,11 +170,12 @@ public:
                            Coefficient &rho0_coeff,
                            ParGridFunction &rho0_gf,
                            ParGridFunction &gamma_gf,
+                           QuadratureData &quad_data,
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort, const bool pa,
                            const double cgt, const int cgiter, double ftz_tol,
-                           const int order_q);
+                           const IntegrationRule &irule);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -195,11 +196,17 @@ public:
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    void ComputeDensity(ParGridFunction &rho) const;
+   void ComputeDensity(QuadratureFunction &rho) const;
+   void ComputePressure(const QuadratureFunction &rho,
+                        const ParGridFunction &energy,
+                        double gamma,
+                        QuadratureFunction &p) const;
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
+   const IntegrationRule &GetIntRule() const { return ir; }
 
    void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
 };

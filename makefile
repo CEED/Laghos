@@ -63,7 +63,7 @@ PREFIX ?= ./bin
 INSTALL = /usr/bin/install
 
 # Use the MFEM source, build, or install directory
-MFEM_DIR ?= ../mfem
+MFEM_DIR ?= ../mfem_remap
 CONFIG_MK = $(MFEM_DIR)/config/config.mk
 ifeq ($(wildcard $(CONFIG_MK)),)
    CONFIG_MK = $(MFEM_DIR)/share/mfem/config.mk
@@ -87,6 +87,7 @@ endif
 CXX = $(MFEM_CXX)
 CPPFLAGS = $(MFEM_CPPFLAGS)
 CXXFLAGS = $(MFEM_CXXFLAGS)
+CXXFLAGS += -I../remhos_remap
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
 # Extra include dir, needed for now to include headers like "general/forall.hpp"
 EXTRA_INC_DIR = $(or $(wildcard $(MFEM_DIR)/include/mfem),$(MFEM_DIR))
@@ -99,6 +100,18 @@ SOURCE_FILES = $(sort $(wildcard *.cpp))
 HEADER_FILES = $(sort $(wildcard *.hpp))
 OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 
+# objects from remhos_remap you actually use
+REMHOS_OBJS = \
+  ../remhos_remap/remhos_gslib.o \
+  ../remhos_remap/remhos_tools.o \
+  ../remhos_remap/remhos_sync.o \
+  ../remhos_remap/remhos_fct.o \
+  ../remhos_remap/remhos_lo.o \
+  ../remhos_remap/remhos_ho.o \
+  ../remhos_remap/remhos_lvpp.o \
+  ../remhos_remap/remhos_mono.o \
+  ../remhos_remap/remhos_HiOp.o
+
 # Targets
 
 .PHONY: all clean distclean install status info opt debug test tests style \
@@ -108,8 +121,8 @@ OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 .cpp.o:
 	cd $(<D); $(CCC) -c $(<F)
 
-laghos: $(OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
-	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o laghos $(OBJECT_FILES) $(LIBS)
+laghos: $(OBJECT_FILES) $(REMHOS_OBJS) $(CONFIG_MK) $(MFEM_LIB_FILE)
+	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o laghos $(OBJECT_FILES) $(REMHOS_OBJS) $(LIBS)
 
 all:;@$(MAKE) -j $(NPROC) laghos
 

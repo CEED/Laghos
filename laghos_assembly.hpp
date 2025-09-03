@@ -47,6 +47,11 @@ struct QuadratureData
    // conservation.
    Vector rho0DetJ0w;
 
+   // Indicators at quadrature points.
+   // Lagrangian phase: these just move with the mesh.
+   // Updated only after remesh / remap.
+   std::vector<QuadratureFunction> ind;
+
    // Initial length scale. This represents a notion of local mesh size.
    // We assume that all initial zones have similar size.
    double h0;
@@ -55,10 +60,10 @@ struct QuadratureData
    // recomputed at every time step to achieve adaptive time stepping.
    double dt_est;
 
-   QuadratureData(int dim, int NE, int quads_per_el)
+   QuadratureData(int dim, int NE, int quads_per_el, int ind_cnt)
       : Jac0inv(dim, dim, NE * quads_per_el),
         stressJinvT(NE * quads_per_el, dim, dim),
-        rho0DetJ0w(NE * quads_per_el) { }
+        rho0DetJ0w(NE * quads_per_el), ind(ind_cnt) { }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each

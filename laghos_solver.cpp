@@ -101,6 +101,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
                                                  ParGridFunction &gamma_gf,
+                                                 QuadratureData &quad_data,
                                                  const int source,
                                                  const double cfl,
                                                  const bool visc,
@@ -109,7 +110,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  const double cgt,
                                                  const int cgiter,
                                                  double ftz,
-                                                 const int oq) :
+                                                 const IntegrationRule &irule) :
    TimeDependentOperator(size),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
    pmesh(H1.GetParMesh()),
@@ -135,10 +136,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(l2dofs_cnt, l2dofs_cnt, NE),
-   ir(IntRules.Get(pmesh->GetElementBaseGeometry(0),
-                   (oq > 0) ? oq : 3 * H1.GetOrder(0) + L2.GetOrder(0) - 1)),
+   ir(irule),
    Q1D(int(floor(0.7 + pow(ir.GetNPoints(), 1.0 / dim)))),
-   qdata(dim, NE, ir.GetNPoints()),
+   qdata(quad_data),
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1),
@@ -521,7 +521,41 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    }
 }
 
+void LagrangianHydroOperator::ComputeDensity(QuadratureFunction &rho) const
+{
+   const int nqp = ir.GetNPoints();
 
+   for (int e = 0; e < NE; e++)
+   {
+      ElementTransformation *T = H1.GetElementTransformation(e);
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         T->SetIntPoint(&ip);
+         rho(e*nqp + q) = qdata.rho0DetJ0w(e*nqp + q) / T->Weight() / ip.weight;
+      }
+   }
+}
+
+void LagrangianHydroOperator::ComputePressure(const QuadratureFunction &rho,
+                                              const ParGridFunction &energy,
+                                              double gamma,
+                                              QuadratureFunction &p) const
+{
+   const int nqp = ir.GetNPoints();
+
+   for (int e = 0; e < NE; e++)
+   {
+      ElementTransformation *T = H1.GetElementTransformation(e);
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         T->SetIntPoint(&ip);
+         p(e*nqp + q) = (gamma - 1.0) * rho(e*nqp + q) *
+                        energy.GetValue(*T, ip);
+      }
+   }
+}
 
 double ComputeVolumeIntegral(const int DIM, const int NE,const int NQ,const int Q1D,const int VDIM,const double ln_norm,
 const mfem::Vector& mass, const mfem::Vector& f)

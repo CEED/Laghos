@@ -45,27 +45,19 @@
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 //
-// Combinations resulting in 3D uniform Cartesian MPI partitionings of the mesh:
-// -m data/cube01_hex.mesh   -pt 211 for  2 / 16 / 128 / 1024 ... tasks.
-// -m data/cube_922_hex.mesh -pt 921 for    / 18 / 144 / 1152 ... tasks.
-// -m data/cube_522_hex.mesh -pt 522 for    / 20 / 160 / 1280 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 311 for  3 / 24 / 192 / 1536 ... tasks.
-// -m data/cube01_hex.mesh   -pt 221 for  4 / 32 / 256 / 2048 ... tasks.
-// -m data/cube_922_hex.mesh -pt 922 for    / 36 / 288 / 2304 ... tasks.
-// -m data/cube_522_hex.mesh -pt 511 for  5 / 40 / 320 / 2560 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 321 for  6 / 48 / 384 / 3072 ... tasks.
-// -m data/cube01_hex.mesh   -pt 111 for  8 / 64 / 512 / 4096 ... tasks.
-// -m data/cube_922_hex.mesh -pt 911 for  9 / 72 / 576 / 4608 ... tasks.
-// -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
-// -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
-
-// mpirun -np 6 ./laghos -p 7 -m data/rt2D.mesh -tf 3.0 -rs 3 -ok 2 -ot 1 -pa
+// ALE runs with latest remap:
+// 3point 3 materials.
+// mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.5 -pa
+// Sedov 1 material.
+// mpirun -np 4 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa
 
 #include <fstream>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 #include "laghos_tmop.hpp"
+#include "../remhos_remap/remhos_gslib.hpp"
+#include "../remhos_remap/remhos_sync.hpp"
 
 using std::cout;
 using std::endl;
@@ -90,6 +82,7 @@ int mat_id(const Vector &x)
    switch (problem)
    {
    case 0: return (x(0) < 0.5) ? 0 : 1;
+   case 1: return 0;
    case 3:
    {
       if (x(0) < 1.0) { return 0; }
@@ -169,26 +162,10 @@ double interface_rt(const Vector &x)
    }
 }
 
-void FindDOFid(ParGridFunction &pos)
-{
-   // For 3point the point is (1.0, 1.5).
-   const double x = 1.0, y = 1.5;
-   const double eps = 1e-6;
-   const int size = pos.Size() / 2;
-   for (int i = 0; i < size; i++)
-   {
-      if (fabs(pos(i) - x) < eps && fabs(pos(size + i) - y) < eps)
-      {
-         std::cout << "Proc id: " << pos.ParFESpace()->GetMyRank() << std::endl;
-         std::cout << "Dof id: " << i << " " << i + size << std::endl;
-      }
-   }
-}
-
 void SetInterfaces(const ParGridFunction &x, ParGridFunction &interfaces)
 {
    // 0 - triple point; 1 - rayleigh-taylor.
-   const int interface_type = 1;
+   const int interface_type = 0;
    interfaces = 0.0;
 
    const double eps = 1.0e-8;
@@ -236,6 +213,34 @@ void InitIndicators(std::vector<ParGridFunction> &ind)
       ind[k].ProjectCoefficient(ic);
    }
 }
+
+void InitIndicators(std::vector<QuadratureFunction> &ind)
+{
+   auto qspace = dynamic_cast<QuadratureSpace *>(ind[0].GetSpace());
+   const int NE  = qspace->GetMesh()->GetNE(), ind_cnt = ind.size();
+
+   for (int e = 0; e < NE; e++)
+   {
+      const IntegrationRule &ir = qspace->GetElementIntRule(e);
+      const int nip = ir.GetNPoints();
+
+      // Transformation of the element with the pos_mesh coordinates.
+      IsoparametricTransformation Tr;
+      qspace->GetMesh()->GetElementTransformation(e, &Tr);
+
+      Vector coord(Tr.GetSpaceDim());
+      for (int q = 0; q < nip; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.Transform(ip, coord);
+         for (int k = 0; k < ind_cnt; k++)
+         {
+            ind[k](e*nip + q) = (mat_id(coord) == k) ? 1.0 : 0.0;
+         }
+      }
+   }
+}
+
 
 void PrintNewInterface(ParGridFunction &interfaces)
 {
@@ -659,6 +664,28 @@ int main(int argc, char *argv[])
    true_offset[3] = true_offset[2] + Vsize_l2;
    BlockVector S(true_offset, Device::GetMemoryType());
 
+   // Additional details, depending on the problem.
+   int source = 0; bool visc = true, vorticity = false;
+   int ind_cnt = 1;
+   switch (problem)
+   {
+   case 0: if (pmesh->Dimension() == 2) { source = 1; }
+           visc = false; ind_cnt = 2; break;
+   case 1: visc = true; break;
+   case 2: visc = true; break;
+   case 3: visc = true; ind_cnt = 3; S.HostRead(); break;
+   case 4: visc = false; ind_cnt = 2; break;
+   case 5: visc = true; break;
+   case 6: visc = true; break;
+   case 7: source = 2; visc = true; vorticity = true; ind_cnt = 2; break;
+   default: MFEM_ABORT("Wrong problem specification!");
+   }
+   if (impose_visc) { visc = true; }
+
+   // Integration rule for all hydro integrals.
+   auto ir = IntRules.Get(pmesh->GetElementBaseGeometry(0),
+                          order_q > 0 ? order_q : 3 * order_v + order_e - 1);
+
    // Define GridFunction objects for the position, velocity and specific
    // internal energy. There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
@@ -673,8 +700,18 @@ int main(int argc, char *argv[])
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
 
-   FindDOFid(x_gf);
-   //MFEM_ABORT(");");
+   // Quadrature-based data.
+   QuadratureSpace qspace(*pmesh, ir);
+   hydrodynamics::QuadratureData qdata(dim, NE, ir.GetNPoints(), ind_cnt);
+
+   // Initialize material indicator functions.
+   for (int k = 0; k < ind_cnt; k++) { qdata.ind[k].SetSpace(&qspace, 1); }
+   L2_FECollection ind_fec(1, pmesh->Dimension(), BasisType::GaussLegendre);
+   ParFiniteElementSpace ind_fes(pmesh, &ind_fec);
+   std::vector<ParGridFunction> ind_L2(ind_cnt);
+   for (int k = 0; k < ind_cnt; k++) { ind_L2[k].SetSpace(&ind_fes); }
+   InitIndicators(ind_L2);
+   InitIndicators(qdata.ind);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
@@ -728,40 +765,13 @@ int main(int argc, char *argv[])
    ParGridFunction interfaces(&interf_fes);
    SetInterfaces(x_gf, interfaces);
 
-   // Initialize material indicator functions.
-   L2_FECollection ind_fec(1, pmesh->Dimension(), BasisType::GaussLegendre);
-   ParFiniteElementSpace ind_fes(pmesh, &ind_fec);
-   int ind_cnt = -1;
-   if (problem == 0 || problem == 7 || problem == 4) { ind_cnt = 2; }
-   else if (problem == 3)            { ind_cnt = 3; }
-   else { MFEM_ABORT("problem not prepared for TMOP interface tests."); }
-   std::vector<ParGridFunction> ind_L2(ind_cnt);
-   for (int k = 0; k < ind_cnt; k++) { ind_L2[k].SetSpace(&ind_fes); }
-   InitIndicators(ind_L2);
-
-   // Additional details, depending on the problem.
-   int source = 0; bool visc = true, vorticity = false;
-   switch (problem)
-   {
-      case 0: if (pmesh->Dimension() == 2) { source = 1; } visc = false; break;
-      case 1: visc = true; break;
-      case 2: visc = true; break;
-      case 3: visc = true; S.HostRead(); break;
-      case 4: visc = false; break;
-      case 5: visc = true; break;
-      case 6: visc = true; break;
-      case 7: source = 2; visc = true; vorticity = true;  break;
-      default: MFEM_ABORT("Wrong problem specification!");
-   }
-   if (impose_visc) { visc = true; }
-
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
-                                                mat_gf, source, cfl,
+                                                mat_gf, qdata, source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
-                                                order_q);
+                                                ir);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
@@ -1063,25 +1073,122 @@ int main(int argc, char *argv[])
       ind_H1[k].ProjectDiscCoefficient(ic, GridFunction::ARITHMETIC);
    }
 
-   // Vis initial L2 indicators
    for (int k = 0; k < ind_cnt; k++)
    {
-      socketstream vis;
-      hydrodynamics::VisualizeField(vis, "localhost", 19916, ind_L2[k],
-                                    "Materials - initial",
-                                    300*k, 0, 300, 300, false, "ppppp");
+      VisQuadratureFunction(*pmesh, qdata.ind[k], "ind QF", 0 + k*400, 400);
    }
 
-   // Finally, run a tmop mesh optimization.
-   hydrodynamics::OptimizeMesh(x_gf, ess_vdofs, interfaces, ind_H1);
-
-   // Vis final L2 indicators
-   for (int k = 0; k < ind_cnt; k++)
+   //
+   // Prepare for ALE.
+   //
+   // Setup the BlockVector (ordered ind-rho-e-v).
+   const int size_qf   = qspace.GetSize(),
+             size_gf_e = L2FESpace.GetVSize(),
+             size_gf_v = H1FESpace.GetVSize();
+   Array<int> offset(5);
+   offset[0] = 0;
+   offset[1] = offset[0] + size_qf;
+   offset[2] = offset[1] + size_qf;
+   offset[3] = offset[2] + size_gf_e;
+   offset[4] = offset[3] + size_gf_v;
+   BlockVector ind_rho_e_v_0(offset, Device::GetMemoryType());
+   BlockVector ind_rho_e(offset);
+   // Move indicators and densities to QuadratureFunctions.
+   QuadratureFunction ind_0(&qspace, ind_rho_e_v_0.GetBlock(0).GetData()),
+                      rho_0(&qspace, ind_rho_e_v_0.GetBlock(1).GetData());
+   const int index = (problem == 3) ? 2 : 0;
+   ParGridFunction ind_remap(ind_L2[index]);
+   GridFunctionCoefficient ind_c(&ind_remap);
+   InitializeQuadratureFunction(ind_c, x_gf, ind_0);
+   hydro.ComputeDensity(rho_0);
+   // Copy energy and velocity.
+   ParGridFunction e_0(&L2FESpace, ind_rho_e_v_0.GetBlock(2).GetData());
+   e_0 = e_gf;
+   ParGridFunction v_0(&H1FESpace, ind_rho_e_v_0.GetBlock(3).GetData());
+   v_0 = v_gf;
+   Array<bool> ind_0_bool_el, ind_0_bool_dofs;
+   ComputeBoolIndicators(NE, ind_0, ind_0_bool_el, ind_0_bool_dofs);
+   const int nqp = ir.GetNPoints(), ndof = e_0.Size() / NE;
+   for (int e = 0; e < NE; e++)
    {
-      socketstream vis;
-      hydrodynamics::VisualizeField(vis, "localhost", 19916, ind_L2[k],
-                                    "Materials - optimized",
-                                    300*k, 700, 300, 300, false, "ppppp");
+      if (ind_0_bool_el[e] == false)
+      {
+         for (int q = 0; q < nqp; q++)
+         {
+            rho_0(e * nqp + q) = 0.0;
+         }
+         for (int i = 0; i < ndof; i++)
+         {
+            e_0(e*ndof + i) = 0.0;
+         }
+      }
+   }
+
+   InterpolationRemap interpolator(*pmesh);
+   // Visualize starting state.
+   VisQuadratureFunction(*pmesh, ind_0, "ind_0 QF", 0, 400);
+   VisQuadratureFunction(*pmesh, rho_0, "rho_0 QF", 400, 400);
+   {
+      socketstream sock_e;
+      hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e_0, "e_0 GF",
+                                    800, 400, 400, 400);
+
+      socketstream sock_v;
+      hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v_0, "v_0 GF",
+                                    1200, 400, 400, 400, true, "m");
+   }
+   QuadratureFunction p_0(&qspace);
+   hydro.ComputePressure(rho_0, e_0, mat_gf(0), p_0);
+   VisQuadratureFunction(*pmesh, p_0, "p_0 QF", 1600, 400);
+
+   //
+   // Remesh.
+   //
+   Vector x0(x_gf.Size());
+   x0 = x_gf;
+   ParGridFunction x_opt(x_gf);
+   hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, interfaces, ind_H1);
+
+   //
+   // Remap.
+   //
+   {
+      interpolator.visualization = false;
+      interpolator.h1_seminorm   = false;
+      interpolator.max_iter      = 100;
+      interpolator.subprob       = true;
+      interpolator.weightedSpace = hiop::hiopInterfaceBase::WeightedSpaceType::Euclidean;
+      interpolator.SetQuadratureSpace(qspace);
+      interpolator.SetEnergyFESpace(L2FESpace);
+      interpolator.SetVelocityFESpace(H1FESpace);
+
+      BlockVector ind_rho_e(offset);
+      const int optimization_type = 5;
+      interpolator.RemapHydro(ind_rho_e_v_0, true, ind_0_bool_el, x_opt,
+                              ind_rho_e, optimization_type);
+
+      x_gf = x_opt;
+
+      QuadratureFunction ind(&qspace, ind_rho_e.GetBlock(0).GetData()),
+                         rho(&qspace, ind_rho_e.GetBlock(1).GetData());
+      ParGridFunction e(&L2FESpace, ind_rho_e.GetBlock(2).GetData());
+      ParGridFunction v(&H1FESpace, ind_rho_e.GetBlock(3).GetData());
+
+      // Visualize starting state.
+      VisQuadratureFunction(*pmesh, ind, "ind QF", 0, 800);
+      VisQuadratureFunction(*pmesh, rho, "rho QF", 400, 800);
+      {
+         socketstream sock_e;
+         hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e, "e GF",
+                                       800, 800, 400, 400);
+
+         socketstream sock_v;
+         hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
+                                       1200, 800, 400, 400, true, "m");
+      }
+      QuadratureFunction p(&qspace);
+      hydro.ComputePressure(rho, e, mat_gf(0), p);
+      VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
    }
 
    if (visualization)
