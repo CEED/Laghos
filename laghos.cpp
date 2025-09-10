@@ -1156,7 +1156,7 @@ int main(int argc, char *argv[])
    {
       interpolator.visualization = false;
       interpolator.h1_seminorm   = false;
-      interpolator.max_iter      = 100;
+      interpolator.max_iter      = 500;
       interpolator.subprob       = true;
       interpolator.weightedSpace = hiop::hiopInterfaceBase::WeightedSpaceType::Euclidean;
       interpolator.SetQuadratureSpace(qspace);
@@ -1164,10 +1164,12 @@ int main(int argc, char *argv[])
       interpolator.SetVelocityFESpace(H1FESpace);
 
       BlockVector ind_rho_e(offset);
-      const int optimization_type = 0;
-      interpolator.RemapHydro(ind_rho_e_v_0, true, p_0, ind_0_bool_el, x_opt,
+      const int optimization_type = 1;
+      const bool remap_v = (problem == 1) ? false : true;
+      const bool p_control = (problem == 1) ? true : false;
+      interpolator.RemapHydro(ind_rho_e_v_0, remap_v, p_control, p_0,
+                              ind_0_bool_el, x_opt,
                               ind_rho_e, optimization_type);
-
       x_gf = x_opt;
 
       QuadratureFunction ind(&qspace, ind_rho_e.GetBlock(0).GetData()),
@@ -1183,9 +1185,12 @@ int main(int argc, char *argv[])
          hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e, "e GF",
                                        800, 800, 400, 400);
 
-         socketstream sock_v;
-         hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
-                                       1200, 800, 400, 400, true, "m");
+         if (remap_v)
+         {
+            socketstream sock_v;
+            hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
+                                          1200, 800, 400, 400, true, "m");
+         }
       }
       QuadratureFunction p(&qspace);
       hydro.ComputePressure(rho, e, mat_gf(0), p);
