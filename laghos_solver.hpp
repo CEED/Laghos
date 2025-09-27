@@ -97,6 +97,7 @@ public:
 class LagrangianHydroOperator : public TimeDependentOperator
 {
 protected:
+   int ind_cnt;
    ParFiniteElementSpace &H1, &L2;
    mutable ParFiniteElementSpace H1c;
    ParMesh *pmesh;
@@ -122,13 +123,15 @@ protected:
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
    SparseMatrix Mv_spmat_copy;
-   DenseTensor Me, Me_inv;
+   DenseTensor Me;
+   std::vector<DenseTensor> Me_inv;
    // Integration rule for all assemblies.
    const IntegrationRule &ir;
    // Data associated with each quadrature point in the mesh.
    // These values are recomputed at each time step.
    const int Q1D;
    QuadratureData &qdata;
+   std::vector<Array<bool>> &bool_ind;
    mutable bool qdata_is_current, forcemat_is_assembled;
    // Force matrix that combines the kinematic and thermodynamic spaces. It is
    // assembled in each time step and then it is used to compute the final
@@ -138,10 +141,12 @@ protected:
    ForcePAOperator *ForcePA;
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
-   MassPAOperator *VMassPA, *EMassPA;
+   MassPAOperator *VMassPA;
+   std::vector <MassPAOperator *> EMassPA;
    OperatorJacobiSmoother *VMassPA_Jprec;
    // Linear solver for energy.
-   CGSolver CG_VMass, CG_EMass;
+   CGSolver CG_VMass;
+   mutable CGSolver CG_EMass;
    mutable TimingData timer;
    mutable QUpdate *qupdate;
    mutable Vector X, B, one, rhs, e_rhs;
@@ -163,7 +168,7 @@ protected:
    void AssembleForceMatrix() const;
 
 public:
-   LagrangianHydroOperator(const int size,
+   LagrangianHydroOperator(const int size, int mat_cnt,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
@@ -171,6 +176,7 @@ public:
                            ParGridFunction &rho0_gf,
                            ParGridFunction &gamma_gf,
                            QuadratureData &quad_data,
+                           std::vector<Array<bool>> &bi,
                            const int source,
                            const double cfl,
                            const bool visc, const bool vort, const bool pa,
@@ -195,8 +201,8 @@ public:
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
-   void ComputeDensity(ParGridFunction &rho) const;
-   void ComputeDensity(QuadratureFunction &rho) const;
+   void ComputeDensity(int ind_id, ParGridFunction &rho) const;
+   void ComputeDensity(int ind_id, QuadratureFunction &rho) const;
    void ComputePressure(const QuadratureFunction &rho,
                         const ParGridFunction &energy,
                         double gamma,

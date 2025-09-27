@@ -49,8 +49,7 @@ int material_id(int el_id, const GridFunction &g)
 IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
 void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
-                  ParGridFunction &interface_ls,
-                  std::vector<ParGridFunction> ind)
+                  ParGridFunction &interface_ls)
 {
    const int myid = x.ParFESpace()->GetMyRank();
 
@@ -64,9 +63,6 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const int    max_lin_iter   = 100;
    const int    quad_order     = 8;
    const bool   normalization  = false;
-
-   // Adaptive limiting.
-   real_t adapt_lim_const = 0.0;
 
    // Limiting the node movement.
    real_t lim_const         = 0.0;
@@ -103,28 +99,6 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    // Integrator.
    TMOP_Integrator *he_nlf_integ= new TMOP_Integrator(metric, target_c);
    he_nlf_integ->SetIntegrationRules(*irules, quad_order);
-
-   // Adaptive limiting.
-   ParGridFunction ind_combo(ind[0].ParFESpace());
-   for (int i = 0; i < ind_combo.Size(); i++)
-   {
-      if (ind_combo.Size() == 3) { ind_combo(i) += ind[0](i) + 2.0 * ind[1](i); }
-      else { ind_combo(i) = ind[0](i); }
-   }
-   ParGridFunction adapt_lim_gf0(interface_ls.ParFESpace());
-   adapt_lim_gf0.ProjectGridFunction(ind_combo);
-   InterpolatorFP adapt_lim_eval;
-   ConstantCoefficient adapt_lim_coeff(adapt_lim_const);
-   if (adapt_lim_const > 0.0)
-   {
-      socketstream vis1;
-      hydrodynamics::VisualizeField(vis1, "localhost", 19916, adapt_lim_gf0,
-                                    "Adaptive Region GF",
-                                    0, 400, 300, 300);
-
-      he_nlf_integ->EnableAdaptiveLimiting(adapt_lim_gf0, adapt_lim_coeff,
-                                           adapt_lim_eval);
-   }
 
    // Limit the node movement.
    // The limiting distances can be given by a general function of space.

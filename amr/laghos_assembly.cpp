@@ -353,7 +353,7 @@ void ForcePAOperator::Mult(const Vector &vecL2, Vector &vecH1) const
    else { MFEM_ABORT("Unsupported dimension"); }
 }
 
-void ForcePAOperator::MultTranspose(const Vector &vecH1, Vector &vecL2) const
+void ForcePAOperator::MultTranspose(int k, const Vector &vecH1, Vector &vecL2) const
 {
    if      (dim == 2) { MultTransposeQuad(vecH1, vecL2); }
    else if (dim == 3) { MultTransposeHex(vecH1, vecL2); }

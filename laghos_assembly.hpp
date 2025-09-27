@@ -38,14 +38,14 @@ struct QuadratureData
    // At each quadrature point, it combines the stress, inverse Jacobian,
    // determinant of the Jacobian and the integration weight.
    // It must be recomputed in every time step.
-   DenseTensor stressJinvT;
+   std::vector<DenseTensor> stressJinvT;
 
    // Quadrature data used for full/partial assembly of the mass matrices.
    // At time zero, we compute and store (rho0 * det(J0) * qp_weight) at each
    // quadrature point. Note the at any other time, we can compute
    // rho = rho0 * det(J0) / det(J), representing the notion of pointwise mass
    // conservation.
-   Vector rho0DetJ0w;
+   std::vector<Vector> i_rho0DetJ0w;
 
    // Indicators at quadrature points.
    // Lagrangian phase: these just move with the mesh.
@@ -62,8 +62,39 @@ struct QuadratureData
 
    QuadratureData(int dim, int NE, int quads_per_el, int ind_cnt)
       : Jac0inv(dim, dim, NE * quads_per_el),
-        stressJinvT(NE * quads_per_el, dim, dim),
-        rho0DetJ0w(NE * quads_per_el), ind(ind_cnt) { }
+        stressJinvT(ind_cnt+1, DenseTensor(NE * quads_per_el, dim, dim)),
+        i_rho0DetJ0w(ind_cnt, Vector(NE * quads_per_el)),
+        ind(ind_cnt) { }
+};
+
+class MassCoefficient : public Coefficient
+{
+private:
+   const QuadratureData &qdata;
+   int ind_id, ind_cnt;
+
+public:
+   MassCoefficient(int k, QuadratureData &qd)
+       : ind_id(k), qdata(qd), ind_cnt(qdata.ind.size()) {}
+
+   real_t Eval(ElementTransformation &T, const IntegrationPoint &ip) override
+   {
+      const int nqp = qdata.ind[0].Size() / T.mesh->GetNE();
+      const int i = T.ElementNo * nqp + ip.index;
+      const double det = T.Weight();
+
+      if (ind_id > 0)
+      {
+         return qdata.i_rho0DetJ0w[ind_id](i) / ip.weight / det;
+      }
+
+      double mass = 0.0;
+      for (int k = 0; k < ind_cnt; k++)
+      {
+         mass += qdata.i_rho0DetJ0w[k](i) / ip.weight / det;
+      }
+      return mass;
+   }
 };
 
 // This class is used only for visualization. It assembles (rho, phi) in each
@@ -74,9 +105,11 @@ class DensityIntegrator : public LinearFormIntegrator
    using LinearFormIntegrator::AssembleRHSElementVect;
 private:
    const QuadratureData &qdata;
+   int ind_id;
 
 public:
-   DensityIntegrator(QuadratureData &qdata) : qdata(qdata) { }
+   DensityIntegrator(QuadratureData &qdata, int ind_id_)
+       : qdata(qdata), ind_id(ind_id_) { }
    virtual void AssembleRHSElementVect(const FiniteElement &fe,
                                        ElementTransformation &Tr,
                                        Vector &elvect);
@@ -113,7 +146,7 @@ public:
                    ParFiniteElementSpace&,
                    const IntegrationRule&);
    virtual void Mult(const Vector&, Vector&) const;
-   virtual void MultTranspose(const Vector&, Vector&) const;
+   virtual void MultTranspose(int k, const Vector&, Vector&) const;
 };
 
 // Performs partial assembly for the velocity mass matrix.

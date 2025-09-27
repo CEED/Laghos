@@ -35,7 +35,7 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    {
       fe.CalcShape(IntRule->IntPoint(q), shape);
       // Note that rhoDetJ = rho0DetJ0.
-      shape *= qdata.rho0DetJ0w(Tr.ElementNo*nqp + q);
+      shape *= qdata.i_rho0DetJ0w[ind_id](Tr.ElementNo*nqp + q);
       elvect += shape;
    }
 }
@@ -50,6 +50,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    const int dim = trial_fe.GetDim();
    const int h1dofs_cnt = test_fe.GetDof();
    const int l2dofs_cnt = trial_fe.GetDof();
+   const int ind_cnt = qdata.stressJinvT.size();
    elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
    elmat = 0.0;
    DenseMatrix vshape(h1dofs_cnt, dim), loc_force(h1dofs_cnt, dim);
@@ -67,8 +68,12 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
             for (int gd = 0; gd < dim; gd++) // Gradient components.
             {
                const int eq = e*nqp + q;
-               const double stressJinvT = qdata.stressJinvT(vd)(eq, gd);
-               loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
+               for (int k = 0; k < ind_cnt; k++)
+               {
+                  const double stressJinvT = qdata.stressJinvT[k](vd)(eq, gd);
+                  loc_force(i, vd) += qdata.ind[k](e*nqp + q) * stressJinvT *
+                                      vshape(i,gd);
+               }
             }
          }
       }
@@ -555,9 +560,12 @@ void ForcePAOperator::Mult(const Vector &x, Vector &y) const
 {
    if (L2R) { L2R->Mult(x, X); }
    else { X = x; }
+
+   Y = 0.0;
    ForceMult(dim, D1D, Q1D, L1D, D1D, NE,
              L2D2Q->B, H1D2Q->Bt, H1D2Q->Gt,
-             qdata.stressJinvT, X, Y);
+             qdata.stressJinvT[qdata.ind.size()], X, Y);
+
    H1R->MultTranspose(Y, y);
 }
 
@@ -956,12 +964,12 @@ static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
    call[id](NE, L2Bt, H1B, H1G, stressJinvT, v, e);
 }
 
-void ForcePAOperator::MultTranspose(const Vector &x, Vector &y) const
+void ForcePAOperator::MultTranspose(int k, const Vector &x, Vector &y) const
 {
    H1R->Mult(x, Y);
    ForceMultTranspose(dim, D1D, Q1D, L1D, NE,
                       L2D2Q->Bt, H1D2Q->B, H1D2Q->G,
-                      qdata.stressJinvT, Y, X);
+                      qdata.stressJinvT[k], Y, X);
    if (L2R) { L2R->MultTranspose(X, y); }
    else { y = X; }
 }

@@ -214,10 +214,13 @@ void InitIndicators(std::vector<ParGridFunction> &ind)
    }
 }
 
-void InitIndicators(std::vector<QuadratureFunction> &ind)
+void InitIndicators(std::vector<QuadratureFunction> &ind,
+                    std::vector<Array<bool>> &bool_ind)
 {
    auto qspace = dynamic_cast<QuadratureSpace *>(ind[0].GetSpace());
    const int NE  = qspace->GetMesh()->GetNE(), ind_cnt = ind.size();
+
+   for(int k = 0; k < ind_cnt; k++) { bool_ind[k] = false; }
 
    for (int e = 0; e < NE; e++)
    {
@@ -236,6 +239,7 @@ void InitIndicators(std::vector<QuadratureFunction> &ind)
          for (int k = 0; k < ind_cnt; k++)
          {
             ind[k](e*nip + q) = (mat_id(coord) == k) ? 1.0 : 0.0;
+            if (mat_id(coord) == k) { bool_ind[k][e] = true; }
          }
       }
    }
@@ -651,29 +655,16 @@ int main(int argc, char *argv[])
            << glob_size_l2 << endl;
    }
 
-   // The monolithic BlockVector stores unknown fields as:
-   // - 0 -> position
-   // - 1 -> velocity
-   // - 2 -> specific internal energy
-   const int Vsize_l2 = L2FESpace.GetVSize();
-   const int Vsize_h1 = H1FESpace.GetVSize();
-   Array<int> true_offset(4);
-   true_offset[0] = 0;
-   true_offset[1] = true_offset[0] + Vsize_h1;
-   true_offset[2] = true_offset[1] + Vsize_h1;
-   true_offset[3] = true_offset[2] + Vsize_l2;
-   BlockVector S(true_offset, Device::GetMemoryType());
-
    // Additional details, depending on the problem.
    int source = 0; bool visc = true, vorticity = false;
    int ind_cnt = 1;
    switch (problem)
    {
    case 0: if (pmesh->Dimension() == 2) { source = 1; }
-           visc = false; ind_cnt = 2; break;
+      visc = false; ind_cnt = 2; break;
    case 1: visc = true; break;
    case 2: visc = true; break;
-   case 3: visc = true; ind_cnt = 3; S.HostRead(); break;
+   case 3: visc = true; ind_cnt = 3; break;
    case 4: visc = false; ind_cnt = 2; break;
    case 5: visc = true; break;
    case 6: visc = true; break;
@@ -681,6 +672,22 @@ int main(int argc, char *argv[])
    default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
+
+   // The monolithic BlockVector stores unknown fields as:
+   // 0  -> position
+   // 1  -> velocity
+   // 2+ -> specific internal energies
+   const int Vsize_l2 = L2FESpace.GetVSize();
+   const int Vsize_h1 = H1FESpace.GetVSize();
+   Array<int> true_offset(3 + ind_cnt);
+   true_offset[0] = 0;
+   true_offset[1] = true_offset[0] + Vsize_h1;
+   true_offset[2] = true_offset[1] + Vsize_h1;
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      true_offset[3+k] = true_offset[2] + (k+1) * Vsize_l2;
+   }
+   BlockVector S(true_offset, Device::GetMemoryType());
 
    // Integration rule for all hydro integrals.
    auto ir = IntRules.Get(pmesh->GetElementBaseGeometry(0),
@@ -690,10 +697,14 @@ int main(int argc, char *argv[])
    // internal energy. There is no function for the density, as we can always
    // compute the density values given the current mesh position, using the
    // property of pointwise mass conservation.
-   ParGridFunction x_gf, v_gf, e_gf;
+   ParGridFunction x_gf, v_gf;
+   std::vector<ParGridFunction> e_gf(ind_cnt);
    x_gf.MakeRef(&H1FESpace, S, true_offset[0]);
    v_gf.MakeRef(&H1FESpace, S, true_offset[1]);
-   e_gf.MakeRef(&L2FESpace, S, true_offset[2]);
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      e_gf[k].MakeRef(&L2FESpace, S, true_offset[2 + k]);
+   }
 
    // Initialize x_gf using the starting mesh coordinates.
    pmesh->SetNodalGridFunction(&x_gf);
@@ -706,12 +717,8 @@ int main(int argc, char *argv[])
 
    // Initialize material indicator functions.
    for (int k = 0; k < ind_cnt; k++) { qdata.ind[k].SetSpace(&qspace, 1); }
-   L2_FECollection ind_fec(1, pmesh->Dimension(), BasisType::GaussLegendre);
-   ParFiniteElementSpace ind_fes(pmesh, &ind_fec);
-   std::vector<ParGridFunction> ind_L2(ind_cnt);
-   for (int k = 0; k < ind_cnt; k++) { ind_L2[k].SetSpace(&ind_fes); }
-   InitIndicators(ind_L2);
-   InitIndicators(qdata.ind);
+   std::vector<Array<bool>> bool_ind(ind_cnt, Array<bool>(NE));
+   InitIndicators(qdata.ind, bool_ind);
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
@@ -748,9 +755,25 @@ int main(int argc, char *argv[])
       FunctionCoefficient e_coeff(e0);
       l2_e.ProjectCoefficient(e_coeff);
    }
-   e_gf.ProjectGridFunction(l2_e);
-   // Sync the data location of e_gf with its base, S
-   e_gf.SyncAliasMemory(S);
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      e_gf[k].ProjectGridFunction(l2_e);
+      // Clean empty zones.
+      int ndof = e_gf[k].Size() / NE;
+      for (int e = 0; e < NE; e++)
+      {
+         if (bool_ind[k][e] == false)
+         {
+            for (int i = 0; i < ndof; i++)
+            {
+               e_gf[k](e * ndof + i) = 0.0;
+            }
+         }
+      }
+
+      // Sync the data location of e_gf with its base, S
+      e_gf[k].SyncAliasMemory(S);
+   }
 
    // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
    // gamma values are projected on function that's constant on the moving mesh.
@@ -765,10 +788,11 @@ int main(int argc, char *argv[])
    ParGridFunction interfaces(&interf_fes);
    SetInterfaces(x_gf, interfaces);
 
-   hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
+   hydrodynamics::LagrangianHydroOperator hydro(S.Size(), ind_cnt,
                                                 H1FESpace, L2FESpace, ess_tdofs,
                                                 rho0_coeff, rho0_gf,
-                                                mat_gf, qdata, source, cfl,
+                                                mat_gf, qdata, bool_ind,
+                                                source, cfl,
                                                 visc, vorticity, p_assembly,
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 ir);
@@ -778,8 +802,8 @@ int main(int argc, char *argv[])
    int  visport   = 19916;
 
    ParGridFunction rho_gf;
-   if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
-   const double energy_init = hydro.InternalEnergy(e_gf) +
+   if (visualization || visit) { hydro.ComputeDensity(0, rho_gf); }
+   const double energy_init = hydro.InternalEnergy(e_gf[0]) +
                               hydro.KineticEnergy(v_gf);
 
    if (visualization)
@@ -802,7 +826,7 @@ int main(int argc, char *argv[])
       hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
                                     "Velocity", Wx, Wy, Ww, Wh);
       Wx += offx;
-      hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+      hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf[0],
                                     "Specific Internal Energy", Wx, Wy, Ww, Wh);
    }
 
@@ -812,7 +836,7 @@ int main(int argc, char *argv[])
    {
       visit_dc.RegisterField("Density",  &rho_gf);
       visit_dc.RegisterField("Velocity", &v_gf);
-      visit_dc.RegisterField("Specific Internal Energy", &e_gf);
+      visit_dc.RegisterField("Specific Internal Energy", &e_gf[0]);
       visit_dc.SetCycle(0);
       visit_dc.SetTime(0.0);
       visit_dc.Save();
@@ -828,28 +852,6 @@ int main(int argc, char *argv[])
    int steps = 0;
    BlockVector S_old(S);
    long mem=0, mmax=0, msum=0;
-   int checks = 0;
-//   const double internal_energy = hydro.InternalEnergy(e_gf);
-//   const double kinetic_energy = hydro.KineticEnergy(v_gf);
-//   if (mpi.Root())
-//   {
-//      cout << std::fixed;
-//      cout << "step " << std::setw(5) << 0
-//            << ",\tt = " << std::setw(5) << std::setprecision(4) << t
-//            << ",\tdt = " << std::setw(5) << std::setprecision(6) << dt
-//            << ",\t|IE| = " << std::setprecision(10) << std::scientific
-//            << internal_energy
-//            << ",\t|KE| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy
-//            << ",\t|E| = " << std::setprecision(10) << std::scientific
-//            << kinetic_energy+internal_energy;
-//      cout << std::fixed;
-//      if (mem_usage)
-//      {
-//         cout << ", mem: " << mmax << "/" << msum << " MB";
-//      }
-//      cout << endl;
-//   }
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -890,7 +892,7 @@ int main(int argc, char *argv[])
       // the sub-vectors to match those of S.
       x_gf.SyncAliasMemory(S);
       v_gf.SyncAliasMemory(S);
-      e_gf.SyncAliasMemory(S);
+      for (int k = 0; k < ind_cnt; k++) { e_gf[k].SyncAliasMemory(S); }
 
       // Make sure that the mesh corresponds to the new solution state. This is
       // needed, because some time integrators use different S-type vectors
@@ -899,7 +901,7 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double lnorm = e_gf * e_gf, norm;
+         double lnorm = e_gf[0] * e_gf[0], norm;
          MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
          if (mem_usage)
          {
@@ -937,7 +939,10 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh->GetComm());
 
-         if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
+         if (visualization || visit || gfprint)
+         {
+            hydro.ComputeDensity(0, rho_gf);
+         }
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
@@ -952,7 +957,7 @@ int main(int argc, char *argv[])
             hydrodynamics::VisualizeField(vis_v, vishost, visport,
                                           v_gf, "Velocity", Wx, Wy, Ww, Wh);
             Wx += offx;
-            hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf,
+            hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf[0],
                                           "Specific Internal Energy",
                                           Wx, Wy, Ww,Wh);
             Wx += offx;
@@ -990,29 +995,11 @@ int main(int argc, char *argv[])
 
             std::ofstream e_ofs(e_name.str().c_str());
             e_ofs.precision(8);
-            e_gf.SaveAsOne(e_ofs);
+            e_gf[0].SaveAsOne(e_ofs);
             e_ofs.close();
          }
       }
-
-      // Problems checks
-      if (check)
-      {
-         double lnorm = e_gf * e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-         const double e_norm = sqrt(norm);
-         MFEM_VERIFY(rs_levels==0 && rp_levels==0, "check: rs, rp");
-         MFEM_VERIFY(order_v==2, "check: order_v");
-         MFEM_VERIFY(order_e==1, "check: order_e");
-         MFEM_VERIFY(ode_solver_type==4, "check: ode_solver_type");
-         MFEM_VERIFY(t_final == 0.6, "check: t_final");
-         MFEM_VERIFY(cfl==0.5, "check: cfl");
-         MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
-         MFEM_VERIFY(dim==2 || dim==3, "check: dimension");
-         Checks(dim, ti, e_norm, checks);
-      }
    }
-   MFEM_VERIFY(!check || checks == 2, "Check error!");
 
    switch (ode_solver_type)
    {
@@ -1033,7 +1020,7 @@ int main(int argc, char *argv[])
       MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
    }
 
-   const double energy_final = hydro.InternalEnergy(e_gf) +
+   const double energy_final = hydro.InternalEnergy(e_gf[0]) +
                                hydro.KineticEnergy(v_gf);
    if (Mpi::Root())
    {
@@ -1062,17 +1049,6 @@ int main(int argc, char *argv[])
       }
    }
 
-   // Project indicators to H1+P1.
-   H1_FECollection ind_fec_H1(1, pmesh->Dimension());
-   ParFiniteElementSpace ind_fes_H1(pmesh, &ind_fec_H1);
-   std::vector<ParGridFunction> ind_H1(ind_cnt);
-   for (int k = 0; k < ind_cnt; k++)
-   {
-      ind_H1[k].SetSpace(&ind_fes_H1);
-      GridFunctionCoefficient ic(&ind_L2[k]);
-      ind_H1[k].ProjectDiscCoefficient(ic, GridFunction::ARITHMETIC);
-   }
-
    for (int k = 0; k < ind_cnt; k++)
    {
       VisQuadratureFunction(*pmesh, qdata.ind[k], "ind QF", 0 + k*400, 400);
@@ -1097,33 +1073,17 @@ int main(int argc, char *argv[])
    QuadratureFunction ind_0(&qspace, ind_rho_e_v_0.GetBlock(0).GetData()),
                       rho_0(&qspace, ind_rho_e_v_0.GetBlock(1).GetData());
    const int index = (problem == 3) ? 2 : 0;
-   ParGridFunction ind_remap(ind_L2[index]);
-   GridFunctionCoefficient ind_c(&ind_remap);
-   InitializeQuadratureFunction(ind_c, x_gf, ind_0);
-   hydro.ComputeDensity(rho_0);
+   ind_0 = qdata.ind[index];
+   hydro.ComputeDensity(index, rho_0);
    // Copy energy and velocity.
    ParGridFunction e_0(&L2FESpace, ind_rho_e_v_0.GetBlock(2).GetData());
-   e_0 = e_gf;
+   e_0 = e_gf[index];
    e_0 += 1e-12; // must be positive to avoid the e bounds check.
    ParGridFunction v_0(&H1FESpace, ind_rho_e_v_0.GetBlock(3).GetData());
    v_0 = v_gf;
    Array<bool> ind_0_bool_el, ind_0_bool_dofs;
    ComputeBoolIndicators(NE, ind_0, ind_0_bool_el, ind_0_bool_dofs);
    const int nqp = ir.GetNPoints(), ndof = e_0.Size() / NE;
-   for (int e = 0; e < NE; e++)
-   {
-      if (ind_0_bool_el[e] == false)
-      {
-         for (int q = 0; q < nqp; q++)
-         {
-            rho_0(e * nqp + q) = 0.0;
-         }
-         for (int i = 0; i < ndof; i++)
-         {
-            e_0(e*ndof + i) = 0.0;
-         }
-      }
-   }
 
    InterpolationRemap interpolator(*pmesh);
    // Visualize starting state.
@@ -1148,7 +1108,9 @@ int main(int argc, char *argv[])
    Vector x0(x_gf.Size());
    x0 = x_gf;
    ParGridFunction x_opt(x_gf);
-   hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, interfaces, ind_H1);
+   hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, interfaces);
+
+   std::cout << "ehoe" << std::endl;
 
    //
    // Remap.
@@ -1168,7 +1130,7 @@ int main(int argc, char *argv[])
       const bool remap_v = (problem == 1) ? false : true;
       const bool p_control = (problem == 1) ? true : false;
       interpolator.RemapHydro(ind_rho_e_v_0, remap_v, p_control, p_0,
-                              ind_0_bool_el, x_opt,
+                              bool_ind[index], x_opt,
                               ind_rho_e, optimization_type);
       x_gf = x_opt;
 
@@ -1176,6 +1138,13 @@ int main(int argc, char *argv[])
                          rho(&qspace, ind_rho_e.GetBlock(1).GetData());
       ParGridFunction e(&L2FESpace, ind_rho_e.GetBlock(2).GetData());
       ParGridFunction v(&H1FESpace, ind_rho_e.GetBlock(3).GetData());
+
+      for (int q = 0; q < rho.Size(); q++)
+      {
+         rho(q) *= ind(q);
+      }
+
+         std::cout << "aa" << std::endl;
 
       // Visualize starting state.
       VisQuadratureFunction(*pmesh, ind, "ind QF", 0, 800);

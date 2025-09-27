@@ -26,8 +26,7 @@ namespace hydrodynamics
 {
 
 void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
-                  ParGridFunction &interface_ls,
-                  std::vector<ParGridFunction> ind);
+                  ParGridFunction &interface_ls);
 
 } // namespace hydrodynamics
 
