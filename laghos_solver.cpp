@@ -1301,7 +1301,7 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
 		   Vector dist;
 		   Vector true_n;
 		   analyticalSurface->ComputeDistanceAndNormal(position, dist, true_n);
-		   true_n = tn;
+		   //true_n = tn;
 		   double nDotNtilda = true_n * tn;
 		   
 		   for (int dx = 0; dx < dim; dx++)
