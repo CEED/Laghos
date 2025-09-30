@@ -138,6 +138,7 @@ protected:
    // right-hand sides for momentum and specific internal energy.
    mutable MixedBilinearForm Force;
    // Same as above, but done through partial assembly.
+   MassCoefficient total_mass_coeff;
    ForcePAOperator *ForcePA;
    // Mass matrices done through partial assembly:
    // velocity (coupled H1 assembly) and energy (local L2 assemblies).
@@ -193,6 +194,7 @@ public:
    void SolveVelocity(const Vector &S, Vector &dS_dt) const;
    void SolveEnergy(const Vector &S, const Vector &v, Vector &dS_dt) const;
    void UpdateMesh(const Vector &S) const;
+   void UpdateMassMatrices();
 
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    double GetTimeStepEstimate(const Vector &S) const;
@@ -203,6 +205,7 @@ public:
    // are projected as a ParGridFunction.
    void ComputeDensity(int ind_id, ParGridFunction &rho) const;
    void ComputeDensity(int ind_id, QuadratureFunction &rho) const;
+   void SetIndRhoDetJw(int ind_id, const QuadratureFunction &rho);
    void ComputePressure(const QuadratureFunction &rho,
                         const ParGridFunction &energy,
                         double gamma,

@@ -161,6 +161,7 @@ private:
    OperatorPtr mass;
 public:
    MassPAOperator(ParFiniteElementSpace&, const IntegrationRule&, Coefficient&);
+   void Recompute();
    virtual void Mult(const Vector&, Vector&) const;
    void MultFull(const Vector &x, Vector &y) const { mass->Mult(x, y); }
    virtual void SetEssentialTrueDofs(Array<int>&);

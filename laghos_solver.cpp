@@ -144,6 +144,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size, int mat_cnt,
    qdata_is_current(false),
    forcemat_is_assembled(false),
    Force(&L2, &H1),
+   total_mass_coeff(-7, qdata),
    ForcePA(nullptr), VMassPA(nullptr), EMassPA(ind_cnt, nullptr),
    VMassPA_Jprec(nullptr),
    CG_VMass(H1.GetParMesh()->GetComm()),
@@ -234,7 +235,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size, int mat_cnt,
       qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
                             &timer, gamma_gf, ir, H1, L2);
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
-      MassCoefficient total_mass_coeff(-7, qdata);
       VMassPA = new MassPAOperator(H1c, ir, total_mass_coeff);
       for (int k = 0; k < ind_cnt; k++)
       {
@@ -514,6 +514,32 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
    H1.GetParMesh()->NewNodes(x_gf, false);
 }
 
+void LagrangianHydroOperator::UpdateMassMatrices()
+{
+   // Velocity.
+   VMassPA->Recompute();
+   Array<int> ess_tdofs;
+   delete VMassPA_Jprec;
+   VMassPA_Jprec = new OperatorJacobiSmoother(VMassPA->GetBF(), ess_tdofs);
+   CG_VMass.SetPreconditioner(*VMassPA_Jprec);
+
+   // Energy.
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      MassCoefficient mass_k(k, qdata);
+      MassIntegrator mi(mass_k, &ir);
+      for (int e = 0; e < NE; e++)
+      {
+         const FiniteElement &fe = *L2.GetFE(e);
+         ElementTransformation &Tr = *L2.GetElementTransformation(e);
+         DenseMatrixInverse inv(&Me(e));
+         mi.AssembleElementMatrix(fe, Tr, Me(e));
+         inv.Factor();
+         inv.GetInverseMatrix(Me_inv[k](e));
+      }
+   }
+}
+
 double LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S) const
 {
    UpdateMesh(S);
@@ -557,7 +583,6 @@ void LagrangianHydroOperator::ComputeDensity(int ind_id,
                                              QuadratureFunction &rho) const
 {
    const int nqp = ir.GetNPoints();
-
    for (int e = 0; e < NE; e++)
    {
       ElementTransformation *T = H1.GetElementTransformation(e);
@@ -570,6 +595,28 @@ void LagrangianHydroOperator::ComputeDensity(int ind_id,
          rho(e*nqp + q) = (ind > 0) ? qdata.i_rho0DetJ0w[ind_id](e*nqp + q) /
                                       ind / T->Weight() / ip.weight
                                     : 0.0;
+      }
+   }
+}
+
+void LagrangianHydroOperator::SetIndRhoDetJw(int ind_id,
+                                             const QuadratureFunction &rho)
+{
+   const int nqp = ir.GetNPoints();
+   for (int e = 0; e < NE; e++)
+   {
+      ElementTransformation *T = H1.GetElementTransformation(e);
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         T->SetIntPoint(&ip);
+
+         DenseMatrixInverse Jinv(T->Jacobian());
+         Jinv.GetInverseMatrix(qdata.Jac0inv(e*nqp + q));
+
+         const double ind = qdata.ind[ind_id](e*nqp + q);
+         qdata.i_rho0DetJ0w[ind_id](e*nqp + q) = ind * rho(e*nqp + q) *
+                                                 T->Weight() * ip.weight;
       }
    }
 }

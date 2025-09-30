@@ -287,6 +287,7 @@ int main(int argc, char *argv[])
    int order_q = -1;
    int ode_solver_type = 4;
    double t_final = 0.6;
+   double ale_period = -1.0;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
@@ -331,6 +332,8 @@ int main(int argc, char *argv[])
                   "            7 - RK2Avg.");
    args.AddOption(&t_final, "-tf", "--t-final",
                   "Final time; start time is 0.");
+   args.AddOption(&ale_period, "-ale", "--ale-period",
+                  "ALE period interval in physical time.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
@@ -852,6 +855,7 @@ int main(int argc, char *argv[])
    int steps = 0;
    BlockVector S_old(S);
    long mem=0, mmax=0, msum=0;
+   int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -884,6 +888,166 @@ int main(int argc, char *argv[])
          if (Mpi::Root()) { cout << "Repeating step " << ti << endl; }
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
+      }
+      else if (ale_period > 0.0 && t + 1e-12 > (ale_cnt + 1) * ale_period)
+      {
+         // ALE step - the next remap period has been reached, the dt was ok.
+         if (myid == 0)
+         {
+            cout << std::fixed << std::setw(5)
+            << "ALE step [" << ale_cnt << "] at " << t << ": " << endl;
+         }
+
+         for (int k = 0; k < ind_cnt; k++)
+         {
+            VisQuadratureFunction(*pmesh, qdata.ind[k], "ind QF", 0 + k*400, 400);
+         }
+
+         //
+         // Prepare for ALE.
+         //
+         // Setup the BlockVector (ordered ind-rho-e-v).
+         const int size_qf   = qspace.GetSize(),
+                   size_gf_e = L2FESpace.GetVSize(),
+                   size_gf_v = H1FESpace.GetVSize();
+         Array<int> offset(5);
+         offset[0] = 0;
+         offset[1] = offset[0] + size_qf;
+         offset[2] = offset[1] + size_qf;
+         offset[3] = offset[2] + size_gf_e;
+         offset[4] = offset[3] + size_gf_v;
+         auto mt = Device::GetMemoryType();
+         std::vector<BlockVector> ind_rho_e_v_0(ind_cnt, BlockVector(offset, mt));
+         std::vector<QuadratureFunction> p_0(ind_cnt, QuadratureFunction(&qspace));
+         for (int k = 0; k < ind_cnt; k++)
+         {
+            // Initial indicators.
+            QuadratureFunction ind_0(&qspace,
+                                     ind_rho_e_v_0[k].GetBlock(0).GetData());
+            ind_0 = qdata.ind[k];
+            // Initial densities.
+            QuadratureFunction rho_0(&qspace,
+                                     ind_rho_e_v_0[k].GetBlock(1).GetData());
+            hydro.ComputeDensity(k, rho_0);
+            // Initial specific internal energy.
+            ParGridFunction e_0(&L2FESpace,
+                                ind_rho_e_v_0[k].GetBlock(2).GetData());
+            e_0 = e_gf[k];
+            // Initial velocity.
+            ParGridFunction v_0(&H1FESpace,
+                                ind_rho_e_v_0[k].GetBlock(3).GetData());
+            v_0 = v_gf;
+
+            // Visualize starting state.
+            VisQuadratureFunction(*pmesh, ind_0, "ind_0 QF", 0, 400);
+            VisQuadratureFunction(*pmesh, rho_0, "rho_0 QF", 400, 400);
+            {
+               socketstream sock_e;
+               hydrodynamics::VisualizeField(sock_e, "localhost", 19916,
+                                             e_0, "e_0 GF",
+                                             800, 400, 400, 400);
+
+               socketstream sock_v;
+               hydrodynamics::VisualizeField(sock_v, "localhost", 19916,
+                                             v_0, "v_0 GF",
+                                             1200, 400, 400, 400, true, "m");
+            }
+            hydro.ComputePressure(rho_0, e_0, mat_gf(0), p_0[k]);
+            VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 400);
+         }
+
+         //
+         // Remesh.
+         //
+         Vector x0(x_gf.Size());
+         x0 = x_gf;
+         ParGridFunction x_opt(x_gf);
+         hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, interfaces);
+
+         //
+         // Remap.
+         //
+         {
+            InterpolationRemap interpolator(*pmesh);
+            interpolator.visualization = false;
+            interpolator.h1_seminorm   = false;
+            interpolator.max_iter      = 500;
+            interpolator.subprob       = true;
+            interpolator.weightedSpace = hiop::hiopInterfaceBase::Euclidean;
+            interpolator.SetQuadratureSpace(qspace);
+            interpolator.SetEnergyFESpace(L2FESpace);
+            interpolator.SetVelocityFESpace(H1FESpace);
+
+            std::vector<BlockVector> ind_rho_e(ind_cnt, BlockVector(offset));
+            const int optimization_type = 1;
+            const bool remap_v = (problem == 1) ? false : true;
+            const bool p_control = (problem == 1) ? true : false;
+            for (int k = 0; k < ind_cnt; k++)
+            {
+               QuadratureFunction ind_0(&qspace,
+                                        ind_rho_e_v_0[k].GetBlock(0).GetData());
+               Array<bool> ind_0_bool_el, ind_0_bool_dofs;
+               ComputeBoolIndicators(NE, ind_0, ind_0_bool_el, ind_0_bool_dofs);
+               interpolator.RemapHydro(ind_rho_e_v_0[k],
+                                       remap_v, p_control, p_0[k],
+                                       bool_ind[k], x_opt,
+                                       ind_rho_e[k], optimization_type);
+            }
+
+            x_gf = x_opt;
+
+            for (int k = 0; k < ind_cnt; k++)
+            {
+               QuadratureFunction ind(&qspace, ind_rho_e[k].GetBlock(0).GetData()),
+                   rho(&qspace, ind_rho_e[k].GetBlock(1).GetData());
+               ParGridFunction e(&L2FESpace, ind_rho_e[k].GetBlock(2).GetData());
+               ParGridFunction v(&H1FESpace, ind_rho_e[k].GetBlock(3).GetData());
+
+               qdata.ind[k] = ind;
+               hydro.SetIndRhoDetJw(k, rho);
+               e_gf[k]      = e;
+               v_gf         = v;
+
+               // Update bool_ind.
+               const int nip = ir.GetNPoints();
+               bool_ind[k] = false;
+               for (int e = 0; e < NE; e++)
+               {
+                  for (int q = 0; q < nip; q++)
+                  {
+                     if (qdata.ind[k](e*nip + q) > 1e-12)
+                     {
+                        bool_ind[k][e] = true;
+                        continue;
+                     }
+                  }
+               }
+
+               hydro.UpdateMassMatrices();
+
+               VisQuadratureFunction(*pmesh, ind, "ind QF", 0, 800);
+               VisQuadratureFunction(*pmesh, rho, "rho QF", 400, 800);
+               socketstream sock_e;
+               hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e, "e GF",
+                                             800, 800, 400, 400);
+               socketstream sock_v;
+               hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
+                                             1200, 800, 400, 400, true, "m");
+               QuadratureFunction p(&qspace);
+               hydro.ComputePressure(rho, e, mat_gf(0), p);
+               VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
+            }
+         }
+
+         /*
+         hydro.RemoveBdrNormalPart(v_gf, x_gf);
+
+         // Update mass matrices.
+         // Above we changed rho0_gf to reflect the mass matrices Coefficient.
+         hydro.UpdateMassMatrices(rho0_gf_coeff);
+         */
+
+         ale_cnt++;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
@@ -1047,123 +1211,6 @@ int main(int argc, char *argv[])
               << "L_1    error: " << error_l1 << endl
               << "L_2    error: " << error_l2 << endl;
       }
-   }
-
-   for (int k = 0; k < ind_cnt; k++)
-   {
-      VisQuadratureFunction(*pmesh, qdata.ind[k], "ind QF", 0 + k*400, 400);
-   }
-
-   //
-   // Prepare for ALE.
-   //
-   // Setup the BlockVector (ordered ind-rho-e-v).
-   const int size_qf   = qspace.GetSize(),
-             size_gf_e = L2FESpace.GetVSize(),
-             size_gf_v = H1FESpace.GetVSize();
-   Array<int> offset(5);
-   offset[0] = 0;
-   offset[1] = offset[0] + size_qf;
-   offset[2] = offset[1] + size_qf;
-   offset[3] = offset[2] + size_gf_e;
-   offset[4] = offset[3] + size_gf_v;
-   BlockVector ind_rho_e_v_0(offset, Device::GetMemoryType());
-   BlockVector ind_rho_e(offset);
-   // Move indicators and densities to QuadratureFunctions.
-   QuadratureFunction ind_0(&qspace, ind_rho_e_v_0.GetBlock(0).GetData()),
-                      rho_0(&qspace, ind_rho_e_v_0.GetBlock(1).GetData());
-   const int index = (problem == 3) ? 2 : 0;
-   ind_0 = qdata.ind[index];
-   hydro.ComputeDensity(index, rho_0);
-   // Copy energy and velocity.
-   ParGridFunction e_0(&L2FESpace, ind_rho_e_v_0.GetBlock(2).GetData());
-   e_0 = e_gf[index];
-   e_0 += 1e-12; // must be positive to avoid the e bounds check.
-   ParGridFunction v_0(&H1FESpace, ind_rho_e_v_0.GetBlock(3).GetData());
-   v_0 = v_gf;
-   Array<bool> ind_0_bool_el, ind_0_bool_dofs;
-   ComputeBoolIndicators(NE, ind_0, ind_0_bool_el, ind_0_bool_dofs);
-   const int nqp = ir.GetNPoints(), ndof = e_0.Size() / NE;
-
-   InterpolationRemap interpolator(*pmesh);
-   // Visualize starting state.
-   VisQuadratureFunction(*pmesh, ind_0, "ind_0 QF", 0, 400);
-   VisQuadratureFunction(*pmesh, rho_0, "rho_0 QF", 400, 400);
-   {
-      socketstream sock_e;
-      hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e_0, "e_0 GF",
-                                    800, 400, 400, 400);
-
-      socketstream sock_v;
-      hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v_0, "v_0 GF",
-                                    1200, 400, 400, 400, true, "m");
-   }
-   QuadratureFunction p_0(&qspace);
-   hydro.ComputePressure(rho_0, e_0, mat_gf(0), p_0);
-   VisQuadratureFunction(*pmesh, p_0, "p_0 QF", 1600, 400);
-
-   //
-   // Remesh.
-   //
-   Vector x0(x_gf.Size());
-   x0 = x_gf;
-   ParGridFunction x_opt(x_gf);
-   hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, interfaces);
-
-   std::cout << "ehoe" << std::endl;
-
-   //
-   // Remap.
-   //
-   {
-      interpolator.visualization = false;
-      interpolator.h1_seminorm   = false;
-      interpolator.max_iter      = 500;
-      interpolator.subprob       = true;
-      interpolator.weightedSpace = hiop::hiopInterfaceBase::WeightedSpaceType::Euclidean;
-      interpolator.SetQuadratureSpace(qspace);
-      interpolator.SetEnergyFESpace(L2FESpace);
-      interpolator.SetVelocityFESpace(H1FESpace);
-
-      BlockVector ind_rho_e(offset);
-      const int optimization_type = 1;
-      const bool remap_v = (problem == 1) ? false : true;
-      const bool p_control = (problem == 1) ? true : false;
-      interpolator.RemapHydro(ind_rho_e_v_0, remap_v, p_control, p_0,
-                              bool_ind[index], x_opt,
-                              ind_rho_e, optimization_type);
-      x_gf = x_opt;
-
-      QuadratureFunction ind(&qspace, ind_rho_e.GetBlock(0).GetData()),
-                         rho(&qspace, ind_rho_e.GetBlock(1).GetData());
-      ParGridFunction e(&L2FESpace, ind_rho_e.GetBlock(2).GetData());
-      ParGridFunction v(&H1FESpace, ind_rho_e.GetBlock(3).GetData());
-
-      for (int q = 0; q < rho.Size(); q++)
-      {
-         rho(q) *= ind(q);
-      }
-
-         std::cout << "aa" << std::endl;
-
-      // Visualize starting state.
-      VisQuadratureFunction(*pmesh, ind, "ind QF", 0, 800);
-      VisQuadratureFunction(*pmesh, rho, "rho QF", 400, 800);
-      {
-         socketstream sock_e;
-         hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e, "e GF",
-                                       800, 800, 400, 400);
-
-         if (remap_v)
-         {
-            socketstream sock_v;
-            hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
-                                          1200, 800, 400, 400, true, "m");
-         }
-      }
-      QuadratureFunction p(&qspace);
-      hydro.ComputePressure(rho, e, mat_gf(0), p);
-      VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
    }
 
    if (visualization)

@@ -100,6 +100,14 @@ MassPAOperator::MassPAOperator(ParFiniteElementSpace &pfes,
    pabf.FormSystemMatrix(mfem::Array<int>(), mass);
 }
 
+void MassPAOperator::Recompute()
+{
+   pabf.Update();
+   pabf.BilinearForm::operator=(0.0);
+   pabf.Assemble();
+   pabf.FormSystemMatrix(mfem::Array<int>(), mass);
+}
+
 void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 {
    ess_tdofs_count = dofs.Size();
