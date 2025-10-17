@@ -14,10 +14,11 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
+find_package(HYPRE REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
 
-set(CMAKE_CXX_STANDARD 11 CACHE STRING "C++ standard to use.")
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to use.")
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL
   "Force the use of the chosen C++ standard.")
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Enable C++ standard extensions.")
@@ -66,4 +67,5 @@ target_include_directories(laghos PUBLIC "${MFEM_DIR}/../../../include/mfem")
 target_link_libraries(laghos
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
+  PUBLIC HYPRE::HYPRE
 )
