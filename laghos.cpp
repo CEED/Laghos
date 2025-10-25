@@ -101,6 +101,9 @@ int main(int argc, char *argv[])
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
+   int nx = 2;
+   int ny = 2;
+   int nz = 2;
    Array<int> cxyz;
    int order_v = 2;
    int order_e = 1;
@@ -135,6 +138,12 @@ int main(int argc, char *argv[])
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
+   args.AddOption(&nx, "-nx", "--xelems",
+                  "Elements in x-dimension (do not specify mesh_file)");
+   args.AddOption(&ny, "-ny", "--yelems",
+                  "Elements in y-dimension (do not specify mesh_file)");
+   args.AddOption(&nz, "-nz", "--zelems",
+                  "Elements in z-dimension (do not specify mesh_file)");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
@@ -249,7 +258,7 @@ int main(int argc, char *argv[])
       }
       if (dim == 2)
       {
-         mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
+         mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
                                                true));
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
@@ -261,7 +270,7 @@ int main(int argc, char *argv[])
       }
       if (dim == 3)
       {
-         mesh = new Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON,
+         mesh = new Mesh(Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
                                                true));
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
