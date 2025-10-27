@@ -96,6 +96,7 @@ Other computational motives in Laghos include the following:
 - Domain-decomposed MPI parallelism.
 - Optional in-situ visualization with [GLVis](http:/glvis.org) and data output
   for visualization and data analysis with [VisIt](http://visit.llnl.gov).
+- Optional performance analysis with [Caliper](http://github.com/LLNL/caliper).
 
 ## Code Structure
 
@@ -187,6 +188,28 @@ See the [MFEM building page](http://mfem.org/building/) for additional details.
 The easiest way to visualize Laghos results is to have GLVis running in a
 separate terminal. Then the `-vis` option in Laghos will stream results directly
 to the GLVis socket.
+
+(Optional) Build Caliper
+1. Clone and build Adiak:
+```sh
+~> git clone --recursive https://github.com/LLNL/Adiak.git
+~> cd Adiak
+~/Adiak> mkdir build && cd build
+~/Adiak> cmake -DBUILD_SHARED_LIBS=On -DENABLE_MPI=On \
+               -DCMAKE_INSTALL_PREFIX=../../adiak ..
+~/Adiak> make && make install
+~/Adiak> cd ../..
+```
+2. Clone and build Caliper:
+```sh
+~> git clone https://github.com/LLNL/Caliper.git
+~> cd Caliper
+~/Caliper> mkdir build && cd build
+~/Caliper> cmake -DWITH_MPI=True -DWITH_ADIAK=True -Dadiak_ROOT=../../adiak/ \
+                 -DCMAKE_INSTALL_PREFIX=../../caliper ..
+~/Caliper> make && make install
+~/Caliper> cd ../..
+```
 
 Build Laghos
 ```sh

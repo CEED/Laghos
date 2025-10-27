@@ -63,6 +63,10 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#ifdef USE_CALIPER
+#include <caliper/cali.h>
+#include <adiak.hpp>
+#endif
 
 using std::cout;
 using std::endl;
@@ -97,6 +101,9 @@ int main(int argc, char *argv[])
    const char *mesh_file = "default";
    int rs_levels = 2;
    int rp_levels = 0;
+   int nx = 2;
+   int ny = 2;
+   int nz = 2;
    Array<int> cxyz;
    int order_v = 2;
    int order_e = 1;
@@ -131,6 +138,12 @@ int main(int argc, char *argv[])
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
+   args.AddOption(&nx, "-nx", "--xelems",
+                  "Elements in x-dimension (do not specify mesh_file)");
+   args.AddOption(&ny, "-ny", "--yelems",
+                  "Elements in y-dimension (do not specify mesh_file)");
+   args.AddOption(&nz, "-nz", "--zelems",
+                  "Elements in z-dimension (do not specify mesh_file)");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
@@ -211,6 +224,17 @@ int main(int argc, char *argv[])
    }
    if (Mpi::Root()) { args.PrintOptions(cout); }
 
+#ifdef USE_CALIPER
+   cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
+   CALI_CXX_MARK_FUNCTION;
+
+   MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
+   void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
+   adiak::init(adiak_mpi_comm_ptr);
+   adiak::launchdate();
+   adiak::jobsize();
+#endif
+
    // Configure the device from the command line options
    Device backend;
    backend.Configure(device, dev);
@@ -234,7 +258,7 @@ int main(int argc, char *argv[])
       }
       if (dim == 2)
       {
-         mesh = new Mesh(Mesh::MakeCartesian2D(2, 2, Element::QUADRILATERAL,
+         mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
                                                true));
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
@@ -246,7 +270,7 @@ int main(int argc, char *argv[])
       }
       if (dim == 3)
       {
-         mesh = new Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON,
+         mesh = new Mesh(Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
                                                true));
          const int NBE = mesh->GetNBE();
          for (int b = 0; b < NBE; b++)
@@ -662,8 +686,17 @@ int main(int argc, char *argv[])
    //      }
    //      cout << endl;
    //   }
-   for (int ti = 1; !last_step; ti++)
+   //
+
+#ifdef USE_CALIPER
+   CALI_CXX_MARK_LOOP_BEGIN(mainloop_annotation, "timestep loop");
+#endif
+   int ti = 1;
+   for (; !last_step; ti++)
    {
+#ifdef USE_CALIPER
+      CALI_CXX_MARK_LOOP_ITERATION(mainloop_annotation, static_cast<int>(ti));
+#endif
       if (t + dt >= t_final)
       {
          dt = t_final - t;
@@ -824,6 +857,11 @@ int main(int argc, char *argv[])
          Checks(ti, e_norm, checks);
       }
    }
+#ifdef USE_CALIPER
+  CALI_CXX_MARK_LOOP_END(mainloop_annotation);
+  adiak::value("steps", ti);
+#endif
+
    MFEM_VERIFY(!check || checks == 2, "Check error!");
 
    switch (ode_solver_type)
@@ -878,6 +916,10 @@ int main(int argc, char *argv[])
       vis_v.close();
       vis_e.close();
    }
+
+#ifdef USE_CALIPER
+   adiak::fini();
+#endif
 
    // Free the used memory.
    delete ode_solver;
