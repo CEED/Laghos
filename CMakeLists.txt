@@ -14,6 +14,7 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
+find_package(HYPRE REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
 
@@ -66,4 +67,5 @@ target_include_directories(laghos PUBLIC "${MFEM_DIR}/../../../include/mfem")
 target_link_libraries(laghos
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
+  PUBLIC HYPRE::HYPRE
 )
