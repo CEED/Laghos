@@ -110,7 +110,8 @@ REMHOS_OBJS = \
   ../remhos_remap/remhos_ho.o \
   ../remhos_remap/remhos_lvpp.o \
   ../remhos_remap/remhos_mono.o \
-  ../remhos_remap/remhos_HiOp.o
+  ../remhos_remap/remhos_HiOp.o \
+  ../remhos_remap/remap.o
 
 # Targets
 

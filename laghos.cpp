@@ -898,10 +898,7 @@ int main(int argc, char *argv[])
             << "ALE step [" << ale_cnt << "] at " << t << ": " << endl;
          }
 
-         for (int k = 0; k < ind_cnt; k++)
-         {
-            VisQuadratureFunction(*pmesh, qdata.ind[k], "ind QF", 0 + k*400, 400);
-         }
+         VisQuadratureFunction(*pmesh, qdata.ind[2], "ind QF", 0 + 2*400, 400);
 
          //
          // Prepare for ALE.
@@ -938,22 +935,22 @@ int main(int argc, char *argv[])
                                 ind_rho_e_v_0[k].GetBlock(3).GetData());
             v_0 = v_gf;
 
-            // Visualize starting state.
-            VisQuadratureFunction(*pmesh, ind_0, "ind_0 QF", 0, 400);
-            VisQuadratureFunction(*pmesh, rho_0, "rho_0 QF", 400, 400);
-            {
-               socketstream sock_e;
-               hydrodynamics::VisualizeField(sock_e, "localhost", 19916,
-                                             e_0, "e_0 GF",
-                                             800, 400, 400, 400);
+            // // Visualize starting state.
+            // VisQuadratureFunction(*pmesh, ind_0, "ind_0 QF", 0, 400);
+            // VisQuadratureFunction(*pmesh, rho_0, "rho_0 QF", 400, 400);
+            // {
+            //    socketstream sock_e;
+            //    hydrodynamics::VisualizeField(sock_e, "localhost", 19916,
+            //                                  e_0, "e_0 GF",
+            //                                  800, 400, 400, 400);
 
-               socketstream sock_v;
-               hydrodynamics::VisualizeField(sock_v, "localhost", 19916,
-                                             v_0, "v_0 GF",
-                                             1200, 400, 400, 400, true, "m");
-            }
-            hydro.ComputePressure(rho_0, e_0, mat_gf(0), p_0[k]);
-            VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 400);
+            //    socketstream sock_v;
+            //    hydrodynamics::VisualizeField(sock_v, "localhost", 19916,
+            //                                  v_0, "v_0 GF",
+            //                                  1200, 400, 400, 400, true, "m");
+            // }
+            // hydro.ComputePressure(rho_0, e_0, mat_gf(0), p_0[k]);
+            // VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 400);
          }
 
          //
@@ -988,9 +985,10 @@ int main(int argc, char *argv[])
                                         ind_rho_e_v_0[k].GetBlock(0).GetData());
                Array<bool> ind_0_bool_el, ind_0_bool_dofs;
                ComputeBoolIndicators(NE, ind_0, ind_0_bool_el, ind_0_bool_dofs);
+               const unsigned diffused_ind_order = 1;
                interpolator.RemapHydro(ind_rho_e_v_0[k],
-                                       remap_v, p_control, p_0[k],
-                                       bool_ind[k], x_opt,
+                                       remap_v, p_control, diffused_ind_order,
+                                       p_0[k], bool_ind[k], x_opt,
                                        ind_rho_e[k], optimization_type);
             }
 
@@ -1026,16 +1024,16 @@ int main(int argc, char *argv[])
                hydro.UpdateMassMatrices();
 
                VisQuadratureFunction(*pmesh, ind, "ind QF", 0, 800);
-               VisQuadratureFunction(*pmesh, rho, "rho QF", 400, 800);
-               socketstream sock_e;
-               hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e, "e GF",
-                                             800, 800, 400, 400);
-               socketstream sock_v;
-               hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
-                                             1200, 800, 400, 400, true, "m");
-               QuadratureFunction p(&qspace);
-               hydro.ComputePressure(rho, e, mat_gf(0), p);
-               VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
+               // VisQuadratureFunction(*pmesh, rho, "rho QF", 400, 800);
+               // socketstream sock_e;
+               // hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e, "e GF",
+               //                               800, 800, 400, 400);
+               // socketstream sock_v;
+               // hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
+               //                               1200, 800, 400, 400, true, "m");
+               // QuadratureFunction p(&qspace);
+               // hydro.ComputePressure(rho, e, mat_gf(0), p);
+               // VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
             }
          }
 
