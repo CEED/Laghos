@@ -683,7 +683,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    MPI_Reduce(my_rt, T, 5, MPI_DOUBLE, MPI_MAX, 0, com);
 
    HYPRE_BigInt mydata[3], alldata[3];
-   mydata[0] = static_cast<HYPRE_BigInt>(timer.L2dof) * static_cast<HYPRE_BigInt>(timer.L2iter);
+   mydata[0] = static_cast<HYPRE_BigInt>(timer.L2dof) * static_cast<HYPRE_BigInt>
+               (timer.L2iter);
    mydata[1] = timer.quad_tstep;
    mydata[2] = NE;
    MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_BIG_INT, MPI_SUM, 0, com);
@@ -1345,7 +1346,8 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
       {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>},
       {0x28,&QKernel<2,8>}, {0x2A,&QKernel<2,10>},
       // 3D.
-      {0x34,&QKernel<3,4>}, {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
+      {0x32,&QKernel<3,2>}, {0x34,&QKernel<3,4>},
+      {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
    };
    if (!qupdate[id])
    {
