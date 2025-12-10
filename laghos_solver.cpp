@@ -783,18 +783,23 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          cs(i) = sqrt(gamma(i) * (gamma(i) - 1.0) * e(i));
       }
    };
+   // CalcEigenvalues.
+   auto dag_compute_eigen = [this](const DenseMatrix &sgrad_v,
+                                   double *eig_vals, double *eig_vecs)
+   {
+      if (dim == 1)
+      {
+         eig_vals[0] = sgrad_v(0, 0);
+         eig_vals[0] = 1.;
+      }
+      else { sgrad_v.CalcEigenvalues(eig_vals, eig_vecs); }
+   };
    // Change of the initial mesh size in the compression direction.
    auto dag_compute_h = [this](double h0, const DenseMatrix &Jpr,
                                const DenseMatrix &Jac0inv,
-                               const DenseMatrix &sgrad_v)
+                               double *eig_vec_data)
    {
-      double eig_val_data[3], eig_vec_data[9];
       DenseMatrix Jpi(dim);
-      if (dim == 1)
-      {
-         eig_vec_data[0] = 1.;
-      }
-      else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
       Vector compr_dir(eig_vec_data, dim);
       // Computes the initial->physical transformation Jacobian.
       mfem::Mult(Jpr, Jac0inv, Jpi);
@@ -804,7 +809,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       return h0 * ph_dir.Norml2() / compr_dir.Norml2();
    };
    // Viscosity coefficient.
-   auto dag_compute_mu = [this](double h, double rho, double cs,
+   auto dag_compute_mu = [this](double h, double rho, double cs, double *eigval,
                                 const DenseMatrix &sgrad_v)
    {
       double vorticity_coeff = 1.0;
@@ -819,15 +824,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       // eigenvector of the symmetric velocity gradient gives the
       // direction of maximal compression. This is used to define the
       // relative change of the initial length scale.
-      double eig_val_data[3], eig_vec_data[9];
-      if (dim == 1)
-      {
-         eig_val_data[0] = sgrad_v(0, 0);
-         eig_vec_data[0] = 1.;
-      }
-      else { sgrad_v.CalcEigenvalues(eig_val_data, eig_vec_data); }
-      double delta_v = eig_val_data[0];
-
+      double delta_v = eigval[0];
       double mu = 2.0 * rho * h * h * fabs(delta_v);
       // The following represents a "smooth" version of the statement
       // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
@@ -966,10 +963,12 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                v.GetVectorGradient(*T, sgrad_v);
                sgrad_v.Symmetrize();
 
+               double eig_val_data[3], eig_vec_data[9];
+               dag_compute_eigen(sgrad_v, eig_val_data, eig_vec_data);
                const double h = dag_compute_h(qdata.h0, Jpr,
                                               qdata.Jac0inv(z_id*nqp + q),
-                                              sgrad_v);
-               mu = dag_compute_mu(h, rho, cs, sgrad_v);
+                                              eig_vec_data);
+               mu = dag_compute_mu(h, rho, cs, eig_val_data, sgrad_v);
                dag_compute_sigma(mu, p, sgrad_v, sigma);
             }
             qdata.dt_est = fmin(qdata.dt_est,
