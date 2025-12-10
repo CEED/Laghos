@@ -985,8 +985,9 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                                               qdata.Jac0inv(z_id*nqp + q),
                                               eig_vec_data);
                mu = dag_compute_mu(use_vorticity, h, rho, cs, eig_val_data, sgrad_v);
-               dag_compute_sigma(dim, mu, p, sgrad_v, sigma);
             }
+
+            dag_compute_sigma(dim, mu, p, sgrad_v, sigma);
             qdata.dt_est = fmin(qdata.dt_est,
                                 dag_compute_dt(dim, H1.GetOrder(0), cfl, rho, mu, cs, Jpr));
 
