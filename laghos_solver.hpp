@@ -202,7 +202,7 @@ public:
                             const ParGridFunction *v,
                             const ParGridFunction *e,
                             const Vector *rho0DetJ0w,
-                            DenseMatrix *stressJiT) const;
+                            DenseTensor *stressJinvT) const;
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
