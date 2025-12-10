@@ -888,39 +888,26 @@ void dag_compute_sigmaJiT(const int &dim, const double &ind, const double &ipw,
    sigmaJiT *= ipw * Jpr.Det();
 };
 
-void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
+void LagrangianHydroOperator::ComputeQdataBatched(
+   const ParGridFunction *x,
+   const ParGridFunction *v,
+   const ParGridFunction *e,
+   const Vector *rho0DetJ0w,
+   DenseMatrix *stressJiT) const
 {
-   if (qdata_is_current) { return; }
+   DenseMatrix sgrad_v(dim), sigma(dim);
 
-   qdata_is_current = true;
-   forcemat_is_assembled = false;
-
-   if (dim > 1 && p_assembly) { return qupdate->UpdateQuadratureData(S, qdata); }
-
-   // This code is only for the 1D/FA mode
-   LAGHOS_DEVICE_SYNC;
-   timer.sw_qdata.Start();
    const int nqp = ir.GetNPoints();
-   ParGridFunction x, v, e;
-   Vector* sptr = const_cast<Vector*>(&S);
-   x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1.GetVSize());
-   e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
-   Vector e_vals;
-   DenseMatrix sgrad_v(dim), sigma(dim), stressJiT(dim);
-
-   // Batched computations are needed, because hydrodynamic codes usually
-   // involve expensive computations of material properties. Although this
-   // miniapp uses simple EOS equations, we still want to represent the batched
-   // cycle structure.
    int nzones_batch = 3;
-   const int nbatches =  NE / nzones_batch + 1; // +1 for the remainder.
+   int nbatches =  NE / nzones_batch + 1; // +1 for the remainder.
    int nqp_batch = nqp * nzones_batch;
+   Vector e_vals;
    Vector e_b(nqp_batch), gamma_b(nqp_batch), rho_b(nqp_batch),
           p_b(nqp_batch), cs_b(nqp_batch);
    // Jacobians of reference->physical transformations for all quadrature points
    // in the batch.
    DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
+
    for (int b = 0; b < nbatches; b++)
    {
       int z_id = b * nzones_batch; // Global index over zones.
@@ -937,7 +924,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       {
          ElementTransformation *T = H1.GetElementTransformation(z_id);
          Jpr_b[z].SetSize(dim, dim, nqp);
-         e.GetValues(z_id, ir, e_vals);
+         e->GetValues(z_id, ir, e_vals);
          for (int q = 0; q < nqp; q++)
          {
             const double ind = 1.0;
@@ -947,7 +934,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             const int idx = z * nqp + q;
             // Assuming piecewise constant gamma that moves with the mesh.
             gamma_b(idx) = gamma_gf(z_id);
-            rho_b(idx) = dag_compute_rho(ind, qdata.rho0DetJ0w(z_id*nqp + q),
+            rho_b(idx) = dag_compute_rho(ind, (*rho0DetJ0w)(z_id*nqp + q),
                                          ip.weight, Jpr_b[z](q));
             e_b(idx) = fmax(0.0, e_vals(q));
          }
@@ -976,7 +963,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             {
                const IntegrationPoint &ip = ir.IntPoint(q);
                T->SetIntPoint(&ip);
-               v.GetVectorGradient(*T, sgrad_v);
+               v->GetVectorGradient(*T, sgrad_v);
                sgrad_v.Symmetrize();
 
                double eig_val_data[3], eig_vec_data[9];
@@ -992,13 +979,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
                                 dag_compute_dt(dim, H1.GetOrder(0), cfl, rho, mu, cs, Jpr));
 
             dag_compute_sigmaJiT(dim, ind, ir.IntPoint(q).weight,
-                                 Jpr, sigma, stressJiT);
+                                 Jpr, sigma, *stressJiT);
             for (int vd = 0 ; vd < dim; vd++)
             {
                for (int gd = 0; gd < dim; gd++)
                {
                   qdata.stressJinvT(vd)(z_id*nqp + q, gd) =
-                     stressJiT(vd, gd);
+                     (*stressJiT)(vd, gd);
                }
             }
          }
@@ -1006,6 +993,44 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       }
    }
    delete [] Jpr_b;
+}
+
+void compute_qdata_batched(
+   const LagrangianHydroOperator *hydro,
+   const ParGridFunction *x,
+   const ParGridFunction *v,
+   const ParGridFunction *e,
+   const Vector *rho0DetJ0w,
+   DenseMatrix *stressJiT)
+{
+   hydro->ComputeQdataBatched(x, v, e, rho0DetJ0w, stressJiT);
+}
+
+void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
+{
+   if (qdata_is_current) { return; }
+
+   qdata_is_current = true;
+   forcemat_is_assembled = false;
+
+   if (dim > 1 && p_assembly) { return qupdate->UpdateQuadratureData(S, qdata); }
+
+   // This code is only for the 1D/FA mode
+   LAGHOS_DEVICE_SYNC;
+   timer.sw_qdata.Start();
+   ParGridFunction x, v, e;
+   Vector* sptr = const_cast<Vector*>(&S);
+   x.MakeRef(&H1, *sptr, 0);
+   v.MakeRef(&H1, *sptr, H1.GetVSize());
+   e.MakeRef(&L2, *sptr, 2*H1.GetVSize());
+   DenseMatrix stressJiT(dim);
+
+   // Batched computations are needed, because hydrodynamic codes usually
+   // involve expensive computations of material properties. Although this
+   // miniapp uses simple EOS equations, we still want to represent the batched
+   // cycle structure.
+   compute_qdata_batched(this, &x, &v, &e, &qdata.rho0DetJ0w, &stressJiT);
+
    LAGHOS_DEVICE_SYNC;
    timer.sw_qdata.Stop();
    timer.quad_tstep += NE;

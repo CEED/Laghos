@@ -198,6 +198,12 @@ public:
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
 
+   void ComputeQdataBatched(const ParGridFunction *x,
+                            const ParGridFunction *v,
+                            const ParGridFunction *e,
+                            const Vector *rho0DetJ0w,
+                            DenseMatrix *stressJiT) const;
+
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
 
