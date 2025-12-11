@@ -443,7 +443,7 @@ int main(int argc, char *argv[])
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
-   if (!cartesian_partitioning && enable_nc && dim > 1)
+   if (!cartesian_partitioning && enable_nc && dim > 1 && enable_rebalance)
    {
       if (myid == 0) { cout << "Rebalancing mesh" << endl; }
       pmesh->Rebalance();
