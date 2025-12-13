@@ -160,10 +160,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    one.UseDevice(true);
    one = 1.0;
 
+   qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
+                         &timer, gamma_gf, ir, H1, L2);
    if (p_assembly)
    {
-      qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
-                            &timer, gamma_gf, ir, H1, L2);
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
       VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
       EMassPA = new MassPAOperator(L2, ir, rho0_coeff);
@@ -787,6 +787,16 @@ double dag_compute_rho(double ind, double rho0detJ0, double ipw,
    return rho0detJ0 / Jpr.Det() / ind / ipw;
 };
 
+void dag_compute_sgradv(const DenseMatrix &grad_vhat, const DenseMatrix &J,
+                        DenseMatrix &sgrad_v)
+{
+   const int dim = J.Size();
+   DenseMatrix Jinv(dim);
+   CalcInverse(J, Jinv);
+   mfem::Mult(grad_vhat, Jinv, sgrad_v);
+   sgrad_v.Symmetrize();
+}
+
 // Eigenvalues
 void dag_compute_eigen(const int &dim, const DenseMatrix &sgrad_v,
                        double *eig_vals, double *eig_vecs)
@@ -892,22 +902,37 @@ void LagrangianHydroOperator::ComputeQdataBatched(
    const ParGridFunction *x,
    const ParGridFunction *v,
    const ParGridFunction *e,
-   const Vector *rho0DetJ0w,
-   DenseTensor *stressJinvT) const
+   DenseTensor *stressJinvT, double &dt_est) const
 {
+   const int nqp = ir.GetNPoints();
+   Vector J(dim*dim*NE*nqp), gradhat_v(dim*dim*NE*nqp), e_q(NE*nqp);
+   qupdate->GetGrads(*x, J);
+   qupdate->GetGrads(*v, gradhat_v);
+   qupdate->GetE(*e, e_q);
+
+   QdataDAGKernel(qdata.h0, &qdata.Jac0inv, &gradhat_v, &J,
+                  &qdata.rho0DetJ0w, &e_q, stressJinvT, dt_est);
+}
+
+void LagrangianHydroOperator::QdataDAGKernel(double h0,
+                                             const DenseTensor *J0inv,
+                                             const Vector *gradhat_v,
+                                             const Vector *J,
+                                             const Vector *rho0DetJ0w,
+                                             const Vector *e,
+                                             DenseTensor *stressJinvT,
+                                             double &dt_est) const
+{
+   const int nqp = ir.GetNPoints();
    DenseMatrix sgrad_v(dim), sigma(dim), stressJiT(dim);
 
-   const int nqp = ir.GetNPoints();
+   const double ind = 1.0;
    int nzones_batch = 3;
    int nbatches =  NE / nzones_batch + 1; // +1 for the remainder.
    int nqp_batch = nqp * nzones_batch;
-   Vector e_vals;
    Vector e_b(nqp_batch), gamma_b(nqp_batch), rho_b(nqp_batch),
           p_b(nqp_batch), cs_b(nqp_batch);
-   // Jacobians of reference->physical transformations for all quadrature points
-   // in the batch.
-   DenseTensor *Jpr_b = new DenseTensor[nzones_batch];
-
+   DenseTensor Jpr;
    for (int b = 0; b < nbatches; b++)
    {
       int z_id = b * nzones_batch; // Global index over zones.
@@ -922,21 +947,16 @@ void LagrangianHydroOperator::ComputeQdataBatched(
       // Loop over all quad points in the batch.
       for (int z = 0; z < nzones_batch; z++)
       {
-         ElementTransformation *T = H1.GetElementTransformation(z_id);
-         Jpr_b[z].SetSize(dim, dim, nqp);
-         e->GetValues(z_id, ir, e_vals);
+         Jpr.UseExternalData(J->GetData() + z_id*nqp*dim*dim, dim, dim, nqp);
          for (int q = 0; q < nqp; q++)
          {
-            const double ind = 1.0;
             const IntegrationPoint &ip = ir.IntPoint(q);
-            T->SetIntPoint(&ip);
-            Jpr_b[z](q) = T->Jacobian();
             const int idx = z * nqp + q;
             // Assuming piecewise constant gamma that moves with the mesh.
             gamma_b(idx) = gamma_gf(z_id);
             rho_b(idx) = dag_compute_rho(ind, (*rho0DetJ0w)(z_id*nqp + q),
-                                         ip.weight, Jpr_b[z](q));
-            e_b(idx) = fmax(0.0, e_vals(q));
+                                         ip.weight, Jpr(q));
+            e_b(idx) = fmax(0.0, (*e)(z_id*nqp + q));
          }
          ++z_id;
       }
@@ -948,58 +968,52 @@ void LagrangianHydroOperator::ComputeQdataBatched(
       z_id -= nzones_batch;
       for (int z = 0; z < nzones_batch; z++)
       {
-         ElementTransformation *T = H1.GetElementTransformation(z_id);
+         Jpr.UseExternalData(J->GetData() + z_id*nqp*dim*dim, dim, dim, nqp);
          // mfem::forall...
          for (int q = 0; q < nqp; q++)
          {
-            const double ind = 1.0;
-
             // The Jacobians ere already computed in the first loop.
-            const DenseMatrix &Jpr = Jpr_b[z](q);
+            const DenseMatrix &Jpr_q = Jpr(q);
             const double rho = rho_b[z*nqp + q],
                          p   = p_b[z*nqp + q],
                          cs  = cs_b[z*nqp + q];
             double mu = 0.0;
             if (use_viscosity)
             {
-               const IntegrationPoint &ip = ir.IntPoint(q);
-               T->SetIntPoint(&ip);
-               v->GetVectorGradient(*T, sgrad_v);
-               sgrad_v.Symmetrize();
+               DenseMatrix gradv_r;
+               gradv_r.UseExternalData(gradhat_v->GetData() + z_id*nqp*dim*dim + q*dim*dim, dim, dim);
+               dag_compute_sgradv(gradv_r, Jpr_q, sgrad_v);
 
                double eig_val_data[3], eig_vec_data[9];
                dag_compute_eigen(dim, sgrad_v, eig_val_data, eig_vec_data);
-               const double h = dag_compute_h(dim, qdata.h0, Jpr,
-                                              qdata.Jac0inv(z_id*nqp + q),
+               const double h = dag_compute_h(dim, qdata.h0, Jpr_q,
+                                              (*J0inv)(z_id*nqp + q),
                                               eig_vec_data);
                mu = dag_compute_mu(use_vorticity, h, rho, cs, eig_val_data, sgrad_v);
             }
 
             dag_compute_sigma(dim, mu, p, sgrad_v, sigma);
-            qdata.dt_est = fmin(qdata.dt_est,
-                                dag_compute_dt(dim, H1.GetOrder(0), cfl, rho, mu, cs, Jpr));
+            dt_est = fmin(dt_est,
+                          dag_compute_dt(dim, H1.GetOrder(0), cfl, rho, mu, cs, Jpr_q));
 
             dag_compute_sigmaJiT(dim, ind, ir.IntPoint(q).weight,
-                                 Jpr, sigma, stressJiT);
+                                 Jpr_q, sigma, stressJiT);
             for (int vd = 0 ; vd < dim; vd++)
             {
                for (int gd = 0; gd < dim; gd++)
                {
-                  (*stressJinvT)(vd)(z_id*nqp + q, gd) =
-                     stressJiT(vd, gd);
+                  (*stressJinvT)(vd)(z_id*nqp + q, gd) = stressJiT(vd, gd);
                }
             }
          }
          ++z_id;
       }
    }
-   delete [] Jpr_b;
 }
 
 template <typename ...arg_types>
-auto compute_qdata_batched(
-   const LagrangianHydroOperator *obj,
-   arg_types &&...args)
+auto compute_qdata_batched(const LagrangianHydroOperator *obj,
+                           arg_types &&...args)
 {
    return obj->ComputeQdataBatched(args...);
 }
@@ -1026,7 +1040,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // involve expensive computations of material properties. Although this
    // miniapp uses simple EOS equations, we still want to represent the batched
    // cycle structure.
-   compute_qdata_batched(this, &x, &v, &e, &qdata.rho0DetJ0w, &qdata.stressJinvT);
+   compute_qdata_batched(this, &x, &v, &e, &qdata.stressJinvT, qdata.dt_est);
 
    LAGHOS_DEVICE_SYNC;
    timer.sw_qdata.Stop();
@@ -1455,6 +1469,18 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    LAGHOS_DEVICE_SYNC;
    timer->sw_qdata.Stop();
    timer->quad_tstep += NE;
+}
+
+void QUpdate::GetGrads(const ParGridFunction &x, Vector &sx)
+{
+   H1R->Mult(x, e_vec);
+   q1->SetOutputLayout(QVectorLayout::byVDIM);
+   q1->Derivatives(e_vec, sx);
+}
+void QUpdate::GetE(const ParGridFunction &e, Vector &eq)
+{
+   q2->SetOutputLayout(QVectorLayout::byVDIM);
+   q2->Values(e, eq);
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const

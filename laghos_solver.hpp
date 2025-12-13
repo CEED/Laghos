@@ -90,6 +90,10 @@ public:
       gamma_gf(gamma_gf) { }
 
    void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
+
+   void GetGrads(const ParGridFunction &x, Vector &dx);
+   void GetE(const ParGridFunction &e, Vector &eq);
+
 };
 
 // Given a solutions state (x, v, e), this class performs all necessary
@@ -201,8 +205,17 @@ public:
    void ComputeQdataBatched(const ParGridFunction *x,
                             const ParGridFunction *v,
                             const ParGridFunction *e,
-                            const Vector *rho0DetJ0w,
-                            DenseTensor *stressJinvT) const;
+                            DenseTensor *stressJinvT, double &dt_ets) const;
+
+   // All at quad points.
+   void QdataDAGKernel(double h0,
+                       const DenseTensor *J0inv,
+                       const Vector *gradhat_v,
+                       const Vector *J,
+                       const Vector *rho0DetJ0w,
+                       const Vector *e,
+                       DenseTensor *stressJinvT,
+                       double &dt_est) const;
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
