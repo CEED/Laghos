@@ -902,7 +902,8 @@ void LagrangianHydroOperator::ComputeQdataBatched(
    const ParGridFunction *x,
    const ParGridFunction *v,
    const ParGridFunction *e,
-   DenseTensor *stressJinvT, double &dt_est) const
+   DenseTensor *stressJinvT,
+   double *dt_est) const
 {
    const int nqp = ir.GetNPoints();
    Vector J(dim*dim*NE*nqp), gradhat_v(dim*dim*NE*nqp), e_q(NE*nqp);
@@ -910,8 +911,14 @@ void LagrangianHydroOperator::ComputeQdataBatched(
    qupdate->GetGrads(*v, gradhat_v);
    qupdate->GetE(*e, e_q);
 
+   Vector weights(nqp);
+   for (int i = 0; i < nqp; i++)
+   {
+      weights(i) = ir.GetWeights()[i];
+   }
+
    QdataDAGKernel(qdata.h0, &qdata.Jac0inv, &gradhat_v, &J,
-                  &qdata.rho0DetJ0w, &e_q, stressJinvT, dt_est);
+                  &qdata.rho0DetJ0w, &e_q, &weights, stressJinvT, dt_est);
 }
 
 void LagrangianHydroOperator::QdataDAGKernel(double h0,
@@ -920,11 +927,12 @@ void LagrangianHydroOperator::QdataDAGKernel(double h0,
                                              const Vector *J,
                                              const Vector *rho0DetJ0w,
                                              const Vector *e,
+                                             const Vector *weights,
                                              DenseTensor *stressJinvT,
-                                             double &dt_est) const
+                                             double *dt_est) const
 {
    const int nqp = ir.GetNPoints();
-   DenseMatrix sgrad_v(dim), sigma(dim), stressJiT(dim);
+   DenseMatrix sgrad_v(dim), sigma(dim), stressJiT(dim), gradv_r;
 
    const double ind = 1.0;
    int nzones_batch = 3;
@@ -950,12 +958,11 @@ void LagrangianHydroOperator::QdataDAGKernel(double h0,
          Jpr.UseExternalData(J->GetData() + z_id*nqp*dim*dim, dim, dim, nqp);
          for (int q = 0; q < nqp; q++)
          {
-            const IntegrationPoint &ip = ir.IntPoint(q);
             const int idx = z * nqp + q;
             // Assuming piecewise constant gamma that moves with the mesh.
             gamma_b(idx) = gamma_gf(z_id);
             rho_b(idx) = dag_compute_rho(ind, (*rho0DetJ0w)(z_id*nqp + q),
-                                         ip.weight, Jpr(q));
+                                         (*weights)(q), Jpr(q));
             e_b(idx) = fmax(0.0, (*e)(z_id*nqp + q));
          }
          ++z_id;
@@ -980,8 +987,8 @@ void LagrangianHydroOperator::QdataDAGKernel(double h0,
             double mu = 0.0;
             if (use_viscosity)
             {
-               DenseMatrix gradv_r;
-               gradv_r.UseExternalData(gradhat_v->GetData() + z_id*nqp*dim*dim + q*dim*dim, dim, dim);
+               gradv_r.UseExternalData(gradhat_v->GetData() + z_id*nqp*dim*dim + q*dim*dim,
+                                       dim, dim);
                dag_compute_sgradv(gradv_r, Jpr_q, sgrad_v);
 
                double eig_val_data[3], eig_vec_data[9];
@@ -993,8 +1000,8 @@ void LagrangianHydroOperator::QdataDAGKernel(double h0,
             }
 
             dag_compute_sigma(dim, mu, p, sgrad_v, sigma);
-            dt_est = fmin(dt_est,
-                          dag_compute_dt(dim, H1.GetOrder(0), cfl, rho, mu, cs, Jpr_q));
+            *dt_est = fmin(*dt_est,
+                           dag_compute_dt(dim, H1.GetOrder(0), cfl, rho, mu, cs, Jpr_q));
 
             dag_compute_sigmaJiT(dim, ind, ir.IntPoint(q).weight,
                                  Jpr_q, sigma, stressJiT);
@@ -1040,7 +1047,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    // involve expensive computations of material properties. Although this
    // miniapp uses simple EOS equations, we still want to represent the batched
    // cycle structure.
-   compute_qdata_batched(this, &x, &v, &e, &qdata.stressJinvT, qdata.dt_est);
+   ComputeQdataBatched(&x, &v, &e, &qdata.stressJinvT, &qdata.dt_est);
 
    LAGHOS_DEVICE_SYNC;
    timer.sw_qdata.Stop();
