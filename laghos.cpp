@@ -87,6 +87,10 @@ double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
+// for generated meshes
+static void AssignMeshBdrAttrs2D(Mesh &, real_t, real_t);
+static void AssignMeshBdrAttrs3D(Mesh &, real_t, real_t, real_t, real_t);
+
 static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int ti, const double norm, int &checks);
@@ -285,26 +289,32 @@ int main(int argc, char *argv[])
       }
       if (dim == 2)
       {
-         mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
-                                               true));
-         const int NBE = mesh->GetNBE();
-         for (int b = 0; b < NBE; b++)
-         {
-            Element *bel = mesh->GetBdrElement(b);
-            const int attr = (b < NBE/2) ? 2 : 1;
-            bel->SetAttribute(attr);
+         switch (problem) {
+         case 3:
+           mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
+                                                 true, 7_r, 3_r));
+           AssignMeshBdrAttrs2D(*mesh, 0_r, 7_r);
+           break;
+         default:
+           mesh = new Mesh(
+               Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true));
+           AssignMeshBdrAttrs2D(*mesh, 0_r, 1_r);
+           break;
          }
       }
       if (dim == 3)
       {
-         mesh = new Mesh(Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
-                                               true));
-         const int NBE = mesh->GetNBE();
-         for (int b = 0; b < NBE; b++)
-         {
-            Element *bel = mesh->GetBdrElement(b);
-            const int attr = (b < NBE/3) ? 3 : (b < 2*NBE/3) ? 1 : 2;
-            bel->SetAttribute(attr);
+         switch (problem) {
+         case 3:
+           mesh = new Mesh(Mesh::MakeCartesian3D(
+               nx, ny, nz, Element::HEXAHEDRON, 7_r, 3_r, 3_r, true));
+           AssignMeshBdrAttrs3D(*mesh, 0_r, 7_r, 0_r, 3_r);
+           break;
+         default:
+           mesh = new Mesh(Mesh::MakeCartesian3D(
+               nx, ny, nz, Element::HEXAHEDRON, 1_r, 1_r, 1_r, true));
+           AssignMeshBdrAttrs3D(*mesh, 0_r, 1_r, 0_r, 1_r);
+           break;
          }
       }
    }
@@ -1212,4 +1222,48 @@ static void Checks(const int ti, const double nrm, int &chk)
          check(p, it, norm);
       }
    }
+}
+
+static void AssignMeshBdrAttrs2D(Mesh& mesh, real_t xmin, real_t xmax)
+{
+  Vector pos(3);
+  constexpr real_t tol = 1e-6;
+  const int NBE = mesh.GetNBE();
+  IntegrationPoint center;
+  center.x = 0.5;
+  center.y = 0.5;
+  center.z = 0.5;
+  for (int b = 0; b < NBE; b++) {
+    Element *bel = mesh.GetBdrElement(b);
+    auto eltrans = mesh.GetBdrElementTransformation(b);
+    eltrans->Transform(center, pos);
+    int attr = 2;
+    if (pos[0] <= xmin + tol || pos[0] >= xmax - tol) {
+      attr = 1;
+    }
+    bel->SetAttribute(attr);
+  }
+}
+
+static void AssignMeshBdrAttrs3D(Mesh &mesh, real_t xmin, real_t xmax,
+                                 real_t ymin, real_t ymax) {
+  Vector pos(3);
+  constexpr real_t tol = 1e-6;
+  const int NBE = mesh.GetNBE();
+  IntegrationPoint center;
+  center.x = 0.5;
+  center.y = 0.5;
+  center.z = 0.5;
+  for (int b = 0; b < NBE; b++) {
+    Element *bel = mesh.GetBdrElement(b);
+    auto eltrans = mesh.GetBdrElementTransformation(b);
+    eltrans->Transform(center, pos);
+    int attr = 3;
+    if (pos[0] <= xmin + tol || pos[0] >= xmax - tol) {
+      attr = 1;
+    } else if (pos[1] <= ymin + tol || pos[1] >= ymax - tol) {
+      attr = 2;
+    }
+    bel->SetAttribute(attr);
+  }
 }
