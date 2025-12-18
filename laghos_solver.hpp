@@ -208,17 +208,6 @@ public:
                             DenseTensor *stressJinvT,
                             double *dt_est) const;
 
-   // All at quad points.
-   void QdataDAGKernel(double h0,
-                       const DenseTensor *J0inv,
-                       const Vector *gradhat_v,
-                       const Vector *J,
-                       const Vector *rho0DetJ0w,
-                       const Vector *e,
-                       const Vector *weights,
-                       DenseTensor *stressJinvT,
-                       double *dt_est) const;
-
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
 
