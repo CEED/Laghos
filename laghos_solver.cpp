@@ -19,6 +19,10 @@
 #include "linalg/kernels.hpp"
 #include <unordered_map>
 
+#ifdef USE_CALIPER
+#include <adiak.hpp>
+#endif
+
 #ifdef MFEM_USE_MPI
 
 // for benchmark timing purposes; for a regular run this can be a no-op
@@ -683,7 +687,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    MPI_Reduce(my_rt, T, 5, MPI_DOUBLE, MPI_MAX, 0, com);
 
    HYPRE_BigInt mydata[3], alldata[3];
-   mydata[0] = static_cast<HYPRE_BigInt>(timer.L2dof) * static_cast<HYPRE_BigInt>(timer.L2iter);
+   mydata[0] = static_cast<HYPRE_BigInt>(timer.L2dof) * static_cast<HYPRE_BigInt>
+               (timer.L2iter);
    mydata[1] = timer.quad_tstep;
    mydata[2] = NE;
    MPI_Reduce(mydata, alldata, 3, HYPRE_MPI_BIG_INT, MPI_SUM, 0, com);
@@ -749,6 +754,22 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
            << "| " << setw(7) << FOM
            << "| " << setw(5) << T[4]
            << "| " << endl;
+#ifdef USE_CALIPER
+      adiak::value("zones", GNZones);
+      adiak::value("h1_dofs", H1GTVSize);
+      adiak::value("l2_dofs", L2GTVSize);
+      adiak::value("qp", QPT);
+      adiak::value("n_dofs", ndofs);
+      adiak::value("fom0", FOM0);
+      adiak::value("fom1", FOM1);
+      adiak::value("t1", T[0]);
+      adiak::value("fom2", FOM2);
+      adiak::value("t2", T[2]);
+      adiak::value("fom3", FOM3);
+      adiak::value("t3", T[3]);
+      adiak::value("fom4", FOM);
+      adiak::value("tt", T[4]);
+#endif
    }
 }
 
@@ -1345,7 +1366,8 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
       {0x24,&QKernel<2,4>}, {0x26,&QKernel<2,6>},
       {0x28,&QKernel<2,8>}, {0x2A,&QKernel<2,10>},
       // 3D.
-      {0x34,&QKernel<3,4>}, {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
+      {0x32,&QKernel<3,2>}, {0x34,&QKernel<3,4>},
+      {0x36,&QKernel<3,6>}, {0x38,&QKernel<3,8>}
    };
    if (!qupdate[id])
    {
