@@ -63,6 +63,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
+#include "sedov_sol.hpp"
 #ifdef USE_CALIPER
 #include <caliper/cali.h>
 #include <adiak.hpp>
@@ -135,13 +136,12 @@ int main(int argc, char *argv[])
    int partition_type = 0;
    const char *device = "cpu";
    bool check = false;
+   bool check_exact = false;
    bool mem_usage = false;
    bool fom = false;
    bool gpu_aware_mpi = false;
    int dev = 0;
    int dev_pool_size = 4;
-   double blast_energy = 0.25;
-   double blast_position[] = {0.0, 0.0, 0.0};
 
    bool enable_nc = true;
    bool enable_rebalance = true;
@@ -213,6 +213,10 @@ int main(int argc, char *argv[])
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
                   "Enable 2D checks.");
+   args.AddOption(&check_exact, "-err", "--exact-error", "-no-err",
+                  "--no-exact-error",
+                  "Enable comparing the Sedov problem (problem 1) against the "
+                  "exact solution.");
    args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
                   "Enable memory usage.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
@@ -236,6 +240,13 @@ int main(int argc, char *argv[])
       return 1;
    }
    if (Mpi::Root()) { args.PrintOptions(cout); }
+
+   if (check_exact) {
+     MFEM_VERIFY(
+         problem == 1,
+         "Can only compare problem 1 (Sedov) against the exact solution");
+     MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
+   }
 
 #ifdef USE_CALIPER
    cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
@@ -598,11 +609,16 @@ int main(int argc, char *argv[])
    ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
+   
+   double blast_energy = 1;
+   double blast_position[] = {0.0, 0.0, 0.0};
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
+      // divide amount of blast energy by 2^d due to simulating only a portion
+      // of the symmetric blast.
       DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                               blast_position[2], blast_energy);
+                               blast_position[2], blast_energy / pow(2, dim));
       l2_e.ProjectCoefficient(e_coeff);
    }
    else
@@ -957,6 +973,68 @@ int main(int argc, char *argv[])
 #ifdef USE_CALIPER
    adiak::fini();
 #endif
+
+   if (check_exact) {
+     // compare against the exact Sedov solution
+     double gamma = 1.4;
+     double rho0 = 1;
+     double omega = 0;
+
+     SedovSol asol(dim, gamma, rho0, blast_energy, omega);
+
+     asol.SetTime(t_final);
+
+     MFEM_VERIFY(asol.r2 <= 0.9,
+                 "Solution reflections off boundaries detected, cannot compare "
+                 "against exact solution.");
+
+     int err_order = std::max((std::max(order_v, order_e) + 1) * 2, order_q) * 2;
+     const IntegrationRule &irule =
+         IntRules.Get(pmesh->GetTypicalElementGeometry(), err_order);
+
+     QuadratureSpace qspace(*pmesh, irule);
+     // only compare density
+     QuadratureFunction sim_qfunc(qspace, 1);
+     QuadratureFunction err_qfunc(qspace, 1);
+
+     hydro.ComputeDensity(rho_gf);
+
+     sim_qfunc.ProjectGridFunction(rho_gf);
+
+     auto slambda = [&](const Vector &x, Vector &res) {
+       real_t tmp[3];
+       Vector dr(tmp, dim);
+       double r = 0;
+
+       for (int i = 0; i < dim; ++i) {
+         dr[i] = x[i] - blast_position[i];
+         r += dr[i] * dr[i];
+       }
+       r = sqrt(r);
+       if (r) {
+         for (int i = 0; i < dim; ++i) {
+           dr[i] /= r;
+         }
+       } else {
+         dr = 0_r;
+       }
+       double rho, v, P;
+       asol.EvalSol(r, rho, v, P);
+       res[0] = rho;
+     };
+     VectorFunctionCoefficient asol_coeff(1, slambda);
+     asol_coeff.Project(err_qfunc);
+     err_qfunc -= sim_qfunc;
+
+     err_qfunc.HostReadWrite();
+     for (int i = 0; i < err_qfunc.Size(); ++i) {
+       err_qfunc[i] = pow(err_qfunc[i], 2);
+     }
+     real_t lrho_err = err_qfunc.Integrate();
+     if (Mpi::Root()) {
+       cout << "Density L2 error: " << sqrt(lrho_err) << endl;
+     }
+   }
 
    // Free the used memory.
    delete ode_solver;

@@ -53,7 +53,7 @@ endif()
 
 
 list(APPEND SOURCES
-  laghos_assembly.cpp laghos.cpp laghos_solver.cpp
+  laghos_assembly.cpp laghos.cpp laghos_solver.cpp sedov_sol.cpp
 )
 
 if (MFEM_USE_CUDA)
@@ -65,6 +65,20 @@ add_executable(laghos ${SOURCES})
 target_include_directories(laghos PUBLIC "${MFEM_DIR}/../../../include/mfem")
 
 target_link_libraries(laghos
+  PUBLIC mfem
+  PUBLIC MPI::MPI_CXX
+  PUBLIC HYPRE::HYPRE
+)
+
+if (MFEM_USE_CUDA)
+  set_source_files_properties(sedov_sol.cpp sedov/sedov.cpp PROPERTIES LANGUAGE CUDA)
+endif()
+
+add_executable(sedov sedov_sol.cpp sedov/sedov.cpp)
+
+target_include_directories(sedov PUBLIC "${MFEM_DIR}/../../../include/mfem")
+
+target_link_libraries(sedov
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
