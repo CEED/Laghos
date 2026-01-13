@@ -999,7 +999,12 @@ int main(int argc, char *argv[])
 
      hydro.ComputeDensity(rho_gf);
 
-     sim_qfunc.ProjectGridFunction(rho_gf);
+     rho_gf.HostReadWrite();
+
+     {
+       GridFunctionCoefficient ctmp(&rho_gf);
+       ctmp.Coefficient::Project(sim_qfunc);
+     }
 
      auto slambda = [&](const Vector &x, Vector &res) {
        real_t tmp[3];
