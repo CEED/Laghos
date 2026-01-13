@@ -50,12 +50,16 @@ int main(int argc, char *argv[]) {
   int order_q = -1;
   double t_final = 0.6;
   const char *basename = "results/Sedov";
+  real_t Sx = 1, Sy = 1, Sz = 1;
 
   OptionsParser args(argc, argv);
   args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
   args.AddOption(&nx, "-nx", "--xelems", "Elements in x-dimension");
   args.AddOption(&ny, "-ny", "--yelems", "Elements in y-dimension");
   args.AddOption(&nz, "-nz", "--zelems", "Elements in z-dimension");
+  args.AddOption(&Sx, "-Sx", "--xwidth", "Domain width in x-dimension");
+  args.AddOption(&Sy, "-Sy", "--ywidth", "Domain width in y-dimension");
+  args.AddOption(&Sz, "-Sz", "--zwidth", "Domain width in z-dimension");
   args.AddOption(&rs_levels, "-rs", "--refine-serial",
                  "Number of times to refine the mesh uniformly in serial.");
   args.AddOption(&rp_levels, "-rp", "--refine-parallel",
@@ -87,15 +91,15 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<Mesh> mesh;
   switch (dim) {
   case 1:
-    mesh.reset(new Mesh(Mesh::MakeCartesian1D(nx)));
+    mesh.reset(new Mesh(Mesh::MakeCartesian1D(nx, Sx)));
     break;
   case 2:
     mesh.reset(new Mesh(
-        Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true)));
+        Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true, Sx, Sy)));
     break;
   case 3:
     mesh.reset(new Mesh(Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
-                                              1_r, 1_r, 1_r, true)));
+                                              Sx, Sy, Sz, true)));
     break;
   default:
     if (Mpi::Root()) {

@@ -143,6 +143,8 @@ int main(int argc, char *argv[])
    int dev = 0;
    int dev_pool_size = 4;
 
+   real_t Sx = 1, Sy = 1, Sz = 1;
+
    bool enable_nc = true;
    bool enable_rebalance = true;
 
@@ -155,6 +157,12 @@ int main(int argc, char *argv[])
                   "Elements in y-dimension (do not specify mesh_file)");
    args.AddOption(&nz, "-nz", "--zelems",
                   "Elements in z-dimension (do not specify mesh_file)");
+   args.AddOption(&Sx, "-Sx", "--xwidth",
+                  "Domain width in x-dimension (do not specify mesh_file)");
+   args.AddOption(&Sy, "-Sy", "--ywidth",
+                  "Domain width in y-dimension (do not specify mesh_file)");
+   args.AddOption(&Sz, "-Sz", "--zwidth",
+                  "Domain width in z-dimension (do not specify mesh_file)");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
@@ -292,41 +300,65 @@ int main(int argc, char *argv[])
    }
    else
    {
+     if (Mpi::Root()) {
+       // generated domain checks
+       if (problem == 3) {
+         switch (dim) {
+         case 1:
+           if (Sx <= 0.5) {
+             cout << "WARNING: The triple point is initialized at x=0.5. Sx = "
+                  << Sx
+                  << " puts the triple point outside the simulation "
+                     "domain."
+                  << endl;
+           }
+           break;
+         case 3:
+           if (Sz <= 1.5) {
+             cout << "WARNING: The triple point is initialized at z=1.5. Sz = "
+                  << Sz
+                  << " puts the triple point outside the simulation "
+                     "domain."
+                  << endl;
+           }
+         case 2:
+           if (Sx <= 1) {
+             cout << "WARNING: The triple point is initialized at x=1. Sx = "
+                  << Sx
+                  << " puts the triple point outside the simulation "
+                     "domain."
+                  << endl;
+           }
+
+           if (Sy <= 1.5) {
+             cout << "WARNING: The triple point is initialized at y=1.5. Sy = "
+                  << Sy
+                  << " puts the triple point outside the simulation "
+                     "domain."
+                  << endl;
+           }
+           break;
+         }
+       }
+     }
+
       if (dim == 1)
       {
-         mesh = new Mesh(Mesh::MakeCartesian1D(2));
+         mesh = new Mesh(Mesh::MakeCartesian1D(nx, Sx));
          mesh->GetBdrElement(0)->SetAttribute(1);
          mesh->GetBdrElement(1)->SetAttribute(1);
       }
       if (dim == 2)
       {
-         switch (problem) {
-         case 3:
-           mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
-                                                 true, 7_r, 3_r));
-           AssignMeshBdrAttrs2D(*mesh, 0_r, 7_r);
-           break;
-         default:
-           mesh = new Mesh(
-               Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true));
-           AssignMeshBdrAttrs2D(*mesh, 0_r, 1_r);
-           break;
-         }
+        mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
+                                              true, Sx, Sy));
+        AssignMeshBdrAttrs2D(*mesh, 0_r, Sx);
       }
       if (dim == 3)
       {
-         switch (problem) {
-         case 3:
-           mesh = new Mesh(Mesh::MakeCartesian3D(
-               nx, ny, nz, Element::HEXAHEDRON, 7_r, 3_r, 3_r, true));
-           AssignMeshBdrAttrs3D(*mesh, 0_r, 7_r, 0_r, 3_r);
-           break;
-         default:
-           mesh = new Mesh(Mesh::MakeCartesian3D(
-               nx, ny, nz, Element::HEXAHEDRON, 1_r, 1_r, 1_r, true));
-           AssignMeshBdrAttrs3D(*mesh, 0_r, 1_r, 0_r, 1_r);
-           break;
-         }
+        mesh = new Mesh(Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
+                                              Sx, Sy, Sz, true));
+        AssignMeshBdrAttrs3D(*mesh, 0_r, Sx, 0_r, Sy);
       }
    }
    dim = mesh->Dimension();
@@ -984,9 +1016,13 @@ int main(int argc, char *argv[])
 
      asol.SetTime(t_final);
 
-     MFEM_VERIFY(asol.r2 <= 0.9,
-                 "Solution reflections off boundaries detected, cannot compare "
-                 "against exact solution.");
+     if (strncmp(mesh_file, "default", 7) == 0) {
+       real_t min_r = std::min(std::min(Sx, Sy), Sz);
+       MFEM_VERIFY(
+           asol.r2 <= min_r,
+           "Solution reflections off boundaries detected, cannot compare "
+           "against exact solution.");
+     }
 
      int err_order = std::max((std::max(order_v, order_e) + 1) * 2, order_q) * 2;
      const IntegrationRule &irule =
