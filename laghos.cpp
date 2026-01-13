@@ -1024,11 +1024,11 @@ int main(int argc, char *argv[])
      };
      VectorFunctionCoefficient asol_coeff(1, slambda);
      asol_coeff.Project(err_qfunc);
-     err_qfunc -= sim_qfunc;
 
+     sim_qfunc.HostRead();
      err_qfunc.HostReadWrite();
      for (int i = 0; i < err_qfunc.Size(); ++i) {
-       err_qfunc[i] = pow(err_qfunc[i], 2);
+       err_qfunc[i] = pow(err_qfunc[i] - AsConst(sim_qfunc)[i], 2);
      }
      real_t lrho_err = err_qfunc.Integrate();
      if (Mpi::Root()) {
