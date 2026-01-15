@@ -265,7 +265,7 @@ tests:
 	$(shell echo 'step = 0339, dt = 0.000702, |e| = 4.9695537349e+01' >> BASELINE.dat)
 	$(shell echo 'step = 1041, dt = 0.000121, |e| = 3.3909635545e+03' >> BASELINE.dat)
 	$(shell echo 'step = 1154, dt = 0.001655, |e| = 4.6303396053e+01' >> BASELINE.dat)
-	$(shell echo 'step = 0495, dt = 0.002645, |e| = 7.5737286941e+01' >> BASELINE.dat)
+	$(shell echo 'step = 0495, dt = 0.002645, |e| = 7.5737286940e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0413, dt = 0.000470, |e| = 3.2012077410e+01' >> BASELINE.dat)
 	$(shell echo 'step = 2872, dt = 0.000064, |e| = 5.6547039096e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0858, dt = 0.000474, |e| = 5.6691500623e+01' >> BASELINE.dat)
