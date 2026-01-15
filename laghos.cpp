@@ -64,7 +64,7 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 #include "sedov_sol.hpp"
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
 #include <caliper/cali.h>
 #include <adiak.hpp>
 #endif
@@ -256,7 +256,7 @@ int main(int argc, char *argv[])
      MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
    }
 
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
    cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
    CALI_CXX_MARK_FUNCTION;
 
@@ -773,13 +773,13 @@ int main(int argc, char *argv[])
    //   }
    //
 
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
    CALI_CXX_MARK_LOOP_BEGIN(mainloop_annotation, "timestep loop");
 #endif
    int ti = 1;
    for (; !last_step; ti++)
    {
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
       CALI_CXX_MARK_LOOP_ITERATION(mainloop_annotation, static_cast<int>(ti));
 #endif
       if (t + dt >= t_final)
@@ -942,7 +942,7 @@ int main(int argc, char *argv[])
          Checks(ti, e_norm, checks);
       }
    }
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
   CALI_CXX_MARK_LOOP_END(mainloop_annotation);
   adiak::value("steps", ti);
 #endif
@@ -1002,7 +1002,7 @@ int main(int argc, char *argv[])
       vis_e.close();
    }
 
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
    adiak::fini();
 #endif
 

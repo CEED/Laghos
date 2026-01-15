@@ -18,6 +18,11 @@ find_package(HYPRE REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
 
+option(LAGHOS_USE_CALIPER "Use Caliper" OFF)
+if (LAGHOS_USE_CALIPER)
+  find_package(caliper REQUIRED)
+endif()
+
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to use.")
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL
   "Force the use of the chosen C++ standard.")
@@ -69,6 +74,13 @@ target_link_libraries(laghos
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
 )
+if(LAGHOS_USE_CALIPER)
+  target_link_libraries(laghos
+    PUBLIC caliper
+  )
+  target_compile_definitions(laghos
+    PUBLIC LAGHOS_USE_CALIPER)
+endif()
 
 if (MFEM_USE_CUDA)
   set_source_files_properties(sedov_sol.cpp sedov/sedov.cpp PROPERTIES LANGUAGE CUDA)

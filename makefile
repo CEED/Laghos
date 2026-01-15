@@ -81,7 +81,7 @@ ifeq ($(wildcard $(CALIPER_DIR)),)
 else
    CALIPER_INCLUDE := -I $(CALIPER_DIR)/include
    CALIPER_LIBS := -L $(CALIPER_DIR)/lib64 -lcaliper
-   CALIPER_FLAGS := -DUSE_CALIPER
+   CALIPER_FLAGS := -DLAGHOS_USE_CALIPER
 endif
 
 # Only configure Adiak if Caliper is enabled
