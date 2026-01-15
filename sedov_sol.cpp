@@ -39,7 +39,7 @@ SedovSol::SedovSol(int dim_, double gamma_, double rho_0_, double blast_energy_,
   alpha2 = -(gamma - 1) / (2 * (gamma - 1) + dim - gamma * omega);
   alpha1 =
       ((dim + 2 - omega) * gamma / (2 + dim * (gamma - 1)) *
-       (2 * (dim * (2 - gamma) - omega) / pow(gamma * (dim + 2 - omega), 2) -
+       (2 * (dim * (2 - gamma) - omega) / (gamma * pow((dim + 2 - omega), 2)) -
         alpha2));
   alpha3 = (dim - omega) / (2 * (gamma - 1) + dim - dim * omega);
   alpha4 =
@@ -75,25 +75,28 @@ SedovSol::SedovSol(int dim_, double gamma_, double rho_0_, double blast_energy_,
              pow((b * (1 - c * V / gamma)), alpha5);
     };
     scalar_error_functor err_fun;
-    err_fun.eps_abs = 1.49e-8;
-    err_fun.eps_rel = 1.49e-8;
-    auto J1 = gk21_integrate(J1_integrand, err_fun, Vmin, V2);
+    err_fun.eps_abs = 1.49e-15;
+    err_fun.eps_rel = 1.49e-15;
+    auto J1 = gk21_integrate(J1_integrand, err_fun, Vmin, V2, 20, 64);
 
     auto J2_integrand = [dim = dim, gamma = gamma, alpha0 = alpha0,
                          alpha1 = alpha1, alpha2 = alpha2, alpha3 = alpha3,
                          alpha4 = alpha4, alpha5 = alpha5, a = a, b = b, c = c,
                          d = d, e = e, omega = omega](double V) {
-      return -(gamma + 1) / (2 * gamma) * pow(V, 2) * (c * V - gamma) /
-             (1 - c * V) *
-             (alpha0 / V + alpha2 * c / (c * V - 1) -
-              alpha1 * e / (1 - e * V)) *
-             pow((pow((a * V), alpha0) * pow((b * (c * V - 1)), alpha2) *
-                  pow((d * (1 - e * V)), alpha1)),
-                 (-(dim + 2 - omega))) *
+      double denom = 1 - c * V;
+      if (fabs(denom) <= 1e-15) {
+        denom = std::copysign(1e-15, denom);
+      }
+      return -(gamma + 1) / (2 * gamma) * pow(V, 2) * (c * V - gamma) / denom *
+             (alpha0 / V + alpha2 * c / -denom - alpha1 * e / (1 - e * V)) *
+             pow(pow(a * V, alpha0) * pow(b * (c * V - 1), alpha2) *
+                     pow(d * (1 - e * V), alpha1),
+                 -(dim + 2 - omega)) *
              pow((b * (c * V - 1)), alpha3) * pow((d * (1 - e * V)), alpha4) *
              pow((b * (1 - c * V / gamma)), alpha5);
+      
     };
-    auto J2 = gk21_integrate(J2_integrand, err_fun, Vmin, V2);
+    auto J2 = gk21_integrate(J2_integrand, err_fun, Vmin, V2, 20, 64);
     double I1 = pow(2, dim - 2) * J1;
     double I2 = pow(2, (dim - 1)) / (gamma - 1) * J2;
     if (dim > 1) {

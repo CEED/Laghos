@@ -162,6 +162,7 @@ int main(int argc, char *argv[]) {
   double rho0 = 1;
   double omega = 0;
   {
+    std::cout << std::setprecision(16);
     SedovSol asol(dim, gamma, rho0, blast_energy, omega);
     asol.SetTime(t_final);
     if (myid == 0) {
