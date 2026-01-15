@@ -85,6 +85,28 @@ static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int ti, const double norm, int &checks);
 
+DagTrace global_dag_trace;
+
+#define XSTR(x) STR(x)
+#define STR(x) #x
+#pragma message "The value of MFEM_ENZYME_INACTIVE " XSTR(MFEM_ENZYME_INACTIVE)
+
+inline
+void dump_dag_dot(const std::string& fname)
+{
+   std::ofstream out(fname);
+   out << "digraph DAG {\n";
+   for (const auto& node : global_dag_trace.nodes)
+   {
+      out << "    \"" << node << "\";\n";
+   }
+   for (const auto& [parent, child] : global_dag_trace.edges)
+   {
+      out << "    \"" << parent << "\" -> \"" << child << "\";\n";
+   }
+   out << "}\n";
+}
+
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
@@ -858,8 +880,8 @@ int main(int argc, char *argv[])
       }
    }
 #ifdef USE_CALIPER
-  CALI_CXX_MARK_LOOP_END(mainloop_annotation);
-  adiak::value("steps", ti);
+   CALI_CXX_MARK_LOOP_END(mainloop_annotation);
+   adiak::value("steps", ti);
 #endif
 
    MFEM_VERIFY(!check || checks == 2, "Check error!");
@@ -916,6 +938,8 @@ int main(int argc, char *argv[])
       vis_v.close();
       vis_e.close();
    }
+
+   dump_dag_dot("dag.dot");
 
 #ifdef USE_CALIPER
    adiak::fini();

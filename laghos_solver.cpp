@@ -766,7 +766,11 @@ MFEM_HOST_DEVICE inline double smooth_step_01(double x, double eps)
 // DAG node functions. The parameters correspond to the edges of the DAG.
 //
 
-unsigned long long __enzyme_iter(unsigned long long, unsigned long long);
+extern "C" {
+   unsigned long long __enzyme_iter(unsigned long long, unsigned long long);
+}
+
+MFEM_ENZYME_INACTIVE static inline __attribute__((always_inline))
 bool is_in_autodiff()
 {
    return __enzyme_iter(0, 1) != 0;
@@ -775,6 +779,10 @@ bool is_in_autodiff()
 void dag_compute_eos_batched(Vector &gamma, Vector &rho,
                              Vector &e, Vector &p, Vector &cs)
 {
+   DAG_FUNCTION_START("EOS");
+   DAG_DEPENDS_ON_VARS("gamma", "rho", "e");
+   DAG_PRODUCES_VARS("p", "cs");
+
    const auto d_gamma = gamma.Read();
    const auto d_rho = rho.Read();
    const auto d_e = e.Read();
@@ -785,6 +793,8 @@ void dag_compute_eos_batched(Vector &gamma, Vector &rho,
       d_p[i] = (d_gamma[i] - 1.0) * d_rho[i] * d_e[i];
       d_cs[i] = sqrt(d_gamma[i] * (d_gamma[i] - 1.0) * d_e[i]);
    });
+
+   DAG_FUNCTION_END();
 }
 
 // Density
@@ -792,6 +802,10 @@ template<int DIM> static inline
 double dag_compute_rho(double ind, double rho0detJ0, double ipw,
                        const DenseMatrix &Jpr)
 {
+   DAG_FUNCTION_START("rho");
+   DAG_DEPENDS_ON_VARS("rho0detJ0", "Jpr");
+
+   DAG_FUNCTION_END();
    return rho0detJ0 / kernels::Det<DIM>(Jpr.GetData()) / ind / ipw;
 };
 
@@ -800,10 +814,15 @@ void dag_compute_sgradv(const DenseMatrix &grad_vhat, const DenseMatrix &J,
                         DenseMatrix &Jinv,
                         DenseMatrix &sgrad_v)
 {
+   DAG_FUNCTION_START("sgradv");
+   DAG_DEPENDS_ON_VARS("Jinv", "Jpr", "gradvhat");
+
    kernels::CalcInverse<DIM>(J.GetData(), Jinv.GetData());
    kernels::Mult(DIM, DIM, DIM, grad_vhat.GetData(), Jinv.GetData(),
                  sgrad_v.GetData());
    kernels::Symmetrize(DIM, sgrad_v.GetData());
+
+   DAG_FUNCTION_END();
 }
 
 // Eigenvalues
@@ -811,6 +830,9 @@ template<int DIM> static inline
 void dag_compute_eigen(const DenseMatrix &sgrad_v,
                        double *eig_vals, double *eig_vecs)
 {
+   DAG_FUNCTION_START("eigen");
+   DAG_DEPENDS_ON_VARS("sgradv");
+
    if constexpr (DIM == 1)
    {
       eig_vals[0] = sgrad_v(0, 0);
@@ -820,6 +842,8 @@ void dag_compute_eigen(const DenseMatrix &sgrad_v,
    {
       kernels::CalcEigenvalues<DIM>(sgrad_v.GetData(), eig_vals, eig_vecs);
    }
+
+   DAG_FUNCTION_END();
 };
 
 // Change of the initial mesh size in the compression direction.
@@ -831,6 +855,9 @@ double dag_compute_h(const double &h0,
                      Vector &ph_dir,
                      double *compr_dir)
 {
+   DAG_FUNCTION_START("h");
+   DAG_DEPENDS_ON_VARS("h0", "Jpr", "Jac0inv", "Jpi");
+
    // Computes the initial->physical transformation Jacobian.
    kernels::Mult(DIM, DIM, DIM, Jpr.GetData(), Jac0inv.GetData(), Jpi.GetData());
    kernels::Mult(DIM, DIM, Jpi.GetData(), compr_dir, ph_dir.GetData());
@@ -839,6 +866,9 @@ double dag_compute_h(const double &h0,
    // return h0 * ph_dir.Norml2() / compr_dir.Norml2();
    const double ph_dir_nl2 = kernels::Norml2(DIM, ph_dir.GetData());
    const double compr_dir_nl2 = kernels::Norml2(DIM, compr_dir);
+
+   DAG_FUNCTION_END();
+
    return h0 * ph_dir_nl2 / compr_dir_nl2;
 };
 
@@ -848,6 +878,9 @@ double dag_compute_mu(const bool &use_vorticity, const double &h,
                       const double *eigval,
                       const DenseMatrix &sgrad_v)
 {
+   DAG_FUNCTION_START("mu");
+   DAG_DEPENDS_ON_VARS("h", "rho", "cs", "eigen");
+
    double vorticity_coeff = 1.0;
    // if (use_vorticity)
    // {
@@ -870,6 +903,8 @@ double dag_compute_mu(const bool &use_vorticity, const double &h,
    mu += 0.5 * rho * h * cs * vorticity_coeff *
          (1.0 - smooth_step_01(delta_v - 2.0 * eps, eps));
 
+   DAG_FUNCTION_END();
+
    return mu;
 };
 
@@ -879,10 +914,15 @@ void dag_compute_sigma(const double& mu, const double& p,
                        const DenseMatrix &sgrad_v,
                        DenseMatrix &stress)
 {
+   DAG_FUNCTION_START("sigma");
+   DAG_DEPENDS_ON_VARS("mu", "p", "sgradv");
+
    stress = 0.0;
    for (int d = 0; d < DIM; d++) { stress(d, d) = -p; }
    kernels::Add(DIM, DIM, mu, stress.GetData(), sgrad_v.GetData(),
                 stress.GetData());
+
+   DAG_FUNCTION_END();
 };
 
 // Time step estimate
@@ -893,6 +933,9 @@ double dag_compute_dt(const int &h1order, const double &cfl,
                       const double &cs,
                       const DenseMatrix &Jpr)
 {
+   DAG_FUNCTION_START("dt");
+   DAG_DEPENDS_ON_VARS("rho", "mu", "cs", "Jpr");
+
    // Time step estimate at the point. Here the more relevant length
    // scale is related to the actual mesh deformation; we use the min
    // singular value of the ref->physical Jacobian. In addition, the
@@ -902,6 +945,9 @@ double dag_compute_dt(const int &h1order, const double &cfl,
    const double inv_dt = cs / h_min +
                          2.5 * mu / rho / h_min / h_min;
    double detJ = kernels::Det<DIM>(Jpr.GetData());
+
+   DAG_FUNCTION_END();
+
    // Zero will force repetition of the step with smaller dt.
    return (detJ < 0.0 || inv_dt < 0.0) ? 0.0 : cfl / inv_dt;
 };
@@ -914,11 +960,16 @@ void dag_compute_sigmaJiT(const double &ind, const double &ipw,
                           DenseMatrix &Jinv,
                           DenseMatrix &sigmaJiT)
 {
+   DAG_FUNCTION_START("sigmaJiT");
+   DAG_DEPENDS_ON_VARS("Jpr", "sigma", "Jinv");
+
    kernels::CalcInverse<DIM>(Jpr.GetData(), Jinv.GetData());
    kernels::MultABt(DIM, DIM, DIM, sigma.GetData(), Jinv.GetData(),
                     sigmaJiT.GetData());
    const double detJ = kernels::Det<DIM>(Jpr.GetData());
    for (int k = 0; k < DIM*DIM; k++) { sigmaJiT.GetData()[k] *= ipw * detJ; }
+
+   DAG_FUNCTION_END();
 };
 
 template<int DIM> static inline
@@ -997,12 +1048,13 @@ void QdataDAGKernel(
                       p   = (*p_b)[z*nqp + q],
                       cs  = (*cs_b)[z*nqp + q];
          double mu = 0.0;
+
+         gradv_r->UseExternalData(gradhat_v->GetData() + z_id*nqp*DIM*DIM + q*DIM*DIM,
+                                  DIM, DIM);
+         dag_compute_sgradv<DIM>(*gradv_r, Jpr_q, *Jtmp, *sgrad_v);
+
          if (use_viscosity)
          {
-            gradv_r->UseExternalData(gradhat_v->GetData() + z_id*nqp*DIM*DIM + q*DIM*DIM,
-                                     DIM, DIM);
-            dag_compute_sgradv<DIM>(*gradv_r, Jpr_q, *Jtmp, *sgrad_v);
-
             double eig_val_data[3], eig_vec_data[9];
             dag_compute_eigen<DIM>(*sgrad_v, eig_val_data, eig_vec_data);
             const double h = dag_compute_h<DIM>(h0, Jpr_q,
@@ -1072,6 +1124,50 @@ void LagrangianHydroOperator::ComputeQdataBatched(
                            &sigma, &stressJiT, &gradv_r, &Jtmp, &ph_dir, &Jpr, qdata.h0,
                            &qdata.Jac0inv, &gradhat_v, &J, &qdata.rho0DetJ0w, &e_q, &weights, &gamma_gf,
                            stressJinvT, dt_est);
+         {
+            // auto dstressJinvT(*stressJinvT);
+
+            // __enzyme_fwddiff<void>(
+            //    (void *)QdataDAGKernel<2>,
+
+            //    enzyme_const, b,
+            //    enzyme_const, nzones_batch,
+            //    enzyme_const, nqp_batch,
+            //    enzyme_const, nqp,
+            //    enzyme_const, NE,
+            //    enzyme_const, porder,
+            //    enzyme_const, cfl,
+            //    enzyme_const, use_viscosity,
+            //    enzyme_const, use_vorticity,
+
+            //    enzyme_const, &gamma_b,
+            //    enzyme_const, &rho_b,
+            //    enzyme_const, &e_b,
+            //    enzyme_const, &p_b,
+            //    enzyme_const, &cs_b,
+
+            //    enzyme_const, &sgrad_v,
+            //    enzyme_const, &sigma,
+            //    enzyme_const, &stressJiT,
+            //    enzyme_const, &gradv_r,
+            //    enzyme_const, &Jtmp,
+            //    enzyme_const, &ph_dir,
+
+            //    enzyme_const, &Jpr,
+
+            //    enzyme_const, qdata.h0,
+            //    enzyme_const, &qdata.Jac0inv,
+            //    enzyme_const, &gradhat_v,
+            //    enzyme_const, &J,
+            //    enzyme_const, &qdata.rho0DetJ0w,
+            //    enzyme_const, &e_q,
+            //    enzyme_const, &weights,
+            //    enzyme_const, &gamma_gf,
+
+            //    enzyme_dup, stressJinvT, dstressJinvT,
+            //    enzyme_const, dt_est
+            // );
+         }
       }
       else if (dim == 3)
       {
@@ -1082,50 +1178,7 @@ void LagrangianHydroOperator::ComputeQdataBatched(
                            stressJinvT, dt_est);
 
       }
-      {
-         auto dstressJinvT(*stressJinvT);
 
-         __enzyme_fwddiff<void>(
-            (void *)QdataDAGKernel<2>,
-
-            enzyme_const, b,
-            enzyme_const, nzones_batch,
-            enzyme_const, nqp_batch,
-            enzyme_const, nqp,
-            enzyme_const, NE,
-            enzyme_const, porder,
-            enzyme_const, cfl,
-            enzyme_const, use_viscosity,
-            enzyme_const, use_vorticity,
-
-            enzyme_const, &gamma_b,
-            enzyme_const, &rho_b,
-            enzyme_const, &e_b,
-            enzyme_const, &p_b,
-            enzyme_const, &cs_b,
-
-            enzyme_const, &sgrad_v,
-            enzyme_const, &sigma,
-            enzyme_const, &stressJiT,
-            enzyme_const, &gradv_r,
-            enzyme_const, &Jtmp,
-            enzyme_const, &ph_dir,
-
-            enzyme_const, &Jpr,
-
-            enzyme_const, qdata.h0,
-            enzyme_const, &qdata.Jac0inv,
-            enzyme_const, &gradhat_v,
-            enzyme_const, &J,
-            enzyme_const, &qdata.rho0DetJ0w,
-            enzyme_const, &e_q,
-            enzyme_const, &weights,
-            enzyme_const, &gamma_gf,
-
-            enzyme_dup, stressJinvT, dstressJinvT,
-            enzyme_const, dt_est
-         );
-      }
    }
 }
 

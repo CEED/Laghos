@@ -22,6 +22,128 @@
 
 #ifdef MFEM_USE_MPI
 
+struct DagTrace
+{
+   std::vector<std::string> nodes;
+   std::vector<std::pair<std::string, std::string>> edges;
+   std::stack<std::string> call_stack;
+   std::map<std::string, std::string> producers;
+
+   __attribute__((enzyme_inactive)) inline void add_node(const std::string& node)
+   {
+      for (const auto& existing : nodes)
+      {
+         if (existing == node) { return; }
+      }
+      nodes.push_back(node);
+   }
+
+   __attribute__((enzyme_inactive)) inline void add_edge(
+      const std::string& parent,
+      const std::string& dependency)
+   {
+      for (const auto& edge : edges)
+      {
+         if (edge.first == parent && edge.second == dependency) { return; }
+      }
+      edges.emplace_back(parent, dependency);
+   }
+
+   __attribute__((enzyme_inactive)) inline void function_enter(
+      const std::string& func_name)
+   {
+      add_node(func_name);
+
+      // If we have a parent function, add an edge from parent to this function
+      if (!call_stack.empty())
+      {
+         add_edge(call_stack.top(), func_name);
+      }
+
+      // Push current function onto the stack
+      call_stack.push(func_name);
+   }
+
+   __attribute__((enzyme_inactive)) inline void function_exit()
+   {
+      if (!call_stack.empty())
+      {
+         call_stack.pop();
+      }
+   }
+
+   __attribute__((enzyme_inactive)) inline void add_producer(
+      const std::string& var)
+   {
+      if (!call_stack.empty())
+      {
+         // Register that current function produces this variable
+         producers[var] = call_stack.top();
+
+         // Add the var as a node in the graph
+         add_node(var);
+
+         // Add edge FROM variable TO function (reversed)
+         // This indicates that the variable is an OUTPUT of the function
+         add_edge(var, call_stack.top());
+      }
+   }
+
+   __attribute__((enzyme_inactive)) inline void add_dependency(
+      const std::string& var)
+   {
+      if (!call_stack.empty())
+      {
+         add_node(var);
+         // Add edge FROM function TO variable
+         // This indicates that the variable is an INPUT to the function
+         add_edge(call_stack.top(), var);
+      }
+   }
+
+   __attribute__((enzyme_inactive)) inline void add_consumer_edges()
+   {
+      // After all dependencies are tracked, connect consumers to producers
+      for (const auto& edge : edges)
+      {
+         const std::string& func = edge.first;
+         const std::string& var = edge.second;
+
+         // This only applies to func->var edges (consumption)
+         auto producer_it = producers.find(var);
+         if (producer_it != producers.end())
+         {
+            // Add an implicit dependency edge from consumer function to producer function
+            add_edge(func, producer_it->second);
+         }
+      }
+   }
+};
+
+extern DagTrace global_dag_trace;
+
+#define DAG_FUNCTION_START(name) \
+if (!is_in_autodiff()) global_dag_trace.function_enter(name);
+
+#define DAG_FUNCTION_END() \
+if (!is_in_autodiff()) global_dag_trace.function_exit();
+
+#define DAG_DEPENDS_ON_VARS(...) \
+if (!is_in_autodiff()) { \
+   const std::string deps[] = {__VA_ARGS__}; \
+   for (const auto& dep : deps) { \
+      global_dag_trace.add_dependency(dep); \
+   } \
+}
+
+#define DAG_PRODUCES_VARS(...) \
+if (!is_in_autodiff()) { \
+   const std::string vars[] = {__VA_ARGS__}; \
+   for (const auto& var : vars) { \
+      global_dag_trace.add_producer(var); \
+   } \
+}
+
 namespace mfem
 {
 
