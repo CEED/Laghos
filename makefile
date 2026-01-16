@@ -261,6 +261,7 @@ tests:
 	         -ot 2 -tf 0.62831853 -s 7 -pa -vs 100 | tee RUN.dat
 	cat RUN.dat | tail -n 21 | head -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
+	cat RESULTS.dat
 	$(shell cat << EOF > BASELINE.dat)
 	$(shell echo 'step = 0339, dt = 0.000702, |e| = 4.9695537349e+01' >> BASELINE.dat)
 	$(shell echo 'step = 1041, dt = 0.000121, |e| = 3.3909635545e+03' >> BASELINE.dat)
@@ -270,10 +271,6 @@ tests:
 	$(shell echo 'step = 2872, dt = 0.000064, |e| = 5.6547039096e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0858, dt = 0.000474, |e| = 5.6691500623e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0776, dt = 0.000045, |e| = 4.0982431726e+02' >> BASELINE.dat)
-  echo "RESULTS.dat:"
-  cat RESULTS.dat
-  echo "BASELINE:"
-  cat BASELINE.dat
 	diff --report-identical-files RESULTS.dat BASELINE.dat
 
 # Setup: download & install third party libraries: HYPRE, METIS & MFEM
