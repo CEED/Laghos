@@ -128,99 +128,184 @@ Other computational motives in Laghos include the following:
 
 Laghos has the following external dependencies:
 
-- *hypre*, used for parallel linear algebra, we recommend version 2.11.2<br>
-  https://github.com/hypre-space/hypre/releases/tag/v2.11.2 
+- *hypre*, used for parallel linear algebra, we recommend version 2.31.0 or new<br>
+  https://github.com/hypre-space/hypre/releases/tag/v2.31.0
 
-- METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](https://github.com/mfem/tpls/blob/gh-pages/metis-4.0.3.tar.gz) <br>
-  https://github.com/mfem/tpls
+- METIS, used for parallel domain decomposition (optional)
+  https://github.com/KarypisLab/METIS.git
 
 - MFEM, used for (high-order) finite element discretization, its GitHub master branch <br>
   https://github.com/mfem/mfem
 
-To build the miniapp, first download *hypre* and METIS from the links above
-and put everything on the same level as the `Laghos` directory:
+- Umpire, used for device memory pools in hypre and MFEM. This is only recommended for GPU-accelerated builds. (optional)<br>
+  https://github.com/LLNL/Umpire.git
+
+- CMake 3.24.0+
+- C and C++17 compiler
+- MPI
+
+This installs built dependencies to `INSTALLDIR` using the `CC` C-compiler and `CXX` C++17-compiler.
+
+Build METIS (optional):
 ```sh
-~> ls
-Laghos/  v2.11.2.tar.gz  metis-4.0.3.tar.gz
+git clone https://github.com/KarypisLab/METIS.git
+cd METIS
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$CC -DCMAKE_INSTALL_PREFIX=$INSTALLDIR
+make -j install
+```
+For large runs (problem size above 2 billion unknowns), add `-DMETIS_USE_LONGINDEX=ON` option to the above `cmake` line. If building without METIS only Cartesian partitioning is supported.
+
+Build Umpire (CUDA, optional):
+```sh
+git clone https://github.com/LLNL/Umpire.git
+cd Umpire
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=native -DENABLE_CUDA=ON -DUMPIRE_ENABLE_C=ON -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CUDA_COMPILER=$CUDACC
+make -j install
 ```
 
-Build *hypre*:
+Build Umpire (HIP, optional):
 ```sh
-~> tar -zxvf v2.11.2.tar.gz
-~> cd hypre-2.11.2/src/
-~/hypre-2.11.2/src> ./configure --disable-fortran
-~/hypre-2.11.2/src> make -j
-~/hypre-2.11.2/src> cd ../..
-~> ln -s hypre-2.11.2 hypre
+git clone https://github.com/LLNL/Umpire.git
+cd Umpire
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_HIP_ARCHITECTURES=native -DENABLE_HIP=ON -DUMPIRE_ENABLE_C=ON -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_HIP_COMPILER=$HIPCC
+make -j install
 ```
-For large runs (problem size above 2 billion unknowns), add the
-`--enable-bigint` option to the above `configure` line.
 
-Build METIS:
-```sh
-~> tar -zxvf metis-4.0.3.tar.gz
-~> cd metis-4.0.3
-~/metis-4.0.3> make
-~/metis-4.0.3> cd ..
-~> ln -s metis-4.0.3 metis-4.0
-```
-This build is optional, as MFEM can be build without METIS by specifying
-`MFEM_USE_METIS = NO` below.
+Build *hypre* (CPU-only):
 
-Clone and build the parallel version of MFEM:
 ```sh
-~> git clone https://github.com/mfem/mfem.git ./mfem
-~> cd mfem/
-~/mfem> git checkout master
-~/mfem> make parallel -j
-~/mfem> cd ..
+git clone https://github.com/hypre-space/hypre.git
+cd hypre/build
+cmake ../src -DCMAKE_BUILD_TYPE=Release -DHYPRE_ENABLE_MIXEDINT=ON -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX
+make -j install
 ```
-The above uses the `master` branch of MFEM.
+
+Build *hypre* (CUDA):
+
+```sh
+git clone https://github.com/hypre-space/hypre.git
+cd hypre/build
+cmake ../src -DCMAKE_BUILD_TYPE=Release -DHYPRE_ENABLE_MIXEDINT=ON -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DHYPRE_ENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=native -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CUDA_COMPILER=$CUDACC -DHYPRE_ENABLE_GPU_AWARE_MPI=ON -DHYPRE_ENABLE_UMPIRE=ON
+make -j install
+```
+``HYPRE_ENABLE_GPU_AWARE_MPI`` and ``HYPRE_ENABLE_UMPIRE`` may be optionally turned off.
+
+Build *hypre* (HIP):
+
+```sh
+git clone https://github.com/hypre-space/hypre.git
+cd hypre/build
+cmake ../src -DCMAKE_BUILD_TYPE=Release -DHYPRE_ENABLE_MIXEDINT=ON -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DHYPRE_ENABLE_HIP=ON -DCMAKE_HIP_ARCHITECTURES=native -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_HIP_COMPILER=$HIPCC -DHYPRE_ENABLE_GPU_AWARE_MPI=ON -DHYPRE_ENABLE_UMPIRE=ON
+make -j install
+```
+``HYPRE_ENABLE_GPU_AWARE_MPI`` and ``HYPRE_ENABLE_UMPIRE`` may be optionally turned off.
+
+Build MFEM (CPU-only):
+```sh
+git clone https://github.com/mfem/mfem.git
+cd mfem
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DHYPRE_DIR=$INSTALLDIR -DMETIS_DIR=$INSTALLDIR -DMFEM_USE_MPI=ON -DMFEM_USE_METIS=ON -DCMAKE_CXX_COMPILER=$CXX
+make -j install
+```
+`MFEM_USE_METIS` may be optionally disabled.
 See the [MFEM building page](http://mfem.org/building/) for additional details.
 
-(Optional) Clone and build GLVis:
+Build MFEM (CUDA):
 ```sh
-~> git clone https://github.com/GLVis/glvis.git ./glvis
-~> cd glvis/
-~/glvis> make
-~/glvis> cd ..
+git clone https://github.com/mfem/mfem.git
+cd mfem
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DHYPRE_DIR=$INSTALLDIR -DMETIS_DIR=$INSTALLDIR -DMFEM_USE_MPI=ON -DMFEM_USE_METIS=ON -DMFEM_USE_CUDA=ON -DMFEM_USE_UMPIRE=ON -DCMAKE_CUDA_ARCHITECTURES=native -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CUDA_COMPILER=$CUDACC -DUMPIRE_DIR=$INSTALLDIR
+make -j install
+```
+`MFEM_USE_METIS` and `MFEM_USE_UMPIRE may be optionally disabled.
+See the [MFEM building page](http://mfem.org/building/) for additional details.
+
+Build MFEM (HIP):
+```sh
+git clone https://github.com/mfem/mfem.git
+cd mfem
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DHYPRE_DIR=$INSTALLDIR -DMETIS_DIR=$INSTALLDIR -DMFEM_USE_MPI=ON -DMFEM_USE_METIS=ON -DMFEM_USE_HIP=ON -DMFEM_USE_UMPIRE=ON -DCMAKE_HIP_ARCHITECTURES=native -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_HIP_COMPILER=$HIPCC -DUMPIRE_DIR=$INSTALLDIR
+make -j install
+```
+`MFEM_USE_METIS` and `MFEM_USE_UMPIRE` may be optionally disabled.
+See the [MFEM building page](http://mfem.org/building/) for additional details.
+
+GLVis (optional):
+```sh
+git clone https://github.com/GLVis/glvis.git
+cd glvis
+mkdir build
+cd build
+cmake .. -DMFEM_DIR=$INSTALLDIR -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DCMAKE_CXX_COMPILER=$CXX
 ```
 The easiest way to visualize Laghos results is to have GLVis running in a
 separate terminal. Then the `-vis` option in Laghos will stream results directly
 to the GLVis socket.
 
-(Optional) Build Caliper
+Caliper (Optional):
 1. Clone and build Adiak:
 ```sh
-~> git clone --recursive https://github.com/LLNL/Adiak.git
-~> cd Adiak
-~/Adiak> mkdir build && cd build
-~/Adiak> cmake -DBUILD_SHARED_LIBS=On -DENABLE_MPI=On \
-               -DCMAKE_INSTALL_PREFIX=../../adiak ..
-~/Adiak> make && make install
-~/Adiak> cd ../..
+git clone --recursive https://github.com/LLNL/Adiak.git
+cd Adiak
+mkdir build && cd build
+cmake -DBUILD_SHARED_LIBS=On -DENABLE_MPI=On \
+      -DCMAKE_INSTALL_PREFIX=$INSTALLDIR ..
+make -j install
 ```
 2. Clone and build Caliper:
 ```sh
-~> git clone https://github.com/LLNL/Caliper.git
-~> cd Caliper
-~/Caliper> mkdir build && cd build
-~/Caliper> cmake -DWITH_MPI=True -DWITH_ADIAK=True -Dadiak_ROOT=../../adiak/ \
-                 -DCMAKE_INSTALL_PREFIX=../../caliper ..
-~/Caliper> make && make install
-~/Caliper> cd ../..
+git clone https://github.com/LLNL/Caliper.git
+cd Caliper
+mkdir build && cd build
+cmake -DWITH_MPI=True -DWITH_ADIAK=True -Dadiak_ROOT=$INSTALLDIR \
+      -DCMAKE_INSTALL_PREFIX=$INSTALLDIR ..
+make -j install
 ```
 
-Build Laghos
+Laghos (CPU-only):
 ```sh
-~> cd Laghos/
-~/Laghos> make -j
+git clone https://github.com/CEED/Laghos.git
+cd Laghos
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DCMAKE_CXX_COMPILER=$CXX -Dcaliper_ROOT=$INSTALLDIR -DLAGHOS_USE_CALIPER=ON
+make -j
 ```
-This can be followed by `make test` and `make install` to check and install the
-build respectively. See `make help` for additional options.
+`LAGHOS_USE_CALIPER` may be optionally disabled.
 
-See also the `make setup` target that can be used to automated the
-download and building of hypre, METIS and MFEM.
+Laghos (CUDA):
+```sh
+git clone https://github.com/CEED/Laghos.git
+cd Laghos
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CUDA_COMPILER=$CUDACC -DCMAKE_CUDA_ARCHITECTURES=native -Dcaliper_ROOT=$INSTALLDIR -DLAGHOS_USE_CALIPER=ON
+make -j
+```
+`LAGHOS_USE_CALIPER` may be optionally disabled.
+
+Laghos (HIP):
+```sh
+git clone https://github.com/CEED/Laghos.git
+cd Laghos
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$INSTALLDIR -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_HIP_COMPILER=$HIPCC -DCMAKE_HIP_ARCHITECTURES=native -Dcaliper_ROOT=$INSTALLDIR -DLAGHOS_USE_CALIPER=ON
+make -j
+```
+`LAGHOS_USE_CALIPER` may be optionally disabled.
 
 ## Running
 
@@ -232,12 +317,14 @@ partial assembly option (`-pa`).
 Some sample runs in 2D and 3D respectively are:
 ```sh
 mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa
-mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
+mpirun -np 8 ./laghos -p 1 -dim 3 -E0 2 -rs 2 -tf 0.6 -pa -vis
 ```
 
 The latter produces the following density plot (notice the `-vis` option)
 
 [![Sedov blast image](data/sedov.png)](https://glvis.org/live/?stream=../data/laghos.saved)
+
+To compare against the analytical soluton the `-err` option can be used to compute $\int_{\Omega} \|\rho_{sim} - \rho_{exact}\|_2 dV$ of the final solution.
 
 #### Taylor-Green and Gresho vortices
 
