@@ -143,6 +143,7 @@ int main(int argc, char *argv[])
    int dev = 0;
    int dev_pool_size = 4;
 
+   double blast_energy = 1;
    real_t Sx = 1, Sy = 1, Sz = 1;
 
    bool enable_nc = true;
@@ -157,6 +158,8 @@ int main(int argc, char *argv[])
                   "Elements in y-dimension (do not specify mesh_file)");
    args.AddOption(&nz, "-nz", "--zelems",
                   "Elements in z-dimension (do not specify mesh_file)");
+   args.AddOption(&blast_energy, "-E0", "--blast-energy",
+                  "Sedov initial blast energy (for problem 1)");
    args.AddOption(&Sx, "-Sx", "--xwidth",
                   "Domain width in x-dimension (do not specify mesh_file)");
    args.AddOption(&Sy, "-Sy", "--ywidth",
@@ -642,7 +645,6 @@ int main(int argc, char *argv[])
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
    
-   double blast_energy = 1;
    double blast_position[] = {0.0, 0.0, 0.0};
    if (problem == 1)
    {
