@@ -23,54 +23,76 @@
 #include <iostream>
 
 /// Bisection root finder
-template <class Fun> double bisection(Fun &&fun, double lower, double upper) {
-  double lv = fun(lower);
-  constexpr double tol = 1e-20;
-  if (std::fabs(lv) < tol) {
-    return lower;
-  }
-  double rv = fun(upper);
-  if (std::fabs(rv) < tol) {
-    return upper;
-  }
-  if (std::copysign(1., lv) * std::copysign(1., rv) > 0) {
-    throw std::runtime_error("bisection: no sign change");
-  }
-  auto dx_init = upper - lower;
-  auto dx_last = dx_init;
-  while (true) {
-    double mid = 0.5 * (lower + upper);
-    auto dx = mid - lower;
-    double mv = fun(mid);
-    if (dx < dx_init * 1e-16 || dx >= dx_last) {
-      if (fabs(mv) < fabs(lv)) {
-        if (fabs(mv) < fabs(rv)) {
-          return mid;
-        } else if (fabs(rv) < fabs(lv)) {
-          return upper;
-        } else {
-          return lower;
-        }
-      } else if (fabs(rv) < fabs(lv)) {
-        return upper;
-      } else {
-        return lower;
-      }
-    }
-    if (std::fabs(mv) < tol) {
-      return mid;
-    }
-    if (std::copysign(1., lv) != std::copysign(1., mv)) {
-      upper = mid;
-      rv = mv;
-    } else if (std::copysign(1., rv) != std::copysign(1., mv)) {
-      lower = mid;
-      lv = mv;
-    } else {
+template <class Fun> double bisection(Fun &&fun, double lower, double upper)
+{
+   double lv = fun(lower);
+   constexpr double tol = 1e-20;
+   if (std::fabs(lv) < tol)
+   {
+      return lower;
+   }
+   double rv = fun(upper);
+   if (std::fabs(rv) < tol)
+   {
+      return upper;
+   }
+   if (std::copysign(1., lv) * std::copysign(1., rv) > 0)
+   {
       throw std::runtime_error("bisection: no sign change");
-    }
-    dx_last = dx;
-  }
+   }
+   auto dx_init = upper - lower;
+   auto dx_last = dx_init;
+   while (true)
+   {
+      double mid = 0.5 * (lower + upper);
+      auto dx = mid - lower;
+      double mv = fun(mid);
+      if (dx < dx_init * 1e-16 || dx >= dx_last)
+      {
+         if (fabs(mv) < fabs(lv))
+         {
+            if (fabs(mv) < fabs(rv))
+            {
+               return mid;
+            }
+            else if (fabs(rv) < fabs(lv))
+            {
+               return upper;
+            }
+            else
+            {
+               return lower;
+            }
+         }
+         else if (fabs(rv) < fabs(lv))
+         {
+            return upper;
+         }
+         else
+         {
+            return lower;
+         }
+      }
+      if (std::fabs(mv) < tol)
+      {
+         return mid;
+      }
+      if (std::copysign(1., lv) != std::copysign(1., mv))
+      {
+         upper = mid;
+         rv = mv;
+      }
+      else if (std::copysign(1., rv) != std::copysign(1., mv))
+      {
+         lower = mid;
+         lv = mv;
+      }
+      else
+      {
+         throw std::runtime_error("bisection: no sign change");
+      }
+      dx_last = dx;
+   }
 }
 
 #endif

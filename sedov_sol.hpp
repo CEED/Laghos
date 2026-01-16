@@ -18,60 +18,61 @@
 #define LAGHOS_SEDOV_SOL_HPP
 
 /// Taylor-von Neumann-Sedov blast wave solution
-struct SedovSol {
-  /// 1 for plane wave, 2 for cylinder, 3 for sphere
-  int dim;
-  /// time to compute the solution at
-  double t = 0;
-  /// ideal gas gamma
-  double gamma;
-  /// initial density = rho_0 * pow(r, -omega)
-  double rho_0;
-  double omega;
-  /// initial blast energy
-  double blast_energy;
+struct SedovSol
+{
+   /// 1 for plane wave, 2 for cylinder, 3 for sphere
+   int dim;
+   /// time to compute the solution at
+   double t = 0;
+   /// ideal gas gamma
+   double gamma;
+   /// initial density = rho_0 * pow(r, -omega)
+   double rho_0;
+   double omega;
+   /// initial blast energy
+   double blast_energy;
 
-  /// currently only supports uniform initial density
-  /// computed quantities used for computing the solution
-  /// these values don't depend on time
-  double a;
-  double b;
-  double c;
-  double d;
-  double e;
-  
-  double alpha0;
-  double alpha1;
-  double alpha2;
-  double alpha3;
-  double alpha4;
-  double alpha5;
-  
-  double V0;
-  double Vv;
-  double V2;
-  double Vs;
+   /// currently only supports uniform initial density
+   /// computed quantities used for computing the solution
+   /// these values don't depend on time
+   double a;
+   double b;
+   double c;
+   double d;
+   double e;
 
-  double alpha;
+   double alpha0;
+   double alpha1;
+   double alpha2;
+   double alpha3;
+   double alpha4;
+   double alpha5;
 
-  /// these values depend on time
-  /// shock position
-  double r2;
-  /// shock speed
-  double U;
-  /// pre-shock density
-  double rho1;
-  /// post-shock state
-  double rho2;
-  double v2;
-  double p2;
+   double V0;
+   double Vv;
+   double V2;
+   double Vs;
 
-  void SetTime(double t);
+   double alpha;
 
-  void EvalSol(double r, double &rho, double &v, double &P) const;
+   /// these values depend on time
+   /// shock position
+   double r2;
+   /// shock speed
+   double U;
+   /// pre-shock density
+   double rho1;
+   /// post-shock state
+   double rho2;
+   double v2;
+   double p2;
 
-  SedovSol(int dim, double gamma, double rho_0, double blast_energy,
-           double omega = 0);
+   void SetTime(double t);
+
+   void EvalSol(double r, double &rho, double &v, double &P) const;
+
+   SedovSol(int dim, double gamma, double rho_0, double blast_energy,
+            double omega = 0);
 };
 
 #endif

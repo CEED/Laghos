@@ -252,11 +252,12 @@ int main(int argc, char *argv[])
    }
    if (Mpi::Root()) { args.PrintOptions(cout); }
 
-   if (check_exact) {
-     MFEM_VERIFY(
+   if (check_exact)
+   {
+      MFEM_VERIFY(
          problem == 1,
          "Can only compare problem 1 (Sedov) against the exact solution");
-     MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
+      MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
    }
 
 #ifdef LAGHOS_USE_CALIPER
@@ -275,7 +276,8 @@ int main(int argc, char *argv[])
    const char * allocator_name = "laghos_device_alloc";
    size_t umpire_dev_pool_size = ((size_t) dev_pool_size) * 1024 * 1024 * 1024;
    size_t umpire_dev_block_size = 512;
-   rm.makeAllocator<umpire::strategy::QuickPool>(allocator_name, rm.getAllocator("DEVICE"), umpire_dev_pool_size, umpire_dev_block_size);
+   rm.makeAllocator<umpire::strategy::QuickPool>(allocator_name,
+                                                 rm.getAllocator("DEVICE"), umpire_dev_pool_size, umpire_dev_block_size);
 
 #ifdef HYPRE_USING_UMPIRE
    HYPRE_SetUmpireDevicePoolName(allocator_name);
@@ -303,47 +305,54 @@ int main(int argc, char *argv[])
    }
    else
    {
-     if (Mpi::Root()) {
-       // generated domain checks
-       if (problem == 3) {
-         switch (dim) {
-         case 1:
-           if (Sx <= 0.5) {
-             cout << "WARNING: The triple point is initialized at x=0.5. Sx = "
-                  << Sx
-                  << " puts the triple point outside the simulation "
-                     "domain."
-                  << endl;
-           }
-           break;
-         case 3:
-           if (Sz <= 1.5) {
-             cout << "WARNING: The triple point is initialized at z=1.5. Sz = "
-                  << Sz
-                  << " puts the triple point outside the simulation "
-                     "domain."
-                  << endl;
-           }
-         case 2:
-           if (Sx <= 1) {
-             cout << "WARNING: The triple point is initialized at x=1. Sx = "
-                  << Sx
-                  << " puts the triple point outside the simulation "
-                     "domain."
-                  << endl;
-           }
+      if (Mpi::Root())
+      {
+         // generated domain checks
+         if (problem == 3)
+         {
+            switch (dim)
+            {
+               case 1:
+                  if (Sx <= 0.5)
+                  {
+                     cout << "WARNING: The triple point is initialized at x=0.5. Sx = "
+                          << Sx
+                          << " puts the triple point outside the simulation "
+                          "domain."
+                          << endl;
+                  }
+                  break;
+               case 3:
+                  if (Sz <= 1.5)
+                  {
+                     cout << "WARNING: The triple point is initialized at z=1.5. Sz = "
+                          << Sz
+                          << " puts the triple point outside the simulation "
+                          "domain."
+                          << endl;
+                  }
+               case 2:
+                  if (Sx <= 1)
+                  {
+                     cout << "WARNING: The triple point is initialized at x=1. Sx = "
+                          << Sx
+                          << " puts the triple point outside the simulation "
+                          "domain."
+                          << endl;
+                  }
 
-           if (Sy <= 1.5) {
-             cout << "WARNING: The triple point is initialized at y=1.5. Sy = "
-                  << Sy
-                  << " puts the triple point outside the simulation "
-                     "domain."
-                  << endl;
-           }
-           break;
+                  if (Sy <= 1.5)
+                  {
+                     cout << "WARNING: The triple point is initialized at y=1.5. Sy = "
+                          << Sy
+                          << " puts the triple point outside the simulation "
+                          "domain."
+                          << endl;
+                  }
+                  break;
+            }
          }
-       }
-     }
+      }
 
       if (dim == 1)
       {
@@ -353,15 +362,15 @@ int main(int argc, char *argv[])
       }
       if (dim == 2)
       {
-        mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
-                                              true, Sx, Sy));
-        AssignMeshBdrAttrs2D(*mesh, 0_r, Sx);
+         mesh = new Mesh(Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL,
+                                               true, Sx, Sy));
+         AssignMeshBdrAttrs2D(*mesh, 0_r, Sx);
       }
       if (dim == 3)
       {
-        mesh = new Mesh(Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
-                                              Sx, Sy, Sz, true));
-        AssignMeshBdrAttrs3D(*mesh, 0_r, Sx, 0_r, Sy);
+         mesh = new Mesh(Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON,
+                                               Sx, Sy, Sz, true));
+         AssignMeshBdrAttrs3D(*mesh, 0_r, Sx, 0_r, Sy);
       }
    }
    dim = mesh->Dimension();
@@ -644,7 +653,7 @@ int main(int argc, char *argv[])
    ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
-   
+
    double blast_position[] = {0.0, 0.0, 0.0};
    if (problem == 1)
    {
@@ -751,6 +760,7 @@ int main(int argc, char *argv[])
    int steps = 0;
    BlockVector S_old(S);
    long mem=0, mmax=0, msum=0;
+   long dmem = 0, dmmax = 0, dmsum = 0;
    int checks = 0;
    //   const double internal_energy = hydro.InternalEnergy(e_gf);
    //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
@@ -836,6 +846,18 @@ int main(int argc, char *argv[])
          if (mem_usage)
          {
             mem = GetMaxRssMB();
+            size_t mfree, mtot;
+            if (Device::Allows(Backend::CUDA_MASK | Backend::HIP_MASK))
+            {
+               Device::DeviceMem(&mfree, &mtot);
+               dmem = mtot - mfree;
+               MPI_Reduce(&dmem, &dmmax, 1, MPI_LONG, MPI_MAX, 0,
+                          pmesh->GetComm());
+               MPI_Reduce(&dmem, &dmsum, 1, MPI_LONG, MPI_SUM, 0,
+                          pmesh->GetComm());
+               dmmax /= 1024*1024;
+               dmsum /= 1024*1024;
+            }
             MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
             MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
          }
@@ -860,7 +882,8 @@ int main(int argc, char *argv[])
             cout << std::fixed;
             if (mem_usage)
             {
-               cout << ", mem: " << mmax << "/" << msum << " MB";
+               cout << ", mem: " << mmax << "/" << msum << " MB, "
+                    << dmmax << "/" << dmsum << " MB";
             }
             cout << endl;
          }
@@ -945,8 +968,8 @@ int main(int argc, char *argv[])
       }
    }
 #ifdef LAGHOS_USE_CALIPER
-  CALI_CXX_MARK_LOOP_END(mainloop_annotation);
-  adiak::value("steps", ti);
+   CALI_CXX_MARK_LOOP_END(mainloop_annotation);
+   adiak::value("steps", ti);
 #endif
 
    MFEM_VERIFY(!check || checks == 2, "Check error!");
@@ -964,6 +987,16 @@ int main(int argc, char *argv[])
 
    if (mem_usage)
    {
+      if (Device::Allows(Backend::CUDA_MASK | Backend::HIP_MASK))
+      {
+         size_t mfree, mtot;
+         Device::DeviceMem(&mfree, &mtot);
+         dmem = mtot - mfree;
+         MPI_Reduce(&dmem, &dmmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
+         MPI_Reduce(&dmem, &dmsum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
+         dmmax /= 1024*1024;
+         dmsum /= 1024*1024;
+      }
       mem = GetMaxRssMB();
       MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh->GetComm());
       MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh->GetComm());
@@ -978,8 +1011,10 @@ int main(int argc, char *argv[])
            << fabs(energy_init - energy_final) << endl;
       if (mem_usage)
       {
-         cout << "Maximum memory resident set size: "
-              << mmax << "/" << msum << " MB" << endl;
+         cout << "Maximum memory resident set size: " << mmax << "/" << msum
+              << "MB , " << dmmax << "/" << dmsum << " MB" << endl;
+         // cout << "Maximum memory resident set size: " << mmax << "/" << msum
+         //      << " MB" << endl;
       }
    }
 
@@ -1008,75 +1043,85 @@ int main(int argc, char *argv[])
    adiak::fini();
 #endif
 
-   if (check_exact) {
-     // compare against the exact Sedov solution
-     double gamma = 1.4;
-     double rho0 = 1;
-     double omega = 0;
+   if (check_exact)
+   {
+      // compare against the exact Sedov solution
+      double gamma = 1.4;
+      double rho0 = 1;
+      double omega = 0;
 
-     SedovSol asol(dim, gamma, rho0, blast_energy, omega);
+      SedovSol asol(dim, gamma, rho0, blast_energy, omega);
 
-     asol.SetTime(t_final);
+      asol.SetTime(t_final);
 
-     if (strncmp(mesh_file, "default", 7) == 0) {
-       real_t min_r = std::min(std::min(Sx, Sy), Sz);
-       MFEM_VERIFY(
-           asol.r2 <= min_r,
-           "Solution reflections off boundaries detected, cannot compare "
-           "against exact solution.");
-     }
+      if (strncmp(mesh_file, "default", 7) == 0)
+      {
+         real_t min_r = std::min(std::min(Sx, Sy), Sz);
+         MFEM_VERIFY(
+            asol.r2 <= min_r,
+            "Solution reflections off boundaries detected, cannot compare "
+            "against exact solution.");
+      }
 
-     int err_order = std::max((std::max(order_v, order_e) + 1) * 2, order_q) * 2;
-     const IntegrationRule &irule =
+      int err_order = std::max((std::max(order_v, order_e) + 1) * 2, order_q) * 2;
+      const IntegrationRule &irule =
          IntRules.Get(pmesh->GetTypicalElementGeometry(), err_order);
 
-     QuadratureSpace qspace(*pmesh, irule);
-     // only compare density
-     QuadratureFunction sim_qfunc(qspace, 1);
-     QuadratureFunction err_qfunc(qspace, 1);
+      QuadratureSpace qspace(*pmesh, irule);
+      // only compare density
+      QuadratureFunction sim_qfunc(qspace, 1);
+      QuadratureFunction err_qfunc(qspace, 1);
 
-     hydro.ComputeDensity(rho_gf);
+      hydro.ComputeDensity(rho_gf);
 
-     rho_gf.HostReadWrite();
+      rho_gf.HostReadWrite();
 
-     {
-       GridFunctionCoefficient ctmp(&rho_gf);
-       ctmp.Coefficient::Project(sim_qfunc);
-     }
+      {
+         GridFunctionCoefficient ctmp(&rho_gf);
+         ctmp.Coefficient::Project(sim_qfunc);
+      }
 
-     auto slambda = [&](const Vector &x, Vector &res) {
-       real_t tmp[3];
-       Vector dr(tmp, dim);
-       double r = 0;
+      auto slambda = [&](const Vector &x, Vector &res)
+      {
+         real_t tmp[3];
+         Vector dr(tmp, dim);
+         double r = 0;
 
-       for (int i = 0; i < dim; ++i) {
-         dr[i] = x[i] - blast_position[i];
-         r += dr[i] * dr[i];
-       }
-       r = sqrt(r);
-       if (r) {
-         for (int i = 0; i < dim; ++i) {
-           dr[i] /= r;
+         for (int i = 0; i < dim; ++i)
+         {
+            dr[i] = x[i] - blast_position[i];
+            r += dr[i] * dr[i];
          }
-       } else {
-         dr = 0_r;
-       }
-       double rho, v, P;
-       asol.EvalSol(r, rho, v, P);
-       res[0] = rho;
-     };
-     VectorFunctionCoefficient asol_coeff(1, slambda);
-     asol_coeff.Project(err_qfunc);
+         r = sqrt(r);
+         if (r)
+         {
+            for (int i = 0; i < dim; ++i)
+            {
+               dr[i] /= r;
+            }
+         }
+         else
+         {
+            dr = 0_r;
+         }
+         double rho, v, P;
+         asol.EvalSol(r, rho, v, P);
+         res[0] = rho;
+      };
+      VectorFunctionCoefficient asol_coeff(1, slambda);
+      asol_coeff.Project(err_qfunc);
 
-     sim_qfunc.HostRead();
-     err_qfunc.HostReadWrite();
-     for (int i = 0; i < err_qfunc.Size(); ++i) {
-       err_qfunc[i] = pow(err_qfunc[i] - AsConst(sim_qfunc)[i], 2);
-     }
-     real_t lrho_err = err_qfunc.Integrate();
-     if (Mpi::Root()) {
-       cout << "Density L2 error: " << sqrt(lrho_err) << endl;
-     }
+      sim_qfunc.HostRead();
+      err_qfunc.HostReadWrite();
+      for (int i = 0; i < err_qfunc.Size(); ++i)
+      {
+         err_qfunc[i] = pow(err_qfunc[i] - AsConst(sim_qfunc)[i], 2);
+      }
+      real_t lrho_err = err_qfunc.Integrate();
+      if (Mpi::Root())
+      {
+         cout << "Density L2 error: " << sqrt(lrho_err) << endl;
+      }
    }
 
    // Free the used memory.
@@ -1347,44 +1392,51 @@ static void Checks(const int ti, const double nrm, int &chk)
 
 static void AssignMeshBdrAttrs2D(Mesh& mesh, real_t xmin, real_t xmax)
 {
-  Vector pos(3);
-  constexpr real_t tol = 1e-6;
-  const int NBE = mesh.GetNBE();
-  IntegrationPoint center;
-  center.x = 0.5;
-  center.y = 0.5;
-  center.z = 0.5;
-  for (int b = 0; b < NBE; b++) {
-    Element *bel = mesh.GetBdrElement(b);
-    auto eltrans = mesh.GetBdrElementTransformation(b);
-    eltrans->Transform(center, pos);
-    int attr = 2;
-    if (pos[0] <= xmin + tol || pos[0] >= xmax - tol) {
-      attr = 1;
-    }
-    bel->SetAttribute(attr);
-  }
+   Vector pos(3);
+   constexpr real_t tol = 1e-6;
+   const int NBE = mesh.GetNBE();
+   IntegrationPoint center;
+   center.x = 0.5;
+   center.y = 0.5;
+   center.z = 0.5;
+   for (int b = 0; b < NBE; b++)
+   {
+      Element *bel = mesh.GetBdrElement(b);
+      auto eltrans = mesh.GetBdrElementTransformation(b);
+      eltrans->Transform(center, pos);
+      int attr = 2;
+      if (pos[0] <= xmin + tol || pos[0] >= xmax - tol)
+      {
+         attr = 1;
+      }
+      bel->SetAttribute(attr);
+   }
 }
 
 static void AssignMeshBdrAttrs3D(Mesh &mesh, real_t xmin, real_t xmax,
-                                 real_t ymin, real_t ymax) {
-  Vector pos(3);
-  constexpr real_t tol = 1e-6;
-  const int NBE = mesh.GetNBE();
-  IntegrationPoint center;
-  center.x = 0.5;
-  center.y = 0.5;
-  center.z = 0.5;
-  for (int b = 0; b < NBE; b++) {
-    Element *bel = mesh.GetBdrElement(b);
-    auto eltrans = mesh.GetBdrElementTransformation(b);
-    eltrans->Transform(center, pos);
-    int attr = 3;
-    if (pos[0] <= xmin + tol || pos[0] >= xmax - tol) {
-      attr = 1;
-    } else if (pos[1] <= ymin + tol || pos[1] >= ymax - tol) {
-      attr = 2;
-    }
-    bel->SetAttribute(attr);
-  }
+                                 real_t ymin, real_t ymax)
+{
+   Vector pos(3);
+   constexpr real_t tol = 1e-6;
+   const int NBE = mesh.GetNBE();
+   IntegrationPoint center;
+   center.x = 0.5;
+   center.y = 0.5;
+   center.z = 0.5;
+   for (int b = 0; b < NBE; b++)
+   {
+      Element *bel = mesh.GetBdrElement(b);
+      auto eltrans = mesh.GetBdrElementTransformation(b);
+      eltrans->Transform(center, pos);
+      int attr = 3;
+      if (pos[0] <= xmin + tol || pos[0] >= xmax - tol)
+      {
+         attr = 1;
+      }
+      else if (pos[1] <= ymin + tol || pos[1] >= ymax - tol)
+      {
+         attr = 2;
+      }
+      bel->SetAttribute(attr);
+   }
 }
