@@ -29,9 +29,6 @@
 
 using namespace mfem;
 
-// static void ProjectCoeff(ParGridFunction &u, VectorCoefficient &coeff,
-//                          const mfem::IntegrationRule *ir);
-
 int main(int argc, char *argv[]) {
   // Initialize MPI.
   Mpi::Init();
@@ -45,9 +42,7 @@ int main(int argc, char *argv[]) {
   int nx = 2;
   int ny = 2;
   int nz = 2;
-  int order_v = 2;
-  int order_e = 1;
-  int order_q = -1;
+  int order_q = 4;
   double t_final = 0.6;
   const char *basename = "results/Sedov";
   real_t Sx = 1, Sy = 1, Sz = 1;
@@ -64,10 +59,6 @@ int main(int argc, char *argv[]) {
                  "Number of times to refine the mesh uniformly in serial.");
   args.AddOption(&rp_levels, "-rp", "--refine-parallel",
                  "Number of times to refine the mesh uniformly in parallel.");
-  args.AddOption(&order_v, "-ok", "--order-kinematic",
-                 "Order (degree) of the kinematic finite element space.");
-  args.AddOption(&order_e, "-ot", "--order-thermo",
-                 "Order (degree) of the thermodynamic finite element space.");
   args.AddOption(&order_q, "-oq", "--order-intrule",
                  "Order  of the integration rule.");
   args.AddOption(&t_final, "-tf", "--t-final", "Final time; start time is 0.");
@@ -146,10 +137,6 @@ int main(int argc, char *argv[]) {
     std::cout << "Zones min/max: " << ne_min << " " << ne_max << std::endl;
   }
 
-  if (order_q <= 0) {
-    order_q = (std::max(order_v, order_e) + 1) * 2;
-  }
-
   const IntegrationRule &irule =
       IntRules.Get(pmesh->GetTypicalElementGeometry(), order_q);
 
@@ -224,34 +211,6 @@ int main(int argc, char *argv[]) {
     asol_coeff.Project(qfunc);
   }
 
-  // Define the parallel finite element spaces. We use:
-  // - H1 (Gauss-Lobatto, continuous) for position and velocity.
-  // - L2 (Bernstein, discontinuous) for specific internal energy.
-  L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
-  H1_FECollection H1FEC(order_v, dim);
-  ParFiniteElementSpace L2FESpace(pmesh.get(), &L2FEC);
-  ParFiniteElementSpace H1FESpace(pmesh.get(), &H1FEC, pmesh->Dimension());
-
-  ParGridFunction rho_gf(&L2FESpace);
-  ParGridFunction v_gf(&H1FESpace);
-  ParGridFunction energy_gf(&L2FESpace);
-#if 0
-    // TODO: need to allow vector LF integrator to specify intrule
-  VectorQuadratureFunctionCoefficient qcoeff(qfunc);
-  {
-    qcoeff.SetComponent(0, 1);
-    ProjectCoeff(rho_gf, qcoeff, &irule);
-  }
-  {
-    qcoeff.SetComponent(1, dim);
-    ProjectCoeff(v_gf, qcoeff, &irule);
-  }
-  {
-    qcoeff.SetComponent(1 + dim, 1);
-    ProjectCoeff(energy_gf, qcoeff, &irule);
-  }
-#endif
-
   {
     std::stringstream fname;
     fname << basename << "_mesh";
@@ -263,49 +222,5 @@ int main(int argc, char *argv[]) {
     std::ofstream out(fname.str());
     qfunc.Save(out);
   }
-#if 0
-  {
-    std::stringstream fname;
-    fname << basename << "_rho";
-    rho_gf.Save(fname.str().c_str());
-  }
-  {
-    std::stringstream fname;
-    fname << basename << "_v";
-    v_gf.Save(fname.str().c_str());
-  }
-  {
-    std::stringstream fname;
-    fname << basename << "_energy";
-    energy_gf.Save(fname.str().c_str());
-  }
-#endif
-
   return 0;
 }
-
-// static void ProjectCoeff(ParGridFunction &u, VectorCoefficient &coeff,
-//                          const IntegrationRule *ir) {
-//   LinearForm b(u.FESpace());
-//   b.AddDomainIntegrator(new VectorFEDomainLFIntegrator(coeff, ir));
-//   b.UseFastAssembly(true);
-//   b.Assemble();
-
-//   BilinearForm a(u.FESpace());
-//   a.SetAssemblyLevel(AssemblyLevel::FULL);
-//   a.AddDomainIntegrator(new VectorFEMassIntegrator());
-//   a.Assemble();
-//   // Set solver and preconditioner
-//   SparseMatrix A(a.SpMat());
-//   GSSmoother prec(A);
-//   CGSolver cg;
-//   cg.SetPreconditioner(prec);
-//   cg.SetOperator(A);
-//   cg.SetRelTol(1e-12);
-//   cg.SetMaxIter(1000);
-//   cg.SetPrintLevel(0);
-
-//   // Solve and get solution
-//   u = 0.0;
-//   cg.Mult(b, u);
-// }
