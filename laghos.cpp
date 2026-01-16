@@ -1012,9 +1012,7 @@ int main(int argc, char *argv[])
       if (mem_usage)
       {
          cout << "Maximum memory resident set size: " << mmax << "/" << msum
-              << "MB , " << dmmax << "/" << dmsum << " MB" << endl;
-         // cout << "Maximum memory resident set size: " << mmax << "/" << msum
-         //      << " MB" << endl;
+              << " MB, " << dmmax << "/" << dmsum << " MB" << endl;
       }
    }
 
