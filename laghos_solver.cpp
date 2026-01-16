@@ -1161,7 +1161,7 @@ void QUpdateBody(const int NE, const int e,
    {
       for (int gd = 0; gd < DIM; gd++)
       {
-         const int offset = eq + NQ*NE*(gd + vd*DIM);
+         const int offset = vd + DIM * (gd + DIM * eq);
          d_stressJinvT[offset] = stressJiT[vd + gd*DIM];
       }
    }
