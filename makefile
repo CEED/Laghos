@@ -270,6 +270,10 @@ tests:
 	$(shell echo 'step = 2872, dt = 0.000064, |e| = 5.6547039096e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0858, dt = 0.000474, |e| = 5.6691500623e+01' >> BASELINE.dat)
 	$(shell echo 'step = 0776, dt = 0.000045, |e| = 4.0982431726e+02' >> BASELINE.dat)
+  echo "RESULTS.dat:"
+  cat RESULTS.dat
+  echo "BASELINE:"
+  cat BASELINE.dat
 	diff --report-identical-files RESULTS.dat BASELINE.dat
 
 # Setup: download & install third party libraries: HYPRE, METIS & MFEM
