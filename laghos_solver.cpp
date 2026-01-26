@@ -1093,12 +1093,20 @@ auto QUpdateBody(const bool use_viscosity,
       }
 
       kernels::Symmetrize(DIM, sgrad_v);
+      if (DIM == 1)
+      {
+         eig_val_data[0] = sgrad_v[0];
+         eig_vec_data[0] = 1.;
+      }
+      else
       {
          kernels::CalcEigenvalues<DIM>(sgrad_v, eig_val_data, eig_vec_data);
       }
       for (int k=0; k<DIM; k++) { compr_dir[k] = eig_vec_data[k]; }
+      // Computes the initial->physical transformation Jacobian.
       kernels::Mult(DIM, DIM, DIM, J, &Jac0inv[0], Jpi);
       kernels::Mult(DIM, DIM, Jpi, compr_dir, ph_dir);
+      // Change of the initial mesh size in the compression direction.
       const double ph_dir_nl2 = kernels::Norml2(DIM, ph_dir);
       const double compr_dir_nl2 = kernels::Norml2(DIM, compr_dir);
       const double H = h0 * ph_dir_nl2 / compr_dir_nl2;
@@ -1240,9 +1248,9 @@ class QUpdatePA
 public:
    QUpdatePA(const bool use_viscosity,
              const bool use_vorticity,
-             const real_t cfl,
              const real_t h0,
              const real_t h1order,
+             const real_t cfl,
              QuadratureData &qdata,
              const ParGridFunction &gamma_gf,
              const IntegrationRule &ir,
@@ -1362,7 +1370,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
    Vector* S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
-   const double H1order = (double) H1.GetOrder(0);
+   const double h1order = (double) H1.GetOrder(0);
    ParGridFunction x, v, e;
    x.MakeRef(&H1,*S_p, 0);
    v.MakeRef(&H1,*S_p, H1_size);
@@ -1370,12 +1378,12 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 
    if (dim == 2)
    {
-      static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, H1order, qdata, gamma_gf, ir, H1, L2};
+      static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
    }
    else if (dim == 3)
    {
-      static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, H1order, qdata, gamma_gf, ir, H1, L2};
+      static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
    }
    LAGHOS_DEVICE_SYNC;
