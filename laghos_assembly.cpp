@@ -235,7 +235,7 @@ void ForcePAOperator::Mult(const Vector &, Vector &y) const
 
 void ForcePAOperator::MultTranspose(const Vector &v, Vector &y) const
 {
-   forceT->SetParameters({&v, &e_gf});
+   forceT->SetParameters({&(v_gf = v), &e_gf});
    forceT->Mult(stressJiT, y);
 }
 
