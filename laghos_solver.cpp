@@ -1161,6 +1161,7 @@ class QUpdatePA
    ParFiniteElementSpace &H1, &L2, *L0;
    UniformParameterSpace scalar_ups, dim2_ups;
    Vector dt_est, dt_min, Jac0inv, rho0DetJ0w, stressJiT;
+   const std::vector<FieldDescriptor> solution, parameters;
    DifferentiableOperator stress_dop, deltat_dop;
 
    enum
@@ -1197,68 +1198,58 @@ public:
       Jac0inv(qdata.Jac0inv.ReadWrite(), qdata.Jac0inv.TotalSize()),
       rho0DetJ0w(qdata.rho0DetJ0w.ReadWrite(), qdata.rho0DetJ0w.Size()),
       stressJiT(qdata.stressJinvT.ReadWrite(), qdata.stressJinvT.TotalSize()),
-      stress_dop(std::vector<FieldDescriptor> { {Velocity, &H1}},
-   std::vector<FieldDescriptor> {{Coordinates, &H1},
-      {Energy, &L2},
-      {Gamma, L0},
-      {InvJac0, &dim2_ups},
-      {Rho0DetJ0W, &scalar_ups},
-      {StressTensor, &dim2_ups}
-   }, pmesh),
-   deltat_dop(std::vector<FieldDescriptor> { {Velocity, &H1}},
-   std::vector<FieldDescriptor> {{Coordinates, &H1},
-      {Energy, &L2},
-      {Gamma, L0},
-      {InvJac0, &dim2_ups},
-      {Rho0DetJ0W, &scalar_ups},
-      {DeltaTEst, &scalar_ups},
-      {DeltaTEst, &scalar_ups},
-   }, pmesh)
+      solution({{Velocity, &H1}}),
+   parameters({{Coordinates, &H1}, {Energy, &L2}, {Gamma, L0},
+      {InvJac0, &dim2_ups}, {Rho0DetJ0W, &scalar_ups},
+      {DeltaTEst, &scalar_ups}, {StressTensor, &dim2_ups}}),
+   stress_dop(solution, parameters, pmesh), deltat_dop(solution, parameters, pmesh)
    {
       using matd_t = tensor<real_t, DIM, DIM>;
 
       domain_attr = 1;
 
-      auto stress_qf = [=](const matd_t &dvdxi,
-                           const matd_t &J,
-                           const real_t &E,
-                           const real_t &gamma,
-                           const matd_t &invJ0,
-                           const real_t &rho0DetJ0w,
-                           const real_t &w)
+      future::tuple inputs_qf = { Gradient<Velocity> {},
+                                  Gradient<Coordinates> {},
+                                  Value<Energy> {},
+                                  Value<Gamma> {},
+                                  Identity<InvJac0> {},
+                                  Identity<Rho0DetJ0W> {},
+                                  Identity<DeltaTEst> {},
+                                  Weight{}
+                                };
+
+      const auto stress_qf = [=](const matd_t &dvdxi,
+                                 const matd_t &J,
+                                 const real_t &E,
+                                 const real_t &gamma,
+                                 const matd_t &invJ0,
+                                 const real_t &rho0DetJ0w,
+                                 const real_t &dt_min,
+                                 const real_t &weight)
       {
          auto [stress, _, __] =
-         QUpdateBody(use_viscosity, use_vorticity, cfl, h0, h1order,
-                     dvdxi, rho0DetJ0w, J, E, gamma, invJ0, w);
-         return tuple{stress * transpose(inv(J)) * w * det(J)};
+            QUpdateBody(use_viscosity, use_vorticity, cfl, h0, h1order,
+                        dvdxi, rho0DetJ0w, J, E, gamma, invJ0, weight);
+         return tuple{stress * transpose(inv(J)) * weight * det(J)};
       };
-
-      stress_dop.AddDomainIntegrator(stress_qf, future::tuple
-      {
-         Gradient<Velocity>{},
-         Gradient<Coordinates>{},
-         Value<Energy>{},
-         Value<Gamma>{},
-         Identity<InvJac0>{},
-         Identity<Rho0DetJ0W>{},
-         Weight{}},
-      future::tuple{Identity<StressTensor>{}}, ir, domain_attr);
+      auto stress_o = future::tuple{Identity<StressTensor>{}};
+      stress_dop.AddDomainIntegrator(stress_qf, inputs_qf, stress_o, ir, domain_attr);
       stress_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
 
-      auto deltat_qf = [=](const matd_t &dvdxi,
-                           const matd_t &J,
-                           const real_t &E,
-                           const real_t &gamma,
-                           const matd_t &invJ0,
-                           const real_t &rho0DetJ0w,
-                           const real_t &dt_min,
-                           const real_t &w)
+      const auto deltat_qf = [=](const matd_t &dvdxi,
+                                 const matd_t &J,
+                                 const real_t &E,
+                                 const real_t &gamma,
+                                 const matd_t &invJ0,
+                                 const real_t &rho0DetJ0w,
+                                 const real_t &dt_min,
+                                 const real_t &weight)
       {
          const real_t detJ = det(J);
-         const real_t rho = rho0DetJ0w / (detJ * w);
+         const real_t rho = rho0DetJ0w / (detJ * weight);
          auto [_, visc_coeff, S] =
             QUpdateBody(use_viscosity, use_vorticity, cfl, h0, h1order,
-                        dvdxi, rho0DetJ0w, J, E, gamma, invJ0, w);
+                        dvdxi, rho0DetJ0w, J, E, gamma, invJ0, weight);
          real_t J_values[DIM*DIM];
          for (int k = 0; k < DIM*DIM; ++k) { J_values[k] = J(k / DIM, k % DIM); }
          // Time step estimate at the point. Here the more relevant length
@@ -1274,23 +1265,14 @@ public:
          return tuple{dt_est};
       };
 
-      deltat_dop.AddDomainIntegrator(deltat_qf, future::tuple
-      {
-         Gradient<Velocity>{},
-         Gradient<Coordinates>{},
-         Value<Energy>{},
-         Value<Gamma>{},
-         Identity<InvJac0>{},
-         Identity<Rho0DetJ0W>{},
-         Identity<DeltaTEst>{},
-         Weight{}},
-      future::tuple{Identity<DeltaTEst>{}}, ir, domain_attr);
+      auto deltat_o = future::tuple{Identity<DeltaTEst>{}};
+      deltat_dop.AddDomainIntegrator(deltat_qf, inputs_qf, deltat_o, ir, domain_attr);
       deltat_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
 
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
-      stress_dop.SetParameters({&x, &e, &gamma_gf, &Jac0inv, &rho0DetJ0w, &stressJiT});
+      stress_dop.SetParameters({&x, &e, &gamma_gf, &Jac0inv, &rho0DetJ0w, &dt_min, &stressJiT});
       stress_dop.Mult(v, stressJiT);
 
       dt_min = qdata.dt_est;
