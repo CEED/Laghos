@@ -17,8 +17,6 @@
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
-#include <variant>
-
 using namespace mfem::future;
 
 #ifdef USE_CALIPER
@@ -174,7 +172,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    if (p_assembly)
    {
-      qupdate = new QUpdate(dim, visc, vort, cfl,
+      qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
                             &timer, gamma_gf, ir, H1, L2);
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
       VMassPA = new MassPAOperator(H1c, ir, rho0_coeff);
@@ -1021,43 +1019,60 @@ struct QKernel: QConfig
                                 const matd_t &invJ0,
                                 const real_t &w) const
    {
-      const real_t detJ = det(J);
-      const real_t rho = rho0DetJ0w / (detJ * w);
-      const matd_t dvdx_invJ = dvdxi * inv(J);
-      const auto [p, cs] = ComputeMaterialProperties(rho, gamma, E);
-
+      const double detJ = det(J);
+      const double R = rho0DetJ0w / (detJ * w);
+      const auto [p, S] = ComputeMaterialProperties(R, gamma, E);
       matd_t stress {};
       for (int d = 0; d < DIM; d++) { stress(d, d) = -p; }
-
-      real_t visc_coeff = 0.0;
-      real_t vorticity_coeff = 1.0;
-
-      if (use_vorticity)
-      {
-         const real_t grad_norm = norm(dvdx_invJ);
-         const real_t div_v = std::abs(tr(dvdx_invJ));
-         vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-      }
-
+      double visc_coeff = 0.0;
       if (use_viscosity)
       {
-         const matd_t dvdx = sym(dvdx_invJ);
-         real_t eig_val[DIM], eig_vec[DIM*DIM];
+         // Compression-based length scale at the point. The first
+         // eigenvector of the symmetric velocity gradient gives the
+         // direction of maximal compression. This is used to define the
+         // relative change of the initial length scale.
+         const matd_t sgrad_v = dvdxi * inv(J);
+
+         double vorticity_coeff = 1.0;
+         if (use_vorticity)
+         {
+            const double grad_norm = norm(sgrad_v);
+            const double div_v = std::abs(tr(sgrad_v));
+            vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
+         }
+
+         const matd_t dvdx = sym(sgrad_v);
          real_t dvdx_values[DIM*DIM];
          for (int k = 0; k < DIM*DIM; ++k) { dvdx_values[k] = dvdx(k / DIM, k % DIM); }
-         kernels::CalcEigenvalues<DIM>(dvdx_values, eig_val, eig_vec);
-         const vecd_t compr_dir = make_tensor<DIM>([&](int i) {return eig_vec[i];});
+         real_t eig_val_data[DIM], eig_vec_data[DIM*DIM];
+         if (DIM == 1)
+         {
+            eig_val_data[0] = dvdx(0,0);
+            eig_vec_data[0] = 1.;
+         }
+         else
+         {
+            kernels::CalcEigenvalues<DIM>(dvdx_values, eig_val_data, eig_vec_data);
+         }
+         const vecd_t compr_dir = make_tensor<DIM>([&](int i) {return eig_vec_data[i];});
+         // Computes the initial->physical transformation Jacobian.
          const vecd_t ph_dir = (J * invJ0) * compr_dir;
-         const real_t h = h0 * norm(ph_dir) / norm(compr_dir);
-         const real_t mu = eig_val[0];
-         visc_coeff = 2.0 * rho * h * h * fabs(mu);
+         const double ph_dir_nl2 = norm(ph_dir);
+         const double compr_dir_nl2 = norm(compr_dir);
+         const real_t H = h0 * ph_dir_nl2 / compr_dir_nl2;
+         // Measure of maximal compression.
+         const real_t mu = eig_val_data[0];
+         visc_coeff = 2.0 * R * H * H * fabs(mu);
+         // The following represents a "smooth" version of the statement
+         // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+         // eps must be scaled appropriately if a different unit system is
+         // being used.
          const double eps = 1e-12;
-         visc_coeff += 0.5 * rho * h * cs * vorticity_coeff
-                       * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+         visc_coeff += 0.5 * R * H * S * vorticity_coeff *
+                       (1.0 - smooth_step_01(mu-2.0*eps, eps));
          stress += visc_coeff * dvdx;
       }
-
-      return tuple{stress, visc_coeff, cs};
+      return tuple{stress, visc_coeff, S};
    }
 };
 
@@ -1101,18 +1116,116 @@ struct QDeltaT
    {
       const real_t detJ = det(J);
       const real_t rho = rho0DetJ0w / (detJ * w);
-      auto [_, visc, cs] = kernel.Update(dvdxi, rho0DetJ0w, J, E, gamma, invJ0, w);
+      auto [_, visc_coeff, S] = kernel.Update(dvdxi, rho0DetJ0w, J, E, gamma, invJ0,
+                                              w);
       real_t J_values[DIM*DIM];
       for (int k = 0; k < DIM*DIM; ++k) { J_values[k] = J(k / DIM, k % DIM); }
+      // Time step estimate at the point. Here the more relevant length
+      // scale is related to the actual mesh deformation; we use the min
+      // singular value of the ref->physical Jacobian. In addition, the
+      // time step estimate should be aware of the presence of shocks.
       const real_t sv = kernels::CalcSingularvalue<DIM>(J_values, DIM-1);
       const real_t h_min = sv / kernel.h1order;
-      const real_t inv_h_min = 1.0 / h_min;
-      const real_t inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
-      const real_t inv_dt = cs * inv_h_min + 2.5 * visc * inv_rho_inv_h_min_sq;
-      const real_t dt_est = detJ <= 0.0 ? 0.0 : std::min(dt_min, kernel.cfl / inv_dt);
+      const real_t ih_min = 1. / h_min;
+      const real_t irho_ih_min_sq = ih_min * ih_min / rho ;
+      const real_t idt = S * ih_min + 2.5 * visc_coeff * irho_ih_min_sq;
+      const real_t dt_est = detJ <= 0.0 ? 0.0 : std::min(dt_min, kernel.cfl / idt);
       return tuple{dt_est};
    }
 };
+
+static void Rho0DetJ0Vol(const int dim, const int NE,
+                         const IntegrationRule &ir,
+                         ParMesh *pmesh,
+                         ParFiniteElementSpace &L2,
+                         const ParGridFunction &rho0,
+                         QuadratureData &qdata,
+                         double &volume)
+{
+   const int NQ = ir.GetNPoints();
+   const int Q1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
+   const int flags = GeometricFactors::JACOBIANS|GeometricFactors::DETERMINANTS;
+   const GeometricFactors *geom = pmesh->GetGeometricFactors(ir, flags);
+   Vector rho0Q(NQ*NE);
+   rho0Q.UseDevice(true);
+   Vector j, detj;
+   const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
+   qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
+   const auto W = ir.GetWeights().Read();
+   const auto R = Reshape(rho0Q.Read(), NQ, NE);
+   const auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
+   const auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
+   auto V = Reshape(qdata.rho0DetJ0w.Write(), NQ, NE);
+   Memory<double> &Jinv_m = qdata.Jac0inv.GetMemory();
+   const MemoryClass mc = Device::GetMemoryClass();
+   const int Ji_total_size = qdata.Jac0inv.TotalSize();
+   auto invJ = Reshape(Jinv_m.Write(mc, Ji_total_size), dim, dim, NQ, NE);
+   Vector vol(NE*NQ), one(NE*NQ);
+   auto A = Reshape(vol.Write(), NQ, NE);
+   auto O = Reshape(one.Write(), NQ, NE);
+   MFEM_ASSERT(dim==2 || dim==3, "");
+   if (dim==2)
+   {
+      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
+      {
+         MFEM_FOREACH_THREAD(qy,y,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qx,x,Q1D)
+            {
+               const int q = qx + qy * Q1D;
+               const double J11 = J(q,0,0,e);
+               const double J12 = J(q,1,0,e);
+               const double J21 = J(q,0,1,e);
+               const double J22 = J(q,1,1,e);
+               const double det = detJ(q,e);
+               V(q,e) =  W[q] * R(q,e) * det;
+               const double r_idetJ = 1.0 / det;
+               invJ(0,0,q,e) =  J22 * r_idetJ;
+               invJ(1,0,q,e) = -J12 * r_idetJ;
+               invJ(0,1,q,e) = -J21 * r_idetJ;
+               invJ(1,1,q,e) =  J11 * r_idetJ;
+               A(q,e) = W[q] * det;
+               O(q,e) = 1.0;
+            }
+         }
+      });
+   }
+   else
+   {
+      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
+      {
+         MFEM_FOREACH_THREAD(qz,z,Q1D)
+         {
+            MFEM_FOREACH_THREAD(qy,y,Q1D)
+            {
+               MFEM_FOREACH_THREAD(qx,x,Q1D)
+               {
+                  const int q = qx + (qy + qz * Q1D) * Q1D;
+                  const double J11 = J(q,0,0,e), J12 = J(q,0,1,e), J13 = J(q,0,2,e);
+                  const double J21 = J(q,1,0,e), J22 = J(q,1,1,e), J23 = J(q,1,2,e);
+                  const double J31 = J(q,2,0,e), J32 = J(q,2,1,e), J33 = J(q,2,2,e);
+                  const double det = detJ(q,e);
+                  V(q,e) = W[q] * R(q,e) * det;
+                  const double r_idetJ = 1.0 / det;
+                  invJ(0,0,q,e) = r_idetJ * ((J22 * J33)-(J23 * J32));
+                  invJ(1,0,q,e) = r_idetJ * ((J32 * J13)-(J33 * J12));
+                  invJ(2,0,q,e) = r_idetJ * ((J12 * J23)-(J13 * J22));
+                  invJ(0,1,q,e) = r_idetJ * ((J23 * J31)-(J21 * J33));
+                  invJ(1,1,q,e) = r_idetJ * ((J33 * J11)-(J31 * J13));
+                  invJ(2,1,q,e) = r_idetJ * ((J13 * J21)-(J11 * J23));
+                  invJ(0,2,q,e) = r_idetJ * ((J21 * J32)-(J22 * J31));
+                  invJ(1,2,q,e) = r_idetJ * ((J31 * J12)-(J32 * J11));
+                  invJ(2,2,q,e) = r_idetJ * ((J11 * J22)-(J12 * J21));
+                  A(q,e) = W[q] * det;
+                  O(q,e) = 1.0;
+               }
+            }
+         }
+      });
+   }
+   qdata.rho0DetJ0w.HostRead();
+   volume = vol * one;
+}
 
 template <int DIM>
 class QUpdatePA
@@ -1210,11 +1323,8 @@ public:
       deltat_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
 
-   void Update(const Vector &S, QuadratureData &qdata)
+   void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
-      auto &s = const_cast<Vector&>(S);
-      ParGridFunction x(&H1, s, 0), v(&H1, s, H1vsize), e(&L2, s, 2*H1vsize);
-
       stress_dop.SetParameters({&x, &e, &gamma_gf, &Jac0inv, &rho0DetJ0w, &stressJiT});
       stress_dop.Mult(v, stressJiT);
 
@@ -1225,116 +1335,32 @@ public:
    }
 };
 
-using qupdate_2d = QUpdatePA<2>;
-using qupdate_3d = QUpdatePA<3>;
-using qupdate_fn = std::variant<qupdate_2d, qupdate_3d>;
-
-template<typename... Args>
-static auto Select(const int dim, Args&&... args)
-{
-   if (dim == 2) { return qupdate_fn{ std::in_place_type<qupdate_2d>, std::forward<Args>(args)... }; }
-   MFEM_ASSERT(dim == 3, "Unsupported dimension for QUpdate");
-   return qupdate_fn{ std::in_place_type<qupdate_3d>, std::forward<Args>(args)... };
-}
-
 void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 {
+   LAGHOS_DEVICE_SYNC;
+   timer->sw_qdata.Start();
+   LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
+   auto &s = const_cast<Vector&>(S);
+   const int H1_size = H1.GetVSize();
+   ParGridFunction x, v, e;
+   x.MakeRef(&H1, s, 0);
+   v.MakeRef(&H1, s, H1_size);
+   e.MakeRef(&L2, s, 2*H1_size);
    static QConfig cfg{use_viscosity, use_vorticity, cfl, qdata.h0, (real_t) H1.GetOrder(0)};
-   static qupdate_fn qupdate {Select(dim, cfg, qdata, gamma_gf, ir, H1, L2)};
-   std::visit([&](auto &fn) { fn.Update(S, qdata); }, qupdate);
-}
-
-static void Rho0DetJ0Vol(const int dim, const int NE,
-                         const IntegrationRule &ir,
-                         ParMesh *pmesh,
-                         ParFiniteElementSpace &L2,
-                         const ParGridFunction &rho0,
-                         QuadratureData &qdata,
-                         double &volume)
-{
-   const int NQ = ir.GetNPoints();
-   const int Q1D = IntRules.Get(Geometry::SEGMENT,ir.GetOrder()).GetNPoints();
-   const int flags = GeometricFactors::JACOBIANS|GeometricFactors::DETERMINANTS;
-   const GeometricFactors *geom = pmesh->GetGeometricFactors(ir, flags);
-   Vector rho0Q(NQ*NE);
-   rho0Q.UseDevice(true);
-   Vector j, detj;
-   const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
-   qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
-   const auto W = ir.GetWeights().Read();
-   const auto R = Reshape(rho0Q.Read(), NQ, NE);
-   const auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
-   const auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
-   auto V = Reshape(qdata.rho0DetJ0w.Write(), NQ, NE);
-   Memory<double> &Jinv_m = qdata.Jac0inv.GetMemory();
-   const MemoryClass mc = Device::GetMemoryClass();
-   const int Ji_total_size = qdata.Jac0inv.TotalSize();
-   auto invJ = Reshape(Jinv_m.Write(mc, Ji_total_size), dim, dim, NQ, NE);
-   Vector vol(NE*NQ), one(NE*NQ);
-   auto A = Reshape(vol.Write(), NQ, NE);
-   auto O = Reshape(one.Write(), NQ, NE);
-   MFEM_ASSERT(dim==2 || dim==3, "");
-   if (dim==2)
+   if (dim == 2)
    {
-      MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
-      {
-         MFEM_FOREACH_THREAD(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qx,x,Q1D)
-            {
-               const int q = qx + qy * Q1D;
-               const double J11 = J(q,0,0,e);
-               const double J12 = J(q,1,0,e);
-               const double J21 = J(q,0,1,e);
-               const double J22 = J(q,1,1,e);
-               const double det = detJ(q,e);
-               V(q,e) =  W[q] * R(q,e) * det;
-               const double r_idetJ = 1.0 / det;
-               invJ(0,0,q,e) =  J22 * r_idetJ;
-               invJ(1,0,q,e) = -J12 * r_idetJ;
-               invJ(0,1,q,e) = -J21 * r_idetJ;
-               invJ(1,1,q,e) =  J11 * r_idetJ;
-               A(q,e) = W[q] * det;
-               O(q,e) = 1.0;
-            }
-         }
-      });
+      static QUpdatePA<2> qupdate{cfg, qdata, gamma_gf, ir, H1, L2};
+      qupdate.Update(x, v, e, qdata);
    }
-   else
+   else if (dim == 3)
    {
-      MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
-      {
-         MFEM_FOREACH_THREAD(qz,z,Q1D)
-         {
-            MFEM_FOREACH_THREAD(qy,y,Q1D)
-            {
-               MFEM_FOREACH_THREAD(qx,x,Q1D)
-               {
-                  const int q = qx + (qy + qz * Q1D) * Q1D;
-                  const double J11 = J(q,0,0,e), J12 = J(q,0,1,e), J13 = J(q,0,2,e);
-                  const double J21 = J(q,1,0,e), J22 = J(q,1,1,e), J23 = J(q,1,2,e);
-                  const double J31 = J(q,2,0,e), J32 = J(q,2,1,e), J33 = J(q,2,2,e);
-                  const double det = detJ(q,e);
-                  V(q,e) = W[q] * R(q,e) * det;
-                  const double r_idetJ = 1.0 / det;
-                  invJ(0,0,q,e) = r_idetJ * ((J22 * J33)-(J23 * J32));
-                  invJ(1,0,q,e) = r_idetJ * ((J32 * J13)-(J33 * J12));
-                  invJ(2,0,q,e) = r_idetJ * ((J12 * J23)-(J13 * J22));
-                  invJ(0,1,q,e) = r_idetJ * ((J23 * J31)-(J21 * J33));
-                  invJ(1,1,q,e) = r_idetJ * ((J33 * J11)-(J31 * J13));
-                  invJ(2,1,q,e) = r_idetJ * ((J13 * J21)-(J11 * J23));
-                  invJ(0,2,q,e) = r_idetJ * ((J21 * J32)-(J22 * J31));
-                  invJ(1,2,q,e) = r_idetJ * ((J31 * J12)-(J32 * J11));
-                  invJ(2,2,q,e) = r_idetJ * ((J11 * J22)-(J12 * J21));
-                  A(q,e) = W[q] * det;
-                  O(q,e) = 1.0;
-               }
-            }
-         }
-      });
+      static QUpdatePA<3> qupdate{cfg, qdata,  gamma_gf, ir, H1, L2};
+      qupdate.Update(x, v, e, qdata);
    }
-   qdata.rho0DetJ0w.HostRead();
-   volume = vol * one;
+   LAGHOS_DEVICE_SYNC;
+   LAGHOS_CALI_MARK_END("QUpdate-UpdateQuadratureData");
+   timer->sw_qdata.Stop();
+   timer->quad_tstep += NE;
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const

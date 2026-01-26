@@ -58,7 +58,7 @@ struct TimingData
 class QUpdate
 {
 private:
-   const int dim;
+   const int dim, NE, Q1D;
    const bool use_viscosity, use_vorticity;
    const double cfl;
    TimingData *timer;
@@ -66,13 +66,14 @@ private:
    ParFiniteElementSpace &H1, &L2;
    const ParGridFunction &gamma_gf;
 public:
-   QUpdate(const int d,
+   QUpdate(const int d, const int ne,  const int q1d,
            const bool visc, const bool vort,
            const double cfl, TimingData *t,
            const ParGridFunction &gamma_gf,
            const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
       dim(d),
+      NE(ne), Q1D(q1d),
       use_viscosity(visc), use_vorticity(vort), cfl(cfl),
       timer(t), ir(ir), H1(h1), L2(l2),
       gamma_gf(gamma_gf) { }
