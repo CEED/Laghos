@@ -984,105 +984,92 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    timer.quad_tstep += NE;
 }
 
-struct QConfig
+template <int DIM> MFEM_HOST_DEVICE static inline
+auto QUpdateBody(const bool use_viscosity,
+                 const bool use_vorticity,
+                 const double h0,
+                 const double h1order,
+                 const double cfl,
+                 const tensor<double, DIM, DIM> &dvdxi,
+                 const double &rho0DetJ0w,
+                 const tensor<double, DIM, DIM> &J,
+                 const double &d_e,
+                 const double &gamma,
+                 const tensor<double, DIM, DIM> &invJ0,
+                 const double &weight)
 {
-   const real_t cfl, h0, h1order;
-   const bool use_viscosity, use_vorticity;
-
-   QConfig(bool visc, bool vort, real_t c, real_t h, real_t o):
-      cfl(c), h0(h), h1order(o), use_viscosity(visc), use_vorticity(vort) {}
-};
-
-template <int DIM>
-struct QKernel: QConfig
-{
-   using vecd_t = tensor<real_t, DIM>;
-   using matd_t = tensor<real_t, DIM, DIM>;
-
-   QKernel(const QConfig &cfg): QConfig(cfg) {}
-
-   MFEM_HOST_DEVICE auto ComputeMaterialProperties(real_t rho,
-                                                   real_t gamma,
-                                                   real_t E) const
+   using vecd_t = tensor<double, DIM>;
+   using matd_t = tensor<double, DIM, DIM>;
+   const double inv_weight = 1. / weight;
+   const double detJ = det(J);
+   const double R = inv_weight * rho0DetJ0w / detJ;
+   const double E = fmax(0.0, d_e);
+   const double P = (gamma - 1.0) * R * E;
+   const double S = sqrt(gamma * (gamma - 1.0) * E);
+   matd_t stress {};
+   for (int d = 0; d < DIM; d++) { stress(d, d) = -P; }
+   double visc_coeff = 0.0;
+   if (use_viscosity)
    {
-      const real_t e = std::max(0.0_r, E);
-      const real_t p = (gamma - 1.0) * rho * e;
-      const real_t sound_speed = std::sqrt(gamma * (gamma - 1.0) * e);
-      return future::tuple{p, sound_speed};
-   }
+      // Compression-based length scale at the point. The first
+      // eigenvector of the symmetric velocity gradient gives the
+      // direction of maximal compression. This is used to define the
+      // relative change of the initial length scale.
+      const matd_t sgrad_v = dvdxi * inv(J);
 
-   MFEM_HOST_DEVICE auto Update(const matd_t &dvdxi,
-                                const real_t &rho0DetJ0w,
-                                const matd_t &J,
-                                const real_t &E,
-                                const real_t &gamma,
-                                const matd_t &invJ0,
-                                const real_t &w) const
-   {
-      const double detJ = det(J);
-      const double R = rho0DetJ0w / (detJ * w);
-      const auto [p, S] = ComputeMaterialProperties(R, gamma, E);
-      matd_t stress {};
-      for (int d = 0; d < DIM; d++) { stress(d, d) = -p; }
-      double visc_coeff = 0.0;
-      if (use_viscosity)
+      double vorticity_coeff = 1.0;
+      if (use_vorticity)
       {
-         // Compression-based length scale at the point. The first
-         // eigenvector of the symmetric velocity gradient gives the
-         // direction of maximal compression. This is used to define the
-         // relative change of the initial length scale.
-         const matd_t sgrad_v = dvdxi * inv(J);
-
-         double vorticity_coeff = 1.0;
-         if (use_vorticity)
-         {
-            const double grad_norm = norm(sgrad_v);
-            const double div_v = std::abs(tr(sgrad_v));
-            vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
-         }
-
-         const matd_t dvdx = sym(sgrad_v);
-         real_t dvdx_values[DIM*DIM];
-         for (int k = 0; k < DIM*DIM; ++k) { dvdx_values[k] = dvdx(k / DIM, k % DIM); }
-         real_t eig_val_data[DIM], eig_vec_data[DIM*DIM];
-         if (DIM == 1)
-         {
-            eig_val_data[0] = dvdx(0,0);
-            eig_vec_data[0] = 1.;
-         }
-         else
-         {
-            kernels::CalcEigenvalues<DIM>(dvdx_values, eig_val_data, eig_vec_data);
-         }
-         const vecd_t compr_dir = make_tensor<DIM>([&](int i) {return eig_vec_data[i];});
-         // Computes the initial->physical transformation Jacobian.
-         const vecd_t ph_dir = (J * invJ0) * compr_dir;
-         const double ph_dir_nl2 = norm(ph_dir);
-         const double compr_dir_nl2 = norm(compr_dir);
-         const real_t H = h0 * ph_dir_nl2 / compr_dir_nl2;
-         // Measure of maximal compression.
-         const real_t mu = eig_val_data[0];
-         visc_coeff = 2.0 * R * H * H * fabs(mu);
-         // The following represents a "smooth" version of the statement
-         // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-         // eps must be scaled appropriately if a different unit system is
-         // being used.
-         const double eps = 1e-12;
-         visc_coeff += 0.5 * R * H * S * vorticity_coeff *
-                       (1.0 - smooth_step_01(mu-2.0*eps, eps));
-         stress += visc_coeff * dvdx;
+         const double grad_norm = norm(sgrad_v);
+         const double div_v = std::abs(tr(sgrad_v));
+         vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
       }
-      return tuple{stress, visc_coeff, S};
+
+      const matd_t dvdx = sym(sgrad_v);
+      real_t dvdx_values[DIM*DIM];
+      for (int k = 0; k < DIM*DIM; ++k) { dvdx_values[k] = dvdx(k / DIM, k % DIM); }
+      real_t eig_val_data[DIM], eig_vec_data[DIM*DIM];
+      if (DIM == 1)
+      {
+         eig_val_data[0] = dvdx(0,0);
+         eig_vec_data[0] = 1.;
+      }
+      else
+      {
+         kernels::CalcEigenvalues<DIM>(dvdx_values, eig_val_data, eig_vec_data);
+      }
+      const vecd_t compr_dir = make_tensor<DIM>([&](int i) {return eig_vec_data[i];});
+      // Computes the initial->physical transformation Jacobian.
+      const vecd_t ph_dir = (J * invJ0) * compr_dir;
+      const double ph_dir_nl2 = norm(ph_dir);
+      const double compr_dir_nl2 = norm(compr_dir);
+      const real_t H = h0 * ph_dir_nl2 / compr_dir_nl2;
+      // Measure of maximal compression.
+      const real_t mu = eig_val_data[0];
+      visc_coeff = 2.0 * R * H * H * fabs(mu);
+      // The following represents a "smooth" version of the statement
+      // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
+      // eps must be scaled appropriately if a different unit system is
+      // being used.
+      const double eps = 1e-12;
+      visc_coeff += 0.5 * R * H * S * vorticity_coeff *
+                    (1.0 - smooth_step_01(mu-2.0*eps, eps));
+      stress += visc_coeff * dvdx;
    }
-};
+   return tuple{stress, visc_coeff, S};
+}
 
 template <int DIM>
 struct QStress
 {
-   const QKernel<DIM> kernel;
+   using vecd_t = tensor<real_t, DIM>;
    using matd_t = tensor<real_t, DIM, DIM>;
 
-   QStress(const QConfig &cfg) : kernel(cfg) {}
+   const bool use_viscosity, use_vorticity;
+   const real_t cfl, h0, h1order;
+
+   QStress(bool visc, bool vort, real_t c, real_t h, real_t o):
+      use_viscosity(visc), use_vorticity(vort), cfl(c), h0(h), h1order(o) {}
 
    MFEM_HOST_DEVICE inline auto operator()(const matd_t &dvdxi,
                                            const matd_t &J,
@@ -1092,7 +1079,9 @@ struct QStress
                                            const real_t &rho0DetJ0w,
                                            const real_t &w) const
    {
-      auto [stress, _, __] = kernel.Update(dvdxi, rho0DetJ0w, J, E, gamma, invJ0, w);
+      auto [stress, _, __] =
+         QUpdateBody(use_viscosity, use_vorticity, h0, h1order, cfl,
+                     dvdxi, rho0DetJ0w, J, E, gamma, invJ0, w);
       return tuple{stress * transpose(inv(J)) * w * det(J)};
    }
 };
@@ -1100,10 +1089,13 @@ struct QStress
 template <int DIM>
 struct QDeltaT
 {
-   const QKernel<DIM> kernel;
    using matd_t = tensor<real_t, DIM, DIM>;
 
-   QDeltaT(const QConfig &cfg) : kernel(cfg) {}
+   const real_t cfl, h0, h1order;
+   const bool use_viscosity, use_vorticity;
+
+   QDeltaT(bool visc, bool vort, real_t c, real_t h, real_t o):
+      cfl(c), h0(h), h1order(o), use_viscosity(visc), use_vorticity(vort) {}
 
    MFEM_HOST_DEVICE inline auto operator()(const matd_t &dvdxi,
                                            const matd_t &J,
@@ -1116,8 +1108,9 @@ struct QDeltaT
    {
       const real_t detJ = det(J);
       const real_t rho = rho0DetJ0w / (detJ * w);
-      auto [_, visc_coeff, S] = kernel.Update(dvdxi, rho0DetJ0w, J, E, gamma, invJ0,
-                                              w);
+      auto [_, visc_coeff, S] =
+         QUpdateBody(use_viscosity, use_vorticity, h0, h1order, cfl,
+                     dvdxi, rho0DetJ0w, J, E, gamma, invJ0, w);
       real_t J_values[DIM*DIM];
       for (int k = 0; k < DIM*DIM; ++k) { J_values[k] = J(k / DIM, k % DIM); }
       // Time step estimate at the point. Here the more relevant length
@@ -1125,11 +1118,11 @@ struct QDeltaT
       // singular value of the ref->physical Jacobian. In addition, the
       // time step estimate should be aware of the presence of shocks.
       const real_t sv = kernels::CalcSingularvalue<DIM>(J_values, DIM-1);
-      const real_t h_min = sv / kernel.h1order;
+      const real_t h_min = sv / h1order;
       const real_t ih_min = 1. / h_min;
       const real_t irho_ih_min_sq = ih_min * ih_min / rho ;
       const real_t idt = S * ih_min + 2.5 * visc_coeff * irho_ih_min_sq;
-      const real_t dt_est = detJ <= 0.0 ? 0.0 : std::min(dt_min, kernel.cfl / idt);
+      const real_t dt_est = detJ <= 0.0 ? 0.0 : std::min(dt_min, cfl / idt);
       return tuple{dt_est};
    }
 };
@@ -1255,7 +1248,11 @@ class QUpdatePA
    };
 
 public:
-   QUpdatePA(const QConfig &cfg,
+   QUpdatePA(const bool use_viscosity,
+             const bool use_vorticity,
+             const double cfl,
+             const double h0,
+             const double h1order,
              QuadratureData &qdata,
              const ParGridFunction &gamma_gf,
              const IntegrationRule &ir,
@@ -1295,7 +1292,7 @@ public:
    {
       domain_attr = 1;
 
-      QStress<DIM> stress_qf(cfg);
+      QStress<DIM> stress_qf(use_viscosity, use_vorticity, cfl, h0, h1order);
       stress_dop.AddDomainIntegrator(stress_qf, future::tuple
       {
          Gradient<Velocity>{},
@@ -1308,7 +1305,7 @@ public:
       future::tuple{Identity<StressTensor>{}}, ir, domain_attr);
       stress_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
 
-      QDeltaT<DIM> deltat_qf(cfg);
+      QDeltaT<DIM> deltat_qf(use_viscosity, use_vorticity, cfl, h0, h1order);
       deltat_dop.AddDomainIntegrator(deltat_qf, future::tuple
       {
          Gradient<Velocity>{},
@@ -1346,15 +1343,16 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    x.MakeRef(&H1, s, 0);
    v.MakeRef(&H1, s, H1_size);
    e.MakeRef(&L2, s, 2*H1_size);
-   static QConfig cfg{use_viscosity, use_vorticity, cfl, qdata.h0, (real_t) H1.GetOrder(0)};
    if (dim == 2)
    {
-      static QUpdatePA<2> qupdate{cfg, qdata, gamma_gf, ir, H1, L2};
+      static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, (real_t) H1.GetOrder(0),
+                                  qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
    }
    else if (dim == 3)
    {
-      static QUpdatePA<3> qupdate{cfg, qdata,  gamma_gf, ir, H1, L2};
+      static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, (real_t) H1.GetOrder(0),
+                                  qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
    }
    LAGHOS_DEVICE_SYNC;

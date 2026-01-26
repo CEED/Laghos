@@ -66,7 +66,7 @@ private:
    ParFiniteElementSpace &H1, &L2;
    const ParGridFunction &gamma_gf;
 public:
-   QUpdate(const int d, const int ne,  const int q1d,
+   QUpdate(const int d, const int ne, const int q1d,
            const bool visc, const bool vort,
            const double cfl, TimingData *t,
            const ParGridFunction &gamma_gf,
