@@ -984,79 +984,144 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    timer.quad_tstep += NE;
 }
 
+/// Trace of a square matrix
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE inline
+double Trace(const T * __restrict__ data)
+{
+   double t = 0.0;
+   for (int i = 0; i < W; i++) { t += data[i+i*H]; }
+   return t;
+}
+
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE static inline
+void SFNorm(double &scale_factor, double &scaled_fnorm2,
+            const T * __restrict__ data)
+{
+   int i;
+   constexpr int hw = H * W;
+   T max_norm = 0.0, entry, fnorm2;
+
+   for (i = 0; i < hw; i++)
+   {
+      entry = fabs(data[i]);
+      if (entry > max_norm)
+      {
+         max_norm = entry;
+      }
+   }
+
+   if (max_norm == 0.0)
+   {
+      scale_factor = scaled_fnorm2 = 0.0;
+      return;
+   }
+
+   fnorm2 = 0.0;
+   for (i = 0; i < hw; i++)
+   {
+      entry = data[i] / max_norm;
+      fnorm2 += entry * entry;
+   }
+
+   scale_factor = max_norm;
+   scaled_fnorm2 = fnorm2;
+}
+
+/// Compute the Frobenius norm of the matrix
+template<int H, int W, typename T>
+MFEM_HOST_DEVICE inline
+double FNorm(const T * __restrict__ data)
+{
+   double s, n2;
+   SFNorm<H,W>(s, n2, data);
+   return s*sqrt(n2);
+}
+
 template<int DIM> MFEM_HOST_DEVICE static inline
 auto QUpdateBody(const bool use_viscosity,
                  const bool use_vorticity,
-                 const real_t cfl,
-                 const real_t h0,
-                 const real_t h1order,
-                 const tensor<real_t, DIM, DIM> &dvdxi,
-                 const real_t &rho0DetJ0w,
-                 const tensor<real_t, DIM, DIM> &J,
-                 const real_t &d_e,
-                 const real_t &gamma,
-                 const tensor<real_t, DIM, DIM> &invJ0,
-                 const real_t &weight)
+                 const double h0,
+                 const double h1order,
+                 const double cfl,
+                 double* __restrict__ Jinv,
+                 double* __restrict__ stress,
+                 double* __restrict__ sgrad_v,
+                 double* __restrict__ eig_val_data,
+                 double* __restrict__ eig_vec_data,
+                 double* __restrict__ compr_dir,
+                 double* __restrict__ Jpi,
+                 double* __restrict__ ph_dir,
+                 double* __restrict__ stressJiT,
+                 const double &gamma,
+                 const double &weight,
+                 const tensor<double, DIM, DIM> &dx,
+                 const double &rho0DetJ0w,
+                 const double &d_e_quads,
+                 const tensor<double, DIM, DIM> &dvdxi,
+                 const tensor<double, DIM, DIM> &invJ0)
 {
-   using vecd_t = tensor<real_t, DIM>;
-   using matd_t = tensor<real_t, DIM, DIM>;
-   const real_t inv_weight = 1. / weight;
-   const real_t detJ = det(J);
-   const real_t R = inv_weight * rho0DetJ0w / detJ;
-   const real_t E = fmax(0.0, d_e);
-   const real_t P = (gamma - 1.0) * R * E;
-   const real_t S = sqrt(gamma * (gamma - 1.0) * E);
-   matd_t stress {};
-   for (int d = 0; d < DIM; d++) { stress(d, d) = -P; }
-   real_t visc_coeff = 0.0;
+   constexpr int DIM2 = DIM*DIM;
+   using matd_t = tensor<double, DIM, DIM>;
+
+   const double inv_weight = 1. / weight;
+   auto dx_flat = flatten(dx);
+   double *J = dx_flat.values;
+   const double detJ = kernels::Det<DIM>(J);
+   kernels::CalcInverse<DIM>(J, Jinv);
+   const double R = inv_weight * rho0DetJ0w / detJ;
+   const double E = fmax(0.0, d_e_quads);
+   const double P = (gamma - 1.0) * R * E;
+   const double S = sqrt(gamma * (gamma - 1.0) * E);
+   for (int k = 0; k < DIM2; k++) { stress[k] = 0.0; }
+   for (int d = 0; d < DIM; d++) { stress[d*DIM+d] = -P; }
+   double visc_coeff = 0.0;
    if (use_viscosity)
    {
       // Compression-based length scale at the point. The first
       // eigenvector of the symmetric velocity gradient gives the
       // direction of maximal compression. This is used to define the
       // relative change of the initial length scale.
-      const matd_t sgrad_v = dvdxi * inv(J);
+      auto dvdxi_flat = flatten(dvdxi);
+      const double *dV = dvdxi_flat.values;
+      kernels::Mult(DIM, DIM, DIM, dV, Jinv, sgrad_v);
 
-      real_t vorticity_coeff = 1.0;
+      double vorticity_coeff = 1.0;
       if (use_vorticity)
       {
-         const real_t grad_norm = norm(sgrad_v);
-         const real_t div_v = std::abs(tr(sgrad_v));
+         const double grad_norm = FNorm<DIM,DIM>(sgrad_v);
+         const double div_v = fabs(Trace<DIM,DIM>(sgrad_v));
          vorticity_coeff = (grad_norm > 0.0) ? div_v / grad_norm : 1.0;
       }
 
-      const matd_t dvdx = sym(sgrad_v);
-      real_t dvdx_values[DIM*DIM];
-      for (int k = 0; k < DIM*DIM; ++k) { dvdx_values[k] = dvdx(k / DIM, k % DIM); }
-      real_t eig_val_data[DIM], eig_vec_data[DIM*DIM];
-      if (DIM == 1)
+      kernels::Symmetrize(DIM, sgrad_v);
       {
-         eig_val_data[0] = dvdx(0,0);
-         eig_vec_data[0] = 1.;
+         kernels::CalcEigenvalues<DIM>(sgrad_v, eig_val_data, eig_vec_data);
       }
-      else
-      {
-         kernels::CalcEigenvalues<DIM>(dvdx_values, eig_val_data, eig_vec_data);
-      }
-      const vecd_t compr_dir = make_tensor<DIM>([&](int i) {return eig_vec_data[i];});
-      // Computes the initial->physical transformation Jacobian.
-      const vecd_t ph_dir = (J * invJ0) * compr_dir;
-      const double ph_dir_nl2 = norm(ph_dir);
-      const double compr_dir_nl2 = norm(compr_dir);
-      const real_t H = h0 * ph_dir_nl2 / compr_dir_nl2;
+      for (int k=0; k<DIM; k++) { compr_dir[k] = eig_vec_data[k]; }
+      kernels::Mult(DIM, DIM, DIM, J, flatten(invJ0).values, Jpi);
+      kernels::Mult(DIM, DIM, Jpi, compr_dir, ph_dir);
+      const double ph_dir_nl2 = kernels::Norml2(DIM, ph_dir);
+      const double compr_dir_nl2 = kernels::Norml2(DIM, compr_dir);
+      const double H = h0 * ph_dir_nl2 / compr_dir_nl2;
       // Measure of maximal compression.
-      const real_t mu = eig_val_data[0];
+      const double mu = eig_val_data[0];
       visc_coeff = 2.0 * R * H * H * fabs(mu);
       // The following represents a "smooth" version of the statement
       // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
       // eps must be scaled appropriately if a different unit system is
       // being used.
       const double eps = 1e-12;
-      visc_coeff += 0.5 * R * H * S * vorticity_coeff *
+      visc_coeff += 0.5 * R * H  * S * vorticity_coeff *
                     (1.0 - smooth_step_01(mu-2.0*eps, eps));
-      stress += visc_coeff * dvdx;
+      kernels::Add(DIM, DIM, visc_coeff, stress, sgrad_v, stress);
    }
-   return tuple{stress, visc_coeff, S};
+   // Quadrature data for partial assembly of the force operator.
+   kernels::MultABt(DIM, DIM, DIM, stress, Jinv, stressJiT);
+   for (int k = 0; k < DIM2; k++) { stressJiT[k] *= weight * detJ; }
+   matd_t d_stressJinvT = make_tensor<DIM, DIM>([&](int i, int j) {return stressJiT[i + DIM*j];});
+   return tuple{d_stressJinvT, visc_coeff, S};
 }
 
 static void Rho0DetJ0Vol(const int dim, const int NE,
@@ -1152,7 +1217,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
-template <int DIM>
+template <int DIM, int DIM2 = DIM*DIM>
 class QUpdatePA
 {
    ParMesh &pmesh;
@@ -1227,10 +1292,18 @@ public:
                                  const real_t &dt_min,
                                  const real_t &weight)
       {
-         auto [stress, _, __] =
-            QUpdateBody(use_viscosity, use_vorticity, cfl, h0, h1order,
-                        dvdxi, rho0DetJ0w, J, E, gamma, invJ0, weight);
-         return tuple{stress * transpose(inv(J)) * weight * det(J)};
+         double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
+         double eig_val_data[DIM], eig_vec_data[DIM2];
+         double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
+         double stressJiT[DIM2];
+
+         auto [stressJinvT, _, __] =
+            QUpdateBody(use_viscosity, use_vorticity, h0, h1order, cfl,
+                        Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
+                        compr_dir, Jpi, ph_dir, stressJiT,
+                        gamma, weight, J, rho0DetJ0w, E, dvdxi, invJ0);
+         // return tuple{stress * transpose(inv(J)) * weight * det(J)};
+         return tuple{stressJinvT};
       };
       auto stress_o = future::tuple{Identity<StressTensor>{}};
       stress_dop.AddDomainIntegrator(stress_qf, inputs_qf, stress_o, ir, domain_attr);
@@ -1245,18 +1318,23 @@ public:
                                  const real_t &dt_min,
                                  const real_t &weight)
       {
+         double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
+         double eig_val_data[DIM], eig_vec_data[DIM2];
+         double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
+         double stressJiT[DIM2];
+
          const real_t detJ = det(J);
          const real_t rho = rho0DetJ0w / (detJ * weight);
          auto [_, visc_coeff, S] =
-            QUpdateBody(use_viscosity, use_vorticity, cfl, h0, h1order,
-                        dvdxi, rho0DetJ0w, J, E, gamma, invJ0, weight);
-         real_t J_values[DIM*DIM];
-         for (int k = 0; k < DIM*DIM; ++k) { J_values[k] = J(k / DIM, k % DIM); }
+            QUpdateBody(use_viscosity, use_vorticity, h0, h1order, cfl,
+                        Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
+                        compr_dir, Jpi, ph_dir, stressJiT,
+                        gamma, weight, J, rho0DetJ0w, E, dvdxi, invJ0);
          // Time step estimate at the point. Here the more relevant length
          // scale is related to the actual mesh deformation; we use the min
          // singular value of the ref->physical Jacobian. In addition, the
          // time step estimate should be aware of the presence of shocks.
-         const real_t sv = kernels::CalcSingularvalue<DIM>(J_values, DIM-1);
+         const real_t sv = kernels::CalcSingularvalue<DIM>(flatten(J).values, DIM-1);
          const real_t h_min = sv / h1order;
          const real_t ih_min = 1. / h_min;
          const real_t irho_ih_min_sq = ih_min * ih_min / rho ;
@@ -1287,26 +1365,24 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    LAGHOS_DEVICE_SYNC;
    timer->sw_qdata.Start();
    LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
-   Vector &s = const_cast<Vector&>(S);
+   Vector* S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
    const double H1order = (double) H1.GetOrder(0);
    ParGridFunction x, v, e;
-   x.MakeRef(&H1, s, 0);
-   v.MakeRef(&H1, s, H1_size);
-   e.MakeRef(&L2, s, 2*H1_size);
+   x.MakeRef(&H1,*S_p, 0);
+   v.MakeRef(&H1,*S_p, H1_size);
+   e.MakeRef(&L2, *S_p, 2*H1_size);
+
    if (dim == 2)
    {
-      static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, H1order,
-                                  qdata, gamma_gf, ir, H1, L2};
+      static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, H1order, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
    }
    else if (dim == 3)
    {
-      static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, H1order,
-                                  qdata, gamma_gf, ir, H1, L2};
+      static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, H1order, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
    }
-   else { MFEM_ABORT("QUpdatePA is only implemented for 2D and 3D."); }
    LAGHOS_DEVICE_SYNC;
    LAGHOS_CALI_MARK_END("QUpdate-UpdateQuadratureData");
    timer->sw_qdata.Stop();
