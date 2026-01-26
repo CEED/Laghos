@@ -986,26 +986,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    timer.quad_tstep += NE;
 }
 
-// ──────────────────────────────────────────────────────────────
-// Common quadrature utilities
-// ──────────────────────────────────────────────────────────────
-template <typename T, int n, int m>
-MFEM_HOST_DEVICE static tensor<T, n * m> flatten_NxM(tensor<T, n, m> A)
-{
-   tensor<T, n * m> B{};
-   for (int i = 0; i < n; i++)
-   {
-      for (int j = 0; j < m; j++)
-      {
-         B(i + j * m) = A(i, j);
-      }
-   }
-   return B;
-}
-
-// ──────────────────────────────────────────────────────────────
-// Configuration for quadrature updates
-// ──────────────────────────────────────────────────────────────
 struct QConfig
 {
    const real_t cfl, h0, h1order;
@@ -1015,9 +995,6 @@ struct QConfig
       cfl(c), h0(h), h1order(o), use_viscosity(visc), use_vorticity(vort) {}
 };
 
-// ──────────────────────────────────────────────────────────────
-// Quadrature common update kernel
-// ──────────────────────────────────────────────────────────────
 template <int DIM>
 struct QKernel: QConfig
 {
@@ -1066,20 +1043,14 @@ struct QKernel: QConfig
       {
          const matd_t dvdx = sym(dvdx_invJ);
          real_t eig_val[DIM], eig_vec[DIM*DIM];
-         kernels::CalcEigenvalues<DIM>(flatten_NxM(dvdx).values, eig_val, eig_vec);
-
+         real_t dvdx_values[DIM*DIM];
+         for (int k = 0; k < DIM*DIM; ++k) { dvdx_values[k] = dvdx(k / DIM, k % DIM); }
+         kernels::CalcEigenvalues<DIM>(dvdx_values, eig_val, eig_vec);
          const vecd_t compr_dir = make_tensor<DIM>([&](int i) {return eig_vec[i];});
          const vecd_t ph_dir = (J * invJ0) * compr_dir;
-
-         // Change of the initial mesh size in the compression direction.
          const real_t h = h0 * norm(ph_dir) / norm(compr_dir);
-         // Measure of maximal compression.
          const real_t mu = eig_val[0];
          visc_coeff = 2.0 * rho * h * h * fabs(mu);
-         // The following represents a "smooth" version of the statement
-         // "if (mu < 0) visc_coeff += 0.5 rho h sound_speed".  Note that
-         // eps must be scaled appropriately if a different unit system is
-         // being used.
          const double eps = 1e-12;
          visc_coeff += 0.5 * rho * h * cs * vorticity_coeff
                        * (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
@@ -1090,9 +1061,6 @@ struct QKernel: QConfig
    }
 };
 
-// ──────────────────────────────────────────────────────────────
-// Quadrature function – stress update
-// ──────────────────────────────────────────────────────────────
 template <int DIM>
 struct QStress
 {
@@ -1114,9 +1082,6 @@ struct QStress
    }
 };
 
-// ──────────────────────────────────────────────────────────────
-// Quadrature function – time step estimator
-// ──────────────────────────────────────────────────────────────
 template <int DIM>
 struct QDeltaT
 {
@@ -1137,26 +1102,18 @@ struct QDeltaT
       const real_t detJ = det(J);
       const real_t rho = rho0DetJ0w / (detJ * w);
       auto [_, visc, cs] = kernel.Update(dvdxi, rho0DetJ0w, J, E, gamma, invJ0, w);
-      const real_t sv = kernels::CalcSingularvalue<DIM>(flatten_NxM(J).values, DIM-1);
-      // Time step estimate at the point. Here the more relevant length
-      // scale is related to the actual mesh deformation; we use the min
-      // singular value of the ref->physical Jacobian. In addition, the
-      // time step estimate should be aware of the presence of shocks.
+      real_t J_values[DIM*DIM];
+      for (int k = 0; k < DIM*DIM; ++k) { J_values[k] = J(k / DIM, k % DIM); }
+      const real_t sv = kernels::CalcSingularvalue<DIM>(J_values, DIM-1);
       const real_t h_min = sv / kernel.h1order;
       const real_t inv_h_min = 1.0 / h_min;
       const real_t inv_rho_inv_h_min_sq = inv_h_min * inv_h_min / rho ;
       const real_t inv_dt = cs * inv_h_min + 2.5 * visc * inv_rho_inv_h_min_sq;
-      const real_t dt_est =
-         detJ <= 0.0
-         ? 0.0 // This will force repetition of the step with smaller dt
-         : std::min(dt_min, kernel.cfl / inv_dt);
+      const real_t dt_est = detJ <= 0.0 ? 0.0 : std::min(dt_min, kernel.cfl / inv_dt);
       return tuple{dt_est};
    }
 };
 
-// ──────────────────────────────────────────────────────────────
-// QUpdatePA class definition for 2D & 3D
-// ──────────────────────────────────────────────────────────────
 template <int DIM>
 class QUpdatePA
 {
@@ -1203,7 +1160,6 @@ public:
       Jac0inv(qdata.Jac0inv.ReadWrite(), qdata.Jac0inv.TotalSize()),
       rho0DetJ0w(qdata.rho0DetJ0w.ReadWrite(), qdata.rho0DetJ0w.Size()),
       stressJiT(qdata.stressJinvT.ReadWrite(), qdata.stressJinvT.TotalSize()),
-      // ── Stress update operator: solutions & parameters ───────────
       stress_dop(std::vector<FieldDescriptor> { {Velocity, &H1}},
    std::vector<FieldDescriptor>
    {
@@ -1214,7 +1170,6 @@ public:
       {Rho0DetJ0W, &scalar_ups},
       {StressTensor, &dim2_ups}
    }, pmesh),
-   // ── Time-step estimator operator: solutions & parameters ───────-
    deltat_dop(std::vector<FieldDescriptor> { {Velocity, &H1}},
    std::vector<FieldDescriptor> { {Coordinates, &H1},
       {Energy, &L2},
@@ -1227,7 +1182,6 @@ public:
    {
       domain_attr = 1;
 
-      // ── Stress update Q-function: inputs & output ────────────────
       QStress<DIM> stress_qf(cfg);
       stress_dop.AddDomainIntegrator(stress_qf, future::tuple
       {
@@ -1241,7 +1195,6 @@ public:
       future::tuple{Identity<StressTensor>{}}, ir, domain_attr);
       stress_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
 
-      // ── Time-step estimator Q-function: inputs & output ──────────
       QDeltaT<DIM> deltat_qf(cfg);
       deltat_dop.AddDomainIntegrator(deltat_qf, future::tuple
       {
@@ -1262,11 +1215,9 @@ public:
       auto &s = const_cast<Vector&>(S);
       ParGridFunction x(&H1, s, 0), v(&H1, s, H1vsize), e(&L2, s, 2*H1vsize);
 
-      // Update Stress
       stress_dop.SetParameters({&x, &e, &gamma_gf, &Jac0inv, &rho0DetJ0w, &stressJiT});
       stress_dop.Mult(v, stressJiT);
 
-      // Update DeltaT
       dt_min = qdata.dt_est;
       deltat_dop.SetParameters({&x, &e, &gamma_gf, &Jac0inv, &rho0DetJ0w, &dt_min, &dt_est});
       deltat_dop.Mult(v, dt_est);
@@ -1274,9 +1225,6 @@ public:
    }
 };
 
-// ──────────────────────────────────────────────────────────────
-// QUpdate classes for 2D & 3D
-// ──────────────────────────────────────────────────────────────
 using qupdate_2d = QUpdatePA<2>;
 using qupdate_3d = QUpdatePA<3>;
 using qupdate_fn = std::variant<qupdate_2d, qupdate_3d>;
