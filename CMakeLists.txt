@@ -14,7 +14,7 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# Load user settings
+# Load 'user.cmake' settings file if it exists
 set(USER_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/user.cmake" CACHE PATH
   "User configuration file. It can be used to set user-specific options,
    such as paths to external libraries, compiler flags, etc.")
