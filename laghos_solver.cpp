@@ -1233,24 +1233,17 @@ class QUpdatePA
    const std::vector<FieldDescriptor> solution, parameters;
    DifferentiableOperator stress_dop, deltat_dop;
 
-   enum
-   {
-      Velocity,
-      Coordinates,
-      Energy,
-      DeltaTEst,
-      InvJac0,
-      Rho0DetJ0W,
-      Gamma,
-      StressTensor
-   };
+   enum { Velocity, Coordinates, Energy,
+          InvJac0, Rho0DetJ0W, Gamma,
+          DeltaTEst, StressTensor
+        };
 
 public:
    QUpdatePA(const bool use_viscosity,
              const bool use_vorticity,
-             const real_t h0,
-             const real_t h1order,
-             const real_t cfl,
+             const double h0,
+             const double h1order,
+             const double cfl,
              QuadratureData &qdata,
              const ParGridFunction &gamma_gf,
              const IntegrationRule &ir,
@@ -1307,7 +1300,7 @@ public:
                           flatten(dvdxi).values, flatten(invJ0).values);
          return tuple{make_tensor<DIM, DIM>([&](int i, int j) {return stressJiT[i + DIM*j];})};
       };
-      auto stress_o = future::tuple{Identity<StressTensor>{}};
+      const auto stress_o = future::tuple{Identity<StressTensor>{}};
       stress_dop.AddDomainIntegrator(stress_qf, inputs_qf, stress_o, ir, domain_attr);
       stress_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
 
@@ -1324,15 +1317,14 @@ public:
          double eig_val_data[DIM], eig_vec_data[DIM2];
          double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
          double stressJiT[DIM2];
-
-         const real_t detJ = det(J);
-         const real_t R = rho0DetJ0w / (detJ * weight);
          auto [visc_coeff, S] =
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                              compr_dir, Jpi, ph_dir, stressJiT,
                              gamma, weight, flatten(J).values, rho0DetJ0w, E,
                              flatten(dvdxi).values, flatten(invJ0).values);
+         const real_t detJ = det(J);
+         const real_t R = rho0DetJ0w / (detJ * weight);
          // Time step estimate at the point. Here the more relevant length
          // scale is related to the actual mesh deformation; we use the min
          // singular value of the ref->physical Jacobian. In addition, the
@@ -1345,8 +1337,7 @@ public:
          const real_t dt_est = detJ <= 0.0 ? 0.0 : std::min(dt_min, cfl / idt);
          return tuple{dt_est};
       };
-
-      auto deltat_o = future::tuple{Identity<DeltaTEst>{}};
+      const auto deltat_o = future::tuple{Identity<DeltaTEst>{}};
       deltat_dop.AddDomainIntegrator(deltat_qf, inputs_qf, deltat_o, ir, domain_attr);
       deltat_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
