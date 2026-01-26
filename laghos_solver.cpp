@@ -1287,13 +1287,13 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    LAGHOS_DEVICE_SYNC;
    timer->sw_qdata.Start();
    LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
-   auto &s = const_cast<Vector&>(S);
-   const int H1vsize = H1.GetVSize();
-   const real_t H1order = H1.GetOrder(0);
+   Vector &s = const_cast<Vector&>(S);
+   const int H1_size = H1.GetVSize();
+   const double H1order = (double) H1.GetOrder(0);
    ParGridFunction x, v, e;
    x.MakeRef(&H1, s, 0);
-   v.MakeRef(&H1, s, H1vsize);
-   e.MakeRef(&L2, s, 2*H1vsize);
+   v.MakeRef(&H1, s, H1_size);
+   e.MakeRef(&L2, s, 2*H1_size);
    if (dim == 2)
    {
       static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, cfl, qdata.h0, H1order,
