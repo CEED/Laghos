@@ -1054,22 +1054,24 @@ auto QUpdateBody(const bool use_viscosity,
                  double* __restrict__ Jpi,
                  double* __restrict__ ph_dir,
                  double* __restrict__ stressJiT,
-                 const double &gamma,
-                 const double &weight,
-                 const double (&Jacobians)[DIM*DIM],
-                 const double &rho0DetJ0w,
-                 const double &d_e_quads,
-                 const double (&grad_v_ext)[DIM*DIM],
-                 const double (&Jac0inv)[DIM*DIM])
+                 const double* __restrict__ d_gamma,
+                 const double* __restrict__ d_weight,
+                 const double* __restrict__ d_Jacobians,
+                 const double* __restrict__ d_rho0DetJ0w,
+                 const double* __restrict__ d_e_quads,
+                 const double* __restrict__ d_grad_v_ext,
+                 const double* __restrict__ d_Jac0inv)
 {
    constexpr int DIM2 = DIM*DIM;
 
+   const double gamma = d_gamma[0];
+   const double weight =  d_weight[0];
    const double inv_weight = 1. / weight;
-   const double *J = &Jacobians[0];
+   const double *J = &d_Jacobians[0];
    const double detJ = kernels::Det<DIM>(J);
    kernels::CalcInverse<DIM>(J, Jinv);
-   const double R = inv_weight * rho0DetJ0w / detJ;
-   const double E = fmax(0.0, d_e_quads);
+   const double R = inv_weight * d_rho0DetJ0w[0] / detJ;
+   const double E = fmax(0.0, d_e_quads[0]);
    const double P = (gamma - 1.0) * R * E;
    const double S = sqrt(gamma * (gamma - 1.0) * E);
    for (int k = 0; k < DIM2; k++) { stress[k] = 0.0; }
@@ -1081,7 +1083,7 @@ auto QUpdateBody(const bool use_viscosity,
       // eigenvector of the symmetric velocity gradient gives the
       // direction of maximal compression. This is used to define the
       // relative change of the initial length scale.
-      const double *dV = &grad_v_ext[0];
+      const double *dV = &d_grad_v_ext[0];
       kernels::Mult(DIM, DIM, DIM, dV, Jinv, sgrad_v);
 
       double vorticity_coeff = 1.0;
@@ -1104,7 +1106,7 @@ auto QUpdateBody(const bool use_viscosity,
       }
       for (int k=0; k<DIM; k++) { compr_dir[k] = eig_vec_data[k]; }
       // Computes the initial->physical transformation Jacobian.
-      kernels::Mult(DIM, DIM, DIM, J, &Jac0inv[0], Jpi);
+      kernels::Mult(DIM, DIM, DIM, J, &d_Jac0inv[0], Jpi);
       kernels::Mult(DIM, DIM, Jpi, compr_dir, ph_dir);
       // Change of the initial mesh size in the compression direction.
       const double ph_dir_nl2 = kernels::Norml2(DIM, ph_dir);
@@ -1296,7 +1298,7 @@ public:
          QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
                           Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                           compr_dir, Jpi, ph_dir, stressJiT,
-                          gamma, weight, flatten(J).values, rho0DetJ0w, E,
+                          &gamma, &weight, flatten(J).values, &rho0DetJ0w, &E,
                           flatten(dvdxi).values, flatten(invJ0).values);
          return tuple{make_tensor<DIM, DIM>([&](int i, int j) {return stressJiT[i + DIM*j];})};
       };
@@ -1321,7 +1323,7 @@ public:
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                              compr_dir, Jpi, ph_dir, stressJiT,
-                             gamma, weight, flatten(J).values, rho0DetJ0w, E,
+                             &gamma, &weight, flatten(J).values, &rho0DetJ0w, &E,
                              flatten(dvdxi).values, flatten(invJ0).values);
          const real_t detJ = det(J);
          const real_t R = rho0DetJ0w / (detJ * weight);
