@@ -1,3 +1,4 @@
 /user.mk
 *.o
 /laghos
+user.cmake

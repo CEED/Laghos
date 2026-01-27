@@ -58,16 +58,14 @@ struct TimingData
 class QUpdate
 {
 private:
-   const int dim, vdim, NQ, NE, Q1D;
+   const int dim, NE, Q1D;
    const bool use_viscosity, use_vorticity;
    const double cfl;
    TimingData *timer;
    const IntegrationRule &ir;
    ParFiniteElementSpace &H1, &L2;
-   const Operator *H1R;
-   Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
-   const QuadratureInterpolator *q1,*q2;
    const ParGridFunction &gamma_gf;
+   Vector TstressJinvT;
 public:
    QUpdate(const int d, const int ne, const int q1d,
            const bool visc, const bool vort,
@@ -75,19 +73,11 @@ public:
            const ParGridFunction &gamma_gf,
            const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
-      dim(d), vdim(h1.GetVDim()),
-      NQ(ir.GetNPoints()), NE(ne), Q1D(q1d),
+      dim(d),
+      NE(ne), Q1D(q1d),
       use_viscosity(visc), use_vorticity(vort), cfl(cfl),
       timer(t), ir(ir), H1(h1), L2(l2),
-      H1R(H1.GetElementRestriction(ElementDofOrdering::LEXICOGRAPHIC)),
-      q_dt_est(NE*NQ),
-      q_e(NE*NQ),
-      e_vec(NQ*NE*vdim),
-      q_dx(NQ*NE*vdim*vdim),
-      q_dv(NQ*NE*vdim*vdim),
-      q1(H1.GetQuadratureInterpolator(ir)),
-      q2(L2.GetQuadratureInterpolator(ir)),
-      gamma_gf(gamma_gf) { }
+      gamma_gf(gamma_gf), TstressJinvT(dim*dim*NE*ir.GetNPoints()) { }
 
    void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
 };
