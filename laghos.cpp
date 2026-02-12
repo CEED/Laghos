@@ -71,25 +71,78 @@ double e0(const Vector &);
 double rho0(const Vector &);
 double gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
-int attr_id(const Vector &);
 
 static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int dim, const int ti, const double norm, int &checks);
 
+double dx = 0.0;
 int mat_id(const Vector &x)
 {
    switch (problem)
    {
-   case 0: return (x(0) < 0.5) ? 0 : 1;
+   case 0: return 0;
    case 1: return 0;
    case 3:
    {
-      if (x(0) < 1.0) { return 0; }
-      return (x(1) > 1.5) ? 1 : 2;
+      if (x(0) < 1.0 + 0.5*dx) { return 0; }
+      return (x(1) > 1.5 + 0.5*dx) ? 1 : 2;
    }
    case 4: return (x(0) < 0.25) ? 0 : 1;
    case 7: return (x(1) < 0.0) ? 0 : 1;
+   default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
+   }
+}
+
+double density(const Vector &x, int mat_id)
+{
+   switch (problem)
+   {
+   case 0: return 1.0;
+   case 1: return 1.0;
+   case 3:
+   {
+      if (mat_id == 1) { return 0.125; }
+      else             { return 1.0; }
+   }
+   default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
+   }
+}
+
+double energy(const Vector &x, int mat_id)
+{
+   switch (problem)
+   {
+   case 0:
+   {
+      const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
+      double val;
+      if (x.Size() == 2)
+      {
+         val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+      }
+      else
+      {
+         val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
+                            (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+      }
+      return val/denom;
+   }
+   case 3:
+   {
+      if (mat_id == 0)
+      {
+         return 1.0 / density(x, mat_id) / (1.5-1.0);
+      }
+      else if (mat_id == 1)
+      {
+         return 0.1 / density(x, mat_id) / (1.5-1.0);
+      }
+      else
+      {
+         return 0.1 / density(x, mat_id) / (1.4-1.0);
+      }
+   }
    default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
    }
 }
@@ -107,6 +160,27 @@ public:
       Vector coord(T.GetDimension());
       T.Transform(ip, coord);
       return (mat_id(coord) == ind_id) ? 1.0 : 0.0;
+   }
+};
+
+class ThermoFieldCoefficient : public Coefficient
+{
+protected:
+   int ind_id;
+   Array<bool> &bool_ind;
+   int mode; // 0 is density, 1 is energy.
+
+public:
+   ThermoFieldCoefficient(int id, Array<bool> &bi, int m)
+       : ind_id(id), bool_ind(bi), mode(m) { }
+
+   virtual real_t Eval(ElementTransformation &T, const IntegrationPoint &ip)
+   {
+      if (bool_ind[T.ElementNo] == false) { return 0.0; }
+
+      Vector coord(T.GetDimension());
+      T.Transform(ip, coord);
+      return (mode == 0) ? density(coord, ind_id) : energy(coord, ind_id);
    }
 };
 
@@ -162,107 +236,39 @@ double interface_rt(const Vector &x)
    }
 }
 
-void SetInterfaces(const ParGridFunction &x, ParGridFunction &interfaces)
-{
-   // 0 - triple point; 1 - rayleigh-taylor.
-   const int interface_type = 0;
-   interfaces = 0.0;
-
-   const double eps = 1.0e-8;
-   ParFiniteElementSpace *x_pfes = x.ParFESpace(),
-                         *i_pfes = interfaces.ParFESpace();
-   ParMesh *pmesh = x_pfes->GetParMesh();
-   Array<int> vdofs, vdofs_i;
-   if (interface_type == 0)
-   {
-      for (int f = 0; f < pmesh->GetNumFaces(); f++)
-      {
-         x_pfes->GetFaceVDofs(f, vdofs);
-         i_pfes->GetFaceVDofs(f, vdofs_i);
-
-         const int size_i = vdofs_i.Size() / 2;
-         const int size_x = vdofs.Size() / 2;
-
-         // A little mismatch, but whatever.
-         for (int i = 0; i < size_i; i++)
-         {
-            if (fabs(x(vdofs[i]) - 1.0) < eps)
-            {
-               interfaces(vdofs_i[i]) = 1.0;
-            }
-            if (fabs(x(vdofs[i+size_x]) - 1.5) < eps && x(vdofs[i]) >= 1.0)
-            {
-               interfaces(vdofs_i[i]) = 1.0;
-            }
-         }
-      }
-   }
-   else
-   {
-      FunctionCoefficient coeff(interface_rt);
-      interfaces.ProjectCoefficient(coeff);
-   }
-}
-
-// Assumes size and spaces are already set.
-void InitIndicators(std::vector<ParGridFunction> &ind)
-{
-   for (int k = 0; k < ind.size(); k++)
-   {
-      IndicatorCoefficient ic(k);
-      ind[k].ProjectCoefficient(ic);
-   }
-}
-
 void InitIndicators(std::vector<QuadratureFunction> &ind,
-                    std::vector<Array<bool>> &bool_ind)
+                    std::vector<Array<bool>> &bool_ind, int diffuse_order)
 {
    auto qspace = dynamic_cast<QuadratureSpace *>(ind[0].GetSpace());
    const int NE  = qspace->GetMesh()->GetNE(), ind_cnt = ind.size();
+   const int dim = qspace->GetMesh()->Dimension();
 
-   for(int k = 0; k < ind_cnt; k++) { bool_ind[k] = false; }
+   L2_FECollection fec(diffuse_order, dim);
+   FiniteElementSpace fes(qspace->GetMesh(), &fec);
+   GridFunction ind_gf(&fes);
+
+   // dx = qspace->GetMesh()->GetElementSize(0);
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      IndicatorCoefficient ic(k);
+      ind_gf.ProjectCoefficient(ic);
+      ind[k].ProjectGridFunction(ind_gf);
+
+      bool_ind[k] = false;
+   }
 
    for (int e = 0; e < NE; e++)
    {
       const IntegrationRule &ir = qspace->GetElementIntRule(e);
       const int nip = ir.GetNPoints();
-
-      // Transformation of the element with the pos_mesh coordinates.
-      IsoparametricTransformation Tr;
-      qspace->GetMesh()->GetElementTransformation(e, &Tr);
-
-      Vector coord(Tr.GetSpaceDim());
       for (int q = 0; q < nip; q++)
       {
-         const IntegrationPoint &ip = ir.IntPoint(q);
-         Tr.Transform(ip, coord);
          for (int k = 0; k < ind_cnt; k++)
          {
-            ind[k](e*nip + q) = (mat_id(coord) == k) ? 1.0 : 0.0;
-            if (mat_id(coord) == k) { bool_ind[k][e] = true; }
+            if (ind[k](e*nip + q) > 1e-12) { bool_ind[k][e] = true; }
          }
       }
    }
-}
-
-
-void PrintNewInterface(ParGridFunction &interfaces)
-{
-   ParMesh *pmesh = interfaces.ParFESpace()->GetParMesh();
-
-   std::ostringstream mesh_name, interface_name;
-   mesh_name << "interface.mesh";
-   interface_name  << "interface.gf";
-
-   std::ofstream mesh_ofs(mesh_name.str().c_str());
-   mesh_ofs.precision(8);
-   pmesh->PrintAsOne(mesh_ofs);
-   mesh_ofs.close();
-
-   std::ofstream interface_ofs(interface_name.str().c_str());
-   interface_ofs.precision(8);
-   interfaces.SaveAsOne(interface_ofs);
-   interface_ofs.close();
 }
 
 int main(int argc, char *argv[])
@@ -288,6 +294,8 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.6;
    double ale_period = -1.0;
+   int diffuse_quad_order = 1;
+   int optimization_type = 0;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
@@ -334,6 +342,12 @@ int main(int argc, char *argv[])
                   "Final time; start time is 0.");
    args.AddOption(&ale_period, "-ale", "--ale-period",
                   "ALE period interval in physical time.");
+   args.AddOption(&diffuse_quad_order, "-dqo", "--diffuse-quad-order",
+                  "How much to diffuse the indicator quadrature functions.");
+   args.AddOption(&optimization_type, "-opt", "--optimization-type",
+                  "Optimization type: 0 - no optimization,\n\t"
+                  "                   1 - HiOp,\n\t"
+                  "                   2 - LVPP.");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
@@ -584,15 +598,6 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
-   for (int i = 0; i < pmesh->GetNE(); i++)
-   {
-      Vector center;
-      pmesh->GetElementCenter(i, center);
-      int attrib = attr_id(center);
-      pmesh->SetAttribute(i,attrib);
-   }
-   pmesh->SetAttributes();
-
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
@@ -664,7 +669,7 @@ int main(int argc, char *argv[])
    switch (problem)
    {
    case 0: if (pmesh->Dimension() == 2) { source = 1; }
-      visc = false; ind_cnt = 2; break;
+           visc = false; ind_cnt = 1; break;
    case 1: visc = true; break;
    case 2: visc = true; break;
    case 3: visc = true; ind_cnt = 3; break;
@@ -721,7 +726,13 @@ int main(int argc, char *argv[])
    // Initialize material indicator functions.
    for (int k = 0; k < ind_cnt; k++) { qdata.ind[k].SetSpace(&qspace, 1); }
    std::vector<Array<bool>> bool_ind(ind_cnt, Array<bool>(NE));
-   InitIndicators(qdata.ind, bool_ind);
+   InitIndicators(qdata.ind, bool_ind, diffuse_quad_order);
+
+   // Initialize gamma constants for every material.
+   Array<double> gamma(ind_cnt);
+   if (problem == 0) { gamma[0] = 5.0 / 3.0; }
+   else if (problem == 3) { gamma[0] = 1.5; gamma[1] = 1.5; gamma[2] = 1.4; }
+   else { MFEM_ABORT("init gamma or the problem"); }
 
    // Initialize the velocity.
    VectorFunctionCoefficient v_coeff(pmesh->Dimension(), v0);
@@ -739,70 +750,43 @@ int main(int argc, char *argv[])
    // is to get a high-order representation of the initial condition. Note that
    // this density is a temporary function and it will not be updated during the
    // time evolution.
-   ParGridFunction rho0_gf(&L2FESpace);
+   std::vector<ParGridFunction> rho0_gf(ind_cnt);
    FunctionCoefficient rho0_coeff(rho0);
-   L2_FECollection l2_fec(order_e, pmesh->Dimension());
-   ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
-   ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
-   l2_rho0_gf.ProjectCoefficient(rho0_coeff);
-   rho0_gf.ProjectGridFunction(l2_rho0_gf);
-   if (problem == 1)
-   {
-      // For the Sedov test, we use a delta function at the origin.
-      DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                               blast_position[2], blast_energy);
-      l2_e.ProjectCoefficient(e_coeff);
-   }
-   else
-   {
-      FunctionCoefficient e_coeff(e0);
-      l2_e.ProjectCoefficient(e_coeff);
-   }
    for (int k = 0; k < ind_cnt; k++)
    {
-      e_gf[k].ProjectGridFunction(l2_e);
-      // Clean empty zones.
-      int ndof = e_gf[k].Size() / NE;
-      for (int e = 0; e < NE; e++)
-      {
-         if (bool_ind[k][e] == false)
-         {
-            for (int i = 0; i < ndof; i++)
-            {
-               e_gf[k](e * ndof + i) = 0.0;
-            }
-         }
-      }
+      ThermoFieldCoefficient r_coeff(k, bool_ind[k], 0);
+      rho0_gf[k].SetSpace(&L2FESpace);
+      rho0_gf[k].ProjectCoefficient(r_coeff);
 
-      // Sync the data location of e_gf with its base, S
-      e_gf[k].SyncAliasMemory(S);
+      ThermoFieldCoefficient e_coeff(k, bool_ind[k], 1);
+      e_gf[k].ProjectCoefficient(e_coeff);
    }
-
-   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
-   // gamma values are projected on function that's constant on the moving mesh.
-   L2_FECollection mat_fec(0, pmesh->Dimension());
-   ParFiniteElementSpace mat_fes(pmesh, &mat_fec);
-   ParGridFunction mat_gf(&mat_fes);
-   FunctionCoefficient mat_coeff(gamma_func);
-   mat_gf.ProjectCoefficient(mat_coeff);
-
-   H1_FECollection interf_fec(order_v, pmesh->Dimension());
-   ParFiniteElementSpace interf_fes(pmesh, &interf_fec);
-   ParGridFunction interfaces(&interf_fes);
-   SetInterfaces(x_gf, interfaces);
-
-   hydrodynamics::LagrangianHydroOperator hydro(S.Size(), ind_cnt,
-                                                H1FESpace, L2FESpace, ess_tdofs,
-                                                rho0_coeff, rho0_gf,
-                                                mat_gf, qdata, bool_ind,
-                                                source, cfl,
-                                                visc, vorticity, p_assembly,
-                                                cg_tol, cg_max_iter, ftz_tol,
-                                                ir);
 
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
+   // for (int k = 0; k < ind_cnt; k++)
+   // {
+   //    // Initial indicators.
+   //    VisQuadratureFunction(*pmesh, qdata.ind[k], "ind_0 QF", 0, 0);
+
+   //    socketstream vis_r;
+   //    hydrodynamics::VisualizeField(vis_r, vishost, visport, rho0_gf[k],
+   //                                  "rho 0", 400, 0);
+
+   //    socketstream vis_e;
+   //    hydrodynamics::VisualizeField(vis_e, vishost, visport, e_gf[k],
+   //                                  "e 0", 800, 0);
+   // }
+
+   hydrodynamics::LagrangianHydroOperator hydro(S.Size(), ind_cnt,
+                                                H1FESpace, L2FESpace, ess_tdofs,
+                                                rho0_coeff, rho0_gf,
+                                                gamma, qdata, bool_ind,
+                                                source, cfl,
+                                                visc, vorticity, p_assembly,
+                                                cg_tol, cg_max_iter, ftz_tol,
+                                                ir);
 
    ParGridFunction rho_gf;
    if (visualization || visit) { hydro.ComputeDensity(0, rho_gf); }
@@ -898,8 +882,6 @@ int main(int argc, char *argv[])
             << "ALE step [" << ale_cnt << "] at " << t << ": " << endl;
          }
 
-         VisQuadratureFunction(*pmesh, qdata.ind[2], "ind QF", 0 + 2*400, 400);
-
          //
          // Prepare for ALE.
          //
@@ -949,7 +931,7 @@ int main(int argc, char *argv[])
             //                                  v_0, "v_0 GF",
             //                                  1200, 400, 400, 400, true, "m");
             // }
-            // hydro.ComputePressure(rho_0, e_0, mat_gf(0), p_0[k]);
+            // hydro.ComputePressure(rho_0, e_0, gamma[k], p_0[k]);
             // VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 400);
          }
 
@@ -959,7 +941,7 @@ int main(int argc, char *argv[])
          Vector x0(x_gf.Size());
          x0 = x_gf;
          ParGridFunction x_opt(x_gf);
-         hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, interfaces);
+         hydrodynamics::OptimizeMesh(x_opt, ess_vdofs);
 
          //
          // Remap.
@@ -968,7 +950,7 @@ int main(int argc, char *argv[])
             InterpolationRemap interpolator(*pmesh);
             interpolator.visualization = false;
             interpolator.h1_seminorm   = false;
-            interpolator.max_iter      = 500;
+            interpolator.max_iter      = 20;
             interpolator.subprob       = true;
             interpolator.weightedSpace = hiop::hiopInterfaceBase::Euclidean;
             interpolator.SetQuadratureSpace(qspace);
@@ -976,7 +958,6 @@ int main(int argc, char *argv[])
             interpolator.SetVelocityFESpace(H1FESpace);
 
             std::vector<BlockVector> ind_rho_e(ind_cnt, BlockVector(offset));
-            const int optimization_type = 1;
             const bool remap_v = (problem == 1) ? false : true;
             const bool p_control = (problem == 1) ? true : false;
             for (int k = 0; k < ind_cnt; k++)
@@ -985,19 +966,20 @@ int main(int argc, char *argv[])
                                         ind_rho_e_v_0[k].GetBlock(0).GetData());
                Array<bool> ind_0_bool_el, ind_0_bool_dofs;
                ComputeBoolIndicators(NE, ind_0, ind_0_bool_el, ind_0_bool_dofs);
-               const unsigned diffused_ind_order = 1;
                interpolator.RemapHydro(ind_rho_e_v_0[k],
-                                       remap_v, p_control, diffused_ind_order,
+                                       remap_v, p_control,
                                        p_0[k], bool_ind[k], x_opt,
                                        ind_rho_e[k], optimization_type);
             }
 
             x_gf = x_opt;
 
+            QuadratureFunction isum(&qspace);
+            isum = 0.0;
             for (int k = 0; k < ind_cnt; k++)
             {
                QuadratureFunction ind(&qspace, ind_rho_e[k].GetBlock(0).GetData()),
-                   rho(&qspace, ind_rho_e[k].GetBlock(1).GetData());
+                                  rho(&qspace, ind_rho_e[k].GetBlock(1).GetData());
                ParGridFunction e(&L2FESpace, ind_rho_e[k].GetBlock(2).GetData());
                ParGridFunction v(&H1FESpace, ind_rho_e[k].GetBlock(3).GetData());
 
@@ -1021,30 +1003,47 @@ int main(int argc, char *argv[])
                   }
                }
 
-               hydro.UpdateMassMatrices();
-
-               VisQuadratureFunction(*pmesh, ind, "ind QF", 0, 800);
+               isum += ind;
+               // VisQuadratureFunction(*pmesh, ind, "ind QF final", 0, 800);
                // VisQuadratureFunction(*pmesh, rho, "rho QF", 400, 800);
                // socketstream sock_e;
-               // hydrodynamics::VisualizeField(sock_e, "localhost", 19916, e, "e GF",
+               // hydrodynamics::Field(sock_e, "localhost", 19916, e, "e GF",
                //                               800, 800, 400, 400);
                // socketstream sock_v;
-               // hydrodynamics::VisualizeField(sock_v, "localhost", 19916, v, "v GF",
+               // hydrodynamics::Field(sock_v, "localhost", 19916, v, "v GF",
                //                               1200, 800, 400, 400, true, "m");
                // QuadratureFunction p(&qspace);
-               // hydro.ComputePressure(rho, e, mat_gf(0), p);
+               // hydro.ComputePressure(rho, e, gamma[k], p);
                // VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
+
+               double ind_min_active_el = 1.0;
+               const IntegrationRule &ir = qspace.GetIntRule(0);
+               const int nqp = ir.GetNPoints();
+               for (int e = 0; e < NE; e++)
+               {
+                  if (bool_ind[k][e] == false) { continue; }
+
+                  double ind_e_max = 0.0;
+                  for (int q = 0; q < nqp; q++)
+                  {
+                     ind_e_max = fmax(ind_e_max, qdata.ind[k](e*nqp + q));
+                  }
+                  ind_min_active_el = fmin(ind_min_active_el, ind_e_max);
+               }
+               std::cout << "indicator " << k << " minmax = " << ind_min_active_el << std::endl;
             }
+
+            //VisQuadratureFunction(*pmesh, isum, "ind QF final", 500, 800);
+
+            // Clear non-tangential components.
+            for (int i = 0; i < ess_vdofs.Size(); i++)
+            {
+               v_gf(ess_vdofs[i]) = 0.0;
+            }
+
+            // Mass matrices.
+            hydro.UpdateMassMatrices();
          }
-
-         /*
-         hydro.RemoveBdrNormalPart(v_gf, x_gf);
-
-         // Update mass matrices.
-         // Above we changed rho0_gf to reflect the mass matrices Coefficient.
-         hydro.UpdateMassMatrices(rho0_gf_coeff);
-         */
-
          ale_cnt++;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
@@ -1110,7 +1109,7 @@ int main(int argc, char *argv[])
             int Wx = 0, Wy = 0; // window position
             int Ww = 350, Wh = 350; // window size
             int offx = Ww+10; // window offsets
-            if (problem != 0 && problem != 4)
+            if (problem != 4)
             {
                hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
                                              "Density", Wx, Wy, Ww, Wh);
@@ -1172,7 +1171,6 @@ int main(int argc, char *argv[])
       case 7: steps *= 2;
    }
 
-   PrintNewInterface(interfaces);
    hydro.PrintTimingData(Mpi::Root(), steps, fom);
 
    if (mem_usage)
@@ -1222,26 +1220,6 @@ int main(int argc, char *argv[])
    delete pmesh;
 
    return 0;
-}
-
-int attr_id(const Vector &x)
-{
-   if (problem == 1 || problem == 3)
-   {
-      return x(0) <= 1.0 ? 1 : (x(1) >= 1.5 ? 2 : 3);
-   }
-   else if (problem == 4)
-   {
-      return x(0) <= 0.25 ? 1 : 2;
-   }
-   else if (problem == 7)
-   {
-      return x(1) >= 0.0 ? 1 : 2;
-   }
-   else
-   {
-      MFEM_ABORT("attr_id: problem not supported!");
-   }
 }
 
 double rho0(const Vector &x)

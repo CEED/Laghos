@@ -90,28 +90,28 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
                          const IntegrationRule &ir,
                          ParMesh *pmesh,
                          ParFiniteElementSpace &L2,
-                         const ParGridFunction &rho0,
+                         std::vector<ParGridFunction> &rho0,
                          QuadratureData &qdata,
                          double &volume);
 
 LagrangianHydroOperator::LagrangianHydroOperator(const int size, int mat_cnt,
-                                                 ParFiniteElementSpace &h1,
-                                                 ParFiniteElementSpace &l2,
-                                                 const Array<int> &ess_tdofs,
-                                                 Coefficient &rho0_coeff,
-                                                 ParGridFunction &rho0_gf,
-                                                 ParGridFunction &gamma_gf,
-                                                 QuadratureData &quad_data,
-                                                 std::vector<Array<bool>> &bi,
-                                                 const int source,
-                                                 const double cfl,
-                                                 const bool visc,
-                                                 const bool vort,
-                                                 const bool p_assembly,
-                                                 const double cgt,
-                                                 const int cgiter,
-                                                 double ftz,
-                                                 const IntegrationRule &irule) :
+    ParFiniteElementSpace &h1,
+    ParFiniteElementSpace &l2,
+    const Array<int> &ess_tdofs,
+    Coefficient &rho0_coeff,
+    std::vector<ParGridFunction> &rho0_gf,
+    Array<double> &gamma_vals,
+    QuadratureData &quad_data,
+    std::vector<Array<bool>> &bi,
+    const int source,
+    const double cfl,
+    const bool visc,
+    const bool vort,
+    const bool p_assembly,
+    const double cgt,
+    const int cgiter,
+    double ftz,
+    const IntegrationRule &irule) :
    TimeDependentOperator(size),
    ind_cnt(mat_cnt),
    H1(h1), L2(l2), H1c(H1.GetParMesh(), H1.FEColl(), 1),
@@ -134,7 +134,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size, int mat_cnt,
    use_vorticity(vort),
    p_assembly(p_assembly),
    cg_rel_tol(cgt), cg_max_iter(cgiter),ftz_tol(ftz),
-   gamma_gf(gamma_gf),
+   gamma(gamma_vals),
    Mv(&H1), Mv_spmat_copy(),
    Me(l2dofs_cnt, l2dofs_cnt, NE),
    Me_inv(ind_cnt, DenseTensor(l2dofs_cnt, l2dofs_cnt, NE)),
@@ -177,10 +177,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size, int mat_cnt,
    else
    {
       const int NQ = ir.GetNPoints();
-      Vector rho_vals(NQ);
       for (int e = 0; e < NE; e++)
       {
-         rho0_gf.GetValues(e, ir, rho_vals);
          ElementTransformation &Tr = *H1.GetElementTransformation(e);
          for (int q = 0; q < NQ; q++)
          {
@@ -188,16 +186,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size, int mat_cnt,
             Tr.SetIntPoint(&ip);
             DenseMatrixInverse Jinv(Tr.Jacobian());
             Jinv.GetInverseMatrix(qdata.Jac0inv(e*NQ + q));
-            const double rho0DetJ0 = Tr.Weight() * rho_vals(q);
             for (int k = 0; k < ind_cnt; k++)
             {
+               const double rho0DetJ0 = Tr.Weight() * rho0_gf[k].GetValue(Tr);
                qdata.i_rho0DetJ0w[k](e*NQ + q) =
-                  qdata.ind[k](e*NQ + q) * rho0DetJ0 * ir.IntPoint(q).weight;
+                   qdata.ind[k](e*NQ + q) * rho0DetJ0 * ir.IntPoint(q).weight;
             }
          }
       }
-      for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
    }
+   for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
+
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
    MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
    switch (pmesh->GetElementBaseGeometry(0))
@@ -233,7 +232,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size, int mat_cnt,
    if (p_assembly)
    {
       qupdate = new QUpdate(dim, NE, Q1D, visc, vort, cfl,
-                            &timer, gamma_gf, ir, H1, L2);
+                            &timer, gamma_vals, ir, H1, L2);
       ForcePA = new ForcePAOperator(qdata, H1, L2, ir);
       VMassPA = new MassPAOperator(H1c, ir, total_mass_coeff);
       for (int k = 0; k < ind_cnt; k++)
@@ -902,7 +901,6 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
             min_detJ = fmin(min_detJ, detJ);
             const int idx = z * nqp + q;
             // Assuming piecewise constant gamma that moves with the mesh.
-            gamma_b[idx] = gamma_gf(z_id);
             rho_b[idx] = qdata.i_rho0DetJ0w[0](z_id*nqp + q) /
                          qdata.ind[0](z_id*nqp + q) / detJ / ip.weight;
             e_b[idx] = fmax(0.0, e_vals(q));
@@ -911,7 +909,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
       }
 
       // Batched computation of material properties.
-      ComputeMaterialProperties(nqp_batch, gamma_b, rho_b, e_b, p_b, cs_b);
+      ComputeMaterialProperties(nqp_batch, gamma[0], rho_b, e_b, p_b, cs_b);
 
       z_id -= nzones_batch;
       for (int z = 0; z < nzones_batch; z++)
@@ -1091,7 +1089,7 @@ void QUpdateBody(const int NE, const int e,
                  double* __restrict__ Jpi,
                  double* __restrict__ ph_dir,
                  double* __restrict__ stressJiT,
-                 const double* __restrict__ d_gamma,
+                 const double gamma,
                  const double* __restrict__ d_weights,
                  const double* __restrict__ d_Jacobians,
                  const double* __restrict__ d_ind,
@@ -1107,7 +1105,6 @@ void QUpdateBody(const int NE, const int e,
    double min_detJ = infinity;
 
    const int eq = e * NQ + q;
-   const double gamma = d_gamma[e];
    const double weight =  d_weights[q];
    const double inv_weight = 1. / weight;
    const double *J = d_Jacobians + DIM2*(NQ*e + q);
@@ -1210,7 +1207,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
                          const IntegrationRule &ir,
                          ParMesh *pmesh,
                          ParFiniteElementSpace &L2,
-                         const ParGridFunction &rho0,
+                         std::vector<ParGridFunction> &rho0,
                          QuadratureData &qdata,
                          double &volume)
 {
@@ -1220,11 +1217,8 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    const GeometricFactors *geom = pmesh->GetGeometricFactors(ir, flags);
    Vector rho0Q(NQ*NE);
    rho0Q.UseDevice(true);
-   Vector j, detj;
    const QuadratureInterpolator *qi = L2.GetQuadratureInterpolator(ir);
-   qi->Mult(rho0, QuadratureInterpolator::VALUES, rho0Q, j, detj);
    const auto W = ir.GetWeights().Read();
-   const auto R = Reshape(rho0Q.Read(), NQ, NE);
    const auto J = Reshape(geom->J.Read(), NQ, dim, dim, NE);
    const auto detJ = Reshape(geom->detJ.Read(), NQ, NE);
    Memory<double> &Jinv_m = qdata.Jac0inv.GetMemory();
@@ -1239,6 +1233,9 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    const int ind_cnt = qdata.ind.size();
    for (int k = 0; k < ind_cnt; k++)
    {
+      Vector j, detj;
+      qi->Mult(rho0[k], QuadratureInterpolator::VALUES, rho0Q, j, detj);
+      const auto R = Reshape(rho0Q.Read(), NQ, NE);
       auto I = Reshape(qdata.ind[k].Read(), NQ, NE);
       auto V = Reshape(qdata.i_rho0DetJ0w[k].Write(), NQ, NE);
       if (dim==2)
@@ -1313,7 +1310,7 @@ void QKernel(const int NE, const int NQ,
              const double h1order,
              const double cfl,
              const double infinity,
-             const ParGridFunction &gamma_gf,
+             const double gamma,
              const Array<double> &weights,
              const Vector &Jacobians,
              const QuadratureFunction &ind,
@@ -1326,7 +1323,6 @@ void QKernel(const int NE, const int NQ,
              DenseTensor &stressJinvT_total)
 {
    constexpr int DIM2 = DIM*DIM;
-   const auto d_gamma = gamma_gf.Read();
    const auto d_weights = weights.Read();
    const auto d_Jacobians = Jacobians.Read();
    const auto d_ind = ind.Read();
@@ -1359,7 +1355,7 @@ void QKernel(const int NE, const int NQ,
                use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                compr_dir, Jpi, ph_dir, stressJiT,
-               d_gamma, d_weights, d_Jacobians, d_ind, d_rho0DetJ0w,
+               gamma, d_weights, d_Jacobians, d_ind, d_rho0DetJ0w,
                d_e_quads, d_grad_v_ext, d_Jac0inv,
                d_dt_est, d_stressJinvT, d_stressJinvT_total);
             }
@@ -1390,7 +1386,7 @@ void QKernel(const int NE, const int NQ,
                   use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                   Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                   compr_dir, Jpi, ph_dir, stressJiT,
-                  d_gamma, d_weights, d_Jacobians, d_ind, d_rho0DetJ0w,
+                  gamma, d_weights, d_Jacobians, d_ind, d_rho0DetJ0w,
                   d_e_quads, d_grad_v_ext, d_Jac0inv,
                   d_dt_est, d_stressJinvT, d_stressJinvT_total);
                }
@@ -1423,7 +1419,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
                             const bool use_vorticity,
                             const double h0, const double h1order,
                             const double cfl, const double infinity,
-                            const ParGridFunction &gamma_gf,
+                            double gamma,
                             const Array<double> &weights,
                             const Vector &Jacobians,
                             const QuadratureFunction &ind,
@@ -1453,7 +1449,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
       q2->Values(e_k, q_e);
 
       qupdate[id](NE, NQ, use_viscosity, use_vorticity, qdata.h0, h1order,
-                  cfl, infinity, gamma_gf, ir.GetWeights(), q_dx,
+                  cfl, infinity, gamma[k], ir.GetWeights(), q_dx,
                   qdata.ind[k], qdata.i_rho0DetJ0w[k], q_e, q_dv,
                   qdata.Jac0inv, q_dt_est,
                   qdata.stressJinvT[k], qdata.stressJinvT[ind_cnt]);

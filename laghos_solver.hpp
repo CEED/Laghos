@@ -67,12 +67,12 @@ private:
    const Operator *H1R;
    Vector q_dt_est, q_e, e_vec, q_dx, q_dv;
    const QuadratureInterpolator *q1,*q2;
-   const ParGridFunction &gamma_gf;
+   const Array<double> &gamma;
 public:
    QUpdate(const int d, const int ne, const int q1d,
            const bool visc, const bool vort,
            const double cfl, TimingData *t,
-           const ParGridFunction &gamma_gf,
+           const Array<double> &gamma_vals,
            const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
       dim(d), vdim(h1.GetVDim()),
@@ -87,7 +87,7 @@ public:
       q_dv(NQ*NE*vdim*vdim),
       q1(H1.GetQuadratureInterpolator(ir)),
       q2(L2.GetQuadratureInterpolator(ir)),
-      gamma_gf(gamma_gf) { }
+      gamma(gamma_vals) { }
 
    void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
 };
@@ -118,7 +118,7 @@ protected:
    const double cg_rel_tol;
    const int cg_max_iter;
    const double ftz_tol;
-   const ParGridFunction &gamma_gf;
+   const Array<double> &gamma;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
    mutable ParBilinearForm Mv;
@@ -154,14 +154,14 @@ protected:
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];
 
-   virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
+   virtual void ComputeMaterialProperties(int nvalues, double gamma,
                                           const double rho[], const double e[],
                                           double p[], double cs[]) const
    {
       for (int v = 0; v < nvalues; v++)
       {
-         p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
-         cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
+         p[v]  = (gamma - 1.0) * rho[v] * e[v];
+         cs[v] = sqrt(gamma * (gamma-1.0) * e[v]);
       }
    }
 
@@ -174,8 +174,8 @@ public:
                            ParFiniteElementSpace &l2_fes,
                            const Array<int> &ess_tdofs,
                            Coefficient &rho0_coeff,
-                           ParGridFunction &rho0_gf,
-                           ParGridFunction &gamma_gf,
+                           std::vector<ParGridFunction> &rho0_gf,
+                           Array<double> &gamma_vals,
                            QuadratureData &quad_data,
                            std::vector<Array<bool>> &bi,
                            const int source,
@@ -212,6 +212,8 @@ public:
                         QuadratureFunction &p) const;
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
+
+   void RemoveBdrNormalPart(ParGridFunction &v, const ParGridFunction &x);
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }

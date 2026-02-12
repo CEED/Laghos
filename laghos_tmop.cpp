@@ -48,8 +48,7 @@ int material_id(int el_id, const GridFunction &g)
 
 IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
-void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
-                  ParGridFunction &interface_ls)
+void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs)
 {
    const int myid = x.ParFESpace()->GetMyRank();
 
@@ -62,10 +61,10 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const int    precond        = 2;
    const int    max_lin_iter   = 100;
    const int    quad_order     = 8;
-   const bool   normalization  = false;
+   const bool   normalization  = true;
 
    // Limiting the node movement.
-   real_t lim_const         = 0.0;
+   real_t lim_dist = 0.1;
 
    ParFiniteElementSpace *pfespace = x.ParFESpace();
    ParMesh *pmesh = pfespace->GetParMesh();
@@ -100,15 +99,13 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    TMOP_Integrator *he_nlf_integ= new TMOP_Integrator(metric, target_c);
    he_nlf_integ->SetIntegrationRules(*irules, quad_order);
 
-   // Limit the node movement.
-   // The limiting distances can be given by a general function of space.
-   ParFiniteElementSpace dist_pfespace(pmesh,
-                                       interface_ls.ParFESpace()->FEColl());
+   ConstantCoefficient lim_coeff(1.0);
+   H1_FECollection fec_h1(mesh_poly_deg, dim);
+   ParFiniteElementSpace dist_pfespace(pmesh, &fec_h1);
    ParGridFunction dist(&dist_pfespace);
-   dist = 0.1;
-   ConstantCoefficient lim_coeff(lim_const);
-   if (lim_const != 0.0)
+   if (lim_dist != 0.0)
    {
+      dist = lim_dist;
       he_nlf_integ->EnableLimiting(x0, dist, lim_coeff);
    }
 
