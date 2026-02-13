@@ -59,6 +59,7 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
+// mpirun -np 8 ./laghos -p 0 -m data/square01_quad.mesh -tf 0.5 -rs 3 -ok 2 -ot 1 -pa
 // mpirun -np 6 ./laghos -p 7 -m data/rt2D.mesh -tf 3.0 -rs 3 -ok 2 -ot 1 -pa
 // mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
 // mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 2 -ot 1 -tf 0.5 -s 7 -pa
@@ -91,14 +92,26 @@ int mat_id(const Vector &x)
 {
    switch (problem)
    {
-   case 0: return (x(0) < 0.5) ? 0 : 1;
+   case 0:
+   {
+      if      (x(0) < 0.5 && x(1) < 0.5) return 0;
+      else if (x(0) > 0.5 && x(1) < 0.5) return 1;
+      else if (x(0) < 0.5 && x(1) > 0.5) return 2;
+      else return 3;
+   }
    case 3:
    {
       if (x(0) < 1.0) { return 0; }
       return (x(1) > 1.5) ? 1 : 2;
    }
    case 4: return (x(0) < 0.25) ? 0 : 1;
-   case 7: return (x(1) < 0.0) ? 0 : 1;
+   case 7:
+   {
+      if      (x(0) < 0. && x(1) < 0.) return 0;
+      else if (x(0) > 0. && x(1) < 0.) return 1;
+      else if (x(0) > 0. && x(1) < 0.) return 2;
+      else return 3;
+   }
    default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
    }
 }
@@ -574,15 +587,6 @@ int main(int argc, char *argv[])
    delete [] nxyz;
    delete mesh;
 
-   for (int i = 0; i < pmesh->GetNE(); i++)
-   {
-      Vector center;
-      pmesh->GetElementCenter(i, center);
-      int attrib = attr_id(center);
-      pmesh->SetAttribute(i,attrib);
-   }
-   pmesh->SetAttributes();
-
    // Refine the mesh further in parallel to increase the resolution.
    for (int lev = 0; lev < rp_levels; lev++) { pmesh->UniformRefinement(); }
 
@@ -734,8 +738,9 @@ int main(int argc, char *argv[])
    L2_FECollection ind_fec(1, pmesh->Dimension(), BasisType::GaussLegendre);
    ParFiniteElementSpace ind_fes(pmesh, &ind_fec);
    int ind_cnt = -1;
-   if (problem == 0 || problem == 7 || problem == 4) { ind_cnt = 2; }
-   else if (problem == 3)            { ind_cnt = 3; }
+   if (problem == 0 || problem == 7) { ind_cnt = 4; }
+   else if (problem == 4) { ind_cnt = 2; }
+   else if (problem == 3) { ind_cnt = 3; }
    else { MFEM_ABORT("problem not prepared for TMOP interface tests."); }
    std::vector<ParGridFunction> ind_L2(ind_cnt);
    for (int k = 0; k < ind_cnt; k++) { ind_L2[k].SetSpace(&ind_fes); }

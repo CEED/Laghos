@@ -59,7 +59,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    //
    const bool   fix_interface  = false;
    const int    solver_type    = 0,
-                solver_iter    = 1000;
+                solver_iter    = 100;
    const double solver_rtol    = 1e-6;
    const int    precond        = 2;
    const int    max_lin_iter   = 100;
@@ -70,7 +70,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const double surface_fit_const = 0.0;
 
    // Adaptive limiting.
-   real_t adapt_lim_const = 8.0;
+   real_t adapt_lim_const = 20.0;
 
    // Limiting the node movement.
    real_t lim_const         = 0.0;
@@ -125,15 +125,20 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    // }
 
    // Adaptive limiting.
+   adapt_lim_const = 20.0;
    ParGridFunction ind_combo(ind[0].ParFESpace());
+   ParGridFunction alim_coeff_gf(ind[0].ParFESpace());
    for (int i = 0; i < ind_combo.Size(); i++)
    {
-      ind_combo(i) = ind[0](i) + 2.0 * ind[1](i);
+      // ind_combo(i) = ind[0](i) + 2.0 * ind[1](i);
+      ind_combo(i) = ind[2](i);
+      alim_coeff_gf(i) = adapt_lim_const * ind[0](i);
    }
    ParGridFunction adapt_lim_gf0(interface_ls.ParFESpace());
    adapt_lim_gf0.ProjectGridFunction(ind_combo);
    InterpolatorFP adapt_lim_eval;
-   ConstantCoefficient adapt_lim_coeff(adapt_lim_const);
+   //ConstantCoefficient adapt_lim_coeff(adapt_lim_const);
+   GridFunctionCoefficient alim_coeff(&alim_coeff_gf);
    if (adapt_lim_const > 0.0)
    {
       socketstream vis1;
@@ -141,7 +146,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
                                     "Adaptive Region GF",
                                     0, 400, 300, 300);
 
-      he_nlf_integ->EnableAdaptiveLimiting(adapt_lim_gf0, adapt_lim_coeff,
+      he_nlf_integ->EnableAdaptiveLimiting(adapt_lim_gf0, alim_coeff,
                                            adapt_lim_eval);
    }
 
