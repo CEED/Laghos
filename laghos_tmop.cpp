@@ -48,7 +48,7 @@ int material_id(int el_id, const GridFunction &g)
 
 IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
-void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs)
+void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs, double lim_dist)
 {
    const int myid = x.ParFESpace()->GetMyRank();
 
@@ -62,9 +62,6 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs)
    const int    max_lin_iter   = 100;
    const int    quad_order     = 8;
    const bool   normalization  = true;
-
-   // Limiting the node movement.
-   real_t lim_dist = 0.1;
 
    ParFiniteElementSpace *pfespace = x.ParFESpace();
    ParMesh *pmesh = pfespace->GetParMesh();

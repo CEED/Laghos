@@ -237,13 +237,13 @@ double interface_rt(const Vector &x)
 }
 
 void InitIndicators(std::vector<QuadratureFunction> &ind,
-                    std::vector<Array<bool>> &bool_ind, int diffuse_order)
+                    std::vector<Array<bool>> &bool_ind)
 {
    auto qspace = dynamic_cast<QuadratureSpace *>(ind[0].GetSpace());
    const int NE  = qspace->GetMesh()->GetNE(), ind_cnt = ind.size();
    const int dim = qspace->GetMesh()->Dimension();
 
-   L2_FECollection fec(diffuse_order, dim);
+   L2_FECollection fec(1, dim);
    FiniteElementSpace fes(qspace->GetMesh(), &fec);
    GridFunction ind_gf(&fes);
 
@@ -294,7 +294,7 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    double t_final = 0.6;
    double ale_period = -1.0;
-   int diffuse_quad_order = 1;
+   double tmop_lim_dist = 0.25;
    int optimization_type = 0;
    double cfl = 0.5;
    double cg_tol = 1e-8;
@@ -342,8 +342,8 @@ int main(int argc, char *argv[])
                   "Final time; start time is 0.");
    args.AddOption(&ale_period, "-ale", "--ale-period",
                   "ALE period interval in physical time.");
-   args.AddOption(&diffuse_quad_order, "-dqo", "--diffuse-quad-order",
-                  "How much to diffuse the indicator quadrature functions.");
+   args.AddOption(&tmop_lim_dist, "-lim", "--tmop-lim",
+                  "TMOP limiting distance.");
    args.AddOption(&optimization_type, "-opt", "--optimization-type",
                   "Optimization type: 0 - no optimization,\n\t"
                   "                   1 - HiOp,\n\t"
@@ -726,7 +726,7 @@ int main(int argc, char *argv[])
    // Initialize material indicator functions.
    for (int k = 0; k < ind_cnt; k++) { qdata.ind[k].SetSpace(&qspace, 1); }
    std::vector<Array<bool>> bool_ind(ind_cnt, Array<bool>(NE));
-   InitIndicators(qdata.ind, bool_ind, diffuse_quad_order);
+   InitIndicators(qdata.ind, bool_ind);
 
    // Initialize gamma constants for every material.
    Array<double> gamma(ind_cnt);
@@ -754,12 +754,21 @@ int main(int argc, char *argv[])
    FunctionCoefficient rho0_coeff(rho0);
    for (int k = 0; k < ind_cnt; k++)
    {
+      L2_FECollection l2_fec(order_e, dim);
+      ParFiniteElementSpace l2_fes(pmesh, &l2_fec);
+      ParGridFunction l2_rho(&l2_fes);
+
       ThermoFieldCoefficient r_coeff(k, bool_ind[k], 0);
+      l2_rho.ProjectCoefficient(r_coeff);
       rho0_gf[k].SetSpace(&L2FESpace);
-      rho0_gf[k].ProjectCoefficient(r_coeff);
+      rho0_gf[k].ProjectGridFunction(l2_rho);
+      //rho0_gf[k].ProjectCoefficient(r_coeff);
 
       ThermoFieldCoefficient e_coeff(k, bool_ind[k], 1);
-      e_gf[k].ProjectCoefficient(e_coeff);
+      ParGridFunction l2_e(&l2_fes);
+      l2_e.ProjectCoefficient(e_coeff);
+      e_gf[k].ProjectGridFunction(l2_e);
+      // e_gf[k].ProjectCoefficient(e_coeff);
    }
 
    socketstream vis_rho, vis_v, vis_e;
@@ -941,7 +950,7 @@ int main(int argc, char *argv[])
          Vector x0(x_gf.Size());
          x0 = x_gf;
          ParGridFunction x_opt(x_gf);
-         hydrodynamics::OptimizeMesh(x_opt, ess_vdofs);
+         hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, tmop_lim_dist);
 
          //
          // Remap.
@@ -1198,14 +1207,15 @@ int main(int argc, char *argv[])
    // For problems 0 and 4 the exact velocity is constant in time.
    if (problem == 0 || problem == 4)
    {
-      const double error_max = v_gf.ComputeMaxError(v_coeff),
-                   error_l1  = v_gf.ComputeL1Error(v_coeff),
-                   error_l2  = v_gf.ComputeL2Error(v_coeff);
+      ThermoFieldCoefficient e_coeff(0, bool_ind[0], 1);
+      const double error_v_max = v_gf.ComputeMaxError(v_coeff),
+                   error_v_l1  = v_gf.ComputeL1Error(v_coeff),
+                   error_v_l2  = v_gf.ComputeL2Error(v_coeff),
+                   error_e_l1  = e_gf[0].ComputeL1Error(e_coeff);
       if (Mpi::Root())
       {
-         cout << "L_inf  error: " << error_max << endl
-              << "L_1    error: " << error_l1 << endl
-              << "L_2    error: " << error_l2 << endl;
+         cout << "L1 v error: " << error_v_l1 << endl
+              << "L1 e error: " << error_e_l1 << endl;
       }
    }
 
