@@ -143,9 +143,9 @@ int main(int argc, char *argv[])
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
    args.AddOption(
-       &elem_per_mpi, "-epm", "--elem-per-mpi",
-       "Number of element per mpi task. Note: this is mutually-exclusive with "
-       "-nx, -ny, and -nz. Use -epm 0 to use -nx, -ny, and -nz.");
+      &elem_per_mpi, "-epm", "--elem-per-mpi",
+      "Number of element per mpi task. Note: this is mutually-exclusive with "
+      "-nx, -ny, and -nz. Use -epm 0 to use -nx, -ny, and -nz.");
    args.AddOption(&nx, "-nx", "--xelems",
                   "Elements in x-dimension (do not specify mesh_file). Note: "
                   "this is mutually-exclusive with -nx, -ny, and -nz. Use -epm "
@@ -335,50 +335,62 @@ int main(int argc, char *argv[])
    }
    else
    {
-     if (elem_per_mpi) {
-       mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
-                           rp_levels, mpi_partitioning);
-       // scale mesh by Sx, Sy, Sz
-       switch (dim) {
-       case 1:
-         mesh.Transform([=](const Vector &x, Vector &y) { y[0] = x[0] * Sx; });
-         break;
-       case 2:
-         mesh.Transform([=](const Vector &x, Vector &y) { y[0] = x[0] * Sx;
-          y[1] = x[1] * Sy;});
-         break;
-       case 3:
-         mesh.Transform([=](const Vector &x, Vector &y) {
-           y[0] = x[0] * Sx;
-           y[1] = x[1] * Sy;
-           y[2] = x[2] * Sz;
-         });
-         break;
-       }
-     } else {
-       if (dim == 1) {
-         mesh = Mesh::MakeCartesian1D(nx, Sx);
-       }
-       if (dim == 2) {
-         mesh = Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true, Sx,
-                                      Sy);
-       }
-       if (dim == 3) {
-         mesh = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON, Sx, Sy,
-                                      Sz, true);
-       }
-     }
-
-     if (dim == 1) {
-       mesh.GetBdrElement(0)->SetAttribute(1);
-       mesh.GetBdrElement(1)->SetAttribute(1);
-     }
-     if (dim == 2) {
-       AssignMeshBdrAttrs2D(mesh, 0_r, Sx);
-     }
-     if (dim == 3) {
-       AssignMeshBdrAttrs3D(mesh, 0_r, Sx, 0_r, Sy);
-     }
+      if (elem_per_mpi)
+      {
+         mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
+                             rp_levels, mpi_partitioning);
+         // scale mesh by Sx, Sy, Sz
+         switch (dim)
+         {
+            case 1:
+               mesh.Transform([=](const Vector &x, Vector &y) { y[0] = x[0] * Sx; });
+               mesh.GetBdrElement(0)->SetAttribute(1);
+               mesh.GetBdrElement(1)->SetAttribute(1);
+               break;
+            case 2:
+               mesh.Transform([=](const Vector &x, Vector &y)
+               {
+                  y[0] = x[0] * Sx;
+                  y[1] = x[1] * Sy;
+               });
+               AssignMeshBdrAttrs2D(mesh, 0_r, Sx);
+               break;
+            case 3:
+               mesh.Transform([=](const Vector &x, Vector &y)
+               {
+                  y[0] = x[0] * Sx;
+                  y[1] = x[1] * Sy;
+                  y[2] = x[2] * Sz;
+               });
+               AssignMeshBdrAttrs3D(mesh, 0_r, Sx, 0_r, Sy);
+               break;
+         }
+      }
+      else
+      {
+         if (dim == 1)
+         {
+            mesh = Mesh::MakeCartesian1D(nx, Sx);
+            mesh.GetBdrElement(0)->SetAttribute(1);
+            mesh.GetBdrElement(1)->SetAttribute(1);
+         }
+         if (dim == 2)
+         {
+            mesh = Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true, Sx,
+                                         Sy);
+            AssignMeshBdrAttrs2D(mesh, 0_r, Sx);
+         }
+         if (dim == 3)
+         {
+            mesh = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON, Sx, Sy,
+                                         Sz, true);
+            AssignMeshBdrAttrs3D(mesh, 0_r, Sx, 0_r, Sy);
+         }
+         for (int lev = 0; lev < rs_levels; lev++)
+         {
+            mesh.UniformRefinement();
+         }
+      }
    }
    dim = mesh.Dimension();
 
