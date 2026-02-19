@@ -121,8 +121,8 @@ CCC = $(strip $(CXX) $(LAGHOS_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)))
 LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS) $(CALIPER_LIBS) $(ADIAK_LIBS)
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 
-SOURCE_FILES = $(sort $(wildcard *.cpp))
-HEADER_FILES = $(sort $(wildcard *.hpp))
+SOURCE_FILES = $(sort $(wildcard *.cpp) sedov/sedov_sol.cpp)
+HEADER_FILES = $(sort $(wildcard *.hpp) $(wildcard sedov/*.hpp))
 OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 
 # Targets
