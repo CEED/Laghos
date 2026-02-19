@@ -20,7 +20,7 @@
 // James R. Kamm, Evaluation of the Sedov-von Neumann-Taylor Blast Wave Solution
 // LA-UR-00-6055
 
-#include "../sedov_sol.hpp"
+#include "sedov_sol.hpp"
 
 #include <mfem.hpp>
 

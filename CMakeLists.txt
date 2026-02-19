@@ -14,6 +14,13 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
+# Load 'user.cmake' settings file if it exists
+set(USER_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/user.cmake" CACHE PATH "Path to user configuration file" FORCE)
+include("${USER_CONFIG}" OPTIONAL RESULT_VARIABLE USER_CONFIG_LOADED)
+if (USER_CONFIG_LOADED)
+  message(STATUS "USER_CONFIG = ${USER_CONFIG} (LOADED)")
+endif()
+
 find_package(HYPRE REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
@@ -58,7 +65,7 @@ endif()
 
 
 list(APPEND SOURCES
-  laghos_assembly.cpp laghos.cpp laghos_solver.cpp sedov_sol.cpp
+  laghos_assembly.cpp laghos.cpp laghos_solver.cpp sedov/sedov_sol.cpp
 )
 
 if (MFEM_USE_CUDA)
@@ -83,10 +90,10 @@ if(LAGHOS_USE_CALIPER)
 endif()
 
 if (MFEM_USE_CUDA)
-  set_source_files_properties(sedov_sol.cpp sedov/sedov.cpp PROPERTIES LANGUAGE CUDA)
+  set_source_files_properties(sedov/sedov_sol.cpp sedov/sedov.cpp PROPERTIES LANGUAGE CUDA)
 endif()
 
-add_executable(sedov sedov_sol.cpp sedov/sedov.cpp)
+add_executable(sedov sedov/sedov_sol.cpp sedov/sedov.cpp)
 
 target_include_directories(sedov PUBLIC "${MFEM_DIR}/../../../include/mfem")
 
