@@ -718,6 +718,7 @@ int main(int argc, char *argv[])
    pmesh->SetNodalGridFunction(&x_gf);
    // Sync the data location of x_gf with its base, S
    x_gf.SyncAliasMemory(S);
+   ParGridFunction x_init(x_gf);
 
    // Quadrature-based data.
    QuadratureSpace qspace(*pmesh, ir);
@@ -950,7 +951,13 @@ int main(int argc, char *argv[])
          Vector x0(x_gf.Size());
          x0 = x_gf;
          ParGridFunction x_opt(x_gf);
-         hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, tmop_lim_dist);
+         // TG - go to initial mesh.
+         if (problem == 0) { x_opt = x_init; }
+         else
+         {
+            hydrodynamics::OptimizeMesh(x_opt, ess_vdofs, tmop_lim_dist);
+         }
+
 
          //
          // Remap.
@@ -1024,22 +1031,6 @@ int main(int argc, char *argv[])
                // QuadratureFunction p(&qspace);
                // hydro.ComputePressure(rho, e, gamma[k], p);
                // VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
-
-               double ind_min_active_el = 1.0;
-               const IntegrationRule &ir = qspace.GetIntRule(0);
-               const int nqp = ir.GetNPoints();
-               for (int e = 0; e < NE; e++)
-               {
-                  if (bool_ind[k][e] == false) { continue; }
-
-                  double ind_e_max = 0.0;
-                  for (int q = 0; q < nqp; q++)
-                  {
-                     ind_e_max = fmax(ind_e_max, qdata.ind[k](e*nqp + q));
-                  }
-                  ind_min_active_el = fmin(ind_min_active_el, ind_e_max);
-               }
-               std::cout << "indicator " << k << " minmax = " << ind_min_active_el << std::endl;
             }
 
             //VisQuadratureFunction(*pmesh, isum, "ind QF final", 500, 800);
@@ -1050,8 +1041,20 @@ int main(int argc, char *argv[])
                v_gf(ess_vdofs[i]) = 0.0;
             }
 
+            // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
+            // data in S. This operation simply updates the Memory validity flags of
+            // the sub-vectors to match those of S.
+            x_gf.SyncAliasMemory(S);
+            v_gf.SyncAliasMemory(S);
+            for (int k = 0; k < ind_cnt; k++) { e_gf[k].SyncAliasMemory(S); }
+
             // Mass matrices.
             hydro.UpdateMassMatrices();
+
+            // Quad data and time step based on the new mesh and state.
+            hydro.ResetQuadratureData();
+            hydro.ResetTimeStepEstimate();
+            dt = hydro.GetTimeStepEstimate(S);
          }
          ale_cnt++;
       }
