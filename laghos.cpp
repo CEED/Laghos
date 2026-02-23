@@ -148,15 +148,15 @@ int main(int argc, char *argv[])
       "-nx, -ny, and -nz. Use -epm 0 to use -nx, -ny, and -nz.");
    args.AddOption(&nx, "-nx", "--xelems",
                   "Elements in x-dimension (do not specify mesh_file). Note: "
-                  "this is mutually-exclusive with -nx, -ny, and -nz. Use -epm "
+                  "this is mutually-exclusive with -epm. Use -epm "
                   "0 to use -nx, -ny, and -nz.");
    args.AddOption(&ny, "-ny", "--yelems",
                   "Elements in y-dimension (do not specify mesh_file). Note: "
-                  "this is mutually-exclusive with -nx, -ny, and -nz. Use -epm "
+                  "this is mutually-exclusive with -epm. Use -epm "
                   "0 to use -nx, -ny, and -nz.");
    args.AddOption(&nz, "-nz", "--zelems",
                   "Elements in z-dimension (do not specify mesh_file). Note: "
-                  "this is mutually-exclusive with -nx, -ny, and -nz. Use -epm "
+                  "this is mutually-exclusive with -epm. Use -epm "
                   "0 to use -nx, -ny, and -nz.");
    args.AddOption(&blast_energy, "-E0", "--blast-energy",
                   "Sedov initial blast energy (for problem 1)");
