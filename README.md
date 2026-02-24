@@ -128,99 +128,29 @@ Other computational motives in Laghos include the following:
 
 Laghos has the following external dependencies:
 
-- *hypre*, used for parallel linear algebra, we recommend version 2.11.2<br>
-  https://github.com/hypre-space/hypre/releases/tag/v2.11.2 
+- *hypre*, used for parallel linear algebra, we recommend version 2.31.0 or new<br>
+  https://github.com/hypre-space/hypre/releases/tag/v2.31.0
 
-- METIS, used for parallel domain decomposition (optional), we recommend [version 4.0.3](https://github.com/mfem/tpls/blob/gh-pages/metis-4.0.3.tar.gz) <br>
-  https://github.com/mfem/tpls
+- METIS, used for parallel domain decomposition (optional)
+  https://github.com/KarypisLab/METIS.git
 
 - MFEM, used for (high-order) finite element discretization, its GitHub master branch <br>
   https://github.com/mfem/mfem
 
-To build the miniapp, first download *hypre* and METIS from the links above
-and put everything on the same level as the `Laghos` directory:
-```sh
-~> ls
-Laghos/  v2.11.2.tar.gz  metis-4.0.3.tar.gz
-```
+- Umpire, used for device memory pools in hypre and MFEM. This is only recommended for GPU-accelerated builds. (optional)<br>
+  https://github.com/LLNL/Umpire.git
 
-Build *hypre*:
-```sh
-~> tar -zxvf v2.11.2.tar.gz
-~> cd hypre-2.11.2/src/
-~/hypre-2.11.2/src> ./configure --disable-fortran
-~/hypre-2.11.2/src> make -j
-~/hypre-2.11.2/src> cd ../..
-~> ln -s hypre-2.11.2 hypre
-```
-For large runs (problem size above 2 billion unknowns), add the
-`--enable-bigint` option to the above `configure` line.
+- CMake 3.24.0+ or GNU Make
+- C and C++17 compiler
+- MPI
 
-Build METIS:
-```sh
-~> tar -zxvf metis-4.0.3.tar.gz
-~> cd metis-4.0.3
-~/metis-4.0.3> make
-~/metis-4.0.3> cd ..
-~> ln -s metis-4.0.3 metis-4.0
-```
-This build is optional, as MFEM can be build without METIS by specifying
-`MFEM_USE_METIS = NO` below.
+### Makefile
 
-Clone and build the parallel version of MFEM:
-```sh
-~> git clone https://github.com/mfem/mfem.git ./mfem
-~> cd mfem/
-~/mfem> git checkout master
-~/mfem> make parallel -j
-~/mfem> cd ..
-```
-The above uses the `master` branch of MFEM.
-See the [MFEM building page](http://mfem.org/building/) for additional details.
+See INSTALL_makefile.md
 
-(Optional) Clone and build GLVis:
-```sh
-~> git clone https://github.com/GLVis/glvis.git ./glvis
-~> cd glvis/
-~/glvis> make
-~/glvis> cd ..
-```
-The easiest way to visualize Laghos results is to have GLVis running in a
-separate terminal. Then the `-vis` option in Laghos will stream results directly
-to the GLVis socket.
+### CMake
 
-(Optional) Build Caliper
-1. Clone and build Adiak:
-```sh
-~> git clone --recursive https://github.com/LLNL/Adiak.git
-~> cd Adiak
-~/Adiak> mkdir build && cd build
-~/Adiak> cmake -DBUILD_SHARED_LIBS=On -DENABLE_MPI=On \
-               -DCMAKE_INSTALL_PREFIX=../../adiak ..
-~/Adiak> make && make install
-~/Adiak> cd ../..
-```
-2. Clone and build Caliper:
-```sh
-~> git clone https://github.com/LLNL/Caliper.git
-~> cd Caliper
-~/Caliper> mkdir build && cd build
-~/Caliper> cmake -DWITH_MPI=True -DWITH_ADIAK=True -Dadiak_ROOT=../../adiak/ \
-                 -DCMAKE_INSTALL_PREFIX=../../caliper ..
-~/Caliper> make && make install
-~/Caliper> cd ../..
-```
-
-Build Laghos
-```sh
-~> cd Laghos/
-~/Laghos> make -j
-```
-This can be followed by `make test` and `make install` to check and install the
-build respectively. See `make help` for additional options.
-
-See also the `make setup` target that can be used to automated the
-download and building of hypre, METIS and MFEM.
+See INSTALL_cmake.md
 
 ## Running
 
@@ -231,13 +161,15 @@ partial assembly option (`-pa`).
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa
-mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa -vis
+mpirun -np 8 ./laghos -p 1 -m data/square01_quad.mesh -dim 2 -rs 3 -tf 0.8 -pa
+mpirun -np 8 ./laghos -p 1 -m data/cube01_hex.mesh -dim 3 -E0 2 -rs 2 -tf 0.6 -pa -vis
 ```
 
 The latter produces the following density plot (notice the `-vis` option)
 
 [![Sedov blast image](data/sedov.png)](https://glvis.org/live/?stream=../data/laghos.saved)
+
+To compare against the analytical soluton the `-err` option can be used to compute $\int_{\Omega} \|\rho_{sim} - \rho_{exact}\|_2 dV$ of the final solution.
 
 #### Taylor-Green and Gresho vortices
 
@@ -248,8 +180,8 @@ evaluation. (Viscosity can still be activated for these problems with the
 
 Some sample runs in 2D and 3D respectively are:
 ```sh
-mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.5 -pa
-mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.25 -pa
+mpirun -np 8 ./laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.5 -pa
+mpirun -np 8 ./laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.25 -pa
 mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62 -s 7 -vis -pa
 ```
 
@@ -280,11 +212,11 @@ The latter produces the following specific internal energy plot (notice the `-vi
 To make sure the results are correct, we tabulate reference final iterations
 (`step`), time steps (`dt`) and energies (`|e|`) for the runs listed below:
 
-1. `mpirun -np 8 ./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa`
-2. `mpirun -np 8 ./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa`
-3. `mpirun -np 8 ./laghos -p 1 -dim 2 -rs 3 -tf 0.8 -pa`
-4. `mpirun -np 8 ./laghos -p 1 -dim 3 -rs 2 -tf 0.6 -pa`
-5. `mpirun -np 8 ./laghos -p 2 -dim 1 -rs 5 -tf 0.2 -fa`
+1. `mpirun -np 8 ./laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa`
+2. `mpirun -np 8 ./laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa`
+3. `mpirun -np 8 ./laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.8 -pa`
+4. `mpirun -np 8 ./laghos -p 1 -m data/cube01_hex.mesh -E0 2 -rs 2 -tf 0.6 -pa`
+5. `mpirun -np 8 ./laghos -p 2 -m data/segment01.mesh -rs 5 -tf 0.2 -fa`
 6. `mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa`
 7. `mpirun -np 8 ./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa`
 8. `mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa`
@@ -302,17 +234,17 @@ To make sure the results are correct, we tabulate reference final iterations
 |  8. |  776 | 0.000045 | 4.0982431726e+02 |
 |  9. | 2462 | 0.000050 | 1.1792848680e+02 |
 
-Similar GPU runs using the MFEM CUDA *device* can be run as follows:
+Similar GPU runs using the MFEM GPU *device* can be run as follows:
 
-1. `./laghos -p 0 -dim 2 -rs 3 -tf 0.75 -pa -d cuda`
-2. `./laghos -p 0 -dim 3 -rs 1 -tf 0.75 -pa -d cuda`
-3. `./laghos -p 1 -dim 2 -rs 3 -tf 0.80 -pa -d cuda`
-4. `./laghos -p 1 -dim 3 -rs 2 -tf 0.60 -pa -d cuda`
+1. `./laghos -p 0 -m data/square01_quad.mesh -rs 3 -tf 0.75 -pa -d gpu`
+2. `./laghos -p 0 -m data/cube01_hex.mesh -rs 1 -tf 0.75 -pa -d gpu`
+3. `./laghos -p 1 -m data/square01_quad.mesh -rs 3 -tf 0.80 -pa -d gpu`
+4. `./laghos -p 1 -m data/cube01_hex.mesh -E0 2 -rs 2 -tf 0.60 -pa -d gpu`
 5. -- this is a 1D test that is not supported on the device --
-6. `./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -d cuda`
-7. `./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa -cgt 1e-12 -d cuda`
-8. `./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -d cuda`
-9. `./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -pa -d cuda`
+6. `./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -d gpu`
+7. `./laghos -p 3 -m data/box01_hex.mesh -rs 1 -tf 5.0 -pa -cgt 1e-12 -d gpu`
+8. `./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 3 -ot 2 -tf 0.62831853 -s 7 -pa -d gpu`
+9. `./laghos -p 7 -m data/rt2D.mesh -tf 4 -rs 1 -ok 4 -ot 3 -pa -d gpu`
 
 An implementation is considered valid if the final energy values are all within
 round-off distance from the above reference values.
@@ -336,23 +268,14 @@ Laghos also reports the total rate for these major kernels, which is a proposed
 allocation, the FOM should be reported for different problem sizes and finite
 element orders.
 
-A sample run on the [Vulcan](https://computation.llnl.gov/computers/vulcan) BG/Q
-machine at LLNL is:
-
-```
-srun -n 294912 laghos -pa -p 1 -tf 0.6 -pt 911 -m data/cube_922_hex.mesh \
-                      --ode-solver 7 --max-steps 4
-                      --cg-tol 0 --cg-max-iter 50 -ok 3 -ot 2 -rs 5 -rp 2
-```
-This is Q3-Q2 3D computation on 294,912 MPI ranks (18,432 nodes) that produces
-rates of approximately 125419, 55588, and 12674 megadofs, and a total FOM of
-about 2064 megadofs.
-
-To make the above run 8 times bigger, one can either weak scale by using 8 times
-as many MPI tasks and increasing the number of serial refinements: `srun -n
-2359296 ... -rs 6 -rp 2`, or use the same number of MPI tasks but increase the
-local problem on each of them by doing more parallel refinements: `srun -n
-294912 ... -rs 5 -rp 3`.
+For controlled performance scaling, use (-dim) to select the problem dimension
+and (-epm) to set the number of elements per MPI task, instead of providing a
+mesh with (-m). The code then automatically generates and partitions a
+[0, 1]^dim quad/hex mesh. Performance is determined by the device (-d), task
+count (-n), elements per task (-epm), and finite-element orders (-ok and -ot).
+The total problem size is (-n) × (-epm), with higher order increasing the work
+per element. Weak scaling varies (-n) at fixed (-epm), while strong scaling
+keeps (-n) × (-epm) constant.
 
 ## Versions
 

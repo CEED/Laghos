@@ -15,9 +15,7 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # Load 'user.cmake' settings file if it exists
-set(USER_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/user.cmake" CACHE PATH
-  "User configuration file. It can be used to set user-specific options,
-   such as paths to external libraries, compiler flags, etc.")
+set(USER_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/user.cmake" CACHE PATH "Path to user configuration file" FORCE)
 include("${USER_CONFIG}" OPTIONAL RESULT_VARIABLE USER_CONFIG_LOADED)
 if (USER_CONFIG_LOADED)
   message(STATUS "USER_CONFIG = ${USER_CONFIG} (LOADED)")
@@ -26,6 +24,11 @@ endif()
 find_package(HYPRE REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
+
+option(LAGHOS_USE_CALIPER "Use Caliper" OFF)
+if (LAGHOS_USE_CALIPER)
+  find_package(caliper REQUIRED)
+endif()
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to use.")
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL
@@ -62,7 +65,7 @@ endif()
 
 
 list(APPEND SOURCES
-  laghos_assembly.cpp laghos.cpp laghos_solver.cpp
+  laghos_assembly.cpp laghos.cpp laghos_solver.cpp sedov/sedov_sol.cpp
 )
 
 if (MFEM_USE_CUDA)
@@ -74,6 +77,27 @@ add_executable(laghos ${SOURCES})
 target_include_directories(laghos PUBLIC "${MFEM_DIR}/../../../include/mfem")
 
 target_link_libraries(laghos
+  PUBLIC mfem
+  PUBLIC MPI::MPI_CXX
+  PUBLIC HYPRE::HYPRE
+)
+if(LAGHOS_USE_CALIPER)
+  target_link_libraries(laghos
+    PUBLIC caliper
+  )
+  target_compile_definitions(laghos
+    PUBLIC LAGHOS_USE_CALIPER)
+endif()
+
+if (MFEM_USE_CUDA)
+  set_source_files_properties(sedov/sedov_sol.cpp sedov/sedov.cpp PROPERTIES LANGUAGE CUDA)
+endif()
+
+add_executable(sedov sedov/sedov_sol.cpp sedov/sedov.cpp)
+
+target_include_directories(sedov PUBLIC "${MFEM_DIR}/../../../include/mfem")
+
+target_link_libraries(sedov
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
