@@ -123,6 +123,7 @@ int main(int argc, char *argv[])
    bool visualization = false;
    int vis_steps = 5;
    bool visit = false;
+   bool paraview = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
    const char *device = "cpu";
@@ -207,6 +208,8 @@ int main(int argc, char *argv[])
                   "Visualize every n-th timestep.");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
+   args.AddOption(&paraview, "-paraview", "--paraview", "-no-paraview", "--no-paraview",
+                  "Enable or disable Paraview visualization.");
    args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
@@ -603,7 +606,7 @@ int main(int argc, char *argv[])
    int  visport   = 19916;
 
    ParGridFunction rho_gf;
-   if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
+   if (visualization || visit || paraview) { hydro.ComputeDensity(rho_gf); }
    const double energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
 
@@ -641,6 +644,23 @@ int main(int argc, char *argv[])
       visit_dc.SetCycle(0);
       visit_dc.SetTime(0.0);
       visit_dc.Save();
+   }
+
+#ifdef MFEM_USE_HDF5
+   ParaViewHDFDataCollection paraview_dc(basename, &pmesh);
+#else
+   ParaViewDataCollection paraview_dc(basename, &pmesh);
+#endif
+   if (paraview)
+   {
+      paraview_dc.RegisterField("Density",  &rho_gf);
+      paraview_dc.RegisterField("Velocity", &v_gf);
+      paraview_dc.RegisterField("Specific Internal Energy", &e_gf);
+      paraview_dc.SetDataFormat(VTKFormat::BINARY);
+      paraview_dc.SetHighOrderOutput(true);
+      paraview_dc.SetCycle(0);
+      paraview_dc.SetTime(0.0);
+      paraview_dc.Save();
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a
@@ -785,7 +805,9 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh.GetComm());
 
-         if (visualization || visit || gfprint) { hydro.ComputeDensity(rho_gf); }
+         if (visualization || visit || paraview || gfprint) {
+           hydro.ComputeDensity(rho_gf);
+         }
          if (visualization)
          {
             int Wx = 0, Wy = 0; // window position
@@ -811,6 +833,13 @@ int main(int argc, char *argv[])
             visit_dc.SetCycle(ti);
             visit_dc.SetTime(t);
             visit_dc.Save();
+         }
+
+         if (paraview)
+         {
+            paraview_dc.SetCycle(ti);
+            paraview_dc.SetTime(t);
+            paraview_dc.Save();
          }
 
          if (gfprint)
