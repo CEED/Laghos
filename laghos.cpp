@@ -55,7 +55,8 @@
 #include "fem/qinterp/grad.hpp"
 #include "fem/integ/bilininteg_mass_kernels.hpp"
 
-#ifdef USE_CALIPER
+#include "sedov/sedov_sol.hpp"
+#ifdef LAGHOS_USE_CALIPER
 #include <caliper/cali.h>
 #include <adiak.hpp>
 #endif
@@ -100,13 +101,12 @@ int main(int argc, char *argv[])
    problem = 1;
    dim = 3;
    const char *mesh_file = "default";
-   int elem_per_mpi = 1;
+   int elem_per_mpi = 0;
    int rs_levels = 2;
    int rp_levels = 0;
    int nx = 2;
    int ny = 2;
    int nz = 2;
-   Array<int> cxyz;
    int order_v = 2;
    int order_e = 1;
    int order_q = -1;
@@ -115,6 +115,7 @@ int main(int argc, char *argv[])
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
+   double delta_tol = 1e-12;
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
@@ -124,37 +125,51 @@ int main(int argc, char *argv[])
    bool visit = false;
    bool gfprint = false;
    const char *basename = "results/Laghos";
-   int partition_type = 0;
    const char *device = "cpu";
    bool check = false;
+   bool check_exact_sedov = false;
    bool mem_usage = false;
    bool fom = false;
    bool gpu_aware_mpi = false;
    int dev = 0;
    int dev_pool_size = 4;
-   double blast_energy = 0.25;
-   double blast_position[] = {0.0, 0.0, 0.0};
+
+   double blast_energy = 1;
+   real_t Sx = 1, Sy = 1, Sz = 1;
 
    bool enable_nc = true;
-   bool enable_rebalance = true;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
-   args.AddOption(&elem_per_mpi, "-epm", "--elem-per-mpi",
-                  "Number of element per mpi task.");
+   args.AddOption(
+      &elem_per_mpi, "-epm", "--elem-per-mpi",
+      "Number of element per mpi task. Note: this is mutually-exclusive with "
+      "-nx, -ny, and -nz. Use -epm 0 to use -nx, -ny, and -nz.");
    args.AddOption(&nx, "-nx", "--xelems",
-                  "Elements in x-dimension (do not specify mesh_file)");
+                  "Elements in x-dimension (do not specify mesh_file). Note: "
+                  "this is mutually-exclusive with -epm. Use -epm "
+                  "0 to use -nx, -ny, and -nz.");
    args.AddOption(&ny, "-ny", "--yelems",
-                  "Elements in y-dimension (do not specify mesh_file)");
+                  "Elements in y-dimension (do not specify mesh_file). Note: "
+                  "this is mutually-exclusive with -epm. Use -epm "
+                  "0 to use -nx, -ny, and -nz.");
    args.AddOption(&nz, "-nz", "--zelems",
-                  "Elements in z-dimension (do not specify mesh_file)");
+                  "Elements in z-dimension (do not specify mesh_file). Note: "
+                  "this is mutually-exclusive with -epm. Use -epm "
+                  "0 to use -nx, -ny, and -nz.");
+   args.AddOption(&blast_energy, "-E0", "--blast-energy",
+                  "Sedov initial blast energy (for problem 1)");
+   args.AddOption(&Sx, "-Sx", "--xwidth",
+                  "Domain width in x-dimension (do not specify mesh_file)");
+   args.AddOption(&Sy, "-Sy", "--ywidth",
+                  "Domain width in y-dimension (do not specify mesh_file)");
+   args.AddOption(&Sz, "-Sz", "--zwidth",
+                  "Domain width in z-dimension (do not specify mesh_file)");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
                   "Number of times to refine the mesh uniformly in serial.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
                   "Number of times to refine the mesh uniformly in parallel.");
-   args.AddOption(&cxyz, "-c", "--cartesian-partitioning",
-                  "Use Cartesian partitioning.");
    args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
    args.AddOption(&order_v, "-ok", "--order-kinematic",
                   "Order (degree) of the kinematic finite element space.");
@@ -173,6 +188,8 @@ int main(int argc, char *argv[])
                   "Relative CG tolerance (velocity linear solve).");
    args.AddOption(&ftz_tol, "-ftz", "--ftz-tol",
                   "Absolute flush-to-zero tolerance.");
+   args.AddOption(&delta_tol, "-dtol", "--delta-tol",
+                  "Tolerance for projecting Delta functions.");
    args.AddOption(&cg_max_iter, "-cgm", "--cg-max-steps",
                   "Maximum number of CG iterations (velocity linear solve).");
    args.AddOption(&max_tsteps, "-ms", "--max-steps",
@@ -194,19 +211,14 @@ int main(int argc, char *argv[])
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
                   "Name of the visit dump files");
-   args.AddOption(&partition_type, "-pt", "--partition",
-                  "Customized x/y/z Cartesian MPI partitioning of the serial mesh.\n\t"
-                  "Here x,y,z are relative task ratios in each direction.\n\t"
-                  "Example: with 48 mpi tasks and -pt 321, one would get a Cartesian\n\t"
-                  "partition of the serial mesh by (6,4,2) MPI tasks in (x,y,z).\n\t"
-                  "NOTE: the serially refined mesh must have the appropriate number\n\t"
-                  "of zones in each direction, e.g., the number of zones in direction x\n\t"
-                  "must be divisible by the number of MPI tasks in direction x.\n\t"
-                  "Available options: 11, 21, 111, 211, 221, 311, 321, 322, 432.");
    args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
                   "Enable 2D checks.");
+   args.AddOption(&check_exact_sedov, "-err", "--exact-error", "-no-err",
+                  "--no-exact-error",
+                  "Enable comparing the Sedov problem (problem 1) against the "
+                  "exact solution.");
    args.AddOption(&mem_usage, "-mb", "--mem", "-no-mem", "--no-mem",
                   "Enable memory usage.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
@@ -218,10 +230,6 @@ int main(int argc, char *argv[])
    args.AddOption(&enable_nc, "-nc", "--nonconforming", "-no-nc",
                   "--conforming",
                   "Use non-conforming meshes. Requires a 2D or 3D mesh.");
-   args.AddOption(&enable_rebalance, "-b", "--balance", "-no-b",
-                  "--no-rebalance",
-                  "Perform a rebalance after parallel refinement. Only enabled \n\t"
-                  "for non-conforming meshes with Metis partitioning.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.Parse();
    if (!args.Good())
@@ -231,7 +239,15 @@ int main(int argc, char *argv[])
    }
    if (Mpi::Root()) { args.PrintOptions(cout); }
 
-#ifdef USE_CALIPER
+   if (check_exact_sedov)
+   {
+      MFEM_VERIFY(
+         problem == 1,
+         "Can only compare problem 1 (Sedov) against the exact solution");
+      MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
+   }
+
+#ifdef LAGHOS_USE_CALIPER
    cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
    CALI_CXX_MARK_FUNCTION;
 
@@ -319,15 +335,62 @@ int main(int argc, char *argv[])
    }
    else
    {
-      mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
-                          rp_levels, mpi_partitioning);
-      if (dim == 1)
+      if (elem_per_mpi)
       {
-         mesh.GetBdrElement(0)->SetAttribute(1);
-         mesh.GetBdrElement(1)->SetAttribute(1);
+         mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
+                             rp_levels, mpi_partitioning);
+         // scale mesh by Sx, Sy, Sz
+         switch (dim)
+         {
+            case 1:
+               mesh.Transform([=](const Vector &x, Vector &y) { y[0] = x[0] * Sx; });
+               mesh.GetBdrElement(0)->SetAttribute(1);
+               mesh.GetBdrElement(1)->SetAttribute(1);
+               break;
+            case 2:
+               mesh.Transform([=](const Vector &x, Vector &y)
+               {
+                  y[0] = x[0] * Sx;
+                  y[1] = x[1] * Sy;
+               });
+               AssignMeshBdrAttrs2D(mesh, 0_r, Sx);
+               break;
+            case 3:
+               mesh.Transform([=](const Vector &x, Vector &y)
+               {
+                  y[0] = x[0] * Sx;
+                  y[1] = x[1] * Sy;
+                  y[2] = x[2] * Sz;
+               });
+               AssignMeshBdrAttrs3D(mesh, 0_r, Sx, 0_r, Sy);
+               break;
+         }
       }
-      if (dim == 2) { AssignMeshBdrAttrs2D(mesh, 0.0, 1.0); }
-      if (dim == 3) { AssignMeshBdrAttrs3D(mesh, 0.0, 1.0, 0.0, 1.0); }
+      else
+      {
+         if (dim == 1)
+         {
+            mesh = Mesh::MakeCartesian1D(nx, Sx);
+            mesh.GetBdrElement(0)->SetAttribute(1);
+            mesh.GetBdrElement(1)->SetAttribute(1);
+         }
+         if (dim == 2)
+         {
+            mesh = Mesh::MakeCartesian2D(nx, ny, Element::QUADRILATERAL, true, Sx,
+                                         Sy);
+            AssignMeshBdrAttrs2D(mesh, 0_r, Sx);
+         }
+         if (dim == 3)
+         {
+            mesh = Mesh::MakeCartesian3D(nx, ny, nz, Element::HEXAHEDRON, Sx, Sy,
+                                         Sz, true);
+            AssignMeshBdrAttrs3D(mesh, 0_r, Sx, 0_r, Sy);
+         }
+         for (int lev = 0; lev < rs_levels; lev++)
+         {
+            mesh.UniformRefinement();
+         }
+      }
    }
    dim = mesh.Dimension();
 
@@ -361,6 +424,12 @@ int main(int argc, char *argv[])
    ParMesh pmesh(MPI_COMM_WORLD, mesh, mpi_partitioning.GetData());
    mesh.Clear();
    for (int lev = 0; lev < rp_levels; lev++) { pmesh.UniformRefinement(); }
+
+   int NE = pmesh.GetNE(), ne_min, ne_max;
+   MPI_Reduce(&NE, &ne_min, 1, MPI_INT, MPI_MIN, 0, pmesh.GetComm());
+   MPI_Reduce(&NE, &ne_max, 1, MPI_INT, MPI_MAX, 0, pmesh.GetComm());
+   if (myid == 0)
+   { cout << "Zones min/max: " << ne_min << " " << ne_max << endl; }
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
@@ -467,12 +536,26 @@ int main(int argc, char *argv[])
    ParGridFunction l2_rho0_gf(&l2_fes), l2_e(&l2_fes);
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
+
+   double blast_position[] = {0.0, 0.0, 0.0};
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
+      // divide amount of blast energy by 2^d due to simulating only a portion
+      // of the symmetric blast.
       DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
-                               blast_position[2], blast_energy);
+                               blast_position[2], blast_energy / pow(2, dim));
+      e_coeff.SetTol(delta_tol);
       l2_e.ProjectCoefficient(e_coeff);
+
+      int non_finite = l2_e.CheckFinite();
+      MPI_Allreduce(MPI_IN_PLACE, &non_finite, 1, MPI_INT, MPI_SUM, pmesh.GetComm());
+      if (non_finite > 0)
+      {
+         cout << "Delta function could not be initialized!\n";
+         delete ode_solver;
+         return 1;
+      }
    }
    else
    {
@@ -570,6 +653,7 @@ int main(int argc, char *argv[])
    int steps = 0;
    BlockVector S_old(S);
    long mem=0, mmax=0, msum=0;
+   long dmem = 0, dmmax = 0, dmsum = 0;
    int checks = 0;
    //   const double internal_energy = hydro.InternalEnergy(e_gf);
    //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
@@ -594,13 +678,13 @@ int main(int argc, char *argv[])
    //   }
    //
 
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
    CALI_CXX_MARK_LOOP_BEGIN(mainloop_annotation, "timestep loop");
 #endif
    int ti = 1;
    for (; !last_step; ti++)
    {
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
       CALI_CXX_MARK_LOOP_ITERATION(mainloop_annotation, static_cast<int>(ti));
 #endif
       if (t + dt >= t_final)
@@ -655,6 +739,18 @@ int main(int argc, char *argv[])
          if (mem_usage)
          {
             mem = GetMaxRssMB();
+            size_t mfree, mtot;
+            if (Device::Allows(Backend::CUDA_MASK | Backend::HIP_MASK))
+            {
+               Device::DeviceMem(&mfree, &mtot);
+               dmem = mtot - mfree;
+               MPI_Reduce(&dmem, &dmmax, 1, MPI_LONG, MPI_MAX, 0,
+                          pmesh.GetComm());
+               MPI_Reduce(&dmem, &dmsum, 1, MPI_LONG, MPI_SUM, 0,
+                          pmesh.GetComm());
+               dmmax /= 1024*1024;
+               dmsum /= 1024*1024;
+            }
             MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh.GetComm());
             MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh.GetComm());
          }
@@ -679,7 +775,8 @@ int main(int argc, char *argv[])
             cout << std::fixed;
             if (mem_usage)
             {
-               cout << ", mem: " << mmax << "/" << msum << " MB";
+               cout << ", mem: " << mmax << "/" << msum << " MB, "
+                    << dmmax << "/" << dmsum << " MB";
             }
             cout << endl;
          }
@@ -764,8 +861,7 @@ int main(int argc, char *argv[])
          Checks(ti, e_norm, checks);
       }
    }
-
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
    CALI_CXX_MARK_LOOP_END(mainloop_annotation);
    adiak::value("steps", ti);
 #endif
@@ -785,6 +881,16 @@ int main(int argc, char *argv[])
 
    if (mem_usage)
    {
+      if (Device::Allows(Backend::CUDA_MASK | Backend::HIP_MASK))
+      {
+         size_t mfree, mtot;
+         Device::DeviceMem(&mfree, &mtot);
+         dmem = mtot - mfree;
+         MPI_Reduce(&dmem, &dmmax, 1, MPI_LONG, MPI_MAX, 0, pmesh.GetComm());
+         MPI_Reduce(&dmem, &dmsum, 1, MPI_LONG, MPI_SUM, 0, pmesh.GetComm());
+         dmmax /= 1024*1024;
+         dmsum /= 1024*1024;
+      }
       mem = GetMaxRssMB();
       MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh.GetComm());
       MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh.GetComm());
@@ -799,8 +905,8 @@ int main(int argc, char *argv[])
            << fabs(energy_init - energy_final) << endl;
       if (mem_usage)
       {
-         cout << "Maximum memory resident set size: "
-              << mmax << "/" << msum << " MB" << endl;
+         cout << "Maximum memory resident set size: " << mmax << "/" << msum
+              << " MB, " << dmmax << "/" << dmsum << " MB" << endl;
       }
    }
 
@@ -825,9 +931,90 @@ int main(int argc, char *argv[])
       vis_e.close();
    }
 
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
    adiak::fini();
 #endif
+
+   if (check_exact_sedov)
+   {
+      // compare against the exact Sedov solution
+      double gamma = 1.4;
+      double rho0 = 1;
+      double omega = 0;
+
+      SedovSol asol(dim, gamma, rho0, blast_energy, omega);
+
+      asol.SetTime(t_final);
+
+      if (strncmp(mesh_file, "default", 7) == 0)
+      {
+         real_t min_r = std::min(std::min(Sx, Sy), Sz);
+         MFEM_VERIFY(
+            asol.r2 <= min_r,
+            "Solution reflections off boundaries detected, cannot compare "
+            "against exact solution.");
+      }
+
+      int err_order = std::max((std::max(order_v, order_e) + 1) * 2, order_q) * 2;
+      const IntegrationRule &irule =
+         IntRules.Get(pmesh.GetTypicalElementGeometry(), err_order);
+
+      QuadratureSpace qspace(pmesh, irule);
+      // only compare density
+      QuadratureFunction sim_qfunc(qspace, 1);
+      QuadratureFunction err_qfunc(qspace, 1);
+
+      hydro.ComputeDensity(rho_gf);
+
+      rho_gf.HostReadWrite();
+
+      {
+         GridFunctionCoefficient ctmp(&rho_gf);
+         ctmp.Coefficient::Project(sim_qfunc);
+      }
+
+      auto slambda = [&](const Vector &x, Vector &res)
+      {
+         real_t tmp[3];
+         Vector dr(tmp, dim);
+         double r = 0;
+
+         for (int i = 0; i < dim; ++i)
+         {
+            dr[i] = x[i] - blast_position[i];
+            r += dr[i] * dr[i];
+         }
+         r = sqrt(r);
+         if (r > 0)
+         {
+            for (int i = 0; i < dim; ++i)
+            {
+               dr[i] /= r;
+            }
+         }
+         else
+         {
+            dr = 0_r;
+         }
+         double rho, v, P;
+         asol.EvalSol(r, rho, v, P);
+         res[0] = rho;
+      };
+      VectorFunctionCoefficient asol_coeff(1, slambda);
+      asol_coeff.Project(err_qfunc);
+
+      sim_qfunc.HostRead();
+      err_qfunc.HostReadWrite();
+      for (int i = 0; i < err_qfunc.Size(); ++i)
+      {
+         err_qfunc[i] = pow(err_qfunc[i] - AsConst(sim_qfunc)[i], 2);
+      }
+      real_t lrho_err = err_qfunc.Integrate();
+      if (Mpi::Root())
+      {
+         cout << "Density L2 error: " << sqrt(lrho_err) << endl;
+      }
+   }
 
    // Free the used memory.
    delete ode_solver;
@@ -1079,7 +1266,7 @@ static void Checks(const int ti, const double nrm, int &chk)
       },
       {
          {{5, 1.198510951452527e+03}, {188, 1.199384410059154e+03}},
-         {{5, 1.339163718592566e+01}, { 28, 7.521073677397994e+00}},
+         {{5, 6.695818592962833e+00}, { 20, 4.267902387082487e+00}},
          {{5, 2.041491591302486e+01}, { 59, 3.443180411803796e+01}},
          {{5, 1.600000000000000e+01}, { 16, 1.600000000000000e+01}},
          {{5, 6.892649884704898e+01}, { 18, 6.893688067534482e+01}},

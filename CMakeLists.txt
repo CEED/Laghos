@@ -25,6 +25,11 @@ find_package(HYPRE REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
 
+option(LAGHOS_USE_CALIPER "Use Caliper" OFF)
+if (LAGHOS_USE_CALIPER)
+  find_package(caliper REQUIRED)
+endif()
+
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to use.")
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL
   "Force the use of the chosen C++ standard.")
@@ -60,7 +65,7 @@ endif()
 
 
 list(APPEND SOURCES
-  laghos_assembly.cpp laghos.cpp laghos_solver.cpp
+  laghos_assembly.cpp laghos.cpp laghos_solver.cpp sedov/sedov_sol.cpp
 )
 
 if (MFEM_USE_CUDA)
@@ -72,6 +77,27 @@ add_executable(laghos ${SOURCES})
 target_include_directories(laghos PUBLIC "${MFEM_DIR}/../../../include/mfem")
 
 target_link_libraries(laghos
+  PUBLIC mfem
+  PUBLIC MPI::MPI_CXX
+  PUBLIC HYPRE::HYPRE
+)
+if(LAGHOS_USE_CALIPER)
+  target_link_libraries(laghos
+    PUBLIC caliper
+  )
+  target_compile_definitions(laghos
+    PUBLIC LAGHOS_USE_CALIPER)
+endif()
+
+if (MFEM_USE_CUDA)
+  set_source_files_properties(sedov/sedov_sol.cpp sedov/sedov.cpp PROPERTIES LANGUAGE CUDA)
+endif()
+
+add_executable(sedov sedov/sedov_sol.cpp sedov/sedov.cpp)
+
+target_include_directories(sedov PUBLIC "${MFEM_DIR}/../../../include/mfem")
+
+target_link_libraries(sedov
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE

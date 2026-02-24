@@ -81,7 +81,7 @@ ifeq ($(wildcard $(CALIPER_DIR)),)
 else
    CALIPER_INCLUDE := -I $(CALIPER_DIR)/include
    CALIPER_LIBS := -L $(CALIPER_DIR)/lib64 -lcaliper
-   CALIPER_FLAGS := -DUSE_CALIPER
+   CALIPER_FLAGS := -DLAGHOS_USE_CALIPER
 endif
 
 # Only configure Adiak if Caliper is enabled
@@ -121,8 +121,8 @@ CCC = $(strip $(CXX) $(LAGHOS_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)))
 LAGHOS_LIBS = $(MFEM_LIBS) $(MFEM_EXT_LIBS) $(CALIPER_LIBS) $(ADIAK_LIBS)
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 
-SOURCE_FILES = $(sort $(wildcard *.cpp))
-HEADER_FILES = $(sort $(wildcard *.hpp))
+SOURCE_FILES = $(sort $(wildcard *.cpp) sedov/sedov_sol.cpp)
+HEADER_FILES = $(sort $(wildcard *.hpp) $(wildcard sedov/*.hpp))
 OBJECT_FILES = $(SOURCE_FILES:.cpp=.o)
 
 # Targets
@@ -247,7 +247,7 @@ tests:
 	grep -E '^[[:space:]]*step[[:space:]]+[0-9]+' RUN.dat | tail -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
-	./laghos -p 1 -m data/cube01_hex.mesh -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
+	./laghos -p 1 -m data/cube01_hex.mesh -E0 2 -rs 2 -tf 0.6 -pa -vs 100 | tee RUN.dat
 	grep -E '^[[:space:]]*step[[:space:]]+[0-9]+' RUN.dat | tail -n 1 | \
 	awk '{ printf("step = %04d, dt = %s |e| = %.10e\n", $$2, $$8, $$11); }' >> RESULTS.dat
 	$(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP) $(MFEM_MPI_NP) \
