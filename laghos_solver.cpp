@@ -543,7 +543,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
-   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Vector b(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
@@ -553,10 +553,10 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, rhs);
+      di.AssembleRHSElementVect(fe, eltr, b);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
-      inv.Mult(rhs, rho_z);
+      inv.Mult(b, rho_z);
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
