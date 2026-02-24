@@ -1223,6 +1223,20 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
+template <typename T, int n, int m> MFEM_HOST_DEVICE
+tensor<T, n * m> flatten_nm(tensor<T, n, m> A)
+{
+   tensor<T, n * m> B{};
+   for (int i = 0; i < n; i++)
+   {
+      for (int j = 0; j < m; j++)
+      {
+         B(i + j * m) = A(i, j);
+      }
+   }
+   return B;
+}
+
 template <int DIM, int DIM2 = DIM*DIM>
 class QUpdatePA
 {
@@ -1298,8 +1312,8 @@ public:
          QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
                           Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                           compr_dir, Jpi, ph_dir, stressJiT,
-                          &gamma, &weight, flatten(J).values, &rho0DetJ0w, &E,
-                          flatten(dvdxi).values, flatten(invJ0).values);
+                          &gamma, &weight, flatten_nm(J).values, &rho0DetJ0w, &E,
+                          flatten_nm(dvdxi).values, flatten_nm(invJ0).values);
          return tuple{make_tensor<DIM, DIM>([&](int i, int j) {return stressJiT[i + DIM*j];})};
       };
       const auto stress_o = future::tuple{Identity<StressTensor>{}};
@@ -1323,15 +1337,15 @@ public:
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                              compr_dir, Jpi, ph_dir, stressJiT,
-                             &gamma, &weight, flatten(J).values, &rho0DetJ0w, &E,
-                             flatten(dvdxi).values, flatten(invJ0).values);
+                             &gamma, &weight, flatten_nm(J).values, &rho0DetJ0w, &E,
+                             flatten_nm(dvdxi).values, flatten_nm(invJ0).values);
          const real_t detJ = det(J);
          const real_t R = rho0DetJ0w / (detJ * weight);
          // Time step estimate at the point. Here the more relevant length
          // scale is related to the actual mesh deformation; we use the min
          // singular value of the ref->physical Jacobian. In addition, the
          // time step estimate should be aware of the presence of shocks.
-         const real_t sv = kernels::CalcSingularvalue<DIM>(flatten(J).values, DIM-1);
+         const real_t sv = kernels::CalcSingularvalue<DIM>(flatten_nm(J).values, DIM-1);
          const real_t h_min = sv / h1order;
          const real_t ih_min = 1. / h_min;
          const real_t irho_ih_min_sq = ih_min * ih_min / R ;
