@@ -17,6 +17,7 @@
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
+#include "linalg/tensor_arrays.hpp"
 
 // #include "general/enzyme.hpp"
 extern int enzyme_dup;
@@ -35,6 +36,14 @@ using namespace mfem::future;
 #else
 #define LAGHOS_CALI_MARK_BEGIN(x)
 #define LAGHOS_CALI_MARK_END(x)
+#endif
+
+#ifdef NVTX_DEBUG_HPP
+#undef NVTX_COLOR
+#define NVTX_COLOR ::nvtx::kCyan
+#include NVTX_DEBUG_HPP
+#else
+#define dbg(...)
 #endif
 
 #ifdef MFEM_USE_MPI
@@ -1250,29 +1259,15 @@ class QUpdatePA
 {
    ParMesh &pmesh;
    Array<int> domain_attr;
-   ParGridFunction &gamma_gf;
-   ParFiniteElementSpace &H1, &L2, *L0;
+   ParGridFunction &gamma_gf, &nodes_gf;
+   ParFiniteElementSpace &H1, &L2, &L0;
    QuadratureSpace qspace;
-   QuadratureFunction scalar_qft, dim2_qft;
+   QuadratureFunction scalar_qft, dimsqr_qft;
    Vector dt_est, dt_min, Jac0inv, rho0DetJ0w, stressJiT;
 
    using matd_t = tensor<real_t, DIM, DIM>;
 
-   enum
-   {
-      // inputs
-      Velocity = 0,
-      Coordinates = 1,
-      Energy = 2,
-      InvJac0 = 3,
-      Rho0DetJ0W = 4,
-      Gamma = 5,
-      DeltaTEst = 6,
-      StressTensor = 7,
-      // outputs
-      V = 8
-   };
-
+   // ===============================================================
    // Stress operator: FD, QF, DOP
    const std::vector<FieldDescriptor> stress_in, stress_out;
    struct StressQF
@@ -1294,17 +1289,18 @@ class QUpdatePA
                       const tensor_array<const real_t, DIM, DIM> &invJ0,
                       const tensor_array<const real_t> &rhoDetJw,
                       const tensor_array<const real_t> &weight,
-                      const tensor_array<real_t, DIM, DIM> &TstressJiT) const
+                      const tensor_array<const real_t> &dtmin,
+                      const tensor_array<real_t, DIM, DIM> &TstressJiT,
+                      const tensor_array<real_t> &dtest) const
       {
          const auto NQ = dvdxi.size();
+         double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
+         double eig_val_data[DIM], eig_vec_data[DIM2];
+         double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
+         double sJiT[DIM2];
 
          for (size_t q = 0; q < NQ; q++)
          {
-            double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
-            double eig_val_data[DIM], eig_vec_data[DIM2];
-            double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
-            double sJiT[DIM2];
-
             const real_t &d_gamma = gamma(q);
             const real_t &d_weights = weight(q);
             const matd_t &d_Jacobians = J(q);
@@ -1312,21 +1308,39 @@ class QUpdatePA
             const real_t &d_e_quads = E(q);
             const matd_t &d_grad_v_ext = dvdxi(q);
             const matd_t &d_Jac0inv = invJ0(q);
-
-            QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
-                             Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
-                             compr_dir, Jpi, ph_dir, sJiT,
-                             &d_gamma, &d_weights,
-                             flatten_nm(d_Jacobians).values,
-                             &d_rhoDetJw, &d_e_quads,
-                             flatten_nm(d_grad_v_ext).values,
-                             flatten_nm(d_Jac0inv).values);
+            auto [visc_coeff, S] =
+               QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
+                                Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
+                                compr_dir, Jpi, ph_dir, sJiT,
+                                &d_gamma, &d_weights,
+                                flatten_nm(d_Jacobians).values,
+                                &d_rhoDetJw, &d_e_quads,
+                                flatten_nm(d_grad_v_ext).values,
+                                flatten_nm(d_Jac0inv).values);
+            // first output
             TstressJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
+
+            const real_t detJ = det(J(q));
+            const real_t R = rhoDetJw(q) / (detJ * weight(q));
+            // Time step estimate at the point. Here the more relevant length
+            // scale is related to the actual mesh deformation; we use the min
+            // singular value of the ref->physical Jacobian. In addition, the
+            // time step estimate should be aware of the presence of shocks.
+            const real_t sv =
+               kernels::CalcSingularvalue<DIM>(flatten_nm(J(q)).values, DIM-1);
+            const real_t h_min = sv / h1order;
+            const real_t ih_min = 1. / h_min;
+            const real_t irho_ih_min_sq = ih_min * ih_min / R ;
+            const real_t idt = S * ih_min + 2.5 * visc_coeff * irho_ih_min_sq;
+            const real_t deltaT_min = dtmin(q);
+            // second output
+            dtest(q) = detJ <= 0.0 ? 0.0 : std::min(deltaT_min, cfl / idt);
          }
       };
    } stress_qf;
    DifferentiableOperator stress_dop;
 
+   // ===============================================================
    // DeltaT operator: FD, QF, DOP
    const std::vector<FieldDescriptor> deltaT_in, deltaT_out;
    struct DeltaTQF
@@ -1348,18 +1362,17 @@ class QUpdatePA
                       const tensor_array<const real_t, DIM, DIM> &invJ0,
                       const tensor_array<const real_t> &rhoDetJw,
                       const tensor_array<const real_t> &weight,
-                      //  const tensor_array<const real_t> &dtmin,
+                      const tensor_array<const real_t> &dtmin,
                       const tensor_array<real_t> &dtest) const
       {
          const auto NQ = dvdxi.size();
+         double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
+         double eig_val_data[DIM], eig_vec_data[DIM2];
+         double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
+         double sJiT[DIM2];
 
          for (size_t q = 0; q < NQ; q++)
          {
-            double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
-            double eig_val_data[DIM], eig_vec_data[DIM2];
-            double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
-            double sJiT[DIM2];
-
             const real_t &d_gamma = gamma(q);
             const real_t &d_weights = weight(q);
             const matd_t &d_Jacobians = J(q);
@@ -1367,7 +1380,6 @@ class QUpdatePA
             const real_t &d_e_quads = E(q);
             const matd_t &d_grad_v_ext = dvdxi(q);
             const matd_t &d_Jac0inv = invJ0(q);
-
             auto [visc_coeff, S] =
                QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
                                 Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
@@ -1377,7 +1389,6 @@ class QUpdatePA
                                 &d_rhoDetJw, &d_e_quads,
                                 flatten_nm(d_grad_v_ext).values,
                                 flatten_nm(d_Jac0inv).values);
-
             const real_t detJ = det(J(q));
             const real_t R = rhoDetJw(q) / (detJ * weight(q));
             // Time step estimate at the point. Here the more relevant length
@@ -1390,12 +1401,18 @@ class QUpdatePA
             const real_t ih_min = 1. / h_min;
             const real_t irho_ih_min_sq = ih_min * ih_min / R ;
             const real_t idt = S * ih_min + 2.5 * visc_coeff * irho_ih_min_sq;
-            const real_t deltaT_min = M_PI; // dtmin(q); 🔥🔥🔥
+            const real_t deltaT_min = dtmin(q);
             dtest(q) = detJ <= 0.0 ? 0.0 : std::min(deltaT_min, cfl / idt);
          }
       };
    } deltaT_qf;
    DifferentiableOperator deltaT_dop;
+
+   enum
+   {
+      Velocity, Coordinates, Energy, InvJac0,
+      Rho0DetJ0W, Gamma, DeltaTEst, StressTensor
+   };
 
 public:
    QUpdatePA(const bool use_viscosity,
@@ -1411,36 +1428,35 @@ public:
       pmesh(*h1.GetParMesh()),
       domain_attr(pmesh.attributes.Max()),
       gamma_gf(const_cast<ParGridFunction&>(gamma_gf)),
-      H1(h1), L2(l2), L0(gamma_gf.ParFESpace()),
+      nodes_gf(*static_cast<ParGridFunction*>(pmesh.GetNodes())),
+      H1(h1), L2(l2), L0(*gamma_gf.ParFESpace()),
       qspace(pmesh, ir),
       scalar_qft(qspace, 1),
-      dim2_qft(qspace, DIM*DIM),
+      dimsqr_qft(qspace, DIM*DIM),
       dt_est(scalar_qft.Size()),
       dt_min(scalar_qft.Size()),
       Jac0inv(qdata.Jac0inv.ReadWrite(), qdata.Jac0inv.TotalSize()),
       rho0DetJ0w(qdata.rho0DetJ0w.ReadWrite(), qdata.rho0DetJ0w.Size()),
       stressJiT(qdata.stressJinvT.ReadWrite(), qdata.stressJinvT.TotalSize()),
       // *INDENT-OFF*
-      stress_in({
-         {Velocity, &H1},
-         {Coordinates, &H1}, 
-         {Energy, &L2}, 
-         {Gamma, L0}, 
-         {InvJac0, &dim2_qft},
-         {Rho0DetJ0W, &scalar_qft}
-      }),
-      stress_out({{StressTensor, &dim2_qft}}),
+      stress_in({ {Velocity, &H1},
+                  {Coordinates, &H1}, 
+                  {Energy, &L2}, 
+                  {Gamma, &L0}, 
+                  {InvJac0, &dimsqr_qft},
+                  {Rho0DetJ0W, &scalar_qft},
+                  {DeltaTEst, &scalar_qft}}),
+      stress_out({{StressTensor, &dimsqr_qft}, {DeltaTEst, &scalar_qft}}),
       stress_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
       stress_dop(stress_in, stress_out, pmesh),
 
-      deltaT_in({
-         {Velocity, &H1}, 
-         {Coordinates, &H1}, 
-         {Energy, &L2}, 
-         {Gamma, L0}, 
-         {InvJac0, &dim2_qft},
-         {Rho0DetJ0W, &scalar_qft}
-      }),
+      deltaT_in({ {Velocity, &H1}, 
+                  {Coordinates, &H1}, 
+                  {Energy, &L2}, 
+                  {Gamma, &L0}, 
+                  {InvJac0, &dimsqr_qft},
+                  {Rho0DetJ0W, &scalar_qft},
+                  {DeltaTEst, &scalar_qft}}),
       deltaT_out({{DeltaTEst, &scalar_qft}}),
       deltaT_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
       deltaT_dop(deltaT_in, deltaT_out, pmesh)
@@ -1448,51 +1464,109 @@ public:
    {
       domain_attr = 1;
 
-      const auto stress_i = tuple
-      {
-         Gradient<Velocity> {},
-         Gradient<Coordinates> {},
-         Value<Energy> {},
-         Value<Gamma> {},
-         Identity<InvJac0> {},
-         Identity<Rho0DetJ0W> {},
-         Weight{}
-      };
-
-      const auto stress_o = tuple{ Identity<StressTensor>{} };
-      stress_dop.AddDomainIntegrator(stress_qf, stress_i, stress_o, ir, domain_attr);
+      stress_dop.AddDomainIntegrator(stress_qf,
+                                     tuple{Gradient<Velocity> {},
+                                           Gradient<Coordinates> {},
+                                           Value<Energy> {},
+                                           Value<Gamma> {},
+                                           Identity<InvJac0> {},
+                                           Identity<Rho0DetJ0W> {},
+                                           Weight{},
+                                           Identity<DeltaTEst> {}
+                                          },
+                                     tuple{ Identity<StressTensor>{}, Identity<DeltaTEst>{} },
+                                     ir, domain_attr);
       stress_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
 
-      const auto deltaT_i = tuple
-      {
-         Gradient<Velocity> {},
-         Gradient<Coordinates> {},
-         Value<Energy> {},
-         Value<Gamma> {},
-         Identity<InvJac0> {},
-         Identity<Rho0DetJ0W> {},
-         Weight{},
-         // Identity<DeltaTEst> {}
-      };
-
-      const auto deltaT_o = tuple
-      {
-         Identity<DeltaTEst>{}
-      };
-      deltaT_dop.AddDomainIntegrator(deltaT_qf, deltaT_i, deltaT_o, ir, domain_attr);
+      deltaT_dop.AddDomainIntegrator(deltaT_qf, tuple{ Gradient<Velocity> {},
+                                                       Gradient<Coordinates> {},
+                                                       Value<Energy> {},
+                                                       Value<Gamma> {},
+                                                       Identity<InvJac0> {},
+                                                       Identity<Rho0DetJ0W> {},
+                                                       Weight{},
+                                                       Identity<DeltaTEst> {}
+                                                     },
+                                     tuple{ Identity<DeltaTEst>{} },
+                                     ir, domain_attr);
       deltaT_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
 
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
-      assert(false && "🔥🔥🔥");
-      // stress_dop.SetParameters({&x, &e, &gamma_gf, &Jac0inv, &rho0DetJ0w, &dt_min, &stressJiT});
-      // stress_dop.Mult(v, stressJiT);
+      assert(qdata.stressJinvT.TotalSize() == dimsqr_qft.Size());
+      assert(qdata.Jac0inv.TotalSize() == dimsqr_qft.Size());
+      assert(qdata.rho0DetJ0w.Size() == scalar_qft.Size());
 
-      // dt_min = qdata.dt_est;
-      // deltat_dop.SetParameters({&x, &e, &gamma_gf, &Jac0inv, &rho0DetJ0w, &dt_min, &dt_est});
-      // deltat_dop.Mult(v, dt_est);
-      // qdata.dt_est = dt_est.Min();
+      dt_min = qdata.dt_est;
+
+      {
+         Array<int> iOffsets(7+1);
+         iOffsets[0] = 0;
+         iOffsets[1] = H1.GetTrueVSize(); // Velocity
+         iOffsets[2] = H1.GetTrueVSize(); // Coordinates
+         iOffsets[3] = L2.GetTrueVSize(); // Energy
+         iOffsets[4] = L0.GetTrueVSize(); // Gamma
+         iOffsets[5] = dimsqr_qft.Size(); // InvJac0
+         iOffsets[6] = scalar_qft.Size(); // Rho0DetJ0W
+         iOffsets[7] = scalar_qft.Size(); // DeltaTEst (min)
+         iOffsets.PartialSum();
+         // dbg("iOffsets:{}", iOffsets);
+
+         BlockVector P(iOffsets);
+         P.GetBlock(0) = v;            // Velocity
+         P.GetBlock(1) = nodes_gf;     // Coordinates
+         P.GetBlock(2) = e;            // Energy
+         P.GetBlock(3) = gamma_gf;     // Gamma
+         P.GetBlock(4) = Jac0inv;      // InvJac0
+         P.GetBlock(5) = rho0DetJ0w;   // Rho0DetJ0W
+         P.GetBlock(6) = dt_min;       // DeltaTEst (min)
+
+         Array<int> oOffsets(2+1);
+         oOffsets[0] = 0;
+         oOffsets[1] = dimsqr_qft.Size(); // TstressJiT
+         oOffsets[2] = scalar_qft.Size(); // DeltaTEst
+         oOffsets.PartialSum();
+
+         BlockVector Z(oOffsets);
+         stress_dop.Mult(P, Z);
+         stressJiT = Z.GetBlock(0);
+         dt_est = Z.GetBlock(1);
+      }
+
+      /*{
+         Array<int> iOffsets(7+1);
+         iOffsets[0] = 0;
+         iOffsets[1] = H1.GetTrueVSize(); // Velocity
+         iOffsets[2] = H1.GetTrueVSize(); // Coordinates
+         iOffsets[3] = L2.GetTrueVSize(); // Energy
+         iOffsets[4] = L0.GetTrueVSize(); // Gamma
+         iOffsets[5] = dimsqr_qft.Size(); // InvJac0
+         iOffsets[6] = scalar_qft.Size(); // Rho0DetJ0W
+         iOffsets[7] = scalar_qft.Size(); // DeltaTEst (min)
+
+         iOffsets.PartialSum();
+         // dbg("iOffsets:{}", iOffsets);
+
+         BlockVector P(iOffsets);
+         P.GetBlock(0) = v;            // Velocity
+         P.GetBlock(1) = nodes_gf;     // Coordinates
+         P.GetBlock(2) = e;            // Energy
+         P.GetBlock(3) = gamma_gf;     // Gamma
+         P.GetBlock(4) = Jac0inv;      // InvJac0
+         P.GetBlock(5) = rho0DetJ0w;   // Rho0DetJ0W
+         P.GetBlock(6) = dt_min;       // DeltaTEst (min)
+
+         Array<int> oOffsets(1+1);
+         oOffsets[0] = 0;
+         oOffsets[1] = scalar_qft.Size(); // DeltaTEst
+         oOffsets.PartialSum();
+
+         BlockVector Z(dt_est, 0, oOffsets);
+
+         deltaT_dop.Mult(P, Z);
+      }*/
+      qdata.dt_est = dt_est.Min();
    }
 };
 
@@ -1505,8 +1579,8 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    const int H1_size = H1.GetVSize();
    const double h1order = (double) H1.GetOrder(0);
    ParGridFunction x, v, e;
-   x.MakeRef(&H1,*S_p, 0);
-   v.MakeRef(&H1,*S_p, H1_size);
+   x.MakeRef(&H1, *S_p, 0);
+   v.MakeRef(&H1, *S_p, H1_size);
    e.MakeRef(&L2, *S_p, 2*H1_size);
    Vector stressJinvT(qdata.stressJinvT.Write(), qdata.stressJinvT.TotalSize());
 
@@ -1514,7 +1588,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    {
       static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
-      assert(false && "🔥🔥🔥");
 
       const auto QX = Reshape(qdata.stressJinvT.Read(), dim, dim, Q1D, Q1D, NE);
       auto QY = Reshape(TstressJinvT.Write(), Q1D, Q1D, NE, dim, dim);
@@ -1540,7 +1613,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    {
       static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
-      assert(false && "🔥🔥🔥");
 
       const auto QX = Reshape(qdata.stressJinvT.Read(), dim, dim, Q1D, Q1D, Q1D, NE);
       auto QY = Reshape(TstressJinvT.Write(), Q1D, Q1D, Q1D, NE, dim, dim);
@@ -1569,7 +1641,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    LAGHOS_CALI_MARK_END("QUpdate-UpdateQuadratureData");
    timer->sw_qdata.Stop();
    timer->quad_tstep += NE;
-   assert(false && "✅✅✅");
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const
