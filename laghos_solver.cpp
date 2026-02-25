@@ -19,13 +19,8 @@
 #include "linalg/kernels.hpp"
 #include "linalg/tensor_arrays.hpp"
 
-// #include "general/enzyme.hpp"
-extern int enzyme_dup;
-extern int enzyme_dupnoneed;
-extern int enzyme_out;
-extern int enzyme_const;
-extern int enzyme_interleave;
 #include "fem/dfem/doperator.hpp"
+#include "general/enzyme.hpp"
 using namespace mfem::future;
 
 #ifdef USE_CALIPER
@@ -40,7 +35,7 @@ using namespace mfem::future;
 
 #ifdef NVTX_DEBUG_HPP
 #undef NVTX_COLOR
-#define NVTX_COLOR ::nvtx::kCyan
+#define NVTX_COLOR ::nvtx::kNvidia
 #include NVTX_DEBUG_HPP
 #else
 #define dbg(...)
@@ -560,7 +555,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
    DenseMatrix Mrho(l2dofs_cnt);
-   Vector b(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    MassIntegrator mi(&ir);
@@ -570,10 +565,10 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      di.AssembleRHSElementVect(fe, eltr, b);
+      di.AssembleRHSElementVect(fe, eltr, rhs);
       mi.AssembleElementMatrix(fe, eltr, Mrho);
       inv.Factor();
-      inv.Mult(b, rho_z);
+      inv.Mult(rhs, rho_z);
       L2.GetElementDofs(e, dofs);
       rho.SetSubVector(dofs, rho_z);
    }
@@ -1056,12 +1051,24 @@ double FNorm(const T * __restrict__ data)
    return s*sqrt(n2);
 }
 
+template<class T>
+[[nodiscard]] constexpr
+std::enable_if_t<std::is_floating_point_v<T>, bool>
+AlmostEqual(T a, T b, T eps_rel = 1e-10, T eps_abs = 1e-14) noexcept
+{
+   T diff = std::abs(a - b);
+   if (diff <= eps_abs) { return true; }
+   T scale = std::max({T(1), std::abs(a), std::abs(b)});
+   return diff <= eps_rel * scale;
+}
+
 template<int DIM> MFEM_HOST_DEVICE static inline
 auto QUpdateBody(const bool use_viscosity,
                  const bool use_vorticity,
                  const double h0,
                  const double h1order,
                  const double cfl,
+                 const double infinity,
                  double* __restrict__ Jinv,
                  double* __restrict__ stress,
                  double* __restrict__ sgrad_v,
@@ -1077,15 +1084,19 @@ auto QUpdateBody(const bool use_viscosity,
                  const double* __restrict__ d_rho0DetJ0w,
                  const double* __restrict__ d_e_quads,
                  const double* __restrict__ d_grad_v_ext,
-                 const double* __restrict__ d_Jac0inv)
+                 const double* __restrict__ d_Jac0inv,
+                 double *d_dt_est)
 {
    constexpr int DIM2 = DIM*DIM;
+   double min_detJ = infinity;
 
    const double gamma = d_gamma[0];
    const double weight =  d_weights[0];
    const double inv_weight = 1. / weight;
    const double *J = d_Jacobians;
    const double detJ = kernels::Det<DIM>(J);
+   min_detJ = fmin(min_detJ, detJ);
+   dbg("min_detJ:{}", min_detJ);
    kernels::CalcInverse<DIM>(J, Jinv);
    const double R = inv_weight * d_rho0DetJ0w[0] / detJ;
    const double E = fmax(0.0, d_e_quads[0]);
@@ -1141,9 +1152,34 @@ auto QUpdateBody(const bool use_viscosity,
                     (1.0 - smooth_step_01(mu-2.0*eps, eps));
       kernels::Add(DIM, DIM, visc_coeff, stress, sgrad_v, stress);
    }
+   // Time step estimate at the point. Here the more relevant length
+   // scale is related to the actual mesh deformation; we use the min
+   // singular value of the ref->physical Jacobian. In addition, the
+   // time step estimate should be aware of the presence of shocks.
+   const double sv = kernels::CalcSingularvalue<DIM>(J, DIM - 1);
+   const double h_min = sv / h1order;
+   const double ih_min = 1. / h_min;
+   const double irho_ih_min_sq = ih_min * ih_min / R ;
+   const double idt = S * ih_min + 2.5 * visc_coeff * irho_ih_min_sq;
+   if (min_detJ < 0.0)
+   {
+      // This will force repetition of the step with smaller dt.
+      d_dt_est[0] = 0.0;
+   }
+   else
+   {
+      if (idt > 0.0)
+      {
+         const double cfl_inv_dt = cfl / idt;
+         d_dt_est[0] = fmin(d_dt_est[0], cfl_inv_dt);
+      }
+   }
+   dbg("d_dt_est:{}", d_dt_est[0]);
+
    // Quadrature data for partial assembly of the force operator.
    kernels::MultABt(DIM, DIM, DIM, stress, Jinv, stressJiT);
    for (int k = 0; k < DIM2; k++) { stressJiT[k] *= weight * detJ; }
+
    return tuple{visc_coeff, S};
 }
 
@@ -1271,6 +1307,7 @@ class QUpdatePA
    {
       const bool use_viscosity, use_vorticity;
       const real_t h0, h1order, cfl;
+      const double infinity = std::numeric_limits<double>::infinity();
 
       UpdateQF() = delete;
       explicit UpdateQF(const bool use_viscosity, const bool use_vorticity,
@@ -1305,15 +1342,18 @@ class QUpdatePA
             const real_t &d_e_quads = E(q);
             const matd_t &d_grad_v_ext = dvdxi(q);
             const matd_t &d_Jac0inv = invJ0(q);
+            real_t d_dt_est = dtmin(q);
             auto [visc_coeff, S] =
-               QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
+               QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                                 Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                                 compr_dir, Jpi, ph_dir, sJiT,
                                 &d_gamma, &d_weights,
                                 flatten_nm(d_Jacobians).values,
                                 &d_rhoDetJw, &d_e_quads,
                                 flatten_nm(d_grad_v_ext).values,
-                                flatten_nm(d_Jac0inv).values);
+                                flatten_nm(d_Jac0inv).values,
+                                &d_dt_est);
+            dbg("d_dt_est:{}", d_dt_est);
             // first output
             TstressJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
 
@@ -1331,7 +1371,10 @@ class QUpdatePA
             const real_t idt = S * ih_min + 2.5 * visc_coeff * irho_ih_min_sq;
             const real_t deltaT_min = dtmin(q);
             // second output
-            dtest(q) = detJ <= 0.0 ? 0.0 : std::min(deltaT_min, cfl / idt);
+            const real_t dtest_q = (detJ <= 0.0) ? 0.0 : std::min(deltaT_min, cfl / idt);
+            dtest(q) = dtest_q;
+            dbg("dtest_q:{} d_dt_est:{}", dtest_q, d_dt_est);
+            if (std::isfinite(dtest_q) && std::isfinite(d_dt_est)) { assert(AlmostEqual(dtest_q, d_dt_est)); }
          }
       };
    } qupdate_qf;
@@ -1420,6 +1463,7 @@ public:
 
       stressJiT = Z.GetBlock(0);
       qdata.dt_est = Z.GetBlock(1).Min();
+      dbg("MINed, qdata.dt_est:{}", qdata.dt_est);
    }
 };
 
