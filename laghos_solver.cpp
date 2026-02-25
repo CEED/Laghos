@@ -17,11 +17,25 @@
 #include "general/forall.hpp"
 #include "laghos_solver.hpp"
 #include "linalg/kernels.hpp"
-#include "linalg/tensor_arrays.hpp"
 
+#include "linalg/tensor_arrays.hpp"
 #include "fem/dfem/doperator.hpp"
 #include "general/enzyme.hpp"
 using namespace mfem::future;
+
+template <typename T, int n, int m> MFEM_HOST_DEVICE
+tensor<T, n * m> flatten_nm(tensor<T, n, m> A)
+{
+   tensor<T, n * m> B{};
+   for (int i = 0; i < n; i++)
+   {
+      for (int j = 0; j < m; j++)
+      {
+         B(i + j * m) = A(i, j);
+      }
+   }
+   return B;
+}
 
 #ifdef USE_CALIPER
 #include <caliper/cali.h>
@@ -31,14 +45,6 @@ using namespace mfem::future;
 #else
 #define LAGHOS_CALI_MARK_BEGIN(x)
 #define LAGHOS_CALI_MARK_END(x)
-#endif
-
-#ifdef NVTX_DEBUG_HPP
-#undef NVTX_COLOR
-#define NVTX_COLOR ::nvtx::kNvidia
-#include NVTX_DEBUG_HPP
-#else
-#define dbg(...)
 #endif
 
 #ifdef MFEM_USE_MPI
@@ -1051,17 +1057,6 @@ double FNorm(const T * __restrict__ data)
    return s*sqrt(n2);
 }
 
-template<class T>
-[[nodiscard]] constexpr
-std::enable_if_t<std::is_floating_point_v<T>, bool>
-AlmostEqual(T a, T b, T eps_rel = 1e-10, T eps_abs = 1e-14) noexcept
-{
-   T diff = std::abs(a - b);
-   if (diff <= eps_abs) { return true; }
-   T scale = std::max({T(1), std::abs(a), std::abs(b)});
-   return diff <= eps_rel * scale;
-}
-
 template<int DIM> MFEM_HOST_DEVICE static inline
 void QUpdateBody(const bool use_viscosity,
                  const bool use_vorticity,
@@ -1078,27 +1073,27 @@ void QUpdateBody(const bool use_viscosity,
                  double* __restrict__ Jpi,
                  double* __restrict__ ph_dir,
                  double* __restrict__ stressJiT,
-                 const double* __restrict__ d_gamma,
-                 const double* __restrict__ d_weights,
+                 const double &d_gamma,
+                 const double &d_weights,
                  const double* __restrict__ d_Jacobians,
-                 const double* __restrict__ d_rho0DetJ0w,
-                 const double* __restrict__ d_e_quads,
+                 const double &d_rho0DetJ0w,
+                 const double &d_e_quads,
                  const double* __restrict__ d_grad_v_ext,
                  const double* __restrict__ d_Jac0inv,
-                 double *d_dt_est)
+                 double &d_dt_est)
 {
    constexpr int DIM2 = DIM*DIM;
    double min_detJ = infinity;
 
-   const double gamma = d_gamma[0];
-   const double weight =  d_weights[0];
+   const double gamma = d_gamma;
+   const double weight =  d_weights;
    const double inv_weight = 1. / weight;
    const double *J = d_Jacobians;
    const double detJ = kernels::Det<DIM>(J);
    min_detJ = fmin(min_detJ, detJ);
    kernels::CalcInverse<DIM>(J, Jinv);
-   const double R = inv_weight * d_rho0DetJ0w[0] / detJ;
-   const double E = fmax(0.0, d_e_quads[0]);
+   const double R = inv_weight * d_rho0DetJ0w / detJ;
+   const double E = fmax(0.0, d_e_quads);
    const double P = (gamma - 1.0) * R * E;
    const double S = sqrt(gamma * (gamma - 1.0) * E);
    for (int k = 0; k < DIM2; k++) { stress[k] = 0.0; }
@@ -1163,14 +1158,14 @@ void QUpdateBody(const bool use_viscosity,
    if (min_detJ < 0.0)
    {
       // This will force repetition of the step with smaller dt.
-      d_dt_est[0] = 0.0;
+      d_dt_est = 0.0;
    }
    else
    {
       if (idt > 0.0)
       {
          const double cfl_inv_dt = cfl / idt;
-         d_dt_est[0] = fmin(d_dt_est[0], cfl_inv_dt);
+         d_dt_est = fmin(d_dt_est, cfl_inv_dt);
       }
    }
    // Quadrature data for partial assembly of the force operator.
@@ -1271,20 +1266,6 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
-template <typename T, int n, int m> MFEM_HOST_DEVICE
-tensor<T, n * m> flatten_nm(tensor<T, n, m> A)
-{
-   tensor<T, n * m> B{};
-   for (int i = 0; i < n; i++)
-   {
-      for (int j = 0; j < m; j++)
-      {
-         B(i + j * m) = A(i, j);
-      }
-   }
-   return B;
-}
-
 template <int DIM, int DIM2 = DIM*DIM>
 class QUpdatePA
 {
@@ -1330,26 +1311,17 @@ class QUpdatePA
 
          for (size_t q = 0; q < NQ; q++)
          {
-            const real_t d_gamma = gamma(q);
-            const real_t d_weights = weight(q);
-            const matd_t d_Jacobians = J(q);
-            const real_t d_rhoDetJw = rhoDetJw(q);
-            const real_t d_e_quads = E(q);
-            const matd_t d_grad_v_ext = dvdxi(q);
-            const matd_t d_Jac0inv = invJ0(q);
             real_t d_dt_est = dtmin(q);
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                              compr_dir, Jpi, ph_dir, sJiT,
-                             &d_gamma, &d_weights,
-                             flatten_nm(d_Jacobians).values,
-                             &d_rhoDetJw, &d_e_quads,
-                             flatten_nm(d_grad_v_ext).values,
-                             flatten_nm(d_Jac0inv).values,
-                             &d_dt_est);
-            // first output
+                             gamma(q), weight(q),
+                             flatten_nm(J(q)).values,
+                             rhoDetJw(q), E(q),
+                             flatten_nm(dvdxi(q)).values,
+                             flatten_nm(invJ0(q)).values,
+                             d_dt_est);
             TstressJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
-            // second output
             dtest(q) = d_dt_est;
          }
       };
@@ -1395,11 +1367,10 @@ public:
                      {DeltaTEst, &scalar_qft}}, 
                   {  {StressTensor, &dimsqr_qft}, {DeltaTEst, &scalar_qft}},
                   pmesh),
-      P([&](){ Array<int> offsets({
-                  0, H1.GetTrueVSize(), H1.GetTrueVSize(),
+      P([&](){ Array<int> offsets({ 0, 
+                  H1.GetTrueVSize(), H1.GetTrueVSize(),
                   L2.GetTrueVSize(), L0.GetTrueVSize(), 
-                  dimsqr_qft.Size(), scalar_qft.Size(),
-                  scalar_qft.Size()});
+                  dimsqr_qft.Size(), scalar_qft.Size(), scalar_qft.Size()});
                return (offsets.PartialSum(), offsets);
             }()),
       Z([&](){ Array<int> offsets({0, dimsqr_qft.Size(), scalar_qft.Size()});
@@ -1423,16 +1394,16 @@ public:
                Identity<DeltaTEst>{}},
          ir, domain_attr);
       qupdate_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
+      P.GetBlock(3) = gamma_gf;
+      P.GetBlock(4) = Jac0inv;
+      P.GetBlock(5) = rho0DetJ0w;
    }
 
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
       P.GetBlock(0) = v;
-      P.GetBlock(1) = nodes_gf;
+      P.GetBlock(1) = x;
       P.GetBlock(2) = e;
-      P.GetBlock(3) = gamma_gf;
-      P.GetBlock(4) = Jac0inv;
-      P.GetBlock(5) = rho0DetJ0w;
       P.GetBlock(6) = qdata.dt_est;
 
       qupdate_dop.Mult(P, Z);

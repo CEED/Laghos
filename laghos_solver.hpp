@@ -73,8 +73,7 @@ public:
            const ParGridFunction &gamma_gf,
            const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
-      dim(d),
-      NE(ne), Q1D(q1d),
+      dim(d), NE(ne), Q1D(q1d),
       use_viscosity(visc), use_vorticity(vort), cfl(cfl),
       timer(t), ir(ir), H1(h1), L2(l2),
       gamma_gf(gamma_gf), TstressJinvT(dim*dim*NE*ir.GetNPoints()) { }
