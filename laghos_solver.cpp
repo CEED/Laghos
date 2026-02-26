@@ -1453,26 +1453,9 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
       static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
-      db1("Q1D:{}, NE:{}", Q1D, NE);
-
-      // QX holds the data in (2,2, Q1D, Q1D, NE) layout
-#undef LAGHOS_USE_RESHAPES
-#ifdef LAGHOS_USE_RESHAPES
-      const auto QX = Reshape(qdata.stressJinvT.Read(), dim, dim, Q1D, Q1D, NE);
-#else
-      const auto QXr = Reshape(qdata.stressJinvT.Read(), dim, dim, Q1D, Q1D, NE);
-      const auto QXt = make_tensor_array<2,2>(qdata.stressJinvT.Read(), NE, Q1D, Q1D);
-      // NE, Q1D, Q1D with {4,3,2, 1,0}  ✅
-      QXt.set_layout({4,3,2, 1,0});
-#endif
-
-      // QY needs the data in (Q1D, Q1D, NE, 2,2) layout
-#ifdef LAGHOS_USE_RESHAPES
-      auto QY = Reshape(TstressJinvT.Write(), Q1D, Q1D, NE, dim, dim);
-#else
-      // 🔥🔥🔥 NE, Q1D, Q1D == Q1D, Q1D, NE
+      const auto QX = make_tensor_array<2,2>(qdata.stressJinvT.Read(), NE, Q1D, Q1D);
       auto QY = make_tensor_array<2,2>(TstressJinvT.Write(), Q1D, Q1D, NE);
-#endif
+      QX.set_layout({4,3,2,1,0});
 
       mfem::forall_2D(NE, Q1D, Q1D, [=] MFEM_HOST_DEVICE (int e)
       {
@@ -1480,36 +1463,21 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
          {
             MFEM_FOREACH_THREAD_DIRECT(qx,x,Q1D)
             {
-#ifdef LAGHOS_USE_RESHAPES
-               for (int j = 0; j < dim; j++)
-               {
-                  for (int i = 0; i < dim; i++)
-                  {
-                     QY(qx,qy,e,j,i) = QX(i,j,qx,qy,e);
-                  }
-               }
-#else
-               const auto qxr = make_tensor<2, 2>([&](int i, int j) {return QXr(j,i,qx,qy,e);});
-               QY(qx,qy,e) = qxr;
-               assert(AlmostEqual(QXt(e,qy,qx)(0,0), qxr(0,0)));
-               assert(AlmostEqual(QXt(e,qy,qx)(0,1), qxr(0,1)));
-               assert(AlmostEqual(QXt(e,qy,qx)(1,1), qxr(1,1)));
-               assert(AlmostEqual(QXt(e,qy,qx)(1,0), qxr(1,0)));
-               QY(qx,qy,e) = QXt(e,qy,qx);
-               // QY(qx,qy,e) = QXt(qx,qy,e);
-#endif
+               QY(qx,qy,e) = QX(e,qy,qx);
             }
          }
       });
-      // assert(false && "🔥🔥🔥");
    }
    else if (dim == 3)
    {
       static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
-      const auto QX = Reshape(qdata.stressJinvT.Read(), dim, dim, Q1D, Q1D, Q1D, NE);
-      auto QY = Reshape(TstressJinvT.Write(), Q1D, Q1D, Q1D, NE, dim, dim);
+      const auto QX =
+         make_tensor_array<3,3>(qdata.stressJinvT.Read(), NE, Q1D, Q1D, Q1D);
+      auto QY = make_tensor_array<3,3>(TstressJinvT.Write(), Q1D, Q1D, Q1D, NE);
+      QX.set_layout({5,4,3,2,1,0});
+
       mfem::forall_3D(NE, Q1D, Q1D, Q1D, [=] MFEM_HOST_DEVICE (int e)
       {
          MFEM_FOREACH_THREAD_DIRECT(qz,z,Q1D)
@@ -1518,13 +1486,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
             {
                MFEM_FOREACH_THREAD_DIRECT(qx,x,Q1D)
                {
-                  for (int j = 0; j < dim; j++)
-                  {
-                     for (int i = 0; i < dim; i++)
-                     {
-                        QY(qx,qy,qz,e,j,i) = QX(i,j,qx,qy,qz,e);
-                     }
-                  }
+                  QY(qx,qy,qz,e) = QX(e,qz,qy,qx);
                }
             }
          }
@@ -1535,7 +1497,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    LAGHOS_CALI_MARK_END("QUpdate-UpdateQuadratureData");
    timer->sw_qdata.Stop();
    timer->quad_tstep += NE;
-   // assert(false && "🔥🔥🔥");
 }
 
 void LagrangianHydroOperator::AssembleForceMatrix() const
