@@ -21,18 +21,6 @@
 #include "linalg/tensor_arrays.hpp"
 #include "fem/dfem/doperator.hpp"
 #include "general/enzyme.hpp"
-
-#include "tensor_arrays_print.hpp"
-
-template<class T> [[nodiscard]]
-constexpr std::enable_if_t<std::is_floating_point_v<T>, bool>
-AlmostEqual(T a, T b, T eps_rel = 1e-10, T eps_abs = 1e-14) noexcept
-{
-   T diff = std::abs(a - b);
-   if (diff <= eps_abs) { return true; }
-   T scale = std::max({T(1), std::abs(a), std::abs(b)});
-   return diff <= eps_rel * scale;
-}
 using namespace mfem::future;
 
 template <typename T, int n, int m> MFEM_HOST_DEVICE
@@ -57,15 +45,6 @@ tensor<T, n * m> flatten_nm(tensor<T, n, m> A)
 #else
 #define LAGHOS_CALI_MARK_BEGIN(x)
 #define LAGHOS_CALI_MARK_END(x)
-#endif
-
-#ifdef NVTX_DEBUG_HPP
-#undef NVTX_COLOR
-#define NVTX_COLOR ::nvtx::kCyan
-#include NVTX_DEBUG_HPP
-#else
-#define dbg(...)
-#define db1(...)
 #endif
 
 #ifdef MFEM_USE_MPI
@@ -1379,13 +1358,15 @@ public:
       stressJiT(qdata.stressJinvT.ReadWrite(), qdata.stressJinvT.TotalSize()),
       // *INDENT-OFF*
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
-      qupdate_dop({  {Velocity, &H1},
+      qupdate_dop(// input field descriptors
+                  {  {Velocity, &H1},
                      {Coordinates, &H1}, 
                      {Energy, &L2}, 
                      {Gamma, &L0}, 
                      {InvJac0, &dimsqr_qft},
                      {Rho0DetJ0W, &scalar_qft},
                      {DeltaTEst, &scalar_qft}}, 
+                  // output field descriptors
                   {  {StressTensor, &dimsqr_qft}, {DeltaTEst, &scalar_qft}},
                   pmesh),
       P([&](){ Array<int> offsets({ 0, 
@@ -1446,14 +1427,16 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    x.MakeRef(&H1, *S_p, 0);
    v.MakeRef(&H1, *S_p, H1_size);
    e.MakeRef(&L2, *S_p, 2*H1_size);
-   Vector stressJinvT(qdata.stressJinvT.Write(), qdata.stressJinvT.TotalSize());
+
+   // wrap qdata.stressJinvT to allow the transpose
+   Vector QstressJinvT(qdata.stressJinvT.Write(), qdata.stressJinvT.TotalSize());
 
    if (dim == 2)
    {
       static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
-      const auto QX = make_tensor_array<2,2>(qdata.stressJinvT.Read(), NE, Q1D, Q1D);
+      const auto QX = make_tensor_array<2,2>(QstressJinvT.Read(), NE, Q1D, Q1D);
       auto QY = make_tensor_array<2,2>(TstressJinvT.Write(), Q1D, Q1D, NE);
       QX.set_layout({4,3,2,1,0});
 
@@ -1473,8 +1456,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
       static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
-      const auto QX =
-         make_tensor_array<3,3>(qdata.stressJinvT.Read(), NE, Q1D, Q1D, Q1D);
+      const auto QX = make_tensor_array<3,3>(QstressJinvT.Read(), NE, Q1D, Q1D, Q1D);
       auto QY = make_tensor_array<3,3>(TstressJinvT.Write(), Q1D, Q1D, Q1D, NE);
       QX.set_layout({5,4,3,2,1,0});
 
@@ -1492,7 +1474,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
          }
       });
    }
-   stressJinvT = TstressJinvT;
+   QstressJinvT = TstressJinvT;
    LAGHOS_DEVICE_SYNC;
    LAGHOS_CALI_MARK_END("QUpdate-UpdateQuadratureData");
    timer->sw_qdata.Stop();
