@@ -973,7 +973,7 @@ int main(int argc, char *argv[])
 
       SedovSol asol(dim, gamma, rho0, blast_energy, omega);
 
-      asol.SetTime(t_final);
+      asol.SetTime(t);
 
       if (strncmp(mesh_file, "default", 7) == 0)
       {
