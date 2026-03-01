@@ -732,6 +732,7 @@ int main(int argc, char *argv[])
    // Initialize gamma constants for every material.
    Array<double> gamma(ind_cnt);
    if (problem == 0) { gamma[0] = 5.0 / 3.0; }
+   else if (problem == 1) { gamma[0] = 1.4; }
    else if (problem == 3) { gamma[0] = 1.5; gamma[1] = 1.5; gamma[2] = 1.4; }
    else { MFEM_ABORT("init gamma or the problem"); }
 
@@ -765,11 +766,21 @@ int main(int argc, char *argv[])
       rho0_gf[k].ProjectGridFunction(l2_rho);
       //rho0_gf[k].ProjectCoefficient(r_coeff);
 
-      ThermoFieldCoefficient e_coeff(k, bool_ind[k], 1);
-      ParGridFunction l2_e(&l2_fes);
-      l2_e.ProjectCoefficient(e_coeff);
-      e_gf[k].ProjectGridFunction(l2_e);
-      // e_gf[k].ProjectCoefficient(e_coeff);
+      if (problem == 1)
+      {
+         DeltaCoefficient e_coeff(blast_position[0], blast_position[1],
+                                  blast_position[2], blast_energy);
+         e_gf[k].ProjectCoefficient(e_coeff);
+         e_gf[k] += 2.0 * 1e-12;
+      }
+      else
+      {
+         ThermoFieldCoefficient e_coeff(k, bool_ind[k], 1);
+       ParGridFunction l2_e(&l2_fes);
+        l2_e.ProjectCoefficient(e_coeff);
+        e_gf[k].ProjectGridFunction(l2_e);
+        // e_gf[k].ProjectCoefficient(e_coeff);
+      }
    }
 
    socketstream vis_rho, vis_v, vis_e;
@@ -941,8 +952,8 @@ int main(int argc, char *argv[])
             //                                  v_0, "v_0 GF",
             //                                  1200, 400, 400, 400, true, "m");
             // }
-            // hydro.ComputePressure(rho_0, e_0, gamma[k], p_0[k]);
-            // VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 400);
+            hydro.ComputePressure(rho_0, e_0, gamma[k], p_0[k]);
+            VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 0);
          }
 
          //
@@ -964,7 +975,7 @@ int main(int argc, char *argv[])
          //
          {
             InterpolationRemap interpolator(*pmesh);
-            interpolator.visualization = false;
+            interpolator.visualization = true;
             interpolator.h1_seminorm   = false;
             interpolator.max_iter      = 20;
             interpolator.subprob       = true;
@@ -1220,6 +1231,11 @@ int main(int argc, char *argv[])
          cout << "L1 v error: " << error_v_l1 << endl
               << "L1 e error: " << error_e_l1 << endl;
       }
+   }
+
+   if (problem == 1 && Mpi::WorldSize() == 1)
+   {
+      hydro.DensityScatter();
    }
 
    if (visualization)

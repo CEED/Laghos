@@ -220,6 +220,8 @@ public:
    const IntegrationRule &GetIntRule() const { return ir; }
 
    void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
+
+   void DensityScatter() const;
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

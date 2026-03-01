@@ -831,6 +831,39 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    }
 }
 
+void LagrangianHydroOperator::DensityScatter() const
+{
+   MFEM_VERIFY(L2.GetNRanks() == 1, "Scatter only in serial");
+
+   std::ofstream fstream_rho;
+   fstream_rho.open("rho.out");
+   fstream_rho.precision(8);
+
+   const int nqp = ir.GetNPoints();
+   Vector pos(2);
+   const int NE = H1.GetParMesh()->GetNE();
+   for (int e = 0; e < NE; e++)
+   {
+      const int attr = H1.GetParMesh()->GetAttribute(e);
+      ElementTransformation &Tr = *L2.GetElementTransformation(e);
+
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         Tr.Transform(ip, pos);
+
+         double detJ = Tr.Weight();
+         double rho = qdata.i_rho0DetJ0w[0](e*nqp + q) / detJ / ip.weight;
+         double r = sqrt(pos(0) * pos(0) + pos(1) * pos(1));
+
+         fstream_rho << r << " " << rho << "\n";
+      }
+   }
+
+   fstream_rho.close();
+}
+
 // Smooth transition between 0 and 1 for x in [-eps, eps].
 MFEM_HOST_DEVICE inline double smooth_step_01(double x, double eps)
 {
