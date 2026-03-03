@@ -19,9 +19,16 @@
 #include "linalg/kernels.hpp"
 #include <unordered_map>
 
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
+#include <caliper/cali.h>
 #include <adiak.hpp>
+#define LAGHOS_CALI_MARK_BEGIN(x)  CALI_MARK_BEGIN(x)
+#define LAGHOS_CALI_MARK_END(x)    CALI_MARK_END(x)
+#else
+#define LAGHOS_CALI_MARK_BEGIN(x)
+#define LAGHOS_CALI_MARK_END(x)
 #endif
+
 
 namespace mfem
 {
@@ -387,7 +394,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    if (p_assembly)
    {
       timer.sw_force.Start();
+      LAGHOS_CALI_MARK_BEGIN("SolveVelocity-ForcePA");
       ForcePA->Mult(one, rhs);
+      LAGHOS_CALI_MARK_END("SolveVelocity-ForcePA");
       timer.sw_force.Stop();
       rhs.Neg();
 
@@ -404,7 +413,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
          VMassPA->SetEssentialTrueDofs(c_tdofs[c]);
          VMassPA->EliminateRHS(B);
          timer.sw_cgH1.Start();
+         LAGHOS_CALI_MARK_BEGIN("SolveVelocity-CGVMass");
          CG_VMass.Mult(B, X);
+         LAGHOS_CALI_MARK_END("SolveVelocity-CGVMass");
          timer.sw_cgH1.Stop();
          timer.H1iter += CG_VMass.GetNumIterations();
          if (Pconf) { Pconf->Mult(X, dvc_gf); }
@@ -417,7 +428,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    else
    {
       timer.sw_force.Start();
+      LAGHOS_CALI_MARK_BEGIN("SolveVelocity-Force");
       Force.Mult(one, rhs);
+      LAGHOS_CALI_MARK_END("SolveVelocity-Force");
       timer.sw_force.Stop();
       rhs.Neg();
 
@@ -432,7 +445,9 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       cg.SetMaxIter(cg_max_iter);
       cg.SetPrintLevel(-1);
       timer.sw_cgH1.Start();
+      LAGHOS_CALI_MARK_BEGIN("SolveVelocity-CG");
       cg.Mult(B, X);
+      LAGHOS_CALI_MARK_END("SolveVelocity-CG");
       timer.sw_cgH1.Stop();
       timer.H1iter += cg.GetNumIterations();
       Mv.RecoverFEMSolution(X, rhs, dv);
@@ -466,11 +481,15 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    if (p_assembly)
    {
       timer.sw_force.Start();
+      LAGHOS_CALI_MARK_BEGIN("SolveEnergy-ForcePA");
       ForcePA->MultTranspose(v, e_rhs);
+      LAGHOS_CALI_MARK_END("SolveEnergy-ForcePA");
       timer.sw_force.Stop();
       if (e_source) { e_rhs += *e_source; }
       timer.sw_cgL2.Start();
+      LAGHOS_CALI_MARK_BEGIN("SolveEnergy-CG");
       CG_EMass.Mult(e_rhs, de);
+      LAGHOS_CALI_MARK_END("SolveEnergy-CG");
       timer.sw_cgL2.Stop();
       const int cg_num_iter = CG_EMass.GetNumIterations();
       timer.L2iter += (cg_num_iter==0) ? 1 : cg_num_iter;
@@ -481,7 +500,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
    else // not p_assembly
    {
       timer.sw_force.Start();
+      LAGHOS_CALI_MARK_BEGIN("SolveEnergy-Force");
       Force.MultTranspose(v, e_rhs);
+      LAGHOS_CALI_MARK_END("SolveEnergy-Force");
       timer.sw_force.Stop();
       if (e_source) { e_rhs += *e_source; }
       Vector loc_rhs(l2dofs_cnt), loc_de(l2dofs_cnt);
@@ -490,7 +511,9 @@ void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
          L2.GetElementDofs(e, l2dofs);
          e_rhs.GetSubVector(l2dofs, loc_rhs);
          timer.sw_cgL2.Start();
+         LAGHOS_CALI_MARK_BEGIN("SolveEnergy-MeInv");
          Me_inv(e).Mult(loc_rhs, loc_de);
+         LAGHOS_CALI_MARK_END("SolveEnergy-MeInv");
          timer.sw_cgL2.Stop();
          timer.L2iter += 1;
          de.SetSubVector(l2dofs, loc_de);
@@ -688,6 +711,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 
    // This code is only for the 1D/FA mode
    timer.sw_qdata.Start();
+   LAGHOS_CALI_MARK_BEGIN("LagrangianHydroOperator-UpdateQuadratureData");
    const int nqp = ir.GetNPoints();
    GridFunction x, v, e;
    Vector* sptr = const_cast<Vector*>(&S);
@@ -835,6 +859,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    delete [] p_b;
    delete [] cs_b;
    delete [] Jpr_b;
+
+   LAGHOS_CALI_MARK_END("LagrangianHydroOperator-UpdateQuadratureData");
    timer.sw_qdata.Stop();
    timer.quad_tstep += NE;
 }
@@ -1049,6 +1075,7 @@ void QKernel(const int NE, const int NQ,
 void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 {
    timer->sw_qdata.Start();
+   LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
    Vector* S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
    const double h1order = (double) H1.GetOrder(0);
@@ -1091,6 +1118,8 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
                qdata.rho0DetJ0w, q_e, q_dv,
                qdata.Jac0inv, q_dt_est, qdata.stressJinvT);
    qdata.dt_est = q_dt_est.Min();
+   
+   LAGHOS_CALI_MARK_END("QUpdate-UpdateQuadratureData");
    timer->sw_qdata.Stop();
    timer->quad_tstep += NE;
 }
@@ -1100,7 +1129,9 @@ void LagrangianHydroOperator::AssembleForceMatrix() const
    if (forcemat_is_assembled || p_assembly) { return; }
    Force = 0.0;
    timer.sw_force.Start();
+   LAGHOS_CALI_MARK_BEGIN("LagrangianHydroOperator-AssembleForceMatrix");
    Force.Assemble();
+   LAGHOS_CALI_MARK_END("LagrangianHydroOperator-AssembleForceMatrix");
    timer.sw_force.Stop();
    forcemat_is_assembled = true;
 }
