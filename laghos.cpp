@@ -128,7 +128,7 @@ int main(int argc, char *argv[])
    const char *basename = "results/Laghos";
    const char *device = "cpu";
    bool check = false;
-   bool check_exact = false;
+   bool check_exact_sedov = false;
    bool mem_usage = false;
    bool fom = false;
    bool gpu_aware_mpi = false;
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&check, "-chk", "--checks", "-no-chk", "--no-checks",
                   "Enable 2D checks.");
-   args.AddOption(&check_exact, "-err", "--exact-error", "-no-err",
+   args.AddOption(&check_exact_sedov, "-err", "--exact-error", "-no-err",
                   "--no-exact-error",
                   "Enable comparing the Sedov problem (problem 1) against the "
                   "exact solution.");
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
    }
    if (Mpi::Root()) { args.PrintOptions(cout); }
 
-   if (check_exact)
+   if (check_exact_sedov)
    {
       MFEM_VERIFY(
          problem == 1,
@@ -555,7 +555,7 @@ int main(int argc, char *argv[])
       MPI_Allreduce(MPI_IN_PLACE, &non_finite, 1, MPI_INT, MPI_SUM, pmesh.GetComm());
       if (non_finite > 0)
       {
-         cout << "Delta function coult not be initialized!\n";
+         cout << "Delta function could not be initialized!\n";
          delete ode_solver;
          return 1;
       }
@@ -964,7 +964,7 @@ int main(int argc, char *argv[])
    adiak::fini();
 #endif
 
-   if (check_exact)
+   if (check_exact_sedov)
    {
       // compare against the exact Sedov solution
       double gamma = 1.4;
@@ -1014,7 +1014,7 @@ int main(int argc, char *argv[])
             r += dr[i] * dr[i];
          }
          r = sqrt(r);
-         if (r)
+         if (r > 0)
          {
             for (int i = 0; i < dim; ++i)
             {
@@ -1295,7 +1295,7 @@ static void Checks(const int ti, const double nrm, int &chk)
       },
       {
          {{5, 1.198510951452527e+03}, {188, 1.199384410059154e+03}},
-         {{5, 1.339163718592566e+01}, { 28, 7.521073677397994e+00}},
+         {{5, 6.695818592962833e+00}, { 20, 4.267902387082487e+00}},
          {{5, 2.041491591302486e+01}, { 59, 3.443180411803796e+01}},
          {{5, 1.600000000000000e+01}, { 16, 1.600000000000000e+01}},
          {{5, 6.892649884704898e+01}, { 18, 6.893688067534482e+01}},

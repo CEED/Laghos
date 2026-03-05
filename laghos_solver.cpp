@@ -19,7 +19,7 @@
 #include "linalg/kernels.hpp"
 #include <unordered_map>
 
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
 #include <caliper/cali.h>
 #include <adiak.hpp>
 #define LAGHOS_CALI_MARK_BEGIN(x)  CALI_MARK_BEGIN(x)
@@ -776,7 +776,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
            << "| " << setw(7) << FOM
            << "| " << setw(5) << T[4]
            << "| " << endl;
-#ifdef USE_CALIPER
+#ifdef LAGHOS_USE_CALIPER
       adiak::value("zones", GNZones);
       adiak::value("h1_dofs", H1GTVSize);
       adiak::value("l2_dofs", L2GTVSize);
