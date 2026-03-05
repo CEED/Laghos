@@ -67,6 +67,8 @@
 #include <umpire/strategy/QuickPool.hpp>
 #endif
 
+#include <memory>
+
 using std::cout;
 using std::endl;
 using namespace mfem;
@@ -698,6 +700,15 @@ int main(int argc, char *argv[])
    //   }
    //
 
+   std::unique_ptr<SedovSol> asol;
+   if (check_exact_sedov) {
+     double gamma = 1.4;
+     double rho0 = 1;
+     double omega = 0;
+
+     asol.reset(new SedovSol(dim, gamma, rho0, blast_energy, omega));
+   }
+
 #ifdef LAGHOS_USE_CALIPER
    CALI_CXX_MARK_LOOP_BEGIN(mainloop_annotation, "timestep loop");
 #endif
@@ -805,7 +816,8 @@ int main(int argc, char *argv[])
          // another set of GLVis connections (one from each rank):
          MPI_Barrier(pmesh.GetComm());
 
-         if (visualization || visit || paraview || gfprint) {
+         if (visualization || visit || paraview || gfprint ||
+             check_exact_sedov) {
            hydro.ComputeDensity(rho_gf);
          }
          if (visualization)
@@ -840,6 +852,73 @@ int main(int argc, char *argv[])
             paraview_dc.SetCycle(ti);
             paraview_dc.SetTime(t);
             paraview_dc.Save();
+         }
+
+         if (check_exact_sedov) {
+           // compare against the exact Sedov solution
+           asol->SetTime(t);
+
+           if (strncmp(mesh_file, "default", 7) == 0) {
+             real_t min_r = std::min(std::min(Sx, Sy), Sz);
+             MFEM_VERIFY(
+                 asol->r2 <= min_r,
+                 "Solution reflections off boundaries detected, cannot compare "
+                 "against exact solution.");
+           }
+
+           int err_order =
+               std::max((std::max(order_v, order_e) + 1) * 2, order_q) * 2;
+           const IntegrationRule &irule =
+               IntRules.Get(pmesh.GetTypicalElementGeometry(), err_order);
+
+           QuadratureSpace qspace(pmesh, irule);
+           // only compare density
+           QuadratureFunction sim_qfunc(qspace, 1);
+           QuadratureFunction err_qfunc(qspace, 1);
+
+           hydro.ComputeDensity(rho_gf);
+
+           rho_gf.HostReadWrite();
+
+           {
+             GridFunctionCoefficient ctmp(&rho_gf);
+             ctmp.Coefficient::Project(sim_qfunc);
+           }
+
+           auto slambda = [&](const Vector &x, Vector &res) {
+             real_t tmp[3];
+             Vector dr(tmp, dim);
+             double r = 0;
+
+             for (int i = 0; i < dim; ++i) {
+               dr[i] = x[i] - blast_position[i];
+               r += dr[i] * dr[i];
+             }
+             r = sqrt(r);
+             if (r > 0) {
+               for (int i = 0; i < dim; ++i) {
+                 dr[i] /= r;
+               }
+             } else {
+               dr = 0_r;
+             }
+             double rho, v, P;
+             asol->EvalSol(r, rho, v, P);
+             res[0] = rho;
+           };
+           VectorFunctionCoefficient asol_coeff(1, slambda);
+           asol_coeff.Project(err_qfunc);
+
+           sim_qfunc.HostRead();
+           err_qfunc.HostReadWrite();
+           for (int i = 0; i < err_qfunc.Size(); ++i) {
+             err_qfunc[i] = pow(err_qfunc[i] - AsConst(sim_qfunc)[i], 2);
+           }
+           real_t lrho_err = err_qfunc.Integrate();
+           if (Mpi::Root()) {
+             cout << "step " << ti << ", t = " << t
+                  << ", Density L2 error: " << sqrt(lrho_err) << endl;
+           }
          }
 
          if (gfprint)
@@ -963,87 +1042,6 @@ int main(int argc, char *argv[])
 #ifdef LAGHOS_USE_CALIPER
    adiak::fini();
 #endif
-
-   if (check_exact_sedov)
-   {
-      // compare against the exact Sedov solution
-      double gamma = 1.4;
-      double rho0 = 1;
-      double omega = 0;
-
-      SedovSol asol(dim, gamma, rho0, blast_energy, omega);
-
-      asol.SetTime(t);
-
-      if (strncmp(mesh_file, "default", 7) == 0)
-      {
-         real_t min_r = std::min(std::min(Sx, Sy), Sz);
-         MFEM_VERIFY(
-            asol.r2 <= min_r,
-            "Solution reflections off boundaries detected, cannot compare "
-            "against exact solution.");
-      }
-
-      int err_order = std::max((std::max(order_v, order_e) + 1) * 2, order_q) * 2;
-      const IntegrationRule &irule =
-         IntRules.Get(pmesh.GetTypicalElementGeometry(), err_order);
-
-      QuadratureSpace qspace(pmesh, irule);
-      // only compare density
-      QuadratureFunction sim_qfunc(qspace, 1);
-      QuadratureFunction err_qfunc(qspace, 1);
-
-      hydro.ComputeDensity(rho_gf);
-
-      rho_gf.HostReadWrite();
-
-      {
-         GridFunctionCoefficient ctmp(&rho_gf);
-         ctmp.Coefficient::Project(sim_qfunc);
-      }
-
-      auto slambda = [&](const Vector &x, Vector &res)
-      {
-         real_t tmp[3];
-         Vector dr(tmp, dim);
-         double r = 0;
-
-         for (int i = 0; i < dim; ++i)
-         {
-            dr[i] = x[i] - blast_position[i];
-            r += dr[i] * dr[i];
-         }
-         r = sqrt(r);
-         if (r > 0)
-         {
-            for (int i = 0; i < dim; ++i)
-            {
-               dr[i] /= r;
-            }
-         }
-         else
-         {
-            dr = 0_r;
-         }
-         double rho, v, P;
-         asol.EvalSol(r, rho, v, P);
-         res[0] = rho;
-      };
-      VectorFunctionCoefficient asol_coeff(1, slambda);
-      asol_coeff.Project(err_qfunc);
-
-      sim_qfunc.HostRead();
-      err_qfunc.HostReadWrite();
-      for (int i = 0; i < err_qfunc.Size(); ++i)
-      {
-         err_qfunc[i] = pow(err_qfunc[i] - AsConst(sim_qfunc)[i], 2);
-      }
-      real_t lrho_err = err_qfunc.Integrate();
-      if (Mpi::Root())
-      {
-         cout << "Density L2 error: " << sqrt(lrho_err) << endl;
-      }
-   }
 
    // Free the used memory.
    delete ode_solver;
