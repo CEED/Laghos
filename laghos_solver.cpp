@@ -1405,8 +1405,8 @@ public:
                Value<Gamma> {},
                Identity<InvJac0> {},
                Identity<Rho0DetJ0W> {},
-               Weight{},
-               Identity<DeltaTEst> {}},
+               Identity<DeltaTEst> {},
+               Weight{}},
          // outputs
          tuple{Identity<StressTensor>{},
                Identity<DeltaTEst>{}},
