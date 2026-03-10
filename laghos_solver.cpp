@@ -28,6 +28,7 @@ using namespace mfem::future;
 #define NVTX_COLOR ::nvtx::kCyan
 #include NVTX_DEBUG_HPP
 #else
+#define db1(...)
 #define dbg(...)
 #endif
 
@@ -1317,31 +1318,28 @@ class QUpdatePA
          double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
          double sJiT[DIM2];
 
-         dbl("NQ: {}, ", NQ);
+         // dbl("NQ: {}, ", NQ);
          for (size_t q = 0; q < NQ; q++)
          {
-            dba("{}", q);
+            // dba("{}", q);
             real_t d_dt_est = dtmin(q);
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                              compr_dir, Jpi, ph_dir, sJiT,
-                             gamma(q), weight(q % NQ),
+                             gamma(q), weight(q),
                              flatten_nm(J(q)).values,
                              rhoDetJw(q), E(q),
                              flatten_nm(dvdxi(q)).values,
                              flatten_nm(invJ0(q)).values,
                              d_dt_est);
-            dba(". ");
+            // dba(". ");
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
          }
-         dbc();
-         dbg("✅");
+         // dbc();
       };
    } qupdate_qf;
    DifferentiableOperator qupdate_dop;
-   BlockVector P, Z;
-   // MultiVector MP, MZ;
    enum
    {
       Velocity, Coordinates, Energy, InvJac0,
@@ -1383,15 +1381,7 @@ public:
                      {DeltaTEst, &scalar_qft}}, 
                   // output field descriptors
                   {  {StressTensor, &dimsqr_qft}, {DeltaTEst, &scalar_qft}},
-                  pmesh),
-      P([&](){ Array<int> offsets({ 0, 
-                  H1.GetTrueVSize(), H1.GetTrueVSize(),
-                  L2.GetTrueVSize(), L0.GetTrueVSize(), 
-                  dimsqr_qft.Size(), scalar_qft.Size(), scalar_qft.Size()});
-               return (offsets.PartialSum(), offsets);
-            }()),
-      Z([&](){ Array<int> offsets({0, dimsqr_qft.Size(), scalar_qft.Size()});
-               return (offsets.PartialSum(), offsets);}())
+                  pmesh)
       // *INDENT-ON*
    {
       dbg();
@@ -1412,37 +1402,26 @@ public:
                Identity<DeltaTEst>{}},
          ir, domain_attr);
       qupdate_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
-      P.GetBlock(3) = gamma_gf;     // L0
-      P.GetBlock(4) = Jac0inv;      // DIM^2
-      P.GetBlock(5) = rho0DetJ0w;   // scalar
    }
 
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
-      dbg();
-      Vector &g = gamma_gf;
-      MultiVector MP{v, x, e, g, Jac0inv};//, rho0DetJ0w, qdata.dt_est};
-      P.GetBlock(0) = v; // H1
-      P.GetBlock(1) = x; // H1
-      P.GetBlock(2) = e; // L2
-      P.GetBlock(6) = (dt = qdata.dt_est); // scalar
+      MultiVector MP{v, x, e, gamma_gf, Jac0inv, rho0DetJ0w, dt = qdata.dt_est};
+      MultiVector MZ{stressJiT, dt};
 
-      qupdate_dop.Mult(P, Z);
+      qupdate_dop.Mult(MP, MZ);
 
-      // stressJiT = Z.GetBlock(0);
-      // qdata.dt_est = Z.GetBlock(1).Min();
-
-      dbg("✅");
+      qdata.dt_est = MZ[1].Min();
    }
 };
 
 void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 {
-   dbg();
+   db1("dim: {}", dim);
    LAGHOS_DEVICE_SYNC;
    timer->sw_qdata.Start();
    LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
-   Vector* S_p = const_cast<Vector*>(&S);
+   auto *S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
    const double h1order = (double) H1.GetOrder(0);
    ParGridFunction x, v, e;
@@ -1455,7 +1434,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 
    if (dim == 2)
    {
-      dbg();
       static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
@@ -1476,7 +1454,6 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    }
    else if (dim == 3)
    {
-      dbg();
       static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
