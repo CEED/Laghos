@@ -23,6 +23,14 @@
 #include "general/enzyme.hpp"
 using namespace mfem::future;
 
+#ifdef NVTX_DEBUG_HPP
+#undef NVTX_COLOR
+#define NVTX_COLOR ::nvtx::kCyan
+#include NVTX_DEBUG_HPP
+#else
+#define dbg(...)
+#endif
+
 template <typename T, int n, int m> MFEM_HOST_DEVICE
 tensor<T, n * m> flatten_nm(tensor<T, n, m> A)
 {
@@ -1275,7 +1283,7 @@ class QUpdatePA
    ParFiniteElementSpace &H1, &L2, &L0;
    QuadratureSpace qspace;
    QuadratureFunction scalar_qft, dimsqr_qft;
-   Vector Jac0inv, rho0DetJ0w, stressJiT;
+   Vector Jac0inv, rho0DetJ0w, stressJiT, dt;
 
    using matd_t = tensor<real_t, DIM, DIM>;
 
@@ -1292,16 +1300,16 @@ class QUpdatePA
          h0(h0), h1order(h1order), cfl(cfl) {}
 
       inline MFEM_HOST_DEVICE
-      void operator()(const tensor_array<const real_t, DIM, DIM> &dvdxi,
-                      const tensor_array<const real_t, DIM, DIM> &J,
-                      const tensor_array<const real_t> &E,
-                      const tensor_array<const real_t> &gamma,
-                      const tensor_array<const real_t, DIM, DIM> &invJ0,
-                      const tensor_array<const real_t> &rhoDetJw,
-                      const tensor_array<const real_t> &weight,
-                      const tensor_array<const real_t> &dtmin,
-                      const tensor_array<real_t, DIM, DIM> &TsJiT,
-                      const tensor_array<real_t> &dtest) const
+      void operator()(tensor_array<const real_t, DIM, DIM> &dvdxi,
+                      tensor_array<const real_t, DIM, DIM> &J,
+                      tensor_array<const real_t> &E,
+                      tensor_array<const real_t> &gamma,
+                      tensor_array<const real_t, DIM, DIM> &invJ0,
+                      tensor_array<const real_t> &rhoDetJw,
+                      tensor_array<const real_t> &dtmin,
+                      tensor_array<const real_t> &weight,
+                      tensor_array<real_t, DIM, DIM> &TsJiT,
+                      tensor_array<real_t> &dtest) const
       {
          const auto NQ = dvdxi.size();
          double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
@@ -1309,25 +1317,31 @@ class QUpdatePA
          double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
          double sJiT[DIM2];
 
+         dbl("NQ: {}, ", NQ);
          for (size_t q = 0; q < NQ; q++)
          {
+            dba("{}", q);
             real_t d_dt_est = dtmin(q);
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
                              compr_dir, Jpi, ph_dir, sJiT,
-                             gamma(q), weight(q),
+                             gamma(q), weight(q % NQ),
                              flatten_nm(J(q)).values,
                              rhoDetJw(q), E(q),
                              flatten_nm(dvdxi(q)).values,
                              flatten_nm(invJ0(q)).values,
                              d_dt_est);
+            dba(". ");
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
          }
+         dbc();
+         dbg("✅");
       };
    } qupdate_qf;
    DifferentiableOperator qupdate_dop;
    BlockVector P, Z;
+   // MultiVector MP, MZ;
    enum
    {
       Velocity, Coordinates, Energy, InvJac0,
@@ -1356,6 +1370,7 @@ public:
       Jac0inv(qdata.Jac0inv.ReadWrite(), qdata.Jac0inv.TotalSize()),
       rho0DetJ0w(qdata.rho0DetJ0w.ReadWrite(), qdata.rho0DetJ0w.Size()),
       stressJiT(qdata.stressJinvT.ReadWrite(), qdata.stressJinvT.TotalSize()),
+      dt(scalar_qft.Size()),
       // *INDENT-OFF*
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
       qupdate_dop(// input field descriptors
@@ -1379,6 +1394,7 @@ public:
                return (offsets.PartialSum(), offsets);}())
       // *INDENT-ON*
    {
+      dbg();
       domain_attr = 1;
       qupdate_dop.AddDomainIntegrator(
          qupdate_qf,
@@ -1396,27 +1412,33 @@ public:
                Identity<DeltaTEst>{}},
          ir, domain_attr);
       qupdate_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
-      P.GetBlock(3) = gamma_gf;
-      P.GetBlock(4) = Jac0inv;
-      P.GetBlock(5) = rho0DetJ0w;
+      P.GetBlock(3) = gamma_gf;     // L0
+      P.GetBlock(4) = Jac0inv;      // DIM^2
+      P.GetBlock(5) = rho0DetJ0w;   // scalar
    }
 
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
-      P.GetBlock(0) = v;
-      P.GetBlock(1) = x;
-      P.GetBlock(2) = e;
-      P.GetBlock(6) = qdata.dt_est;
+      dbg();
+      Vector &g = gamma_gf;
+      MultiVector MP{v, x, e, g, Jac0inv};//, rho0DetJ0w, qdata.dt_est};
+      P.GetBlock(0) = v; // H1
+      P.GetBlock(1) = x; // H1
+      P.GetBlock(2) = e; // L2
+      P.GetBlock(6) = (dt = qdata.dt_est); // scalar
 
       qupdate_dop.Mult(P, Z);
 
-      stressJiT = Z.GetBlock(0);
-      qdata.dt_est = Z.GetBlock(1).Min();
+      // stressJiT = Z.GetBlock(0);
+      // qdata.dt_est = Z.GetBlock(1).Min();
+
+      dbg("✅");
    }
 };
 
 void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 {
+   dbg();
    LAGHOS_DEVICE_SYNC;
    timer->sw_qdata.Start();
    LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
@@ -1433,6 +1455,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 
    if (dim == 2)
    {
+      dbg();
       static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
@@ -1453,6 +1476,7 @@ void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
    }
    else if (dim == 3)
    {
+      dbg();
       static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
 
