@@ -285,8 +285,8 @@ int main(int argc, char *argv[])
    // Configure the device from the command line options
    Device backend;
    backend.Configure(device, dev);
-   if (Mpi::Root()) { backend.Print(); }
    backend.SetGPUAwareMPI(gpu_aware_mpi);
+   if (Mpi::Root()) { backend.Print(); }
 
    // Prepare the missing kernels.
    if (myid == 0) { KernelReporter::Enable(); }
