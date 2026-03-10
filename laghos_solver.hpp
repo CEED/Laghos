@@ -65,7 +65,6 @@ private:
    const IntegrationRule &ir;
    ParFiniteElementSpace &H1, &L2;
    const ParGridFunction &gamma_gf;
-   Vector TstressJinvT;
 public:
    QUpdate(const int d, const int ne, const int q1d,
            const bool visc, const bool vort,
@@ -75,8 +74,7 @@ public:
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
       dim(d), NE(ne), Q1D(q1d),
       use_viscosity(visc), use_vorticity(vort), cfl(cfl),
-      timer(t), ir(ir), H1(h1), L2(l2),
-      gamma_gf(gamma_gf), TstressJinvT(dim*dim*NE*ir.GetNPoints()) { }
+      timer(t), ir(ir), H1(h1), L2(l2), gamma_gf(gamma_gf) { }
 
    void UpdateQuadratureData(const Vector &S, QuadratureData &qdata);
 };

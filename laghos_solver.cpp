@@ -1312,16 +1312,13 @@ class QUpdatePA
                       tensor_array<real_t, DIM, DIM> &TsJiT,
                       tensor_array<real_t> &dtest) const
       {
-         const auto NQ = dvdxi.size();
          double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
          double eig_val_data[DIM], eig_vec_data[DIM2];
          double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
          double sJiT[DIM2];
 
-         // dbl("NQ: {}, ", NQ);
-         for (size_t q = 0; q < NQ; q++)
+         for (size_t q = 0; q < dvdxi.size(); q++)
          {
-            // dba("{}", q);
             real_t d_dt_est = dtmin(q);
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
@@ -1332,11 +1329,9 @@ class QUpdatePA
                              flatten_nm(dvdxi(q)).values,
                              flatten_nm(invJ0(q)).values,
                              d_dt_est);
-            // dba(". ");
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
          }
-         // dbc();
       };
    } qupdate_qf;
    DifferentiableOperator qupdate_dop;
@@ -1372,186 +1367,68 @@ public:
       // *INDENT-OFF*
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
       qupdate_dop(// input field descriptors
-                  {  {Velocity, &H1},
-                     {Coordinates, &H1}, 
-                     {Energy, &L2}, 
-                     {Gamma, &L0}, 
-                     {InvJac0, &dimsqr_qft},
-                     {Rho0DetJ0W, &scalar_qft},
-                     {DeltaTEst, &scalar_qft}}, 
+                  {{Velocity, &H1},
+                   {Coordinates, &H1}, 
+                   {Energy, &L2}, 
+                   {Gamma, &L0}, 
+                   {InvJac0, &dimsqr_qft},
+                   {Rho0DetJ0W, &scalar_qft},
+                   {DeltaTEst, &scalar_qft}}, 
                   // output field descriptors
-                  {  {StressTensor, &dimsqr_qft}, {DeltaTEst, &scalar_qft}},
+                  {{StressTensor, &dimsqr_qft}, {DeltaTEst, &scalar_qft}},
                   pmesh)
       // *INDENT-ON*
    {
-      dbg();
       domain_attr = 1;
-      qupdate_dop.SetQLayouts(
-         // inputs
-         {},
-         // outputs
-      {{Identity<StressTensor>{}, {0,2,1}}});
-      qupdate_dop.AddDomainIntegrator(
-         qupdate_qf,
-         // inputs
-         tuple{Gradient<Velocity> {},
-               Gradient<Coordinates> {},
-               Value<Energy> {},
-               Value<Gamma> {},
-               Identity<InvJac0> {},
-               Identity<Rho0DetJ0W> {},
-               Identity<DeltaTEst> {},
-               Weight{}},
-         // outputs
-         tuple{Identity<StressTensor>{},
-               Identity<DeltaTEst>{}},
-         ir, domain_attr);
+      qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}}});
+      qupdate_dop.AddDomainIntegrator(qupdate_qf,
+                                      // inputs
+                                      tuple{Gradient<Velocity> {},
+                                            Gradient<Coordinates> {},
+                                            Value<Energy> {},
+                                            Value<Gamma> {},
+                                            Identity<InvJac0> {},
+                                            Identity<Rho0DetJ0W> {},
+                                            Identity<DeltaTEst> {},
+                                            Weight{}},
+                                      // outputs
+                                      tuple{Identity<StressTensor>{},
+                                            Identity<DeltaTEst>{}},
+                                      ir, domain_attr);
       qupdate_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
 
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
-      MultiVector MP{v, x, e, gamma_gf, Jac0inv, rho0DetJ0w, dt = qdata.dt_est};
-      MultiVector MZ{stressJiT, dt};
-
-      qupdate_dop.Mult(MP, MZ);
-
-      qdata.dt_est = MZ[1].Min();
+      MultiVector X{v, x, e, gamma_gf, Jac0inv, rho0DetJ0w, dt = qdata.dt_est};
+      MultiVector Y{stressJiT, dt};
+      qupdate_dop.Mult(X, Y);
+      qdata.dt_est = Y[1].Min();
    }
 };
 
 void QUpdate::UpdateQuadratureData(const Vector &S, QuadratureData &qdata)
 {
-   db1("dim: {}", dim);
    LAGHOS_DEVICE_SYNC;
    timer->sw_qdata.Start();
    LAGHOS_CALI_MARK_BEGIN("QUpdate-UpdateQuadratureData");
    auto *S_p = const_cast<Vector*>(&S);
    const int H1_size = H1.GetVSize();
-   const double h1order = (double) H1.GetOrder(0);
+   const auto h1order = (double) H1.GetOrder(0);
    ParGridFunction x, v, e;
    x.MakeRef(&H1, *S_p, 0);
    v.MakeRef(&H1, *S_p, H1_size);
    e.MakeRef(&L2, *S_p, 2*H1_size);
-
-   // wrap qdata.stressJinvT to allow the transpose
-   Vector QstressJinvT(qdata.stressJinvT.Write(), qdata.stressJinvT.TotalSize());
-
    if (dim == 2)
    {
       static QUpdatePA<2> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
-      /* QstressJinvT: [
-      -2.095668e-02, -1.303761e-19, -3.230884e-19, -2.095668e-02, -2.828715e-02, -7.293281e-19, 1.090255e-19, -2.828715e-02,
-      -1.393307e-02, -2.734527e-18, 0.000000e+00, -1.393307e-02, -1.563626e-03, -2.253489e-19, 4.821275e-20, -1.563626e-03,
-      -2.828715e-02, -1.021045e-19, -2.072792e-18, -2.828715e-02, -3.818175e-02, -1.196375e-19, 6.994594e-19, -3.818175e-02,
-      -1.880674e-02, 8.419165e-19, 0.000000e+00, -1.880674e-02, -2.110570e-03, 1.259467e-19, 3.093117e-19, -2.110570e-03,
-      -1.393307e-02, -8.936638e-20, -2.072792e-18, -1.393307e-02, -1.880674e-02, -3.795349e-19, 6.994594e-19, -1.880674e-02,
-      -9.263420e-03, 1.869431e-19, 0.000000e+00, -9.263420e-03, -1.039579e-03, -8.334664e-21, 3.093117e-19, -1.039579e-03,
-      -1.563626e-03, 5.072031e-20, -3.230884e-19, -1.563626e-03, -2.110570e-03, 2.512415e-19, 1.090255e-19, -2.110570e-03,
-      -1.039579e-03, 3.379147e-19, 0.000000e+00, -1.039579e-03, -1.166658e-04, 5.746995e-20, 4.821275e-20, -1.166658e-04,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00]*/
-      // db1("QstressJinvT: {}", QstressJinvT);
-
-      // const auto QX = make_tensor_array<2,2>(QstressJinvT.Read(), NE, Q1D, Q1D);
-      const auto QX = make_tensor_array<2,2>(QstressJinvT.Read(), Q1D, Q1D, NE);
-      auto QY = make_tensor_array<2,2>(TstressJinvT.Write(), Q1D, Q1D, NE);
-      // QX.set_layout({4,3,2,1,0});
-
-      mfem::forall_2D(NE, Q1D, Q1D, [=] MFEM_HOST_DEVICE (int e)
-      {
-         MFEM_FOREACH_THREAD_DIRECT(qy,y,Q1D)
-         {
-            MFEM_FOREACH_THREAD_DIRECT(qx,x,Q1D)
-            {
-               // QY(qx,qy,e) = QX(e,qy,qx);
-               QY(qx,qy,e) = QX(qx,qy,e);
-            }
-         }
-      });
-      // db1("TstressJinvT: {}", TstressJinvT);
-      /* TstressJinvT: [
-      -2.095668e-02, -2.828715e-02, -1.393307e-02, -1.563626e-03, -2.828715e-02, -3.818175e-02, -1.880674e-02, -2.110570e-03,
-      -1.393307e-02, -1.880674e-02, -9.263420e-03, -1.039579e-03, -1.563626e-03, -2.110570e-03, -1.039579e-03, -1.166658e-04,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      -3.230884e-19, 1.090255e-19, 0.000000e+00, 4.821275e-20, -2.072792e-18, 6.994594e-19, 0.000000e+00, 3.093117e-19,
-      -2.072792e-18, 6.994594e-19, 0.000000e+00, 3.093117e-19, -3.230884e-19, 1.090255e-19, 0.000000e+00, 4.821275e-20,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      -1.303761e-19, -7.293281e-19, -2.734527e-18, -2.253489e-19, -1.021045e-19, -1.196375e-19, 8.419165e-19, 1.259467e-19,
-      -8.936638e-20, -3.795349e-19, 1.869431e-19, -8.334664e-21, 5.072031e-20, 2.512415e-19, 3.379147e-19, 5.746995e-20,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      -2.095668e-02, -2.828715e-02, -1.393307e-02, -1.563626e-03, -2.828715e-02, -3.818175e-02, -1.880674e-02, -2.110570e-03,
-      -1.393307e-02, -1.880674e-02, -9.263420e-03, -1.039579e-03, -1.563626e-03, -2.110570e-03, -1.039579e-03, -1.166658e-04,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00,
-      0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00, 0.000000e+00 ]*/
-      // std::exit((dbg("🔥🔥🔥"), EXIT_SUCCESS));
    }
    else if (dim == 3)
    {
       static QUpdatePA<3> qupdate{use_viscosity, use_vorticity, qdata.h0, h1order, cfl, qdata, gamma_gf, ir, H1, L2};
       qupdate.Update(x, v, e, qdata);
-
-      // const auto QX = make_tensor_array<3,3>(QstressJinvT.Read(), NE, Q1D, Q1D, Q1D);
-      // auto QY = make_tensor_array<3,3>(TstressJinvT.Write(), Q1D, Q1D, Q1D, NE);
-      // QX.set_layout({5,4,3,2,1,0});
-
-      // mfem::forall_3D(NE, Q1D, Q1D, Q1D, [=] MFEM_HOST_DEVICE (int e)
-      // {
-      //    MFEM_FOREACH_THREAD_DIRECT(qz,z,Q1D)
-      //    {
-      //       MFEM_FOREACH_THREAD_DIRECT(qy,y,Q1D)
-      //       {
-      //          MFEM_FOREACH_THREAD_DIRECT(qx,x,Q1D)
-      //          {
-      //             QY(qx,qy,qz,e) = QX(e,qz,qy,qx);
-      //          }
-      //       }
-      //    }
-      // });
    }
-   QstressJinvT = TstressJinvT;
    LAGHOS_DEVICE_SYNC;
    LAGHOS_CALI_MARK_END("QUpdate-UpdateQuadratureData");
    timer->sw_qdata.Stop();
