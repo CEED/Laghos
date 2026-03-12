@@ -59,7 +59,7 @@
 // -m data/cube_522_hex.mesh -pt 521 for 10 / 80 / 640 / 5120 ... tasks.
 // -m data/cube_12_hex.mesh  -pt 322 for 12 / 96 / 768 / 6144 ... tasks.
 
-// mpirun -np 8 ./laghos -p 0 -m data/square01_quad.mesh -tf 0.5 -rs 3 -ok 2 -ot 1 -pa
+// mpirun -np 8 ./laghos -p 0 -m data/square01_quad.mesh -tf 0.5 -rs 4 -ok 2 -ot 1 -pa
 // mpirun -np 6 ./laghos -p 7 -m data/rt2D.mesh -tf 3.0 -rs 3 -ok 2 -ot 1 -pa
 // mpirun -np 8 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa
 // mpirun -np 8 ./laghos -p 4 -m data/square_gresho.mesh -rs 3 -ok 2 -ot 1 -tf 0.5 -s 7 -pa
@@ -94,10 +94,12 @@ int mat_id(const Vector &x)
    {
    case 0:
    {
-      if      (x(0) < 0.5 && x(1) < 0.5) return 0;
-      else if (x(0) > 0.5 && x(1) < 0.5) return 1;
-      else if (x(0) < 0.5 && x(1) > 0.5) return 2;
-      else return 3;
+      if      (x(0) < 0.3 && x(1) < 0.5) return 0;
+      else if (x(0) < 0.7 && x(1) < 0.5) return 1;
+      else if (x(0) < 1.0 && x(1) < 0.5) return 2;
+      else if (x(0) < 0.3 && x(1) > 0.5) return 3;
+      else if (x(0) < 0.7 && x(1) > 0.5) return 4;
+      else return 5;
    }
    case 3:
    {
@@ -114,6 +116,46 @@ int mat_id(const Vector &x)
    }
    default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
    }
+}
+
+void DiffuseField(ParGridFunction &field)
+{
+   // Smooth the field by solving a Helmholtz-type problem:
+   //   (M + alpha*K) u_smooth = M u_original
+   // where M is the mass matrix and K is the diffusion (stiffness) matrix.
+   // This is an implicit diffusion step and is unconditionally stable.
+   const real_t alpha = 0.001;
+
+   ParGridFunction u0(field.ParFESpace());
+   u0 = field;
+
+   ParBilinearForm M(field.ParFESpace());
+   M.AddDomainIntegrator(new MassIntegrator());
+   M.Assemble();
+   M.Finalize();
+
+   Vector rhs(field.Size());
+   M.Mult(u0, rhs);
+
+   ParBilinearForm Aform(field.ParFESpace());
+   ConstantCoefficient c(alpha);
+   Aform.AddDomainIntegrator(new MassIntegrator());
+   Aform.AddDomainIntegrator(new DiffusionIntegrator(c));
+   Aform.Assemble();
+   Aform.Finalize();
+
+   Array<int> ess_tdof_list(0);
+   OperatorPtr A;
+   Vector B, X;
+   Aform.FormLinearSystem(ess_tdof_list, field, rhs, A, X, B);
+
+   CGSolver cg(MPI_COMM_WORLD);
+   cg.SetRelTol(1e-12);
+   cg.SetMaxIter(2000);
+   cg.SetPrintLevel(0);
+   cg.SetOperator(*A);
+   cg.Mult(B, X);
+   Aform.RecoverFEMSolution(X, rhs, field);
 }
 
 class IndicatorCoefficient : public Coefficient
@@ -738,7 +780,7 @@ int main(int argc, char *argv[])
    L2_FECollection ind_fec(1, pmesh->Dimension(), BasisType::GaussLegendre);
    ParFiniteElementSpace ind_fes(pmesh, &ind_fec);
    int ind_cnt = -1;
-   if (problem == 0 || problem == 7) { ind_cnt = 4; }
+   if (problem == 0 || problem == 7) { ind_cnt = 6; }
    else if (problem == 4) { ind_cnt = 2; }
    else if (problem == 3) { ind_cnt = 3; }
    else { MFEM_ABORT("problem not prepared for TMOP interface tests."); }
@@ -1063,21 +1105,25 @@ int main(int argc, char *argv[])
    H1_FECollection ind_fec_H1(1, pmesh->Dimension());
    ParFiniteElementSpace ind_fes_H1(pmesh, &ind_fec_H1);
    std::vector<ParGridFunction> ind_H1(ind_cnt);
+   ParGridFunction ind_all(ind_L2[0]);
+   ind_all = 0.0;
    for (int k = 0; k < ind_cnt; k++)
    {
       ind_H1[k].SetSpace(&ind_fes_H1);
       GridFunctionCoefficient ic(&ind_L2[k]);
       ind_H1[k].ProjectDiscCoefficient(ic, GridFunction::ARITHMETIC);
+      DiffuseField(ind_H1[k]);
+      for (int i = 0; i < ind_all.Size(); i++)
+      {
+         ind_all(i) += k * ind_L2[k](i);
+      }
    }
 
    // Vis initial L2 indicators
-   for (int k = 0; k < ind_cnt; k++)
-   {
-      socketstream vis;
-      hydrodynamics::VisualizeField(vis, "localhost", 19916, ind_L2[k],
-                                    "Materials - initial",
-                                    300*k, 0, 300, 300, false, "ppppp");
-   }
+   socketstream visa;
+   hydrodynamics::VisualizeField(visa, "localhost", 19916, ind_all,
+                                 "Materials - initial",
+                                 0, 0, 300, 300, false, "ppppp");
 
    // Finally, run a tmop mesh optimization.
    hydrodynamics::OptimizeMesh(x_gf, ess_vdofs, interfaces, ind_H1);

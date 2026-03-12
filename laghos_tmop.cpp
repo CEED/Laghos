@@ -60,17 +60,14 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    const bool   fix_interface  = false;
    const int    solver_type    = 0,
                 solver_iter    = 100;
-   const double solver_rtol    = 1e-6;
+   const double solver_rtol    = 1e-7;
    const int    precond        = 2;
    const int    max_lin_iter   = 100;
    const int    quad_order     = 8;
-   const bool   normalization  = false;
+   const bool   normalization  = true;
 
    // Surface fitting.
    const double surface_fit_const = 0.0;
-
-   // Adaptive limiting.
-   real_t adapt_lim_const = 20.0;
 
    // Limiting the node movement.
    real_t lim_const         = 0.0;
@@ -91,7 +88,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    // shape config.
    //TMOP_QualityMetric *metric  = new TMOP_Metric_002;
    //TMOP_QualityMetric *metric  = new TMOP_Metric_050;
-   //auto ttype = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE;
+   // auto ttype = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE;
    // shape+size config.
    TMOP_QualityMetric *metric  = new TMOP_Metric_080(0.5);
    //TMOP_QualityMetric *metric  = new TMOP_Metric_009;
@@ -125,15 +122,17 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
    // }
 
    // Adaptive limiting.
-   adapt_lim_const = 20.0;
+   real_t adapt_lim_const = 20.0;
+   real_t adapt_lim_delta = 0.2;
    ParGridFunction ind_combo(ind[0].ParFESpace());
    ParGridFunction alim_coeff_gf(ind[0].ParFESpace());
    for (int i = 0; i < ind_combo.Size(); i++)
    {
       // ind_combo(i) = ind[0](i) + 2.0 * ind[1](i);
-      ind_combo(i) = ind[2](i);
-      alim_coeff_gf(i) = adapt_lim_const * ind[0](i);
+      ind_combo(i) = ind[0](i) + ind[1](i);
+      alim_coeff_gf(i) = adapt_lim_const * (ind[2](i) + ind[3](i));
    }
+
    ParGridFunction adapt_lim_gf0(interface_ls.ParFESpace());
    adapt_lim_gf0.ProjectGridFunction(ind_combo);
    InterpolatorFP adapt_lim_eval;
@@ -147,7 +146,7 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs,
                                     0, 400, 300, 300);
 
       he_nlf_integ->EnableAdaptiveLimiting(adapt_lim_gf0, alim_coeff,
-                                           adapt_lim_eval);
+                                           adapt_lim_eval, adapt_lim_delta);
    }
 
    // Surface fitting.
