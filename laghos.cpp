@@ -977,7 +977,7 @@ int main(int argc, char *argv[])
             InterpolationRemap interpolator(*pmesh);
             interpolator.visualization = true;
             interpolator.h1_seminorm   = false;
-            interpolator.max_iter      = 20;
+            interpolator.max_iter      = 500;
             interpolator.subprob       = true;
             interpolator.weightedSpace = hiop::hiopInterfaceBase::Euclidean;
             interpolator.SetQuadratureSpace(qspace);
@@ -985,8 +985,8 @@ int main(int argc, char *argv[])
             interpolator.SetVelocityFESpace(H1FESpace);
 
             std::vector<BlockVector> ind_rho_e(ind_cnt, BlockVector(offset));
-            const bool remap_v = (problem == 1) ? false : true;
-            const bool p_control = (problem == 1) ? true : false;
+            const bool remap_v = (problem == 1) ? true : true;
+            const bool p_control = (problem == 1) ? false : false;
             for (int k = 0; k < ind_cnt; k++)
             {
                QuadratureFunction ind_0(&qspace,
@@ -1039,9 +1039,9 @@ int main(int argc, char *argv[])
                // socketstream sock_v;
                // hydrodynamics::Field(sock_v, "localhost", 19916, v, "v GF",
                //                               1200, 800, 400, 400, true, "m");
-               // QuadratureFunction p(&qspace);
-               // hydro.ComputePressure(rho, e, gamma[k], p);
-               // VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
+               QuadratureFunction p(&qspace);
+               hydro.ComputePressure(rho, e, gamma[k], p);
+               VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
             }
 
             //VisQuadratureFunction(*pmesh, isum, "ind QF final", 500, 800);
