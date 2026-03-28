@@ -254,8 +254,7 @@ int main(int argc, char *argv[])
    MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
    void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
    adiak::init(adiak_mpi_comm_ptr);
-   adiak::launchdate();
-   adiak::jobsize();
+   adiak::collect_all();
 #endif
 
 #ifdef LAGHOS_USE_DEVICE_UMPIRE
