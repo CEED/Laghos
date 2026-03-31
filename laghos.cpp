@@ -63,8 +63,15 @@
 
 #if (defined(HYPRE_USING_UMPIRE) || defined(MFEM_USE_UMPIRE)) && (defined(MFEM_USE_CUDA) || defined(MFEM_USE_HIP))
 #define LAGHOS_USE_DEVICE_UMPIRE
+#define LAGHOS_DEVICE_ALLOCATOR_NAME "LAGHOS_DEVICE_POOL"
 #include <umpire/Umpire.hpp>
 #include <umpire/strategy/QuickPool.hpp>
+
+double getDeviceMemoryHighWatermark() {
+  auto &rm = umpire::ResourceManager::getInstance();
+  auto allocator = rm.getAllocator(LAGHOS_DEVICE_ALLOCATOR_NAME);
+  return ((double) allocator.getHighWatermark()) / (1024 * 1024 * 1024);
+}
 #endif
 
 using std::cout;
@@ -259,7 +266,7 @@ int main(int argc, char *argv[])
 
 #ifdef LAGHOS_USE_DEVICE_UMPIRE
    auto &rm = umpire::ResourceManager::getInstance();
-   const char * allocator_name = "laghos_device_alloc";
+   const char * allocator_name = LAGHOS_DEVICE_ALLOCATOR_NAME;
    size_t umpire_dev_pool_size = ((size_t) dev_pool_size) * 1024 * 1024 * 1024;
    size_t umpire_dev_block_size = 512;
    rm.makeAllocator<umpire::strategy::QuickPool>(allocator_name,
@@ -932,6 +939,18 @@ int main(int argc, char *argv[])
 
 #ifdef LAGHOS_USE_CALIPER
    adiak::fini();
+#endif
+
+#ifdef LAGHOS_USE_DEVICE_UMPIRE
+   if (Mpi::Root())
+   {
+      cout << "Umpire device memory pool size: " << dev_pool_size << " GB" << endl;
+      cout << "Umpire device memory high water mark: " << getDeviceMemoryHighWatermark() << " GB" << endl;
+#ifdef LAGHOS_USE_CALIPER
+      adiak::value("umpire_device_pool_size", dev_pool_size);
+      adiak::value("umpire_device_high_water_mark", getDeviceMemoryHighWatermark());
+#endif
+   }
 #endif
 
    if (check_exact_sedov)
