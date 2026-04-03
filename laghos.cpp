@@ -94,6 +94,24 @@ static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int ti, const double norm, int &checks);
 
+#ifdef LAGHOS_USE_CALIPER
+   static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
+                                 int nx, int ny, int nz, double blast_energy,
+                                 double Sx, double Sy, double Sz,
+                                 int rs_levels, int rp_levels, int problem,
+                                 int order_v, int order_e, int order_q,
+                                 int ode_solver_type, double t_final, double cfl,
+                                 double cg_tol, double ftz_tol, double delta_tol,
+                                 int cg_max_iter, int max_tsteps,
+                                 bool p_assembly, bool impose_visc,
+                                 bool visualization, int vis_steps, bool visit,
+                                 bool gfprint, const char *basename,
+                                 const char *device, bool check,
+                                 bool check_exact_sedov, bool mem_usage,
+                                 bool fom, bool gpu_aware_mpi, int dev_pool_size,
+                                 bool enable_nc, int dev);
+#endif
+
 int main(int argc, char *argv[])
 {
    // Initialize MPI.
@@ -145,6 +163,16 @@ int main(int argc, char *argv[])
    real_t Sx = 1, Sy = 1, Sz = 1;
 
    bool enable_nc = true;
+
+   #ifdef LAGHOS_USE_CALIPER
+      cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
+      CALI_CXX_MARK_FUNCTION;
+   
+      MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
+      void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
+      adiak::init(adiak_mpi_comm_ptr);
+      adiak::collect_all();
+   #endif
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -244,7 +272,22 @@ int main(int argc, char *argv[])
       if (Mpi::Root()) { args.PrintUsage(cout); }
       return 1;
    }
-   if (Mpi::Root()) { args.PrintOptions(cout); }
+
+   if (Mpi::Root())
+   {
+      args.PrintOptions(cout);
+
+      #ifdef LAGHOS_USE_CALIPER
+         RecordAdiakMetadata(dim, mesh_file, elem_per_mpi, nx, ny, nz,
+                          blast_energy, Sx, Sy, Sz, rs_levels, rp_levels,
+                          problem, order_v, order_e, order_q, ode_solver_type,
+                          t_final, cfl, cg_tol, ftz_tol, delta_tol,
+                          cg_max_iter, max_tsteps, p_assembly, impose_visc,
+                          visualization, vis_steps, visit, gfprint, basename,
+                          device, check, check_exact_sedov, mem_usage, fom,
+                          gpu_aware_mpi, dev_pool_size, enable_nc, dev);
+      #endif
+   }
 
    if (check_exact_sedov)
    {
@@ -253,16 +296,6 @@ int main(int argc, char *argv[])
          "Can only compare problem 1 (Sedov) against the exact solution");
       MFEM_VERIFY(strncmp(mesh_file, "default", 7) == 0, "check: mesh_file");
    }
-
-#ifdef LAGHOS_USE_CALIPER
-   cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
-   CALI_CXX_MARK_FUNCTION;
-
-   MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
-   void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
-   adiak::init(adiak_mpi_comm_ptr);
-   adiak::collect_all();
-#endif
 
 #ifdef LAGHOS_USE_DEVICE_UMPIRE
    auto &rm = umpire::ResourceManager::getInstance();
@@ -1233,6 +1266,66 @@ static void display_banner(std::ostream &os)
       << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << endl
       << "               /____/                       " << endl << endl;
 }
+
+#ifdef LAGHOS_USE_CALIPER
+static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
+                                int nx, int ny, int nz, double blast_energy,
+                                double Sx, double Sy, double Sz,
+                                int rs_levels, int rp_levels, int problem,
+                                int order_v, int order_e, int order_q,
+                                int ode_solver_type, double t_final, double cfl,
+                                double cg_tol, double ftz_tol, double delta_tol,
+                                int cg_max_iter, int max_tsteps,
+                                bool p_assembly, bool impose_visc,
+                                bool visualization, int vis_steps, bool visit,
+                                bool gfprint, const char *basename,
+                                const char *device, bool check,
+                                bool check_exact_sedov, bool mem_usage,
+                                bool fom, bool gpu_aware_mpi, int dev_pool_size,
+                                bool enable_nc, int dev)
+{
+   adiak::value("dimension", dim);
+   adiak::value("mesh", std::string(mesh_file));
+   adiak::value("elem-per-mpi", elem_per_mpi);
+   adiak::value("xelems", nx);
+   adiak::value("yelems", ny);
+   adiak::value("zelems", nz);
+   adiak::value("blast-energy", blast_energy);
+   adiak::value("xwidth", (double)Sx);
+   adiak::value("ywidth", (double)Sy);
+   adiak::value("zwidth", (double)Sz);
+   adiak::value("refine-serial", rs_levels);
+   adiak::value("refine-parallel", rp_levels);
+   adiak::value("problem", problem);
+   adiak::value("order-kinematic", order_v);
+   adiak::value("order-thermo", order_e);
+   adiak::value("order-intrule", order_q);
+   adiak::value("ode-solver", ode_solver_type);
+   adiak::value("t-final", t_final);
+   adiak::value("cfl", cfl);
+   adiak::value("cg-tol", cg_tol);
+   adiak::value("ftz-tol", ftz_tol);
+   adiak::value("delta-tol", delta_tol);
+   adiak::value("cg-max-steps", cg_max_iter);
+   adiak::value("max-steps", max_tsteps);
+   adiak::value("partial-assembly", (int)p_assembly);
+   adiak::value("impose-viscosity", (int)impose_visc);
+   adiak::value("visualization", (int)visualization);
+   adiak::value("visualization-steps", vis_steps);
+   adiak::value("visit", (int)visit);
+   adiak::value("print", (int)gfprint);
+   adiak::value("outputfilename", std::string(basename));
+   adiak::value("device", std::string(device));
+   adiak::value("checks", (int)check);
+   adiak::value("exact-error", (int)check_exact_sedov);
+   adiak::value("mem", (int)mem_usage);
+   adiak::value("fom", (int)fom);
+   adiak::value("gpu-aware-mpi", (int)gpu_aware_mpi);
+   adiak::value("dev-pool-size", dev_pool_size);
+   adiak::value("conforming", (int)enable_nc);
+   adiak::value("dev", dev);
+}
+#endif
 
 static long GetMaxRssMB()
 {
