@@ -73,23 +73,31 @@ void OptimizeMesh(ParGridFunction &x, Array<int> &ess_vdofs, double lim_dist)
    const int mesh_poly_deg = pfespace->GetOrder(0);
    const int dim = pfespace->GetMesh()->Dimension();
 
+   TMOP_QualityMetric *metric = nullptr;
+
    //
    // Metric + target.
    //
    // shape config.
-   TMOP_QualityMetric *metric  = new TMOP_Metric_002;
-   //TMOP_QualityMetric *metric  = new TMOP_Metric_050;
+   if (dim == 2)
+   {
+      metric  = new TMOP_Metric_002;
+      //TMOP_QualityMetric *metric  = new TMOP_Metric_050;
+      // shape+size config.
+      //TMOP_QualityMetric *metric  = new TMOP_Metric_080(0.5);
+      //TMOP_QualityMetric *metric  = new TMOP_Metric_009;
+      //TMOP_QualityMetric *metric  = new TMOP_Metric_007;
+   }
+   else
+   {
+      metric  = new TMOP_Metric_302;
+      // 328, 333, 334
+      //TMOP_QualityMetric *metric  = new TMOP_Metric_334(0.5);
+   }
+
    auto ttype = TargetConstructor::IDEAL_SHAPE_UNIT_SIZE;
-   // shape+size config.
-   //TMOP_QualityMetric *metric  = new TMOP_Metric_080(0.5);
-   //TMOP_QualityMetric *metric  = new TMOP_Metric_009;
-   //TMOP_QualityMetric *metric  = new TMOP_Metric_007;
-   //TMOP_QualityMetric *metric  = new TMOP_Metric_302;
    //auto ttype = TargetConstructor::IDEAL_SHAPE_EQUAL_SIZE;
    //auto ttype = TargetConstructor::IDEAL_SHAPE_GIVEN_SIZE;
-   // 328, 333, 334
-   //TMOP_QualityMetric *metric  = new TMOP_Metric_334(0.5);
-
    TargetConstructor *target_c = new TargetConstructor(ttype, MPI_COMM_WORLD);
    target_c->SetNodes(x0);
    // Integrator.

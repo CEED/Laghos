@@ -201,6 +201,8 @@ public:
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { qdata_is_current = false; }
 
+   void DensityScatter() const;
+
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    void ComputeDensity(int ind_id, ParGridFunction &rho) const;
@@ -220,8 +222,6 @@ public:
    const IntegrationRule &GetIntRule() const { return ir; }
 
    void PrintTimingData(bool IamRoot, int steps, const bool fom) const;
-
-   void DensityScatter() const;
 };
 
 // TaylorCoefficient used in the 2D Taylor-Green problem.

@@ -450,6 +450,8 @@ int main(int argc, char *argv[])
    }
    dim = mesh->Dimension();
 
+   if (dim == 3) { blast_energy = 0.125; }
+
    // 1D vs partial assembly sanity check.
    if (p_assembly && dim == 1)
    {
@@ -985,8 +987,11 @@ int main(int argc, char *argv[])
             interpolator.SetVelocityFESpace(H1FESpace);
 
             std::vector<BlockVector> ind_rho_e(ind_cnt, BlockVector(offset));
-            const bool remap_v = (problem == 1) ? true : true;
-            const bool p_control = (problem == 1) ? false : false;
+            const bool remap_v = true;
+            const bool p_control = (problem == 1) ? true : false;
+            const bool remap_e_ho = (problem == 0) ? true: false;
+            if (p_control) { interpolator.max_iter = 1000; }
+
             for (int k = 0; k < ind_cnt; k++)
             {
                QuadratureFunction ind_0(&qspace,
@@ -996,7 +1001,8 @@ int main(int argc, char *argv[])
                interpolator.RemapHydro(ind_rho_e_v_0[k],
                                        remap_v, p_control,
                                        p_0[k], bool_ind[k], x_opt,
-                                       ind_rho_e[k], optimization_type);
+                                       ind_rho_e[k], optimization_type,
+                                       remap_e_ho);
             }
 
             x_gf = x_opt;
