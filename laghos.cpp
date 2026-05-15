@@ -324,13 +324,13 @@ int main(int argc, char *argv[])
    if (Mpi::Root()) { backend.Print(); }
    backend.SetGPUAwareMPI(gpu_aware_mpi);
 
-   #ifdef LAGHOS_USE_DEVICE_UMPIRE
-      // Warm up the device pool on the configured GPU to avoid first-use latency.
-      auto allocator = rm.getAllocator(allocator_name);
-      void *tmp = allocator.allocate(umpire_dev_block_size);
-     allocator.deallocate(tmp);
-   #endif
-  
+#ifdef LAGHOS_USE_DEVICE_UMPIRE
+   // Warm up the device pool on the configured GPU to avoid first-use latency.
+   auto allocator = rm.getAllocator(allocator_name);
+   void *tmp = allocator.allocate(umpire_dev_block_size);
+   allocator.deallocate(tmp);
+#endif
+
    // Prepare the missing kernels.
    if (myid == 0) { KernelReporter::Enable(); }
    using TENS = QuadratureInterpolator::TensorEvalKernels;
