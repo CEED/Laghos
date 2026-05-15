@@ -327,8 +327,8 @@ int main(int argc, char *argv[])
 #ifdef LAGHOS_USE_DEVICE_UMPIRE
    // Warm up the device pool on the configured GPU to avoid first-use latency.
    auto allocator = rm.getAllocator(allocator_name);
-   void *tmp = allocator.allocate(umpire_dev_block_size);
-   allocator.deallocate(tmp);
+   void *tmp_device_ptr = allocator.allocate(umpire_dev_block_size);
+   allocator.deallocate(tmp_device_ptr);
 #endif
 
    // Prepare the missing kernels.
