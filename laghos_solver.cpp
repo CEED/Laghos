@@ -222,7 +222,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
-   int Ne, ne = NE;
+   HYPRE_BigInt Ne, ne = NE;
    double Volume, vol = 0.0;
    if (dim > 1 && p_assembly)
    {
@@ -249,7 +249,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       for (int e = 0; e < NE; e++) { vol += pmesh->GetElementVolume(e); }
    }
    MPI_Allreduce(&vol, &Volume, 1, MPI_DOUBLE, MPI_SUM, pmesh->GetComm());
-   MPI_Allreduce(&ne, &Ne, 1, MPI_INT, MPI_SUM, pmesh->GetComm());
+   MPI_Allreduce(&ne, &Ne, 1, HYPRE_MPI_BIG_INT, MPI_SUM, pmesh->GetComm());
    switch (pmesh->GetElementBaseGeometry(0))
    {
       case Geometry::SEGMENT: qdata.h0 = Volume / Ne; break;

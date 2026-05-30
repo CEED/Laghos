@@ -321,8 +321,8 @@ int main(int argc, char *argv[])
    // Configure the device from the command line options
    Device backend;
    backend.Configure(device, dev);
-   if (Mpi::Root()) { backend.Print(); }
    backend.SetGPUAwareMPI(gpu_aware_mpi);
+   if (Mpi::Root()) { backend.Print(); }
 
 #ifdef LAGHOS_USE_DEVICE_UMPIRE
    // Warm up the device pool on the configured GPU to avoid first-use latency.
