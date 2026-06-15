@@ -93,6 +93,10 @@ static void AssignMeshBdrAttrs3D(Mesh &, real_t, real_t, real_t, real_t);
 static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int ti, const double norm, int &checks);
+static bool HasOption(int argc, char *argv[], const char *short_name,
+                      const char *long_name);
+static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
+                                      OptionsParser &args);
 
 #ifdef LAGHOS_USE_CALIPER
    static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
@@ -180,7 +184,8 @@ int main(int argc, char *argv[])
    args.AddOption(
       &elem_per_mpi, "-epm", "--elem-per-mpi",
       "Number of element per mpi task. Note: this is mutually-exclusive with "
-      "-nx, -ny, and -nz. Use -epm 0 to use -nx, -ny, and -nz.");
+      "-nx, -ny, -nz, -rs, and -rp when -epm is nonzero. Use -epm 0 to use "
+      "-nx, -ny, -nz, -rs, and -rp.");
    args.AddOption(&nx, "-nx", "--xelems",
                   "Elements in x-dimension (do not specify mesh_file). Note: "
                   "this is mutually-exclusive with -epm. Use -epm "
@@ -202,9 +207,13 @@ int main(int argc, char *argv[])
    args.AddOption(&Sz, "-Sz", "--zwidth",
                   "Domain width in z-dimension (do not specify mesh_file)");
    args.AddOption(&rs_levels, "-rs", "--refine-serial",
-                  "Number of times to refine the mesh uniformly in serial.");
+                  "Number of times to refine the mesh uniformly in serial. "
+                  "Note: this is mutually-exclusive with -epm when -epm is "
+                  "nonzero.");
    args.AddOption(&rp_levels, "-rp", "--refine-parallel",
-                  "Number of times to refine the mesh uniformly in parallel.");
+                  "Number of times to refine the mesh uniformly in parallel. "
+                  "Note: this is mutually-exclusive with -epm when -epm is "
+                  "nonzero.");
    args.AddOption(&problem, "-p", "--problem", "Problem setup to use.");
    args.AddOption(&order_v, "-ok", "--order-kinematic",
                   "Order (degree) of the kinematic finite element space.");
@@ -272,6 +281,8 @@ int main(int argc, char *argv[])
       if (Mpi::Root()) { args.PrintUsage(cout); }
       return 1;
    }
+
+   if (!ValidateElemPerMpiOptions(elem_per_mpi, argc, argv, args)) { return 1; }
 
    if (Mpi::Root())
    {
@@ -1344,6 +1355,63 @@ static long GetMaxRssMB()
    const long unit = 1024*1024; // mega
 #endif
    return usage.ru_maxrss/unit; // mega bytes
+}
+
+static bool HasOption(int argc, char *argv[], const char *short_name,
+                      const char *long_name)
+{
+   for (int i = 1; i < argc; i++)
+   {
+      if (strcmp(argv[i], short_name) == 0 || strcmp(argv[i], long_name) == 0)
+      {
+         return true;
+      }
+   }
+   return false;
+}
+
+static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
+                                      OptionsParser &args)
+{
+   if (elem_per_mpi == 0) { return true; }
+
+   Array<const char *> conflicting_options;
+   if (HasOption(argc, argv, "-nx", "--xelems"))
+   {
+      conflicting_options.Append("-nx/--xelems");
+   }
+   if (HasOption(argc, argv, "-ny", "--yelems"))
+   {
+      conflicting_options.Append("-ny/--yelems");
+   }
+   if (HasOption(argc, argv, "-nz", "--zelems"))
+   {
+      conflicting_options.Append("-nz/--zelems");
+   }
+   if (HasOption(argc, argv, "-rs", "--refine-serial"))
+   {
+      conflicting_options.Append("-rs/--refine-serial");
+   }
+   if (HasOption(argc, argv, "-rp", "--refine-parallel"))
+   {
+      conflicting_options.Append("-rp/--refine-parallel");
+   }
+
+   if (conflicting_options.Size() == 0) { return true; }
+
+   if (Mpi::Root())
+   {
+      cout << "Option -epm/--elem-per-mpi cannot be used together with ";
+      for (int i = 0; i < conflicting_options.Size(); i++)
+      {
+         if (i > 0) { cout << ", "; }
+         cout << conflicting_options[i];
+      }
+      cout << ". Use -epm 0 to enable -nx/-ny/-nz/-rs/-rp." << endl;
+      args.PrintUsage(cout);
+   }
+
+   return false;
 }
 
 static void Checks(const int ti, const double nrm, int &chk)
