@@ -95,6 +95,8 @@ static void display_banner(std::ostream&);
 static void Checks(const int ti, const double norm, int &checks);
 static bool HasOption(int argc, char *argv[], const char *short_name,
                       const char *long_name);
+static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
+                                      OptionsParser &args);
 
 #ifdef LAGHOS_USE_CALIPER
    static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
@@ -280,46 +282,7 @@ int main(int argc, char *argv[])
       return 1;
    }
 
-   if (elem_per_mpi != 0)
-   {
-      Array<const char *> conflicting_options;
-      if (HasOption(argc, argv, "-nx", "--xelems"))
-      {
-         conflicting_options.Append("-nx/--xelems");
-      }
-      if (HasOption(argc, argv, "-ny", "--yelems"))
-      {
-         conflicting_options.Append("-ny/--yelems");
-      }
-      if (HasOption(argc, argv, "-nz", "--zelems"))
-      {
-         conflicting_options.Append("-nz/--zelems");
-      }
-      if (HasOption(argc, argv, "-rs", "--refine-serial"))
-      {
-         conflicting_options.Append("-rs/--refine-serial");
-      }
-      if (HasOption(argc, argv, "-rp", "--refine-parallel"))
-      {
-         conflicting_options.Append("-rp/--refine-parallel");
-      }
-
-      if (conflicting_options.Size() > 0)
-      {
-         if (Mpi::Root())
-         {
-            cout << "Option -epm/--elem-per-mpi cannot be used together with ";
-            for (int i = 0; i < conflicting_options.Size(); i++)
-            {
-               if (i > 0) { cout << ", "; }
-               cout << conflicting_options[i];
-            }
-            cout << ". Use -epm 0 to enable -nx/-ny/-nz/-rs/-rp." << endl;
-            args.PrintUsage(cout);
-         }
-         return 1;
-      }
-   }
+   if (!ValidateElemPerMpiOptions(elem_per_mpi, argc, argv, args)) { return 1; }
 
    if (Mpi::Root())
    {
@@ -1404,6 +1367,50 @@ static bool HasOption(int argc, char *argv[], const char *short_name,
          return true;
       }
    }
+   return false;
+}
+
+static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
+                                      OptionsParser &args)
+{
+   if (elem_per_mpi == 0) { return true; }
+
+   Array<const char *> conflicting_options;
+   if (HasOption(argc, argv, "-nx", "--xelems"))
+   {
+      conflicting_options.Append("-nx/--xelems");
+   }
+   if (HasOption(argc, argv, "-ny", "--yelems"))
+   {
+      conflicting_options.Append("-ny/--yelems");
+   }
+   if (HasOption(argc, argv, "-nz", "--zelems"))
+   {
+      conflicting_options.Append("-nz/--zelems");
+   }
+   if (HasOption(argc, argv, "-rs", "--refine-serial"))
+   {
+      conflicting_options.Append("-rs/--refine-serial");
+   }
+   if (HasOption(argc, argv, "-rp", "--refine-parallel"))
+   {
+      conflicting_options.Append("-rp/--refine-parallel");
+   }
+
+   if (conflicting_options.Size() == 0) { return true; }
+
+   if (Mpi::Root())
+   {
+      cout << "Option -epm/--elem-per-mpi cannot be used together with ";
+      for (int i = 0; i < conflicting_options.Size(); i++)
+      {
+         if (i > 0) { cout << ", "; }
+         cout << conflicting_options[i];
+      }
+      cout << ". Use -epm 0 to enable -nx/-ny/-nz/-rs/-rp." << endl;
+      args.PrintUsage(cout);
+   }
+
    return false;
 }
 
