@@ -1387,8 +1387,14 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         LoadParametricSnapshots(input.numOfflineParameters, input.basename, "E",
                                 input.window, parametricSnapshotsE);
 
-        SetupEQP_Force(parametricSnapshotsX, parametricSnapshotsV, parametricSnapshotsE,
-                       basisV, basisE, input, elemsEQP);
+        if (hyperreductionSamplingType == eqp_energy)
+            SetupEQP_En_Force(parametricSnapshotsX, parametricSnapshotsV,
+                              parametricSnapshotsE, basisV, basisE, input,
+                              elemsEQP);
+        else
+            SetupEQP_Force(parametricSnapshotsX, parametricSnapshotsV,
+                           parametricSnapshotsE, basisV, basisE, input,
+                           elemsEQP);
 
         for (auto snapshot : parametricSnapshotsX)
             delete snapshot;

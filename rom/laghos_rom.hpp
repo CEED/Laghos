@@ -1123,6 +1123,23 @@ private:
                            bool equationE,
                            std::set<int> & elems);
 
+    // Energy-conserving EQP: form one combined reduced quadrature rule
+    // shared by the velocity and energy force functions.
+    void SetupEQP_En_Force(std::vector<const CAROM::Matrix*> snapX,
+                           std::vector<const CAROM::Matrix*> snapV,
+                           std::vector<const CAROM::Matrix*> snapE,
+                           const std::shared_ptr<CAROM::Matrix> &basisV,
+                           const std::shared_ptr<CAROM::Matrix> &basisE,
+                           ROM_Options const& input, std::set<int> & elems);
+
+    void SetupEQP_En_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
+                              std::vector<const CAROM::Matrix*> snapV,
+                              std::vector<const CAROM::Matrix*> snapE,
+                              const std::shared_ptr<CAROM::Matrix> &basisV,
+                              const std::shared_ptr<CAROM::Matrix> &basisE,
+                              ROM_Options const& input,
+                              std::set<int> & elems);
+
     // Space-time data
     const double t_initial = 0.0;  // Note that the initial time is hard-coded as 0.0
     const HyperreductionSamplingType hyperreductionSamplingType;

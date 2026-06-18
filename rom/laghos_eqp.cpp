@@ -747,6 +747,412 @@ void ROM_Basis::SetupEQP_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
     }
 }
 
+// Energy-conserving EQP: build one combined NNLS problem for both the
+// velocity and energy force functions, yielding a single reduced
+// quadrature rule shared by both forces.
+// This is the implementation analog of the combined matrix force
+// F^phi = Phi_v^T F Phi_e in the conservative EQP formulation.
+// The velocity basis Phi_v and energy basis Phi_e are used directly
+// (no mass-matrix inverse), so the reduced mass-matrix inverses are
+// applied online instead.
+void ROM_Basis::SetupEQP_En_Force_Eq(std::vector<const CAROM::Matrix*> snapX,
+                                     std::vector<const CAROM::Matrix*> snapV,
+                                     std::vector<const CAROM::Matrix*> snapE,
+                                     const std::shared_ptr<CAROM::Matrix> &basisV,
+                                     const std::shared_ptr<CAROM::Matrix> &basisE,
+                                     ROM_Options const& input,
+                                     std::set<int> & elems)
+{
+    const IntegrationRule *ir0 = input.FOMoper->GetIntegrationRule();
+    const int nqe = ir0->GetNPoints();
+    const int ne = input.H1FESpace->GetNE();
+    const int NQ = ne * nqe;
+
+    // The combined problem stacks the velocity basis columns and the
+    // energy basis columns into a single set of NNLS equations.
+    const int NBv = basisV->numColumns();
+    const int NBe = basisE->numColumns();
+    const int NB = NBv + NBe;
+
+    const int nsets = input.numOfflineParameters;
+    MFEM_VERIFY(nsets == snapX.size() && nsets == snapV.size() &&
+                nsets == snapE.size() && nsets > 0, "");
+
+    Array<int> numSnapVar(3);
+    std::vector<Array<int>> allNumSnapVar(3);
+    for (int i=0; i<3; ++i)
+        allNumSnapVar[i].SetSize(nsets);
+
+    Array<int> allnsnap(nsets);
+
+    for (int i=0; i<nsets; ++i)
+    {
+        allNumSnapVar[0][i] = snapX[i]->numColumns();
+        allNumSnapVar[1][i] = snapV[i]->numColumns();
+        allNumSnapVar[2][i] = snapE[i]->numColumns();
+
+        allnsnap[i] = allNumSnapVar[0][i];
+        for (int j=1; j<3; ++j)
+        {
+            allnsnap[i] = std::max(allnsnap[i], allNumSnapVar[j][i]);
+        }
+    }
+
+    for (int i=0; i<3; ++i)
+        numSnapVar[i] = allNumSnapVar[i].Sum();
+
+    const int nsnap = numSnapVar.Max();
+
+    std::vector<Array<int>> numSkipped(3);
+    for (int i=0; i<3; ++i)
+    {
+        numSkipped[i].SetSize(nsets);
+
+        for (int j=0; j<nsets; ++j)
+        {
+            numSkipped[i][j] = allnsnap[j] - allNumSnapVar[i][j];
+        }
+
+        MFEM_VERIFY(numSkipped[i].Max() <= 1, "");
+    }
+
+    Vector r(nqe);
+
+    const int Gnsnap = input.window == 0 ? nsnap + 1 : nsnap;
+
+    // Compute the transpose Gt of the combined matrix G of size
+    // (NB * Gnsnap) x NQ.
+    // For each snapshot, the first NBv columns hold the velocity force
+    // rows and the next NBe columns hold the energy force rows.
+    CAROM::Matrix Gt(NQ, NB * Gnsnap, true);
+    cout << "Energy-conserving NNLS using " << NBv << " velocity and "
+         << NBe << " energy basis dim and " << nsnap << " snapshots" << endl;
+
+    Vector v_i(tH1size);
+    Vector x_i(tH1size);
+    Vector e_i(tL2size);
+
+    Vector w_j_e, v_i_e, v_j_e;
+
+    Vector S((2*input.H1FESpace->GetVSize()) + input.L2FESpace->GetVSize());
+    Vector S_v(S, input.H1FESpace->GetVSize(), input.H1FESpace->GetVSize());  // Subvector
+
+    MFEM_VERIFY(tH1size == basisV->numRows(), "");
+    MFEM_VERIFY(tL2size == basisE->numRows(), "");
+
+    // The velocity basis Phi_v (full H1 size) and energy basis Phi_e
+    // (L2 size) are used directly, without a mass-matrix inverse.
+    CAROM::Matrix Wv(H1size, NBv, true);
+    CAROM::Matrix We(L2size, NBe, true);
+
+    for (int j=0; j<NBv; ++j)
+    {
+        for (int i=0; i<tH1size; ++i)
+            v_i[i] = (*basisV)(i,j);
+
+        gfH1->SetFromTrueDofs(v_i);
+        for (int i=0; i<H1size; ++i)
+            Wv(i,j) = (*gfH1)[i];
+    }
+
+    for (int j=0; j<NBe; ++j)
+    {
+        for (int i=0; i<tL2size; ++i)
+            We(i,j) = (*basisE)(i,j);
+    }
+
+    Array<double> const& w_el = ir0->GetWeights();
+    MFEM_VERIFY(w_el.Size() == nqe, "");
+
+    int oss = 0;
+    const int s0 = input.window == 0 ? -1 : 0;
+    for (int s=s0; s<nsets; ++s)
+    {
+        const int nsnap_s = (s == -1) ? 1 : allnsnap[s];
+        for (int i=0; i<nsnap_s; ++i)
+        {
+            if (s == -1)  // Use the initial state as the first snapshot.
+            {
+                v_i = 0.0;
+                x_i = 0.0;
+                e_i = 0.0;
+            }
+            else
+            {
+                if (i == 0 && numSkipped[0][s] == 1)
+                {
+                    x_i = 0.0;
+                }
+                else
+                {
+                    for (int j = 0; j < tH1size; ++j)
+                        x_i[j] = (*snapX[s])(j, i - numSkipped[0][s]);
+                }
+
+                if (i == 0 && numSkipped[1][s] == 1)
+                    v_i = 0.0;
+                else
+                {
+                    for (int j = 0; j < tH1size; ++j)
+                        v_i[j] = (*snapV[s])(j, i - numSkipped[1][s]);
+                }
+
+                if (i == 0 && numSkipped[2][s] == 1)
+                    e_i = 0.0;
+                else
+                {
+                    for (int j = 0; j < tL2size; ++j)
+                        e_i[j] = (*snapE[s])(j, i - numSkipped[2][s]);
+                }
+            }
+
+            SetStateFromTrueDOFs(x_i, v_i, e_i, S);
+
+            // NOTE: after SetStateFromTrueDOFs, gfH1 is the V-component of S
+            input.FOMoper->ResetQuadratureData();
+            input.FOMoper->GetTimeStepEstimate(S);  // Call UpdateQuadratureData
+            input.FOMoper->ResetQuadratureData();
+
+            const int colSnap = (oss + i) * NB;
+
+            // Velocity force rows: integrand sigma:grad(phi^v_j).
+            for (int j=0; j<NBv; ++j)
+            {
+                for (int k = 0; k < H1size; ++k) (*gfH1)[k] = Wv(k, j);
+
+                for (int e=0; e<ne; ++e)
+                {
+                    gfH1->GetElementDofValues(e, v_j_e);
+                    ComputeElementRowOfG_V(ir0, input.FOMoper->GetQuadData(),
+                                           v_j_e, *input.H1FESpace->GetFE(e),
+                                           *input.L2FESpace->GetFE(e), e, r);
+
+                    for (int m=0; m<nqe; ++m)
+                        Gt((e*nqe) + m, j + colSnap) = r[m];
+                }  // e
+            }  // j (velocity)
+
+            // Energy force rows: integrand (sigma:grad v)*phi^e_j, with
+            // v the snapshot velocity stored in S_v.
+            for (int j=0; j<NBe; ++j)
+            {
+                for (int k = 0; k < basisE->numRows(); ++k)
+                    mfL2[k] = We(k, j);
+
+                gfL2->SetFromTrueDofs(mfL2);
+                *gfH1 = S_v;
+
+                for (int e=0; e<ne; ++e)
+                {
+                    gfL2->GetElementDofValues(e, w_j_e);
+                    gfH1->GetElementDofValues(e, v_i_e);
+
+                    ComputeElementRowOfG_E(ir0, input.FOMoper->GetQuadData(),
+                                           w_j_e, v_i_e,
+                                           *input.H1FESpace->GetFE(e),
+                                           *input.L2FESpace->GetFE(e), e, r);
+
+                    for (int m=0; m<nqe; ++m)
+                        Gt((e*nqe) + m, NBv + j + colSnap) = r[m];
+                }  // e
+            }  // j (energy)
+        }  // i
+        oss += nsnap_s;
+    }  // s
+
+    // Rescale every Gt column (NNLS equation) by its max absolute value.
+    Gt.rescale_cols_max();
+
+    CAROM::Vector w(ne * nqe, true);
+    for (int i=0; i<ne; ++i)
+    {
+        for (int j=0; j<nqe; ++j)
+            w((i*nqe) + j) = w_el[j];
+    }
+
+    CAROM::Vector sol(ne * nqe, true);
+    SolveNNLS(input.rank, input.tolNNLS, input.maxNNLSnnz, input.LQ_NNLS,
+              w, Gt, sol);
+
+    std::vector<double> solnz; // Solution nonzeros
+    std::vector<int> indices;
+    ExtractNonzeros(sol, indices, solnz);
+
+    int prev = -1;
+    for (auto i : indices)
+    {
+        const int elem = i / nqe;
+        if (elem != prev)
+        {
+            elems.insert(elem);
+            prev = elem;
+        }
+    }
+
+    // For the parallel case, convert local indices to global on root.
+    std::vector<int> allne(nprocs);
+    MPI_Gather(&ne, 1, MPI_INT, allne.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    std::vector<int> globalIndices;
+    std::vector<double> globalSol;
+
+    const int localNumIndices = indices.size();
+
+    Int_Gatherv(localNumIndices, indices.data(), 0, rank, nprocs,
+                MPI_COMM_WORLD, globalIndices);
+    Double_Gatherv(localNumIndices, solnz.data(), 0, rank, nprocs,
+                   MPI_COMM_WORLD, globalSol);
+
+    std::vector<int> counts(nprocs);
+    std::vector<int> offsets(nprocs);
+
+    MPI_Gather(&localNumIndices, 1, MPI_INT, counts.data(), 1, MPI_INT, 0,
+               MPI_COMM_WORLD);
+
+    offsets[0] = 0;
+    for (int i=1; i<nprocs; ++i)
+        offsets[i] = offsets[i-1] + counts[i-1];
+
+    if (rank == 0)
+    {
+        int os = 0;
+        for (int i=1; i<nprocs; ++i)
+        {
+            os += allne[i-1] * nqe;
+            for (int j=offsets[i]; j<offsets[i] + counts[i]; ++j)
+            {
+                globalIndices[j] += os;
+            }
+        }
+
+        // Write the single combined rule to both the velocity and energy
+        // NNLS files, so that the online phase reads the same reduced
+        // quadrature rule for both force functions.
+        // Using one shared rule is what enforces the energy conservation
+        // identity v^T F_v^phi = 1_e^T F_e^phi.
+        WriteSolutionNNLS(globalIndices, globalSol,
+                          GetTestingParameterBasename() + "/nnlsV"
+                          + std::to_string(input.window));
+        WriteSolutionNNLS(globalIndices, globalSol,
+                          GetTestingParameterBasename() + "/nnlsE"
+                          + std::to_string(input.window));
+    }
+}
+
+// Energy-conserving EQP wrapper, analogous to SetupEQP_Force.
+// It forms the single combined reduced quadrature rule and writes the
+// sampled elements and the velocity and energy bases restricted to
+// those elements.
+void ROM_Basis::SetupEQP_En_Force(std::vector<const CAROM::Matrix*> snapX,
+                                  std::vector<const CAROM::Matrix*> snapV,
+                                  std::vector<const CAROM::Matrix*> snapE,
+                                  const std::shared_ptr<CAROM::Matrix> &basisV,
+                                  const std::shared_ptr<CAROM::Matrix> &basisE,
+                                  ROM_Options const& input, std::set<int> & elems)
+{
+    MFEM_VERIFY(basisV->numRows() == input.H1FESpace->GetTrueVSize(), "");
+    MFEM_VERIFY(basisE->numRows() == input.L2FESpace->GetTrueVSize(), "");
+
+    for (auto snap : snapX)
+    {
+        MFEM_VERIFY(snap->numRows() == input.H1FESpace->GetTrueVSize(), "");
+    }
+
+    for (auto snap : snapV)
+    {
+        MFEM_VERIFY(snap->numRows() == input.H1FESpace->GetTrueVSize(), "");
+    }
+
+    for (auto snap : snapE)
+    {
+        MFEM_VERIFY(snap->numRows() == input.L2FESpace->GetTrueVSize(), "");
+    }
+
+    cout << "WINDOW " << input.window << endl;
+    SetupEQP_En_Force_Eq(snapX, snapV, snapE, basisV, basisE, input, elems);
+
+    // For the parallel case, gather local elems and construct global elems.
+    std::vector<int> globalElems;
+    {
+        const int localNumElems = elems.size();
+
+        std::vector<int> counts(nprocs);
+        std::vector<int> offsets(nprocs);
+
+        MPI_Gather(&localNumElems, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        offsets[0] = 0;
+        for (int i=1; i<nprocs; ++i)
+            offsets[i] = offsets[i-1] + counts[i-1];
+
+        std::vector<int> localElems(elems.begin(), elems.end());
+        Int_Gatherv(localNumElems, localNumElems > 0 ? localElems.data() : nullptr,
+                    0, rank, nprocs, MPI_COMM_WORLD, globalElems);
+
+        const int ne = input.H1FESpace->GetNE();
+        std::vector<int> allne(nprocs);
+        MPI_Gather(&ne, 1, MPI_INT, allne.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        if (rank == 0)
+        {
+            int os = 0;
+            for (int i=1; i<nprocs; ++i)
+            {
+                os += allne[i-1];
+                for (int j=offsets[i]; j<offsets[i] + counts[i]; ++j)
+                {
+                    globalElems[j] += os;
+                }
+            }
+        }
+    }
+
+    // Write elems to file
+    if (rank == 0)
+    {
+        std::ofstream outfile(GetTestingParameterBasename() + "/nnlsElems"
+                              + std::to_string(input.window));
+        for (auto e : globalElems)
+            outfile << e << endl;
+        outfile.close();
+    }
+
+    // Construct Wmat and write out rows corresponding to elements in elems
+    // to file, using the bases directly (no mass-matrix inverse).
+    CAROM::Matrix Wmat(H1size, rdimv, true);
+    CAROM::Matrix Wmat_E(L2size, rdime, true);
+
+    Vector vj(tH1size);
+    for (int j=0; j<rdimv; ++j)
+    {
+        GetBasisVectorV(false, j, vj);
+        gfH1->SetFromTrueDofs(vj);
+
+        for (int i=0; i<H1size; ++i)
+            Wmat(i,j) = (*gfH1)[i];
+    }
+
+    vj.SetSize(tL2size);
+    for (int j=0; j<rdime; ++j)
+    {
+        GetBasisVectorE(false, j, vj);
+        gfL2->SetFromTrueDofs(vj);
+
+        for (int i=0; i<L2size; ++i)
+            Wmat_E(i,j) = (*gfL2)[i];
+    }
+
+    ExtractMatrixElementRowsAndWrite(elems, input.H1FESpace, Wmat,
+                                     *input.basename + "/WelemsV" +
+                                     std::to_string(input.window),
+                                     input.rank, input.nprocs);
+
+    ExtractMatrixElementRowsAndWrite(elems, input.L2FESpace, Wmat_E,
+                                     *input.basename + "/WelemsE" +
+                                     std::to_string(input.window),
+                                     input.rank, input.nprocs);
+}
+
 void ROM_Operator::InitEQP() const
 {
     operSP->SetPointsEQP(eqpI);
