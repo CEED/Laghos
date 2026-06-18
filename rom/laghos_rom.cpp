@@ -723,6 +723,12 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
+    // Energy-conserving EQP requires zero offset vectors, so that the
+    // velocity offset condition v_os = 0 of the conservation theorem
+    // (condition 1) is satisfied.
+    MFEM_VERIFY(!(hyperreductionSamplingType == eqp_energy && offsetInit),
+                "Energy-conserving EQP requires zero offsets.");
+
     if (useXV) rdimx = rdimv;
     if (useVX) rdimv = rdimx;
 
@@ -1852,6 +1858,56 @@ int ROM_Basis::SolutionSizeFOM() const
     return (2*H1size) + L2size;  // full size, not true DOF size
 }
 
+void ROM_Basis::EnrichEnergyBasisWithUnit()
+{
+    // Construct the unit-energy vector 1_E as the true-dof representation
+    // of the constant unit function in the L2 thermodynamic space.
+    ConstantCoefficient one(1.0);
+    gfL2->ProjectCoefficient(one);
+    Vector oneE(tL2size);
+    gfL2->GetTrueDofs(oneE);
+
+    // Append 1_E as a column to the energy basis and reorthonormalize.
+    // We follow the same SVD-based approach used for the mergeXV merge.
+    const int max_model_dim = rdime + 1;
+    CAROM::Options options(tL2size, max_model_dim, 1);
+    CAROM::BasisGenerator generator(options, false);
+
+    Vector Bej(tL2size);
+    CAROM::Vector ej(rdime, false);
+    CAROM::Vector CBej(Bej.GetData(), tL2size, true, false);  // data owned by Bej
+    ej = 0.0;
+    for (int j=0; j<rdime; ++j)
+    {
+        ej(j) = 1.0;
+        basisE->mult(ej, CBej);
+
+        const bool addSample = generator.takeSample(Bej.GetData());
+        MFEM_VERIFY(addSample, "Energy basis sample not added");
+
+        ej(j) = 0.0;
+    }
+
+    const bool addUnit = generator.takeSample(oneE.GetData());
+    MFEM_VERIFY(addUnit, "Unit-energy sample not added");
+
+    // Keep all original modes plus the unit direction.
+    // An energy fraction of 1 retains every mode with a nonzero singular
+    // value, so the unit direction is kept only if it is not already in
+    // the span of the original energy basis.
+    int new_rdime = rdime + 1;
+    BasisGeneratorFinalSummary(&generator, 0, 1.0, new_rdime, "", false);
+
+    std::shared_ptr<const CAROM::Matrix> basisE_full = generator.getSpatialBasis();
+    basisE = basisE_full->getFirstNColumns(new_rdime);
+    MFEM_VERIFY(basisE->numRows() == tL2size, "");
+    rdime = new_rdime;
+
+    if (rank == 0)
+        cout << "Enriched energy basis with unit-energy vector, rdime = "
+             << rdime << endl;
+}
+
 void ROM_Basis::ReadSolutionBases(const int window)
 {
     if (!useVX)
@@ -1917,6 +1973,9 @@ void ROM_Basis::ReadSolutionBases(const int window)
         MFEM_VERIFY(basisX->numRows() == tH1size, "");
         basisV = basisX;
     }
+
+    if (hyperreductionSamplingType == eqp_energy)
+        EnrichEnergyBasisWithUnit();
 
     if (isEQP(hyperreductionSamplingType)) return;
 

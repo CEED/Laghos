@@ -856,6 +856,11 @@ public:
     void ReadSolutionBases(const int window);
     void ReadTemporalBases(const int window);
 
+    // Energy-conserving EQP: append the unit-energy vector to the energy
+    // basis and reorthonormalize, so that the unit-energy function lies
+    // in the span of Phi_e (condition 2 of the conservation theorem).
+    void EnrichEnergyBasisWithUnit();
+
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
 
