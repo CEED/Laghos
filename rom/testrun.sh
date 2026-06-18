@@ -10,9 +10,16 @@
 # - The distributed mass Gram-Schmidt runs in stage 3 (romhrprep), so the
 #   2-rank run exercises it. Comparing the 1-rank and 2-rank CEQP runs is
 #   the rank-invariance check.
-# - CEQP requires no SNS (-no-romsns) and zero offsets (-no-romoffset);
-#   we also disable the runtime Gram-Schmidt (-no-romgs) since the basis
-#   is mass-orthonormalized offline.
+# - Offsets are kept ON (-romos): offline subtracts the initial state,
+#   making the X/V/E snapshot counts consistent (without offsets the
+#   nonzero initial position is sampled while the zero initial velocity
+#   is skipped as trivial, breaking the merge snapshot-size check). CEQP
+#   only requires the velocity offset to be zero, which holds for Sedov
+#   (zero initial velocity); the online LiftToSampleMesh adds offsets back.
+# - SNS is kept ON (-romsns) so merge skips the Fv/Fe snapshots that the
+#   EQP offline does not write; it does not affect the EQP basis.
+# - Runtime Gram-Schmidt is OFF (-no-romgs): the basis is
+#   mass-orthonormalized offline.
 # - Single window: numWindows defaults to 0 and -nwinsamp is omitted.
 
 set -e
@@ -26,24 +33,24 @@ run_pipeline () {
   TYPE=$1; OUT=$2; NP=$3
 
   # 1. FOM offline (parallel): collect snapshots and write the FOM solution.
-  $RUN -n $NP laghos -o $OUT $P -offline -no-romsns -no-romoffset \
+  $RUN -n $NP laghos -o $OUT $P -offline -romsns -romos \
        -rpar 0 -sample-stages -sdim 1000 -writesol
 
   # 2. Merge snapshots into single-window POD bases (no $P; no -nwinsamp).
-  $RUN -n $NP ./merge -o $OUT -nset 1 -no-romsns -no-romoffset -eqp
+  $RUN -n $NP ./merge -o $OUT -nset 1 -romsns -romos -eqp
 
   # 3. Online prep (parallel): basis enrichment + mass Gram-Schmidt for
   #    CEQP, plus the NNLS reduced quadrature rule.
-  $RUN -n $NP laghos -o $OUT $P -online -romhrprep -no-romsns \
-       -no-romoffset -no-romgs -hrsamptype $TYPE -maxnnls 100
+  $RUN -n $NP laghos -o $OUT $P -online -romhrprep -romsns \
+       -romos -no-romgs -hrsamptype $TYPE -maxnnls 100
 
   # 4. Online hyperreduced (serial: sample mesh is on rank 0).
-  $RUN -n 1 laghos -o $OUT $P -online -romhr -no-romsns \
-       -no-romoffset -no-romgs -hrsamptype $TYPE
+  $RUN -n 1 laghos -o $OUT $P -online -romhr -romsns \
+       -romos -no-romgs -hrsamptype $TYPE
 
   # 5. Restore: print relative errors of the ROM solution vs the FOM.
-  $RUN -n $NP laghos -o $OUT $P -restore -soldiff -no-romsns \
-       -no-romoffset -hrsamptype $TYPE
+  $RUN -n $NP laghos -o $OUT $P -restore -soldiff -romsns \
+       -romos -hrsamptype $TYPE
 }
 
 # Baseline basic EQP and our energy-conserving EQP, both with 2-rank prep.

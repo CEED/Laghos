@@ -723,11 +723,15 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
 {
     MFEM_VERIFY(!(input.useXV && input.useVX) && !(input.useXV && input.mergeXV) && !(input.useVX && input.mergeXV), "");
 
-    // Energy-conserving EQP requires zero offset vectors, so that the
-    // velocity offset condition v_os = 0 of the conservation theorem
-    // (condition 1) is satisfied.
-    MFEM_VERIFY(!(hyperreductionSamplingType == eqp_energy && offsetInit),
-                "Energy-conserving EQP requires zero offsets.");
+    // Energy-conserving EQP requires a zero velocity offset (v_os = 0,
+    // condition 1 of the conservation theorem).
+    // Offsets may still be used: the online LiftToSampleMesh adds them
+    // back, and the energy and position offsets cancel in the energy
+    // difference, so only the velocity offset must vanish.
+    // For offset runs with offsetType useInitialState this means the
+    // initial velocity must be zero (true for e.g. the Sedov problem).
+    // TODO: add a runtime check that the velocity offset is zero once
+    // initV is available.
 
     if (useXV) rdimx = rdimv;
     if (useVX) rdimv = rdimx;
@@ -2107,11 +2111,13 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     if (hyperreductionSamplingType == eqp_energy)
     {
         // Mass-weighted projection onto the mass-orthonormal velocity
-        // basis: rV = Phi_v^T M_v v.
-        // The velocity offset is zero for energy-conserving EQP, so
-        // mfH1 holds the velocity true dofs.
+        // basis: rV = Phi_v^T M_v (v - v_os), using the offset-subtracted
+        // velocity fH1 (v_os = 0 for energy-conserving EQP).
+        Vector fV(tH1size);
+        for (int i=0; i<tH1size; ++i)
+            fV[i] = (*fH1)(i);
         Vector MfV(tH1size);
-        lhoper->MultMv(mfH1, MfV);
+        lhoper->MultMv(fV, MfV);
         CAROM::Vector MfV_c(MfV.GetData(), tH1size, true, false);
         basisV->transposeMult(MfV_c, *rV);
     }
@@ -2129,9 +2135,13 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     if (hyperreductionSamplingType == eqp_energy)
     {
         // Mass-weighted projection onto the mass-orthonormal energy
-        // basis: rE = Phi_e^T M_e e.
+        // basis: rE = Phi_e^T M_e (e - e_os), using the offset-subtracted
+        // energy fL2.
+        Vector fE(tL2size);
+        for (int i=0; i<tL2size; ++i)
+            fE[i] = (*fL2)(i);
         Vector MfE(tL2size);
-        lhoper->MultMe(mfL2, MfE);
+        lhoper->MultMe(fE, MfE);
         CAROM::Vector MfE_c(MfE.GetData(), tL2size, true, false);
         basisE->transposeMult(MfE_c, *rE);
     }
