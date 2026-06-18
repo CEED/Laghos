@@ -1373,7 +1373,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     vector<int> num_sample_dofs_per_procE(nprocs);
 
     std::set<int> elemsEQP;
-    if (hyperreductionSamplingType == eqp)
+    if (isEQP(hyperreductionSamplingType))
     {
         std::vector<const CAROM::Matrix*> parametricSnapshotsX,
             parametricSnapshotsV, parametricSnapshotsE;
@@ -1427,7 +1427,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     vector<int> sample_dofs_V(numSamplesV);
     vector<int> num_sample_dofs_per_procV(nprocs);
 
-    if (spaceTime || hyperreductionSamplingType == eqp)
+    if (spaceTime || isEQP(hyperreductionSamplingType))
         BsinvV.reset(nullptr);
     else
         BsinvV.reset(new CAROM::Matrix(numSamplesV, rdimfv, false));
@@ -1613,7 +1613,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
             MFEM_VERIFY(PiEtransPiFe->numRows() == rdime && PiEtransPiFe->numColumns() == rdimfe, "");
         }
     }
-    else if (hyperreductionSamplingType == eqp)
+    else if (isEQP(hyperreductionSamplingType))
     {
         // Artificially set 1 DOF per element as a sample in the L2 space for E.
         vector<int> localSamples(num_sample_dofs_per_procE[rank]);
@@ -1743,7 +1743,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
         sample_pmesh = smm->GetSampleMesh();
     }
 
-    if (hyperreductionSamplingType == eqp)
+    if (isEQP(hyperreductionSamplingType))
     {
         MapBoundaryAttributesToSampleMesh(rank, nprocs, elemsEQP,
                                           num_sample_dofs_per_procE,
@@ -1752,7 +1752,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
 
     if (rank == 0)
     {
-        if (hyperreductionSamplingType != eqp)
+        if (!isEQP(hyperreductionSamplingType))
             SetBdryAttrForVelocity_Cartesian(sample_pmesh);
 
         BXsp = new CAROM::Matrix(size_H1_sp, rdimx, false);
@@ -1776,7 +1776,7 @@ void ROM_Basis::SetupHyperreduction(ParFiniteElementSpace *H1FESpace,
     smm->GatherDistributedMatrixRows("V", *basisV, rdimv, *BVsp);
     smm->GatherDistributedMatrixRows("E", *basisE, rdime, *BEsp);
 
-    if (hyperreductionSamplingType == eqp) return;
+    if (isEQP(hyperreductionSamplingType)) return;
 
     smm->GatherDistributedMatrixRows("Fv", *basisFv, rdimfv, *BFvsp);
     smm->GatherDistributedMatrixRows("Fe", *basisFe, rdimfe, *BFesp);
@@ -1912,7 +1912,7 @@ void ROM_Basis::ReadSolutionBases(const int window)
         basisV = basisX;
     }
 
-    if (hyperreductionSamplingType == eqp) return;
+    if (isEQP(hyperreductionSamplingType)) return;
 
     if (use_sns) // TODO: only do in online and not hyperreduce
     {
@@ -2436,7 +2436,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
                 ess_tdofs, rho, source, cfl, mat_gf_coeff,
                 visc, vort, p_assembly, cg_tol, cg_max_iter, ftz_tol,
                 H1fec->GetBasisType(), noMsolve, noMsolve,
-                hyperreductionSamplingType == eqp);
+                isEQP(hyperreductionSamplingType));
 
         {
             // StepRK4EQP data
@@ -2473,7 +2473,7 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         ComputeReducedMe();
     }
 
-    if (hyperreduce && hyperreductionSamplingType == eqp)
+    if (hyperreduce && isEQP(hyperreductionSamplingType))
     {
         std::string path_init = basis->GetTestingParameterBasename()
                                 + "/ROMoffset" + input.basisIdentifier;
@@ -2725,7 +2725,7 @@ void ROM_Basis::writeSP(ROM_Options const& input, const int window) const
     BEsp->write(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
 
 
-    if (hyperreductionSamplingType != eqp)
+    if (!isEQP(hyperreductionSamplingType))
     {
         BFvsp->write(hyperreduce_basename + "/" + "BFvsp" + "_" + to_string(window));
         BFesp->write(hyperreduce_basename + "/" + "BFesp" + "_" + to_string(window));
@@ -2822,7 +2822,7 @@ void ROM_Basis::readSP(ROM_Options const& input, const int window)
     BVsp->read(hyperreduce_basename + "/" + "BVsp" + "_" + to_string(window));
     BEsp->read(hyperreduce_basename + "/" + "BEsp" + "_" + to_string(window));
 
-    if (hyperreductionSamplingType != eqp)
+    if (!isEQP(hyperreductionSamplingType))
     {
         BFvsp = new CAROM::Matrix(size_H1_sp, rdimfv, false);
         BFesp = new CAROM::Matrix(size_L2_sp, rdimfe, false);
@@ -4130,7 +4130,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
     MFEM_VERIFY(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
-    if (hyperreductionSamplingType == eqp && rank == 0)
+    if (isEQP(hyperreductionSamplingType) && rank == 0)
     {
         StepRK2AvgEQP(S, t, dt);
     }
@@ -4141,13 +4141,13 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
         else
             basis->LiftROMtoFOM(S, fx);
 
-        if (hyperreduce && hyperreductionSamplingType == eqp)
+        if (hyperreduce && isEQP(hyperreductionSamplingType))
         {
             operSP->SetRomOperator(this);
         }
 
-        const bool sample_mesh_proj = hyperreduce && hyperreductionSamplingType != eqp;
-        const bool eqp_proj = hyperreduce && hyperreductionSamplingType == eqp;
+        const bool sample_mesh_proj = hyperreduce && !isEQP(hyperreductionSamplingType);
+        const bool eqp_proj = hyperreduce && isEQP(hyperreductionSamplingType);
 
         const int Vsize = hyperreduce ? basis->SolutionSizeH1SP() : basis->SolutionSizeH1FOM();
         const int Esize = hyperreduce ? basis->SolutionSizeL2SP() : basis->SolutionSizeL2FOM();
@@ -4279,7 +4279,7 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
         MFEM_VERIFY(!useReducedM, "");
 
-        if (hyperreductionSamplingType != eqp)
+        if (!isEQP(hyperreductionSamplingType))
         {
             if (hyperreduce)
                 basis->RestrictFromSampleMesh(fx, S, false);
@@ -4298,14 +4298,14 @@ void ROM_Operator::StepRK2Avg(Vector &S, double &t, double &dt) const
 
 void ROM_Operator::StepRK4EQP(Vector &S, double &t, double &dt) const
 {
-    MFEM_ASSERT(rank == 0 && hyperreductionSamplingType == eqp && hyperreduce,
+    MFEM_ASSERT(rank == 0 && isEQP(hyperreductionSamplingType) && hyperreduce,
                 "StepRK4EQP needs more general support");
 
     MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");  // rdimx + rdimv + rdime
 
     hydrodynamics::LagrangianHydroOperator *hydro_oper = hyperreduce ? operSP : operFOM;
 
-    if (hyperreduce && hyperreductionSamplingType == eqp)
+    if (hyperreduce && isEQP(hyperreductionSamplingType))
         hydro_oper->SetRomOperator(this);
 
     EQPmult(t, hydro_oper, S, rk4_k); // k1

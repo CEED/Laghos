@@ -1015,7 +1015,7 @@ void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *ope
 
 void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
 {
-    MFEM_ASSERT(hyperreduce && hyperreductionSamplingType == eqp, "");
+    MFEM_ASSERT(hyperreduce && isEQP(hyperreductionSamplingType), "");
     MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");
 
     operSP->SetRomOperator(this);

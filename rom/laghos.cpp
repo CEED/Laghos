@@ -1016,14 +1016,14 @@ int main(int argc, char *argv[])
     LagrangianHydroOperator* oper = NULL;
     if (fom_data)
     {
-        const bool noMassSolve = rom_online && (romOptions.hyperreductionSamplingType == eqp);
+        const bool noMassSolve = rom_online && isEQP(romOptions.hyperreductionSamplingType);
         oper = new LagrangianHydroOperator(S->Size(), *H1FESpace, *L2FESpace,
                                            ess_tdofs, *rho, source, cfl,
                                            mat_gf_coeff, visc, vort, p_assembly,
                                            cg_tol, cg_max_iter, ftz_tol,
                                            H1FEC.GetBasisType(), noMassSolve,
                                            noMassSolve,
-                                           rom_online && (romOptions.hyperreductionSamplingType == eqp));
+                                           rom_online && isEQP(romOptions.hyperreductionSamplingType));
     }
 
     socketstream* vis_rho = NULL;

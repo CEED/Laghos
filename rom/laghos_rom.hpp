@@ -78,7 +78,8 @@ enum HyperreductionSamplingType
     gnat,       // Default, GNAT
     qdeim,      // QDEIM
     sopt,       // S-OPT
-    eqp         // EQP
+    eqp,        // EQP
+    eqp_energy  // Energy-conserving EQP
 };
 
 static HyperreductionSamplingType getHyperreductionSamplingType(const char* sampling_type)
@@ -88,11 +89,19 @@ static HyperreductionSamplingType getHyperreductionSamplingType(const char* samp
         {"gnat", gnat},
         {"qdeim", qdeim},
         {"sopt", sopt},
-        {"eqp", eqp}
+        {"eqp", eqp},
+        {"eqp_energy", eqp_energy}
     };
     auto iter = SamplingTypeMap.find(sampling_type);
     MFEM_VERIFY(iter != std::end(SamplingTypeMap), "Invalid input for hyperreduction sampling type");
     return iter->second;
+}
+
+// Returns true for the EQP family of sampling types.
+// This includes both the basic EQP and the energy-conserving EQP.
+static bool isEQP(HyperreductionSamplingType samplingType)
+{
+    return samplingType == eqp || samplingType == eqp_energy;
 }
 
 enum SpaceTimeMethod
@@ -493,7 +502,7 @@ public:
           energyFraction_X(input.energyFraction_X), sns(input.SNS), lhoper(input.FOMoper), writeSnapshots(input.parameterID >= 0),
           parameterID(input.parameterID), basename(*input.basename), Voffset(!input.useXV && !input.useVX && !input.mergeXV),
           useXV(input.useXV), useVX(input.useVX), VTos(input.VTos), spaceTime(input.spaceTimeMethod != no_space_time),
-          rhsBasis(input.hyperreductionSamplingType != eqp)
+          rhsBasis(!isEQP(input.hyperreductionSamplingType))
     {
         const int window = input.window;
 
@@ -1253,7 +1262,7 @@ public:
     void InitEQP() const;
 
     bool UsingEQP() const {
-        return hyperreductionSamplingType == eqp;
+        return isEQP(hyperreductionSamplingType);
     }
 
     ~ROM_Operator()
