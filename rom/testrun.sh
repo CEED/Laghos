@@ -18,7 +18,7 @@
 set -e
 
 P="-m data/cube01_hex.mesh -rs 1 -pt 211 -tf 0.02"   # single-window Sedov
-RUN="mpirun -oversubscribe"
+RUN="srun"
 
 # Full pipeline for a given sampling type and output directory.
 # $1 = sampling type (eqp | eqp_energy), $2 = output dir, $3 = prep ranks
@@ -47,12 +47,12 @@ run_pipeline () {
 }
 
 # Baseline basic EQP and our energy-conserving EQP, both with 2-rank prep.
-run_pipeline eqp        run/sedov_eqp_2r   2
-run_pipeline eqp_energy run/sedov_ceqp_2r  2
+run_pipeline eqp        sedov_eqp_2r   2
+run_pipeline eqp_energy sedov_ceqp_2r  2
 
 # Rank-invariance check for the distributed mass Gram-Schmidt:
 # run CEQP again with serial prep and compare the restore errors.
-run_pipeline eqp_energy run/sedov_ceqp_1r  1
+run_pipeline eqp_energy sedov_ceqp_1r  1
 
 # Compare:
 # - basic vs CEQP: restore relative errors of sedov_eqp_2r vs sedov_ceqp_2r
