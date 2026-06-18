@@ -1271,6 +1271,14 @@ public:
     void StepRK2Avg(Vector &S, double &t, double &dt) const;
 
     void StepRK2AvgEQP(Vector &S, double &t, double &dt) const;
+
+    // Reduced total energy IE + KE = oneEhat . ehat + 0.5 |vhat|^2,
+    // for the energy-conserving EQP diagnostic (valid when Mhat = I).
+    double ComputeReducedEnergyEQP(const Vector &S) const;
+
+    // Print the end-of-run energy summary (initial energy, absolute and
+    // relative drift) for the energy-conserving EQP method.
+    void PrintEnergySummaryEQP(const Vector &S, const bool root) const;
     void StepRK4EQP(Vector &S, double &t, double &dt) const;
 
     void ApplyHyperreduction(Vector &S);
@@ -1388,6 +1396,12 @@ private:
 
     mutable CAROM::Matrix* BXtBV = 0;
     mutable CAROM::Vector* BXtV0 = 0;
+
+    // Reduced unit-energy vector oneEhat = Phi_e^T M_e 1_E and the
+    // initial total energy, for the energy-conserving EQP diagnostic.
+    CAROM::Vector* oneEhat = 0;
+    mutable double energyInitEQP = 0.0;
+    mutable bool energyInitSetEQP = false;
 
     ParFiniteElementSpace *H1spaceFOM = nullptr; // FOM H1 FEM space
     ParFiniteElementSpace *L2spaceFOM = nullptr; // FOM L2 FEM space

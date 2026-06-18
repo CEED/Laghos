@@ -2655,6 +2655,13 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
         W_elems.read(path_init + "/WelemsV" + std::to_string(window));
         W_E_elems.read(path_init +"/WelemsE" + std::to_string(window));
 
+        if (hyperreductionSamplingType == eqp_energy)
+        {
+            // Reduced unit-energy vector for the energy diagnostic.
+            oneEhat = new CAROM::Vector(basis->GetDimE(), false);
+            oneEhat->read(path_init + "/oneEhat" + std::to_string(window));
+        }
+
         // Set nvdof, nedof
         {
             const int e = eqpI[0] / nqe;  // First element index

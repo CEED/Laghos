@@ -4,6 +4,8 @@
 #include "linalg/NNLS.h"
 #include "utils/HDFDatabase.h"
 
+#include <iomanip>
+
 void SolveNNLS(const int rank, const double nnls_tol, const int maxNNLSnnz,
                const bool useLQ, CAROM::Vector const& w, CAROM::Matrix & Gt,
                CAROM::Vector & sol)
@@ -1151,6 +1153,23 @@ void ROM_Basis::SetupEQP_En_Force(std::vector<const CAROM::Matrix*> snapX,
                                      *input.basename + "/WelemsE" +
                                      std::to_string(input.window),
                                      input.rank, input.nprocs);
+
+    // Compute and write the reduced unit-energy vector
+    // oneEhat = Phi_e^T M_e 1_E, where 1_E is the all-ones coefficient
+    // vector of the unit energy function.
+    // It is used online to evaluate the internal energy as the reduced
+    // inner product IE = oneEhat . ehat, for the energy diagnostic.
+    {
+        Vector oneE(tL2size);
+        oneE = 1.0;
+        Vector MoneE(tL2size);
+        input.FOMoper->MultMe(oneE, MoneE);
+        CAROM::Vector MoneE_c(MoneE.GetData(), tL2size, true, false);
+        CAROM::Vector oneEhat(rdime, false);
+        basisE->transposeMult(MoneE_c, oneEhat);
+        oneEhat.write(GetTestingParameterBasename() + "/oneEhat"
+                      + std::to_string(input.window));
+    }
 }
 
 void ROM_Operator::InitEQP() const
@@ -1419,10 +1438,54 @@ void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *ope
     rde_dt = eqpFe;
 }
 
+double ROM_Operator::ComputeReducedEnergyEQP(const Vector &S) const
+{
+    // Total energy as a reduced inner product, valid because the bases
+    // are mass orthonormalized (Mhat_v = Mhat_e = I):
+    // KE = 0.5 |vhat|^2 and IE = oneEhat . ehat.
+    const int rXsize = basis->GetDimX();
+    const int rVsize = basis->GetDimV();
+    const int rEsize = basis->GetDimE();
+
+    double KE = 0.0;
+    for (int i=0; i<rVsize; ++i)
+        KE += S[rXsize + i] * S[rXsize + i];
+    KE *= 0.5;
+
+    double IE = 0.0;
+    for (int i=0; i<rEsize; ++i)
+        IE += (*oneEhat)(i) * S[rXsize + rVsize + i];
+
+    return IE + KE;
+}
+
+void ROM_Operator::PrintEnergySummaryEQP(const Vector &S, const bool root) const
+{
+    if (hyperreductionSamplingType != eqp_energy || !root || !energyInitSetEQP)
+        return;
+
+    const double E_final = ComputeReducedEnergyEQP(S);
+    cout << endl;
+    cout << "Initial energy: " << std::scientific << std::setprecision(5)
+         << energyInitEQP << endl;
+    cout << "Energy diff: " << std::scientific << std::setprecision(5)
+         << E_final - energyInitEQP << endl;
+    cout << "Rel. energy diff: " << std::scientific << std::setprecision(5)
+         << (E_final - energyInitEQP) / energyInitEQP << endl;
+}
+
 void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
 {
     MFEM_ASSERT(hyperreduce && isEQP(hyperreductionSamplingType), "");
     MFEM_ASSERT(S.Size() == basis->SolutionSize(), "");
+
+    // Capture the initial total energy on the first step, for the
+    // energy-conserving EQP diagnostic.
+    if (hyperreductionSamplingType == eqp_energy && !energyInitSetEQP)
+    {
+        energyInitEQP = ComputeReducedEnergyEQP(S);
+        energyInitSetEQP = true;
+    }
 
     operSP->SetRomOperator(this);
 
@@ -1505,4 +1568,14 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
     Sx.Add(dt, dx);
 
     operSP->ResetQuadratureData();
+
+    // Energy-conserving EQP diagnostic: print the total energy and its
+    // difference from the initial value (should stay near machine zero).
+    if (hyperreductionSamplingType == eqp_energy && rank == 0)
+    {
+        const double E_tot = ComputeReducedEnergyEQP(S);
+        cout << "\tE_tot = " << std::setprecision(14) << E_tot
+             << ",\tE_diff = " << std::setprecision(14)
+             << E_tot - energyInitEQP << endl;
+    }
 }

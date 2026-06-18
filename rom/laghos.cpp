@@ -2470,6 +2470,8 @@ int main(int argc, char *argv[])
     }
     if (rom_online)
     {
+        if (romOper[romOptions.window])  // null in the romhrprep phase
+            romOper[romOptions.window]->PrintEnergySummaryEQP(romS, root);
         delete basis[romOptions.window];
         delete romOper[romOptions.window];
     }
