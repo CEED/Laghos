@@ -1860,52 +1860,106 @@ int ROM_Basis::SolutionSizeFOM() const
 
 void ROM_Basis::EnrichEnergyBasisWithUnit()
 {
-    // Construct the unit-energy vector 1_E as the true-dof representation
-    // of the constant unit function in the L2 thermodynamic space.
-    ConstantCoefficient one(1.0);
-    gfL2->ProjectCoefficient(one);
-    Vector oneE(tL2size);
-    gfL2->GetTrueDofs(oneE);
+    // Append the unit-energy vector 1_E to the energy basis as a new
+    // column, increasing the reduced energy dimension by one.
+    // For the partition-of-unity L2 basis used here, the coefficient
+    // vector of the constant unit function is all ones.
+    // The mass orthonormalization is performed separately afterwards.
+    const int newdim = rdime + 1;
+    std::shared_ptr<CAROM::Matrix> enriched =
+        std::make_shared<CAROM::Matrix>(tL2size, newdim, true);
 
-    // Append 1_E as a column to the energy basis and reorthonormalize.
-    // We follow the same SVD-based approach used for the mergeXV merge.
-    const int max_model_dim = rdime + 1;
-    CAROM::Options options(tL2size, max_model_dim, 1);
-    CAROM::BasisGenerator generator(options, false);
-
-    Vector Bej(tL2size);
-    CAROM::Vector ej(rdime, false);
-    CAROM::Vector CBej(Bej.GetData(), tL2size, true, false);  // data owned by Bej
-    ej = 0.0;
-    for (int j=0; j<rdime; ++j)
+    for (int i=0; i<tL2size; ++i)
     {
-        ej(j) = 1.0;
-        basisE->mult(ej, CBej);
+        for (int j=0; j<rdime; ++j)
+            (*enriched)(i, j) = (*basisE)(i, j);
 
-        const bool addSample = generator.takeSample(Bej.GetData());
-        MFEM_VERIFY(addSample, "Energy basis sample not added");
-
-        ej(j) = 0.0;
+        (*enriched)(i, rdime) = 1.0;
     }
 
-    const bool addUnit = generator.takeSample(oneE.GetData());
-    MFEM_VERIFY(addUnit, "Unit-energy sample not added");
-
-    // Keep all original modes plus the unit direction.
-    // An energy fraction of 1 retains every mode with a nonzero singular
-    // value, so the unit direction is kept only if it is not already in
-    // the span of the original energy basis.
-    int new_rdime = rdime + 1;
-    BasisGeneratorFinalSummary(&generator, 0, 1.0, new_rdime, "", false);
-
-    std::shared_ptr<const CAROM::Matrix> basisE_full = generator.getSpatialBasis();
-    basisE = basisE_full->getFirstNColumns(new_rdime);
-    MFEM_VERIFY(basisE->numRows() == tL2size, "");
-    rdime = new_rdime;
+    basisE = enriched;
+    rdime = newdim;
 
     if (rank == 0)
-        cout << "Enriched energy basis with unit-energy vector, rdime = "
+        cout << "Appended unit-energy column to energy basis, rdime = "
              << rdime << endl;
+}
+
+double ROM_Basis::MassInnerProduct(const int var, const CAROM::Matrix* basisMat,
+                                   const int id1, const int id2)
+{
+    // Compute the mass-induced inner product of columns id1 and id2 of
+    // basisMat, i.e. b_{id1}^T M b_{id2}, in a distributed manner.
+    // MultMv returns true-dof, parallel-assembled values; MultMe is
+    // element-local but L2 is discontinuous (VSize == true size).
+    // The MFEM parallel InnerProduct performs the cross-rank reduction.
+    double inner_prod = 0.0;
+
+    if (var == 1)  // velocity
+    {
+        Vector vi(tH1size), vj(tH1size), Mvj(tH1size);
+        for (int i=0; i<tH1size; ++i)
+        {
+            vj[i] = (*basisMat)(i, id1);
+            vi[i] = (*basisMat)(i, id2);
+        }
+        lhoper->MultMv(vj, Mvj);
+        inner_prod = InnerProduct(comm, vi, Mvj);
+    }
+    else if (var == 2)  // energy
+    {
+        MFEM_VERIFY(L2size == tL2size, "");
+        Vector ei(tL2size), ej(tL2size), Mej(tL2size);
+        for (int i=0; i<tL2size; ++i)
+        {
+            ej[i] = (*basisMat)(i, id1);
+            ei[i] = (*basisMat)(i, id2);
+        }
+        lhoper->MultMe(ej, Mej);
+        inner_prod = InnerProduct(comm, ei, Mej);
+    }
+    else
+    {
+        MFEM_ABORT("Invalid variable index.");
+    }
+
+    return inner_prod;
+}
+
+void ROM_Basis::MassGramSchmidt(const int var, CAROM::Matrix* basisMat)
+{
+    // Mass-induced modified Gram-Schmidt with double orthogonalization.
+    // The columns of basisMat are orthonormalized with respect to the
+    // mass induced inner product, so that basisMat^T M basisMat = I.
+    // Each rank owns its true-dof rows, so the column updates are
+    // rank-local; the global coupling is in MassInnerProduct.
+    const int nrows = basisMat->numRows();
+    const int ncols = basisMat->numColumns();
+
+    for (int work=0; work<ncols; ++work)
+    {
+        // Orthogonalize the working column twice for numerical stability.
+        for (int pass=0; pass<2; ++pass)
+        {
+            for (int col=0; col<work; ++col)
+            {
+                const double factor =
+                    MassInnerProduct(var, basisMat, col, work);
+                for (int row=0; row<nrows; ++row)
+                    (*basisMat)(row, work) -= factor * (*basisMat)(row, col);
+            }
+        }
+
+        // Normalize the working column.
+        const double norm2 = MassInnerProduct(var, basisMat, work, work);
+        MFEM_VERIFY(norm2 > 1.0e-15,
+                    "Mass Gram-Schmidt: near-zero column, the basis may "
+                    "be mass rank deficient.");
+
+        const double inv_norm = 1.0 / sqrt(norm2);
+        for (int row=0; row<nrows; ++row)
+            (*basisMat)(row, work) *= inv_norm;
+    }
 }
 
 void ROM_Basis::ReadSolutionBases(const int window)
@@ -1975,7 +2029,16 @@ void ROM_Basis::ReadSolutionBases(const int window)
     }
 
     if (hyperreductionSamplingType == eqp_energy)
+    {
+        // Append the unit-energy column to Phi_e (condition 2), then
+        // mass-orthonormalize Phi_v and Phi_e so that the reduced mass
+        // matrices are identity (Mhat_v = Mhat_e = I).
+        // This removes the need for any reduced mass-matrix inverse in
+        // the online force assembly.
         EnrichEnergyBasisWithUnit();
+        MassGramSchmidt(1, basisV.get());
+        MassGramSchmidt(2, basisE.get());
+    }
 
     if (isEQP(hyperreductionSamplingType)) return;
 
@@ -2041,7 +2104,19 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     for (int i=0; i<tH1size; ++i)
         (*fH1)(i) = (useOffset && Voffset) ? mfH1[i] - (*initV)(i) : mfH1[i];
 
-    basisV->transposeMult(*fH1, *rV);
+    if (hyperreductionSamplingType == eqp_energy)
+    {
+        // Mass-weighted projection onto the mass-orthonormal velocity
+        // basis: rV = Phi_v^T M_v v.
+        // The velocity offset is zero for energy-conserving EQP, so
+        // mfH1 holds the velocity true dofs.
+        Vector MfV(tH1size);
+        lhoper->MultMv(mfH1, MfV);
+        CAROM::Vector MfV_c(MfV.GetData(), tH1size, true, false);
+        basisV->transposeMult(MfV_c, *rV);
+    }
+    else
+        basisV->transposeMult(*fH1, *rV);
 
     for (int i=0; i<L2size; ++i)
         (*gfL2)(i) = f[(2*H1size) + i];
@@ -2051,7 +2126,17 @@ void ROM_Basis::ProjectFOMtoROM(Vector const& f, Vector & r, const bool timeDeri
     for (int i=0; i<tL2size; ++i)
         (*fL2)(i) = useOffset ? mfL2[i] - (*initE)(i) : mfL2[i];
 
-    basisE->transposeMult(*fL2, *rE);
+    if (hyperreductionSamplingType == eqp_energy)
+    {
+        // Mass-weighted projection onto the mass-orthonormal energy
+        // basis: rE = Phi_e^T M_e e.
+        Vector MfE(tL2size);
+        lhoper->MultMe(mfL2, MfE);
+        CAROM::Vector MfE_c(MfE.GetData(), tL2size, true, false);
+        basisE->transposeMult(MfE_c, *rE);
+    }
+    else
+        basisE->transposeMult(*fL2, *rE);
 
     for (int i=0; i<rdimx; ++i)
         r[i] = (*rX)(i);

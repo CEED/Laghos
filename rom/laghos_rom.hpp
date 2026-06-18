@@ -857,9 +857,15 @@ public:
     void ReadTemporalBases(const int window);
 
     // Energy-conserving EQP: append the unit-energy vector to the energy
-    // basis and reorthonormalize, so that the unit-energy function lies
-    // in the span of Phi_e (condition 2 of the conservation theorem).
+    // basis, so that the unit-energy function lies in the span of Phi_e
+    // (condition 2 of the conservation theorem).
     void EnrichEnergyBasisWithUnit();
+
+    // Mass-induced modified Gram-Schmidt (var: 1 velocity, 2 energy),
+    // orthonormalizing basisMat columns so that basisMat^T M basisMat = I.
+    void MassGramSchmidt(const int var, CAROM::Matrix* basisMat);
+    double MassInnerProduct(const int var, const CAROM::Matrix* basisMat,
+                            const int id1, const int id2);
 
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
