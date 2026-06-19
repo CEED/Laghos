@@ -27,6 +27,16 @@ set -e
 P="-m data/cube01_hex.mesh -rs 1 -pt 211 -tf 0.02"   # single-window Sedov
 RUN="srun"
 
+# Run the single window through the windowed code path as a one-window
+# case (-nwin 1), rather than the non-windowed branch. The online phase
+# has no built-in dimension resolution: without a time-window parameter
+# (twp) file it leaves the ROM dimensions at their -1 default, which
+# aborts in the CAROM::Vector ctor (dim > 0). The merge writes the twp
+# file (the per-window energy-fraction dimensions) only when windowing is
+# requested, so we force a single basis window at merge with a sample
+# count far above the snapshot count (-nwinsamp 1000); the online stages
+# then read the dimensions from the twp file with -nwin 1.
+
 # Full pipeline for a given sampling type and output directory.
 # $1 = sampling type (eqp | eqp_energy), $2 = output dir, $3 = prep ranks
 run_pipeline () {
@@ -36,21 +46,24 @@ run_pipeline () {
   $RUN -n $NP laghos -o $OUT $P -offline -romsns -romos \
        -rpar 0 -sample-stages -sdim 1000 -writesol
 
-  # 2. Merge snapshots into single-window POD bases (no $P; no -nwinsamp).
-  $RUN -n $NP ./merge -o $OUT -nset 1 -romsns -romos -eqp
+  # 2. Merge snapshots into a single basis window (no $P). -nwinsamp 1000
+  #    forces one window (far above the snapshot count) and writes the twp
+  #    file holding the energy-fraction dimensions for the window.
+  $RUN -n $NP ./merge -o $OUT -nset 1 -romsns -romos -eqp -nwinsamp 1000
 
   # 3. Online prep (parallel): basis enrichment + mass Gram-Schmidt for
-  #    CEQP, plus the NNLS reduced quadrature rule.
+  #    CEQP, plus the NNLS reduced quadrature rule. -nwin 1 reads the
+  #    dimensions from the twp file.
   $RUN -n $NP laghos -o $OUT $P -online -romhrprep -romsns \
-       -romos -no-romgs -hrsamptype $TYPE -maxnnls 100
+       -romos -no-romgs -nwin 1 -hrsamptype $TYPE -maxnnls 500
 
   # 4. Online hyperreduced (serial: sample mesh is on rank 0).
   $RUN -n 1 laghos -o $OUT $P -online -romhr -romsns \
-       -romos -no-romgs -hrsamptype $TYPE
+       -romos -no-romgs -nwin 1 -hrsamptype $TYPE
 
   # 5. Restore: print relative errors of the ROM solution vs the FOM.
   $RUN -n $NP laghos -o $OUT $P -restore -soldiff -romsns \
-       -romos -hrsamptype $TYPE
+       -romos -nwin 1 -hrsamptype $TYPE
 }
 
 # Baseline basic EQP and our energy-conserving EQP, both with 2-rank prep.

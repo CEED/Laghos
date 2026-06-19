@@ -730,8 +730,7 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
     // difference, so only the velocity offset must vanish.
     // For offset runs with offsetType useInitialState this means the
     // initial velocity must be zero (true for e.g. the Sedov problem).
-    // TODO: add a runtime check that the velocity offset is zero once
-    // initV is available.
+    // This is enforced below, once initV has been read.
 
     if (useXV) rdimx = rdimv;
     if (useVX) rdimv = rdimx;
@@ -945,6 +944,16 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
             cout << "Interpolated init vectors X, V, E with norms " << initX->norm()
                  << ", " << initV->norm() << ", " << initE->norm() << endl;
         }
+
+        // Energy-conserving EQP conserves energy only when the velocity
+        // offset vanishes (v_os = 0, condition 1 of the theorem).
+        // The position and energy offsets cancel in the energy difference
+        // and are allowed, but a nonzero velocity offset injects a
+        // spurious v_os^T F energy source, so reject it here.
+        if (hyperreductionSamplingType == eqp_energy)
+            MFEM_VERIFY(initV->norm() < 1.0e-12,
+                        "Energy-conserving EQP requires a zero velocity "
+                        "offset (v_os = 0).");
     }
 
     if (hyperreduce_prep)
