@@ -1559,6 +1559,14 @@ int main(int argc, char *argv[])
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
                     }
 
+                    // The energy-conserving EQP appends the unit-energy
+                    // column to the energy basis, so the basis energy
+                    // dimension exceeds the value read from the time-window
+                    // parameters.
+                    // Sync it back so that romS is sized to match the basis.
+                    if (romOptions.hyperreductionSamplingType == eqp_energy)
+                        romOptions.dimE = basis[romOptions.window]->GetDimE();
+
                     romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                     romS.SetSize(romSsize);
                     romS = 0.0;
@@ -2072,6 +2080,14 @@ int main(int argc, char *argv[])
                         romOptions.dimX = basis[romOptions.window]->GetDimX();
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
                     }
+
+                    // SetWindowParameters reset dimE to the un-enriched
+                    // time-window value, but the energy-conserving EQP
+                    // basis carries the appended unit-energy column.
+                    // Sync it back so that romS and subsequent steps match
+                    // the new window's basis.
+                    if (romOptions.hyperreductionSamplingType == eqp_energy)
+                        romOptions.dimE = basis[romOptions.window]->GetDimE();
 
                     if (!romOptions.hyperreduce)
                     {

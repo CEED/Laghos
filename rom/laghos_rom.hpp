@@ -867,6 +867,13 @@ public:
     double MassInnerProduct(const int var, const CAROM::Matrix* basisMat,
                             const int id1, const int id2);
 
+    // Mass-weighted window-transition matrix Phi_new^T M Phi_prev
+    // (var: 1 velocity, 2 energy) for the energy-conserving EQP, so
+    // that romS_new = Bwin romS_old is the mass-weighted projection of
+    // the boundary state onto the new basis (matching ProjectFOMtoROM).
+    CAROM::Matrix* MassWeightedWindowProjection(const int var,
+            const CAROM::Matrix& basisPrev);
+
     void ProjectFOMtoROM(Vector const& f, Vector & r,
                          const bool timeDerivative=false);
 

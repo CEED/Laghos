@@ -2842,14 +2842,74 @@ void ROM_Basis::ScaleByTemporalBasis(const int t, Vector const& u, Vector &ut)
         ut[os + i] = tbasisE->item(t, i) * u[os + i];
 }
 
+CAROM::Matrix* ROM_Basis::MassWeightedWindowProjection(const int var,
+        const CAROM::Matrix& basisPrev)
+{
+    // Build Phi_new^T M Phi_prev one column at a time.
+    // Column j is Phi_new^T (M phi_prev_j), reusing the distributed
+    // mass action MultMv/MultMe (matching ProjectFOMtoROM); the
+    // transposeMult on the distributed new basis performs the
+    // cross-rank reduction.
+    CAROM::Matrix* basisCur = (var == 1) ? basisV.get() : basisE.get();
+    const int n = (var == 1) ? tH1size : tL2size;
+    const int rdimCur = basisCur->numColumns();
+    const int rdimPrev = basisPrev.numColumns();
+
+    if (var == 2)
+        MFEM_VERIFY(L2size == tL2size, "");
+
+    CAROM::Matrix* Bwin = new CAROM::Matrix(rdimCur, rdimPrev, false);
+
+    Vector phi(n), Mphi(n);
+    CAROM::Vector col(rdimCur, false);
+    for (int j=0; j<rdimPrev; ++j)
+    {
+        for (int i=0; i<n; ++i)
+            phi[i] = basisPrev(i, j);
+
+        if (var == 1)
+            lhoper->MultMv(phi, Mphi);
+        else
+            lhoper->MultMe(phi, Mphi);
+
+        CAROM::Vector Mphi_c(Mphi.GetData(), n, true, false);
+        basisCur->transposeMult(Mphi_c, col);
+
+        for (int i=0; i<rdimCur; ++i)
+            (*Bwin)(i, j) = col(i);
+    }
+
+    return Bwin;
+}
+
 void ROM_Basis::computeWindowProjection(const ROM_Basis& basisPrev, ROM_Options const& input, const int window)
 {
+    // Position uses the Euclidean-orthonormal basis, so its window
+    // transition stays Euclidean.
     BwinX = basisX->transposeMult(*basisPrev.basisX);
-    BwinV = basisV->transposeMult(*basisPrev.basisV);
-    BwinE = basisE->transposeMult(*basisPrev.basisE);
+
+    if (hyperreductionSamplingType == eqp_energy)
+    {
+        // The energy-conserving EQP mass-orthonormalizes the velocity
+        // and energy bases, so the window transition must be
+        // mass-weighted to match the mass-weighted ProjectFOMtoROM and
+        // preserve conservation across windows.
+        BwinV.reset(MassWeightedWindowProjection(1, *basisPrev.basisV));
+        BwinE.reset(MassWeightedWindowProjection(2, *basisPrev.basisE));
+    }
+    else
+    {
+        BwinV = basisV->transposeMult(*basisPrev.basisV);
+        BwinE = basisE->transposeMult(*basisPrev.basisE);
+    }
 
     if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
     {
+        // NOTE: for the energy-conserving EQP these offset-difference
+        // terms would also need the mass-weighted projection (Phi^T M d)
+        // to stay consistent with the mass-weighted BwinV/BwinE above.
+        // CEQP currently uses the useInitialState offset, so this branch
+        // is not yet exercised; revisit with general offset handling.
         CAROM::Vector dX(tH1size, true);
         CAROM::Vector dE(tL2size, true);
 
