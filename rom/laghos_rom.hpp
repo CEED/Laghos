@@ -1286,6 +1286,20 @@ public:
     // Print the end-of-run energy summary (initial energy, absolute and
     // relative drift) for the energy-conserving EQP method.
     void PrintEnergySummaryEQP(const Vector &S, const bool root) const;
+
+    // Seed/read the energy-conserving EQP diagnostic baseline.
+    // The window transition uses these to carry the global (t=0)
+    // initial energy across windows, so the per-step E_diff and the
+    // end-of-run summary measure total drift over all windows rather
+    // than resetting the baseline each window.
+    void SetEnergyInitEQP(const double e) const
+    {
+        energyInitEQP = e;
+        energyInitSetEQP = true;
+    }
+    double GetEnergyInitEQP() const { return energyInitEQP; }
+    bool EnergyInitSetEQP() const { return energyInitSetEQP; }
+
     void StepRK4EQP(Vector &S, double &t, double &dt) const;
 
     void ApplyHyperreduction(Vector &S);

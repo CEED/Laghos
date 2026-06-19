@@ -2057,6 +2057,23 @@ int main(int argc, char *argv[])
                         romOper[romOptions.window-1]->PostprocessHyperreduction(romS);
                     }
 
+                    // Capture the global (t=0) energy baseline from the
+                    // outgoing window's operator before it is deleted, so
+                    // the energy-conserving EQP diagnostic measures total
+                    // drift across all windows.
+                    // Window 0's operator set it on its first step; each
+                    // transition carries it forward to the next window.
+                    double energyInitGlobalEQP = 0.0;
+                    bool haveEnergyInitGlobalEQP = false;
+                    if (romOptions.hyperreduce &&
+                            romOptions.hyperreductionSamplingType == eqp_energy)
+                    {
+                        energyInitGlobalEQP =
+                            romOper[romOptions.window-1]->GetEnergyInitEQP();
+                        haveEnergyInitGlobalEQP =
+                            romOper[romOptions.window-1]->EnergyInitSetEQP();
+                    }
+
                     int rdimxprev = romOptions.dimX;
                     int rdimvprev = romOptions.dimV;
                     int rdimeprev = romOptions.dimE;
@@ -2111,6 +2128,17 @@ int main(int argc, char *argv[])
                     if (romOptions.hyperreduce)
                     {
                         romOper[romOptions.window]->ApplyHyperreduction(romS);
+                    }
+
+                    // Seed the new window's operator with the global energy
+                    // baseline so its per-step E_diff and the end-of-run
+                    // summary stay relative to the t=0 total energy rather
+                    // than recapturing a per-window baseline.
+                    if (romOptions.hyperreduce && haveEnergyInitGlobalEQP &&
+                            romOptions.hyperreductionSamplingType == eqp_energy)
+                    {
+                        romOper[romOptions.window]->SetEnergyInitEQP(
+                            energyInitGlobalEQP);
                     }
 
                     if (problem == 7 && romOptions.indicatorType == penetrationDistance)

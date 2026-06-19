@@ -22,7 +22,7 @@
 
 set -e
 
-P="-m data/cube01_hex.mesh -rs 1 -pt 211 -tf 0.04 -s 7"   # single-window Sedov
+P="-m data/cube01_hex.mesh -rs 1 -pt 211 -tf 0.08 -s 7"   # single-window Sedov
 RUN="srun"
 
 # Run the single window through the windowed code path as a one-window
@@ -50,15 +50,15 @@ run_pipeline () {
   # 3. Online prep (parallel): basis enrichment + mass Gram-Schmidt for
   #    CEQP, plus the NNLS reduced quadrature rule.
   $RUN -n $NP laghos -o $OUT $P -online -romhrprep -romsns \
-       -romos -no-romgs -nwin 5 -hrsamptype $TYPE -maxnnls 500
+       -romos -no-romgs -nwin 4 -hrsamptype $TYPE -maxnnls 500
 
   # 4. Online hyperreduced (serial: sample mesh is on rank 0).
   $RUN -n 1 laghos -o $OUT $P -online -romhr -romsns \
-       -romos -no-romgs -nwin 5 -hrsamptype $TYPE
+       -romos -no-romgs -nwin 4 -hrsamptype $TYPE
 
   # 5. Restore: print relative errors of the ROM solution vs the FOM.
   $RUN -n $NP laghos -o $OUT $P -restore -soldiff -romsns \
-       -romos -nwin 5 -hrsamptype $TYPE
+       -romos -nwin 4 -hrsamptype $TYPE
 }
 
 # Baseline basic EQP and our energy-conserving EQP, both with 2-rank prep.
