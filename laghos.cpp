@@ -90,6 +90,7 @@ int mat_id(const Vector &x)
    }
    case 4: return (x(0) < 0.25) ? 0 : 1;
    case 7: return (x(1) < 0.0) ? 0 : 1;
+   case 8: return 0;
    default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
    }
 }
@@ -98,14 +99,15 @@ double density(const Vector &x, int mat_id)
 {
    switch (problem)
    {
-   case 0: return 1.0;
-   case 1: return 1.0;
-   case 3:
-   {
-      if (mat_id == 1) { return 0.125; }
-      else             { return 1.0; }
-   }
-   default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
+      case 0: return 1.0;
+      case 1: return 1.0;
+      case 3:
+      {
+         if (mat_id == 1) { return 0.125; }
+         else             { return 1.0; }
+      }
+      case 8: return (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0;
+      default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
    }
 }
 
@@ -113,37 +115,39 @@ double energy(const Vector &x, int mat_id)
 {
    switch (problem)
    {
-   case 0:
-   {
-      const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
-      double val;
-      if (x.Size() == 2)
+      case 0:
       {
-         val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+         const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
+         double val;
+         if (x.Size() == 2)
+         {
+            val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+         }
+         else
+         {
+            val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
+                               (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+         }
+         return val/denom;
       }
-      else
+      case 3:
       {
-         val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
-                            (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+         if (mat_id == 0)
+         {
+            return 1.0 / density(x, mat_id) / (1.5-1.0);
+         }
+         else if (mat_id == 1)
+         {
+            return 0.1 / density(x, mat_id) / (1.5-1.0);
+         }
+         else
+         {
+            return 0.1 / density(x, mat_id) / (1.4-1.0);
+         }
       }
-      return val/denom;
-   }
-   case 3:
-   {
-      if (mat_id == 0)
-      {
-         return 1.0 / density(x, mat_id) / (1.5-1.0);
-      }
-      else if (mat_id == 1)
-      {
-         return 0.1 / density(x, mat_id) / (1.5-1.0);
-      }
-      else
-      {
-         return 0.1 / density(x, mat_id) / (1.4-1.0);
-      }
-   }
-   default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
+      case 8: return (x(0) > 1.0) ? 0.1 / density(x, mat_id) / (1.5 - 1.0)
+                                  : 1.0 / density(x, mat_id) / (1.5 - 1.0);
+      default: MFEM_ABORT("Materials not setup for problem id!"); return -1;
    }
 }
 
@@ -679,6 +683,7 @@ int main(int argc, char *argv[])
    case 5: visc = true; break;
    case 6: visc = true; break;
    case 7: source = 2; visc = true; vorticity = true; ind_cnt = 2; break;
+   case 8: visc = true; ind_cnt = 1; break;
    default: MFEM_ABORT("Wrong problem specification!");
    }
    if (impose_visc) { visc = true; }
@@ -702,6 +707,10 @@ int main(int argc, char *argv[])
    // Integration rule for all hydro integrals.
    auto ir = IntRules.Get(pmesh->GetElementBaseGeometry(0),
                           order_q > 0 ? order_q : 3 * order_v + order_e - 1);
+   if (Mpi::Root())
+   {
+      cout << "Number of quad points per element: " << ir.GetNPoints() << endl;
+   }
 
    // Define GridFunction objects for the position, velocity and specific
    // internal energy. There is no function for the density, as we can always
@@ -736,6 +745,7 @@ int main(int argc, char *argv[])
    if (problem == 0) { gamma[0] = 5.0 / 3.0; }
    else if (problem == 1) { gamma[0] = 1.4; }
    else if (problem == 3) { gamma[0] = 1.5; gamma[1] = 1.5; gamma[2] = 1.4; }
+   else if (problem == 8) { gamma[0] = 1.5; }
    else { MFEM_ABORT("init gamma or the problem"); }
 
    // Initialize the velocity.
@@ -778,10 +788,10 @@ int main(int argc, char *argv[])
       else
       {
          ThermoFieldCoefficient e_coeff(k, bool_ind[k], 1);
-       ParGridFunction l2_e(&l2_fes);
-        l2_e.ProjectCoefficient(e_coeff);
-        e_gf[k].ProjectGridFunction(l2_e);
-        // e_gf[k].ProjectCoefficient(e_coeff);
+         ParGridFunction l2_e(&l2_fes);
+         l2_e.ProjectCoefficient(e_coeff);
+         e_gf[k].ProjectGridFunction(l2_e);
+         // e_gf[k].ProjectCoefficient(e_coeff);
       }
    }
 
@@ -955,7 +965,9 @@ int main(int argc, char *argv[])
             //                                  1200, 400, 400, 400, true, "m");
             // }
             hydro.ComputePressure(rho_0, e_0, gamma[k], p_0[k]);
-            VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 0);
+
+            //VisQuadratureFunction(*pmesh, rho_0,  "rho_0 QF", 1600, 0);
+            //VisQuadratureFunction(*pmesh, p_0[k], "p_0 QF", 1600, 0);
          }
 
          //
@@ -988,7 +1000,7 @@ int main(int argc, char *argv[])
 
             std::vector<BlockVector> ind_rho_e(ind_cnt, BlockVector(offset));
             const bool remap_v = true;
-            const bool p_control = (problem == 1) ? true : false;
+            const bool p_control = (problem == 1) ? false : false;
             const bool remap_e_ho = (problem == 0) ? true: false;
             if (p_control) { interpolator.max_iter = 1000; }
 
@@ -1047,7 +1059,8 @@ int main(int argc, char *argv[])
                //                               1200, 800, 400, 400, true, "m");
                QuadratureFunction p(&qspace);
                hydro.ComputePressure(rho, e, gamma[k], p);
-               VisQuadratureFunction(*pmesh, p, "p QF", 1600, 800);
+               //VisQuadratureFunction(*pmesh, rho, "rho QF", 1600, 800);
+               VisQuadratureFunction(*pmesh, p,   "p QF", 1600, 800);
             }
 
             //VisQuadratureFunction(*pmesh, isum, "ind QF final", 500, 800);
@@ -1189,6 +1202,16 @@ int main(int argc, char *argv[])
             e_ofs.close();
          }
       }
+   }
+
+   for (int k = 0; k < ind_cnt; k++)
+   {
+      // Final density and pressure.
+      QuadratureFunction rho(&qspace), p(&qspace);
+      hydro.ComputeDensity(k, rho);
+      VisQuadratureFunction(*pmesh, rho,  "rho QF", 0, 0);
+      hydro.ComputePressure(rho, e_gf[k], gamma[k], p);
+      VisQuadratureFunction(*pmesh, p,   "p QF", 1600, 800);
    }
 
    switch (ode_solver_type)
@@ -1363,6 +1386,7 @@ void v0(const Vector &x, Vector &v)
          if (x.Size() == 3) { v(1) *= cos(2*M_PI*x(2)); }
          break;
       }
+      case 8: v = 0.0; break;
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
