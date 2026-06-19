@@ -1169,6 +1169,23 @@ void ROM_Basis::SetupEQP_En_Force(std::vector<const CAROM::Matrix*> snapX,
         basisE->transposeMult(MoneE_c, oneEhat);
         oneEhat.write(GetTestingParameterBasename() + "/oneEhat"
                       + std::to_string(input.window));
+
+        // Offset internal energy E_offset = 1_E^T M_e e_os = (M_e 1_E).e_os.
+        // The online romS is the offset-subtracted deviation, so its reduced
+        // energy excludes this constant; the operator adds it back to report
+        // the physical total energy in the diagnostic.
+        // The kinetic offset is zero since v_os = 0 for energy-conserving EQP.
+        CAROM::Vector energyOffset(1, false);
+        energyOffset(0) = 0.0;
+        if (offsetInit && initE)
+        {
+            Vector eos(tL2size);
+            for (int i=0; i<tL2size; ++i)
+                eos[i] = (*initE)(i);
+            energyOffset(0) = InnerProduct(comm, MoneE, eos);
+        }
+        energyOffset.write(GetTestingParameterBasename() + "/energyOffset"
+                           + std::to_string(input.window));
     }
 }
 
@@ -1456,7 +1473,9 @@ double ROM_Operator::ComputeReducedEnergyEQP(const Vector &S) const
     for (int i=0; i<rEsize; ++i)
         IE += (*oneEhat)(i) * S[rXsize + rVsize + i];
 
-    return IE + KE;
+    // Add the constant offset internal energy so the result is the
+    // physical total energy, not the offset-subtracted deviation energy.
+    return IE + KE + energyOffsetEQP;
 }
 
 void ROM_Operator::PrintEnergySummaryEQP(const Vector &S, const bool root) const
@@ -1465,13 +1484,19 @@ void ROM_Operator::PrintEnergySummaryEQP(const Vector &S, const bool root) const
         return;
 
     const double E_final = ComputeReducedEnergyEQP(S);
+    const double E_diff = E_final - energyInitEQP;
     cout << endl;
     cout << "Initial energy: " << std::scientific << std::setprecision(5)
          << energyInitEQP << endl;
     cout << "Energy diff: " << std::scientific << std::setprecision(5)
-         << E_final - energyInitEQP << endl;
-    cout << "Rel. energy diff: " << std::scientific << std::setprecision(5)
-         << (E_final - energyInitEQP) / energyInitEQP << endl;
+         << E_diff << endl;
+    // energyInitEQP is the physical total energy (offset included), so it
+    // is nonzero in practice; guard the division for zero-energy cases.
+    if (std::abs(energyInitEQP) > 0.0)
+        cout << "Rel. energy diff: " << std::scientific << std::setprecision(5)
+             << E_diff / energyInitEQP << endl;
+    else
+        cout << "Rel. energy diff: N/A (zero initial energy)" << endl;
 }
 
 void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const

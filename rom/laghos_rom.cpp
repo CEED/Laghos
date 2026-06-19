@@ -2679,6 +2679,14 @@ ROM_Operator::ROM_Operator(ROM_Options const& input, ROM_Basis *b,
             // Reduced unit-energy vector for the energy diagnostic.
             oneEhat = new CAROM::Vector(basis->GetDimE(), false);
             oneEhat->read(path_init + "/oneEhat" + std::to_string(window));
+
+            // Offset internal energy, added to the reduced energy so the
+            // diagnostic reports the physical total energy (the reduced
+            // romS is the offset-subtracted deviation).
+            CAROM::Vector energyOffset(1, false);
+            energyOffset.read(path_init + "/energyOffset" +
+                              std::to_string(window));
+            energyOffsetEQP = energyOffset(0);
         }
 
         // Set nvdof, nedof

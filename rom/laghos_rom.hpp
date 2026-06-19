@@ -1421,6 +1421,9 @@ private:
     // Reduced unit-energy vector oneEhat = Phi_e^T M_e 1_E and the
     // initial total energy, for the energy-conserving EQP diagnostic.
     CAROM::Vector* oneEhat = 0;
+    // Offset internal energy 1_E^T M_e e_os, added to the reduced energy
+    // so the diagnostic reports the physical total energy.
+    double energyOffsetEQP = 0.0;
     mutable double energyInitEQP = 0.0;
     mutable bool energyInitSetEQP = false;
 
