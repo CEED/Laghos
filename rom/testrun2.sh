@@ -18,22 +18,26 @@
 # Run from the ROM build directory (where laghos, merge and data/ live).
 #
 # Notes:
-# - Stages 1, 2, 3, 5 run in parallel; stage 4 (online hyperreduced) runs
+# - This is the NON-PARAMETRIC pipeline (no -rpar, no merge): the offline
+#   run builds the windowed POD bases AND writes twp.csv directly. This is
+#   required because -rostype load (saveLoadOffset) is incompatible with a
+#   parametric ROM (laghos.cpp:1140), and merge only runs in the
+#   parametric flow (it consumes snapshots, which are written only when
+#   parameterID >= 0). saveLoadOffset is single-trajectory by design.
+# - Stages 1, 2, 4 run in parallel; stage 3 (online hyperreduced) runs
 #   serially because the EQP sample mesh lives on rank 0.
-# - The distributed mass Gram-Schmidt runs in stage 3 (romhrprep), so the
+# - The distributed mass Gram-Schmidt runs in stage 2 (romhrprep), so the
 #   2-rank run exercises it. Comparing the 1-rank and 2-rank CEQP runs is
 #   the rank-invariance check.
 # - Offsets are kept ON offline (-romos): the offline phase subtracts the
-#   (per-window) initial state, making the X/V/E snapshot counts
-#   consistent (without offsets the nonzero initial position is sampled
-#   while the zero initial velocity is skipped as trivial, breaking the
-#   merge snapshot-size check) and giving an accurate deviation POD.
+#   (per-window) initial state, giving an accurate deviation POD (without
+#   offsets the near-constant initial state is resolved poorly).
 # - For CEQP, -rostype load selects the per-window first-sample offset
-#   (saveLoadOffset); the offline+merge stages keep -romos (useOffset=1,
-#   matching the offline_param record), while the online/restore stages
-#   pass -no-romoffset to run offset-free with the absorbed columns.
-# - SNS is kept ON (-romsns) so merge skips the Fv/Fe snapshots that the
-#   EQP offline does not write; it does not affect the EQP basis.
+#   (saveLoadOffset); the offline stage keeps -romos (useOffset=1, matching
+#   the offline_param record), while the online/restore stages pass
+#   -no-romoffset to run offset-free with the absorbed columns.
+# - SNS is kept ON (-romsns) so the EQP offline does not sample/build the
+#   Fv/Fe bases; it does not affect the EQP basis.
 # - Runtime Gram-Schmidt is OFF (-no-romgs): the basis is
 #   mass-orthonormalized offline.
 
@@ -42,11 +46,14 @@ set -e
 P="-m data/cube01_hex.mesh -rs 1 -pt 211 -tf 0.08 -s 7"   # multi-window Sedov
 RUN="srun"
 
-# Four ROM time windows, resolved from the twp file written by merge.
-# The merge needs windowing requested to write the twp (per-window
-# energy-fraction dimensions); a sample count above the snapshot count
-# (-nwinsamp 10 here) sets the window boundaries, and the online stages
-# read the dimensions back with -nwin 4 (no explicit -rdim* needed).
+# ROM time windows are resolved from the twp file written by the offline
+# stage (which writes twp only when windowing is requested and the run is
+# non-parametric). The offline -nwinsamp 10 sets the per-window sample
+# count and thus the window boundaries; the online stages read the
+# dimensions back with -nwin 4 (no explicit -rdim* needed).
+# NOTE: -nwin 4 must match the number of windows the offline produced; if
+# offline yields a different count for these samples, adjust -nwinsamp or
+# -nwin so they agree (online can also derive it from twp).
 
 # Full pipeline for a given sampling type and output directory.
 # $1 = sampling type (eqp | eqp_energy), $2 = output dir, $3 = prep ranks
@@ -55,9 +62,9 @@ run_pipeline () {
 
   if [ "$TYPE" = "eqp_energy" ]; then
     # CEQP: window-dependent offsets absorbed as basis columns.
-    # Offline + merge sample deviations with offsets on (useOffset = 1);
-    # online + restore run offset-free with the absorbed columns.
-    OS_OFF="-romos -rostype load"        # offline and merge
+    # Offline samples deviations with offsets on (useOffset = 1); online +
+    # restore run offset-free with the absorbed columns.
+    OS_OFF="-romos -rostype load"        # offline
     OS_ON="-no-romoffset -rostype load"  # online prep / online hr / restore
   else
     # Basic EQP baseline: SAME per-window first-sample offset as CEQP, for
@@ -68,23 +75,21 @@ run_pipeline () {
     OS_ON="-romos -rostype load"
   fi
 
-  # 1. FOM offline (parallel): collect snapshots and write the FOM solution.
+  # 1. FOM offline (parallel): build the windowed POD bases + twp directly
+  #    (non-parametric: no -rpar, no merge) and write the FOM solution.
   $RUN -n $NP laghos -o $OUT $P -offline -romsns $OS_OFF \
-       -rpar 0 -sample-stages -sdim 1000 -writesol
+       -nwinsamp 10 -sample-stages -sdim 1000 -writesol
 
-  # 2. Merge snapshots into windows (offsets on to match the record).
-  $RUN -n $NP ./merge -o $OUT -nset 1 -romsns $OS_OFF -eqp -nwinsamp 10
-
-  # 3. Online prep (parallel): basis enrichment + offset-column absorption
+  # 2. Online prep (parallel): basis enrichment + offset-column absorption
   #    + mass Gram-Schmidt for CEQP, plus the NNLS reduced quadrature rule.
   $RUN -n $NP laghos -o $OUT $P -online -romhrprep -romsns \
        $OS_ON -no-romgs -nwin 4 -hrsamptype $TYPE -lqnnls -maxnnls 500
 
-  # 4. Online hyperreduced (serial: sample mesh is on rank 0).
+  # 3. Online hyperreduced (serial: sample mesh is on rank 0).
   $RUN -n 1 laghos -o $OUT $P -online -romhr -romsns \
        $OS_ON -no-romgs -nwin 4 -hrsamptype $TYPE
 
-  # 5. Restore: print relative errors of the ROM solution vs the FOM.
+  # 4. Restore: print relative errors of the ROM solution vs the FOM.
   $RUN -n $NP laghos -o $OUT $P -restore -soldiff -romsns \
        $OS_ON -nwin 4 -hrsamptype $TYPE
 }
