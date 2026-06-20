@@ -185,7 +185,19 @@ void VerifyOfflineParam(int& dim, double& dt, ROM_Options& romOptions,
     std::getline(opin, line);
     split_line(line, words);
 
-    MFEM_VERIFY(std::stoi(words[2]) == romOptions.useOffset, "-romos option does not match record.");
+    // The energy-conserving EQP with window-dependent offsets samples
+    // deviations offline (offsets on) but runs offset-free online, with
+    // each window's offset absorbed as an extra basis column.
+    // In that mode the offline record has useOffset = 1 while the online
+    // run has useOffset = 0, so the usual equality check is relaxed for
+    // this specific offline-on / online-off mismatch.
+    const int recordedUseOffset = std::stoi(words[2]);
+    const bool absorbOffsetMode =
+        (romOptions.hyperreductionSamplingType == eqp_energy)
+        && (romOptions.offsetType == saveLoadOffset)
+        && (recordedUseOffset == 1) && (romOptions.useOffset == 0);
+    MFEM_VERIFY(absorbOffsetMode || recordedUseOffset == romOptions.useOffset,
+                "-romos option does not match record.");
     MFEM_VERIFY(std::stoi(words[3]) == romOptions.offsetType, "-romostype option does not match record.");
     MFEM_VERIFY(std::stoi(words[4]) == romOptions.SNS, "-romsns option does not match record.");
 

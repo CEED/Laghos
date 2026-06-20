@@ -712,6 +712,10 @@ ROM_Basis::ROM_Basis(ROM_Options const& input, MPI_Comm comm_, const double sFac
       numSamplesX(input.sampX), numSamplesV(input.sampV), numSamplesE(input.sampE),
       numTimeSamplesV(input.tsampV), numTimeSamplesE(input.tsampE),
       use_sns(input.SNS),  offsetInit(input.useOffset),
+      offsetType(input.offsetType),
+      absorbOffset((input.hyperreductionSamplingType == eqp_energy)
+                   && !input.useOffset
+                   && input.offsetType == saveLoadOffset),
       hyperreduce(input.hyperreduce), hyperreduce_prep(input.hyperreduce_prep),
       useGramSchmidt(input.GramSchmidt), lhoper(input.FOMoper),
       RK2AvgFormulation(input.RK2AvgSolver), basename(*input.basename), initSamples_basename(input.initSamples_basename),
@@ -1898,6 +1902,54 @@ void ROM_Basis::EnrichEnergyBasisWithUnit()
              << rdime << endl;
 }
 
+void ROM_Basis::AppendColumn(std::shared_ptr<CAROM::Matrix>& basisMat,
+                             const CAROM::Vector& col)
+{
+    // Append col as a new last column of basisMat, returning an
+    // enlarged matrix with one extra column.
+    // The reduced dimension is bumped by the caller; the subsequent
+    // (mass) Gram-Schmidt orthonormalizes the augmented basis.
+    const int nrows = basisMat->numRows();
+    const int ncols = basisMat->numColumns();
+    MFEM_VERIFY(col.dim() == nrows, "AppendColumn: size mismatch.");
+
+    std::shared_ptr<CAROM::Matrix> enriched =
+        std::make_shared<CAROM::Matrix>(nrows, ncols + 1, true);
+
+    for (int i=0; i<nrows; ++i)
+    {
+        for (int j=0; j<ncols; ++j)
+            (*enriched)(i, j) = (*basisMat)(i, j);
+
+        (*enriched)(i, ncols) = col(i);
+    }
+
+    basisMat = enriched;
+}
+
+void ROM_Basis::LoadAbsorptionOffsets(const int window)
+{
+    // Read the per-window saved offsets (the window-boundary first
+    // samples written in the offline phase) for column absorption.
+    // This is needed even though the online run is offset-free
+    // (offsetInit is false), so it is decoupled from the offset machinery.
+    if (initX == 0) initX = new CAROM::Vector(tH1size, true);
+    if (initV == 0) initV = new CAROM::Vector(tH1size, true);
+    if (initE == 0) initE = new CAROM::Vector(tL2size, true);
+
+    std::string path_init = testing_parameter_basename + "/ROMoffset" +
+                            basisIdentifier + "/init";
+
+    initX->read(path_init + "X" + std::to_string(window));
+    initV->read(path_init + "V" + std::to_string(window));
+    initE->read(path_init + "E" + std::to_string(window));
+
+    if (rank == 0)
+        cout << "Loaded absorption offsets X, V, E with norms "
+             << initX->norm() << ", " << initV->norm() << ", "
+             << initE->norm() << endl;
+}
+
 double ROM_Basis::MassInnerProduct(const int var, const CAROM::Matrix* basisMat,
                                    const int id1, const int id2)
 {
@@ -1908,7 +1960,17 @@ double ROM_Basis::MassInnerProduct(const int var, const CAROM::Matrix* basisMat,
     // The MFEM parallel InnerProduct performs the cross-rank reduction.
     double inner_prod = 0.0;
 
-    if (var == 1)  // velocity
+    if (var == 0)  // position: plain Euclidean inner product (no mass)
+    {
+        Vector vi(tH1size), vj(tH1size);
+        for (int i=0; i<tH1size; ++i)
+        {
+            vj[i] = (*basisMat)(i, id1);
+            vi[i] = (*basisMat)(i, id2);
+        }
+        inner_prod = InnerProduct(comm, vi, vj);
+    }
+    else if (var == 1)  // velocity
     {
         Vector vi(tH1size), vj(tH1size), Mvj(tH1size);
         for (int i=0; i<tH1size; ++i)
@@ -2043,12 +2105,52 @@ void ROM_Basis::ReadSolutionBases(const int window)
 
     if (hyperreductionSamplingType == eqp_energy)
     {
-        // Append the unit-energy column to Phi_e (condition 2), then
-        // mass-orthonormalize Phi_v and Phi_e so that the reduced mass
+        // With window-dependent offsets (saveLoadOffset) the online run
+        // is offset-free, and each variable's per-window offset (the
+        // window's first sample) is absorbed as an extra basis column.
+        // This lets the offset-free bases represent the full initial
+        // fields, and makes the velocity offset vanish structurally
+        // (v_os = 0), so conservation holds for nonzero initial velocity.
+        if (absorbOffset)
+        {
+            // The offset absorption assumes separate X and V bases.
+            MFEM_VERIFY(!useXV && !useVX && !mergeXV,
+                        "Offset absorption assumes separate X and V bases.");
+
+            LoadAbsorptionOffsets(window);
+
+            // Absorb the position offset as a new X basis column.
+            AppendColumn(basisX, *initX);
+            rdimx += 1;
+
+            // Absorb the velocity offset as a new V basis column, unless
+            // it is (numerically) zero (e.g. Sedov, zero initial velocity).
+            if (initV->norm() >= 1.0e-15)
+            {
+                AppendColumn(basisV, *initV);
+                rdimv += 1;
+            }
+        }
+
+        // Append the unit-energy column to Phi_e (condition 2).
+        EnrichEnergyBasisWithUnit();
+
+        if (absorbOffset)
+        {
+            // Absorb the energy offset as the last E basis column, after
+            // the unit-energy column (the two are different vectors).
+            AppendColumn(basisE, *initE);
+            rdime += 1;
+        }
+
+        // Orthonormalize the augmented bases: X in the Euclidean inner
+        // product (the position basis is not mass weighted), V and E in
+        // the mass-induced inner product so that the reduced mass
         // matrices are identity (Mhat_v = Mhat_e = I).
         // This removes the need for any reduced mass-matrix inverse in
         // the online force assembly.
-        EnrichEnergyBasisWithUnit();
+        if (absorbOffset)
+            MassGramSchmidt(0, basisX.get());
         MassGramSchmidt(1, basisV.get());
         MassGramSchmidt(2, basisE.get());
     }

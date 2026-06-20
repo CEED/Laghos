@@ -861,8 +861,21 @@ public:
     // (condition 2 of the conservation theorem).
     void EnrichEnergyBasisWithUnit();
 
-    // Mass-induced modified Gram-Schmidt (var: 1 velocity, 2 energy),
-    // orthonormalizing basisMat columns so that basisMat^T M basisMat = I.
+    // Append a vector as a new last column to a reduced basis matrix.
+    // Used to absorb a window-dependent offset (the window's first
+    // sample) into the basis, so that an offset-free online run can
+    // still represent the full initial field for that variable.
+    void AppendColumn(std::shared_ptr<CAROM::Matrix>& basisMat,
+                      const CAROM::Vector& col);
+
+    // Load the per-window saved offsets X<w>, V<w>, E<w> for column
+    // absorption in the offset-free energy-conserving EQP (these are
+    // the window-boundary first samples written in the offline phase).
+    void LoadAbsorptionOffsets(const int window);
+
+    // Mass-induced modified Gram-Schmidt (var: 0 position Euclidean,
+    // 1 velocity, 2 energy), orthonormalizing basisMat columns so that
+    // basisMat^T M basisMat = I (M = identity for the Euclidean case).
     void MassGramSchmidt(const int var, CAROM::Matrix* basisMat);
     double MassInnerProduct(const int var, const CAROM::Matrix* basisMat,
                             const int id1, const int id2);
@@ -1010,6 +1023,10 @@ private:
     const bool hyperreduce;
     const bool hyperreduce_prep;
     const bool offsetInit;
+    const offsetStyle offsetType;
+    // True when the energy-conserving EQP runs offset-free with
+    // window-dependent offsets absorbed as extra basis columns.
+    const bool absorbOffset;
     const bool use_sns;
     hydrodynamics::LagrangianHydroOperator *lhoper; // for SNS
     const bool useGramSchmidt;
