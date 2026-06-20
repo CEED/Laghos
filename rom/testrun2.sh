@@ -18,26 +18,27 @@
 # Run from the ROM build directory (where laghos, merge and data/ live).
 #
 # Notes:
-# - This is the NON-PARAMETRIC pipeline (no -rpar, no merge): the offline
-#   run builds the windowed POD bases AND writes twp.csv directly. This is
-#   required because -rostype load (saveLoadOffset) is incompatible with a
-#   parametric ROM (laghos.cpp:1140), and merge only runs in the
-#   parametric flow (it consumes snapshots, which are written only when
-#   parameterID >= 0). saveLoadOffset is single-trajectory by design.
-# - Stages 1, 2, 4 run in parallel; stage 3 (online hyperreduced) runs
+# - This uses the PARAMETRIC pipeline with a SINGLE training trajectory
+#   (-rpar 0, -nset 1, then merge). EQP requires this flow: the NNLS rule
+#   is built in romhrprep from the raw snapshots (mparam0_var*_snapshot),
+#   which are written only when parameterID >= 0; merge then builds the
+#   windowed bases + twp from those snapshots. -rostype load is allowed in
+#   this path for a single parameter (the laghos.cpp:1140 guard was
+#   relaxed to a warning).
+# - Stages 1, 2, 3, 5 run in parallel; stage 4 (online hyperreduced) runs
 #   serially because the EQP sample mesh lives on rank 0.
-# - The distributed mass Gram-Schmidt runs in stage 2 (romhrprep), so the
+# - The distributed mass Gram-Schmidt runs in stage 3 (romhrprep), so the
 #   2-rank run exercises it. Comparing the 1-rank and 2-rank CEQP runs is
 #   the rank-invariance check.
 # - Offsets are kept ON offline (-romos): the offline phase subtracts the
 #   (per-window) initial state, giving an accurate deviation POD (without
 #   offsets the near-constant initial state is resolved poorly).
 # - For CEQP, -rostype load selects the per-window first-sample offset
-#   (saveLoadOffset); the offline stage keeps -romos (useOffset=1, matching
-#   the offline_param record), while the online/restore stages pass
-#   -no-romoffset to run offset-free with the absorbed columns.
-# - SNS is kept ON (-romsns) so the EQP offline does not sample/build the
-#   Fv/Fe bases; it does not affect the EQP basis.
+#   (saveLoadOffset); the offline+merge stages keep -romos (useOffset=1,
+#   matching the offline_param record), while the online/restore stages
+#   pass -no-romoffset to run offset-free with the absorbed columns.
+# - SNS is kept ON (-romsns) so merge skips the Fv/Fe snapshots that the
+#   EQP offline does not write; it does not affect the EQP basis.
 # - Runtime Gram-Schmidt is OFF (-no-romgs): the basis is
 #   mass-orthonormalized offline.
 
@@ -46,14 +47,12 @@ set -e
 P="-m data/cube01_hex.mesh -rs 1 -pt 211 -tf 0.08 -s 7"   # multi-window Sedov
 RUN="srun"
 
-# ROM time windows are resolved from the twp file written by the offline
-# stage (which writes twp only when windowing is requested and the run is
-# non-parametric). The offline -nwinsamp 10 sets the per-window sample
-# count and thus the window boundaries; the online stages read the
-# dimensions back with -nwin 4 (no explicit -rdim* needed).
-# NOTE: -nwin 4 must match the number of windows the offline produced; if
-# offline yields a different count for these samples, adjust -nwinsamp or
-# -nwin so they agree (online can also derive it from twp).
+# ROM time windows are resolved from the twp file written by merge (the
+# per-window energy-fraction dimensions). The merge -nwinsamp 10 sets the
+# per-window sample count and thus the window boundaries; the online
+# stages read the dimensions back with -nwin (no explicit -rdim* needed).
+# NOTE: -nwin must match the number of twp rows merge produced; set it to
+# the line count of run/<OUT>/twp.csv if it differs from 4.
 
 # Full pipeline for a given sampling type and output directory.
 # $1 = sampling type (eqp | eqp_energy), $2 = output dir, $3 = prep ranks
@@ -62,9 +61,9 @@ run_pipeline () {
 
   if [ "$TYPE" = "eqp_energy" ]; then
     # CEQP: window-dependent offsets absorbed as basis columns.
-    # Offline samples deviations with offsets on (useOffset = 1); online +
-    # restore run offset-free with the absorbed columns.
-    OS_OFF="-romos -rostype load"        # offline
+    # Offline + merge sample deviations with offsets on (useOffset = 1);
+    # online + restore run offset-free with the absorbed columns.
+    OS_OFF="-romos -rostype load"        # offline and merge
     OS_ON="-no-romoffset -rostype load"  # online prep / online hr / restore
   else
     # Basic EQP baseline: SAME per-window first-sample offset as CEQP, for
@@ -75,21 +74,25 @@ run_pipeline () {
     OS_ON="-romos -rostype load"
   fi
 
-  # 1. FOM offline (parallel): build the windowed POD bases + twp directly
-  #    (non-parametric: no -rpar, no merge) and write the FOM solution.
+  # 1. FOM offline (parallel): collect snapshots (single parameter) and
+  #    write the FOM solution.
   $RUN -n $NP laghos -o $OUT $P -offline -romsns $OS_OFF \
-       -nwinsamp 10 -sample-stages -sdim 1000 -writesol
+       -rpar 0 -sample-stages -sdim 1000 -writesol
 
-  # 2. Online prep (parallel): basis enrichment + offset-column absorption
+  # 2. Merge snapshots into windowed bases + twp (offsets on to match the
+  #    offline_param record).
+  $RUN -n $NP ./merge -o $OUT -nset 1 -romsns $OS_OFF -eqp -nwinsamp 10
+
+  # 3. Online prep (parallel): basis enrichment + offset-column absorption
   #    + mass Gram-Schmidt for CEQP, plus the NNLS reduced quadrature rule.
   $RUN -n $NP laghos -o $OUT $P -online -romhrprep -romsns \
        $OS_ON -no-romgs -nwin 4 -hrsamptype $TYPE -lqnnls -maxnnls 500
 
-  # 3. Online hyperreduced (serial: sample mesh is on rank 0).
+  # 4. Online hyperreduced (serial: sample mesh is on rank 0).
   $RUN -n 1 laghos -o $OUT $P -online -romhr -romsns \
-       $OS_ON -no-romgs -nwin 4 -hrsamptype $TYPE
+       $OS_ON -no-romgs -nwin 4 -hrsamptype $TYPE -lqnnls
 
-  # 4. Restore: print relative errors of the ROM solution vs the FOM.
+  # 5. Restore: print relative errors of the ROM solution vs the FOM.
   $RUN -n $NP laghos -o $OUT $P -restore -soldiff -romsns \
        $OS_ON -nwin 4 -hrsamptype $TYPE
 }
@@ -111,4 +114,4 @@ run_pipeline eqp_energy sedov_ceqp_mw_1r  1
 #   errors should match to round-off.
 #
 # Tunables: raise -maxnnls if the combined CEQP NNLS does not converge;
-# add -lqnnls to stage 3 for the LQ preconditioning used in the paper.
+# -lqnnls (LQ preconditioning, used in the paper) is on in stage 3.

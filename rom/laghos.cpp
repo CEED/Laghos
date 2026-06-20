@@ -1137,8 +1137,19 @@ int main(int argc, char *argv[])
         int err_rostype;
         err_rostype = (romOptions.parameterID == -1 && romOptions.offsetType == interpolateOffset);
         MFEM_VERIFY(err_rostype == 0, "-rostype interpolate is not compatible with non-parametric ROM.");
-        err_rostype = (romOptions.parameterID != -1 && romOptions.offsetType == saveLoadOffset);
-        MFEM_VERIFY(err_rostype == 0, "-rostype load is not compatible with parametric ROM.");
+        // -rostype load (saveLoadOffset) writes a single, non-parameter-
+        // indexed offset per window (ROMoffset/init/X<w>), so multiple
+        // offline parameters would clobber each other.
+        // It is therefore restricted to a single training trajectory, but
+        // is still allowed in the parametric code path (parameterID >= 0):
+        // the EQP NNLS rule is built from the parametric snapshots written
+        // only when parameterID >= 0, so window-dependent offsets for EQP
+        // must run through that path with a single parameter (-nset 1).
+        if (romOptions.parameterID > 0 && romOptions.offsetType == saveLoadOffset
+                && myid == 0)
+            cout << "Warning: -rostype load assumes a single offline "
+                    "trajectory; with multiple parameters the per-window "
+                    "offsets are overwritten." << endl;
 
         if (romOptions.parameterID != -1 && romOptions.offsetType == interpolateOffset && myid == 0)
         {
