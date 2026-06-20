@@ -1330,9 +1330,17 @@ void ROM_Basis::SetStateFromTrueDOFs(Vector const& x, Vector const& v,
     MFEM_VERIFY(v.Size() == tH1size, "");
     MFEM_VERIFY(e.Size() == tL2size, "");
 
+    // The snapshots are window-dependent deviations (state minus the
+    // window offset), so the offset must be added back to recover the
+    // whole physical state at which the EQP force is evaluated.
+    // For the energy-conserving EQP the online run is offset-free
+    // (offsetInit is false), but the absorbed per-window offset is still
+    // loaded, so add it back here as well (absorbOffset).
+    const bool addOffset = offsetInit || absorbOffset;
+
     // Set X component of S
     mfH1 = x;
-    if (offsetInit)
+    if (addOffset)
     {
         for (int i=0; i<tH1size; ++i)
         {
@@ -1349,7 +1357,7 @@ void ROM_Basis::SetStateFromTrueDOFs(Vector const& x, Vector const& v,
 
     // Set V component of S
     mfH1 = v;
-    if (offsetInit)
+    if (addOffset)
     {
         for (int i=0; i<tH1size; ++i)
         {
@@ -1366,7 +1374,7 @@ void ROM_Basis::SetStateFromTrueDOFs(Vector const& x, Vector const& v,
 
     // Set E component of S
     mfL2 = e;
-    if (offsetInit)
+    if (addOffset)
     {
         for (int i=0; i<tL2size; ++i)
         {

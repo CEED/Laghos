@@ -104,9 +104,21 @@ void MergeSamplingWindow(const int rank, const int first_sv,
 
         CAROM::Vector *init = nullptr;
 
-        if (offsetInit && offsetType == interpolateOffset)
+        if (offsetInit && (offsetType == interpolateOffset
+                           || offsetType == saveLoadOffset))
         {
-            std::string path_init = basename + "/ROMoffset" + basisIdentifier + "/param" + std::to_string(paramID) + "_init";
+            // Write each window's first sample as that window's offset.
+            // The offline phase is not windowed in the merge flow, so it
+            // only saves the global offset (window 0's first sample); the
+            // per-window offsets are produced here when merge splits the
+            // snapshots into windows.
+            // interpolateOffset stores them per parameter (param<id>_init);
+            // saveLoadOffset uses the single non-parameter-indexed location
+            // (init) that the online phase reads.
+            std::string path_init = (offsetType == interpolateOffset)
+                ? basename + "/ROMoffset" + basisIdentifier + "/param"
+                  + std::to_string(paramID) + "_init"
+                : basename + "/ROMoffset" + basisIdentifier + "/init";
             init = new CAROM::Vector(dim, true);
             init->read(path_init + varName + "0");
 
