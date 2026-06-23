@@ -969,6 +969,10 @@ public:
         return rdime;
     }
 
+    bool AbsorbOffset() const {
+        return absorbOffset;
+    }
+
     int GetDimFv() const {
         return rdimfv;
     }

@@ -1449,7 +1449,11 @@ void ROM_Operator::EQPmult(double t, hydrodynamics::LagrangianHydroOperator *ope
     CAROM::Vector b(rdx_dt.GetData(), rdx_dt.Size(), false, false);
     BXtBV->mult(a, b);
 
-    b += *BXtV0;
+    // With offset absorption the velocity offset is already a column of
+    // basisV, so basisV * rV recovers the full velocity.
+    // Adding BXtV0 here would double-count the velocity offset in dx/dt.
+    if (!basis->AbsorbOffset())
+        b += *BXtV0;
 
     rdv_dt = eqpFv;
     rde_dt = eqpFe;
@@ -1564,7 +1568,10 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
     CAROM::Vector dx_libROM(dx.GetData(), rXsize, false, false);
     CAROM::Vector Shv_libROM(Shv.GetData(), rVsize, false, false);
     BXtBV->mult(Shv_libROM, dx_libROM);
-    dx_libROM += *BXtV0;
+    // With offset absorption the velocity offset is already a column of
+    // basisV, so adding BXtV0 here would double-count it in dx/dt.
+    if (!basis->AbsorbOffset())
+        dx_libROM += *BXtV0;
 
     Shx.Add(0.5 * dt, dx);
 
@@ -1588,7 +1595,10 @@ void ROM_Operator::StepRK2AvgEQP(Vector &S, double &t, double &dt) const
     Se.Add(dt, eqpFe);
 
     BXtBV->mult(vbar_libROM, dx_libROM);
-    dx_libROM += *BXtV0;
+    // With offset absorption the velocity offset is already a column of
+    // basisV, so adding BXtV0 here would double-count it in dx/dt.
+    if (!basis->AbsorbOffset())
+        dx_libROM += *BXtV0;
 
     Sx.Add(dt, dx);
 
