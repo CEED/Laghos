@@ -1325,11 +1325,16 @@ int main(int argc, char *argv[])
         }
 
         // The energy-conserving EQP appends the unit-energy column to the
-        // energy basis, so the basis energy dimension exceeds the value
-        // read from the time-window parameters.
-        // Sync it back so that romS is sized to match the basis.
+        // energy basis (and, with absorbed window-dependent offsets, an
+        // extra column to each of X, V, E), so the basis dimensions exceed
+        // the values read from the time-window parameters.
+        // Sync all three back so that romS is sized to match the basis.
         if (romOptions.hyperreductionSamplingType == eqp_energy)
+        {
+            romOptions.dimX = basis[0]->GetDimX();
+            romOptions.dimV = basis[0]->GetDimV();
             romOptions.dimE = basis[0]->GetDimE();
+        }
 
         romS.SetSize(romOptions.dimX + romOptions.dimV + romOptions.dimE);
         romS = 0.0;
@@ -1501,12 +1506,16 @@ int main(int argc, char *argv[])
                 romOptions.dimV = basis[0]->GetDimV();
             }
 
-            // The energy-conserving EQP appends the unit-energy column to
-            // the energy basis, so the basis energy dimension exceeds the
-            // value read from the time-window parameters.
-            // Sync it back so that romS is sized to match the basis.
+            // The energy-conserving EQP appends extra columns (unit-energy,
+            // and absorbed window-dependent X/V/E offsets), so the basis
+            // dimensions exceed the values read from the time-window
+            // parameters.  Sync all three back so that romS matches.
             if (romOptions.hyperreductionSamplingType == eqp_energy)
+            {
+                romOptions.dimX = basis[0]->GetDimX();
+                romOptions.dimV = basis[0]->GetDimV();
                 romOptions.dimE = basis[0]->GetDimE();
+            }
 
             int romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
             romS.SetSize(romSsize);
@@ -1570,13 +1579,17 @@ int main(int argc, char *argv[])
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
                     }
 
-                    // The energy-conserving EQP appends the unit-energy
-                    // column to the energy basis, so the basis energy
-                    // dimension exceeds the value read from the time-window
-                    // parameters.
-                    // Sync it back so that romS is sized to match the basis.
+                    // The energy-conserving EQP appends extra columns
+                    // (unit-energy, and absorbed window-dependent X/V/E
+                    // offsets), so the basis dimensions exceed the values
+                    // read from the time-window parameters.
+                    // Sync all three back so that romS matches the basis.
                     if (romOptions.hyperreductionSamplingType == eqp_energy)
+                    {
+                        romOptions.dimX = basis[romOptions.window]->GetDimX();
+                        romOptions.dimV = basis[romOptions.window]->GetDimV();
                         romOptions.dimE = basis[romOptions.window]->GetDimE();
+                    }
 
                     romSsize = romOptions.dimX + romOptions.dimV + romOptions.dimE;
                     romS.SetSize(romSsize);
@@ -2109,13 +2122,18 @@ int main(int argc, char *argv[])
                         romOptions.dimV = basis[romOptions.window]->GetDimV();
                     }
 
-                    // SetWindowParameters reset dimE to the un-enriched
-                    // time-window value, but the energy-conserving EQP
-                    // basis carries the appended unit-energy column.
-                    // Sync it back so that romS and subsequent steps match
-                    // the new window's basis.
+                    // SetWindowParameters reset the dims to the un-enriched
+                    // time-window values, but the energy-conserving EQP
+                    // basis carries the appended unit-energy column and the
+                    // absorbed window-dependent X/V/E offset columns.
+                    // Sync all three back so that romS and subsequent steps
+                    // match the new window's basis.
                     if (romOptions.hyperreductionSamplingType == eqp_energy)
+                    {
+                        romOptions.dimX = basis[romOptions.window]->GetDimX();
+                        romOptions.dimV = basis[romOptions.window]->GetDimV();
                         romOptions.dimE = basis[romOptions.window]->GetDimE();
+                    }
 
                     if (!romOptions.hyperreduce)
                     {

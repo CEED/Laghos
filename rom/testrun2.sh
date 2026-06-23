@@ -98,11 +98,12 @@ run_pipeline () {
 }
 
 # Baseline basic EQP and our energy-conserving EQP, both with 2-rank prep.
-run_pipeline eqp        sedov_eqp_mw_2r   2
-run_pipeline eqp_energy sedov_ceqp_mw_2r  2
+#run_pipeline eqp        sedov_eqp_mw_2r   2
+#run_pipeline eqp_energy sedov_ceqp_mw_2r  2
 
 # Rank-invariance check for the distributed mass Gram-Schmidt:
 # run CEQP again with serial prep and compare the restore errors.
+run_pipeline eqp        sedov_eqp_mw_1r   1
 run_pipeline eqp_energy sedov_ceqp_mw_1r  1
 
 # Compare:
