@@ -1011,6 +1011,28 @@ void ROM_Basis::ProjectFromPreviousWindow(ROM_Options const& input, Vector& romS
     BwinV->mult(romS_oldV, romS_V);
     BwinE->mult(romS_oldE, romS_E);
 
+    // Kinetic-energy renormalization at the window transition.
+    // The mass-weighted projection romS_V = BwinV romS_oldV drops the part
+    // of the outgoing velocity not captured by the new basis, so the
+    // kinetic energy KE = 0.5|romS_V|^2 jumps down by exactly that
+    // truncated residual (the bases are mass-orthonormal, Mhat = I).
+    // Rescaling the projected velocity coordinates by a single scalar
+    // restores |romS_V| to the pre-transition |romS_oldV|, so KE is
+    // conserved to round-off across the transition.
+    // Internal energy is already exactly preserved (1_E lies in both
+    // spans), so this fully removes the cross-window energy jump.
+    // This is gated on absorbOffset so the BEQP/global-IC paths are
+    // untouched.
+    if (absorbOffset)
+    {
+        const double nrmVprev = romS_oldV.norm();
+        const double nrmVproj = romS_V.norm();
+        // Skip the rescaling if the projected velocity is degenerate, as
+        // the scale factor is then undefined.
+        if (nrmVproj >= 1.0e-15)
+            romS_V *= nrmVprev / nrmVproj;
+    }
+
     if (offsetInit && (input.offsetType == interpolateOffset || input.offsetType == saveLoadOffset))
     {
         BtInitDiffX = new CAROM::Vector(rdimx, false);
