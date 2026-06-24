@@ -1,0 +1,3273 @@
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_eqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --sample-stages
+   --offline
+   --no-online
+   --no-restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 0
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --writesol
+   --no-soldiff
+   --no-romhr
+   --no-romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --romoffset
+   --norm_type l2
+   --sdim 1000
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam 0
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype gnat
+   --max-nnls 0
+   --tol-nnls 1e-14
+   --no-lq-nnls
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 64 64
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+0: pmesh number of elements 64
+0: max_model_dim 1000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initE0.000000
+X taking sample #0 at t 0
+WARNING: BasisGenerator::takeSample skipped trivial sample.
+V taking sample #0 at t 0
+WARNING: BasisGenerator::takeSample skipped trivial sample.
+E taking sample #0 at t 0
+WARNING: BasisGenerator::takeSample skipped trivial sample.
+Sampling once every 1 timestep(s).
+FOM simulation at t 0, dt 0.00365491
+X taking sample #0 at t 0.00182745
+V taking sample #0 at t 0.00182745
+E taking sample #0 at t 0.00182745
+Runge-Kutta stage 1 sampled
+X taking sample #1 at t 0.00365491
+V taking sample #1 at t 0.00365491
+E taking sample #1 at t 0.00365491
+FOM simulation at t 0.00365491, dt 0.003728
+X taking sample #2 at t 0.00551891
+V taking sample #2 at t 0.00551891
+E taking sample #2 at t 0.00551891
+Runge-Kutta stage 1 sampled
+X taking sample #3 at t 0.00738291
+V taking sample #3 at t 0.00738291
+E taking sample #3 at t 0.00738291
+FOM simulation at t 0.00738291, dt 0.003728
+X taking sample #4 at t 0.00924691
+V taking sample #4 at t 0.00924691
+E taking sample #4 at t 0.00924691
+Runge-Kutta stage 1 sampled
+X taking sample #5 at t 0.0111109
+V taking sample #5 at t 0.0111109
+E taking sample #5 at t 0.0111109
+FOM simulation at t 0.0111109, dt 0.003728
+X taking sample #6 at t 0.0129749
+V taking sample #6 at t 0.0129749
+E taking sample #6 at t 0.0129749
+Runge-Kutta stage 1 sampled
+X taking sample #7 at t 0.0148389
+V taking sample #7 at t 0.0148389
+E taking sample #7 at t 0.0148389
+FOM simulation at t 0.0148389, dt 0.003728
+X taking sample #8 at t 0.0167029
+V taking sample #8 at t 0.0167029
+E taking sample #8 at t 0.0167029
+Runge-Kutta stage 1 sampled
+X taking sample #9 at t 0.0185669
+V taking sample #9 at t 0.0185669
+E taking sample #9 at t 0.0185669
+step     5,	t = 0.0186,	dt = 0.003728,	|e| = 107.7313427149
+FOM simulation at t 0.0185669229, dt 0.0037280042
+X taking sample #10 at t 0.0204309250
+V taking sample #10 at t 0.0204309250
+E taking sample #10 at t 0.0204309250
+Runge-Kutta stage 1 sampled
+X taking sample #11 at t 0.0222949271
+V taking sample #11 at t 0.0222949271
+E taking sample #11 at t 0.0222949271
+FOM simulation at t 0.0222949271, dt 0.0037280042
+X taking sample #12 at t 0.0241589291
+V taking sample #12 at t 0.0241589291
+E taking sample #12 at t 0.0241589291
+Runge-Kutta stage 1 sampled
+X taking sample #13 at t 0.0260229312
+V taking sample #13 at t 0.0260229312
+E taking sample #13 at t 0.0260229312
+FOM simulation at t 0.0260229312, dt 0.0037280042
+X taking sample #14 at t 0.0278869333
+V taking sample #14 at t 0.0278869333
+E taking sample #14 at t 0.0278869333
+Runge-Kutta stage 1 sampled
+X taking sample #15 at t 0.0297509354
+V taking sample #15 at t 0.0297509354
+E taking sample #15 at t 0.0297509354
+FOM simulation at t 0.0297509354, dt 0.0038025643
+X taking sample #16 at t 0.0316522176
+V taking sample #16 at t 0.0316522176
+E taking sample #16 at t 0.0316522176
+Runge-Kutta stage 1 sampled
+X taking sample #17 at t 0.0335534997
+V taking sample #17 at t 0.0335534997
+E taking sample #17 at t 0.0335534997
+FOM simulation at t 0.0335534997, dt 0.0038786156
+X taking sample #18 at t 0.0354928075
+V taking sample #18 at t 0.0354928075
+E taking sample #18 at t 0.0354928075
+Runge-Kutta stage 1 sampled
+X taking sample #19 at t 0.0374321153
+V taking sample #19 at t 0.0374321153
+E taking sample #19 at t 0.0374321153
+step    10,	t = 0.0374,	dt = 0.003879,	|e| = 88.0168680551
+FOM simulation at t 0.0374321153, dt 0.0038786156
+X taking sample #20 at t 0.0393714231
+V taking sample #20 at t 0.0393714231
+E taking sample #20 at t 0.0393714231
+Runge-Kutta stage 1 sampled
+X taking sample #21 at t 0.0413107309
+V taking sample #21 at t 0.0413107309
+E taking sample #21 at t 0.0413107309
+FOM simulation at t 0.0413107309, dt 0.0038786156
+X taking sample #22 at t 0.0432500386
+V taking sample #22 at t 0.0432500386
+E taking sample #22 at t 0.0432500386
+Runge-Kutta stage 1 sampled
+X taking sample #23 at t 0.0451893464
+V taking sample #23 at t 0.0451893464
+E taking sample #23 at t 0.0451893464
+FOM simulation at t 0.0451893464, dt 0.0038786156
+X taking sample #24 at t 0.0471286542
+V taking sample #24 at t 0.0471286542
+E taking sample #24 at t 0.0471286542
+Runge-Kutta stage 1 sampled
+X taking sample #25 at t 0.0490679620
+V taking sample #25 at t 0.0490679620
+E taking sample #25 at t 0.0490679620
+FOM simulation at t 0.0490679620, dt 0.0038786156
+X taking sample #26 at t 0.0510072698
+V taking sample #26 at t 0.0510072698
+E taking sample #26 at t 0.0510072698
+Runge-Kutta stage 1 sampled
+X taking sample #27 at t 0.0529465775
+V taking sample #27 at t 0.0529465775
+E taking sample #27 at t 0.0529465775
+FOM simulation at t 0.0529465775, dt 0.0038786156
+X taking sample #28 at t 0.0548858853
+V taking sample #28 at t 0.0548858853
+E taking sample #28 at t 0.0548858853
+Runge-Kutta stage 1 sampled
+X taking sample #29 at t 0.0568251931
+V taking sample #29 at t 0.0568251931
+E taking sample #29 at t 0.0568251931
+step    15,	t = 0.0568,	dt = 0.003879,	|e| = 75.6482917418
+FOM simulation at t 0.0568251931, dt 0.0038786156
+X taking sample #30 at t 0.0587645009
+V taking sample #30 at t 0.0587645009
+E taking sample #30 at t 0.0587645009
+Runge-Kutta stage 1 sampled
+X taking sample #31 at t 0.0607038087
+V taking sample #31 at t 0.0607038087
+E taking sample #31 at t 0.0607038087
+FOM simulation at t 0.0607038087, dt 0.0038786156
+X taking sample #32 at t 0.0626431165
+V taking sample #32 at t 0.0626431165
+E taking sample #32 at t 0.0626431165
+Runge-Kutta stage 1 sampled
+X taking sample #33 at t 0.0645824242
+V taking sample #33 at t 0.0645824242
+E taking sample #33 at t 0.0645824242
+FOM simulation at t 0.0645824242, dt 0.0038786156
+X taking sample #34 at t 0.0665217320
+V taking sample #34 at t 0.0665217320
+E taking sample #34 at t 0.0665217320
+Runge-Kutta stage 1 sampled
+X taking sample #35 at t 0.0684610398
+V taking sample #35 at t 0.0684610398
+E taking sample #35 at t 0.0684610398
+FOM simulation at t 0.0684610398, dt 0.0038786156
+X taking sample #36 at t 0.0704003476
+V taking sample #36 at t 0.0704003476
+E taking sample #36 at t 0.0704003476
+Runge-Kutta stage 1 sampled
+X taking sample #37 at t 0.0723396554
+V taking sample #37 at t 0.0723396554
+E taking sample #37 at t 0.0723396554
+FOM simulation at t 0.0723396554, dt 0.0038786156
+X taking sample #38 at t 0.0742789632
+V taking sample #38 at t 0.0742789632
+E taking sample #38 at t 0.0742789632
+Runge-Kutta stage 1 sampled
+X taking sample #39 at t 0.0762182709
+V taking sample #39 at t 0.0762182709
+E taking sample #39 at t 0.0762182709
+step    20,	t = 0.0762,	dt = 0.003879,	|e| = 67.9623882647
+FOM simulation at t 0.0762182709, dt 0.0037817291
+X taking sample #40 at t 0.0781091355
+V taking sample #40 at t 0.0781091355
+E taking sample #40 at t 0.0781091355
+Runge-Kutta stage 1 sampled
+X taking sample #41 at t 0.0800000000
+V taking sample #41 at t 0.0800000000
+E taking sample #41 at t 0.0800000000
+step    21,	t = 0.0800,	dt = 0.003782,	|e| = 66.7862656298
+Creating file: run/sedov_eqp_mw_1r/param0_varX0_snapshot.000000
+Creating file: run/sedov_eqp_mw_1r/param0_varV0_snapshot.000000
+Creating file: run/sedov_eqp_mw_1r/param0_varE0_snapshot.000000
+X snapshot size: 42
+V snapshot size: 42
+E snapshot size: 42
+
+CG (H1) total time: 0.1471287500
+CG (H1) rate (megadofs x cg_iterations / second): 12.9767363619
+
+CG (L2) total time: 0.0094020420
+CG (L2) rate (megadofs x cg_iterations / second): 8.7061938247
+
+Forces total time: 0.0193201720
+Forces rate (megadofs x timesteps / second): 5.8673390692
+
+UpdateQuadData total time: 0.2011391710
+UpdateQuadData rate (megaquads x timesteps / second): 0.8756524108
+
+Major kernels total time (seconds): 0.3675880930
+Major kernels total rate (megadofs x time steps / second): 0.3083832207
+
+Initial energy: 2.50000e-01
+Energy diff: -2.87345e-12
+Rel. energy diff: -1.14938e-11
+Elapsed time for sampling in the offline phase: 3.67810e-01 sec
+Elapsed time for basis construction in the offline phase: 3.35446e-01 sec
+Elapsed time for time loop: 3.80780e-01 sec
+Total time: 8.51529e-01 sec
+Options used:
+   --numsets 1
+   --numwindows 0
+   --numwindowsamples 10
+   --numwindowoverlap 0
+   --bi 
+   --rom-ef 0.9999
+   --sv-shift 1
+   --romoffset
+   --romoffsettype load
+   --romindicatortype time
+   --romsns
+   --outputfilename sedov_eqp_mw_1r
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --eqp
+   --square-sv
+run/sedov_eqp_mw_1r/param0_tSnapX
+run/sedov_eqp_mw_1r/param0_tSnapV
+run/sedov_eqp_mw_1r/param0_tSnapE
+Opening file: run/sedov_eqp_mw_1r/param0_varX0_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/param0_varV0_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/param0_varE0_snapshot.000000
+Loading snapshots for X in basis window 0
+Opening file: run/sedov_eqp_mw_1r/param0_varX0_snapshot.000000
+12 columns read. Columns 0 to 11
+Creating file: run/sedov_eqp_mw_1r/mparam0_varX0_snapshot.000000
+Computing SVD for X in basis window 0
+Creating file: run/sedov_eqp_mw_1r/basisX0.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 12 basis vectors
+For energy fraction: 0.99, take first 1 of 12 basis vectors
+For energy fraction: 0.999, take first 2 of 12 basis vectors
+For energy fraction: 0.9999, take first 2 of 12 basis vectors
+Take first 2 of 12 basis vectors
+Loading snapshots for V in basis window 0
+Opening file: run/sedov_eqp_mw_1r/param0_varV0_snapshot.000000
+12 columns read. Columns 0 to 11
+Creating file: run/sedov_eqp_mw_1r/mparam0_varV0_snapshot.000000
+Computing SVD for V in basis window 0
+Creating file: run/sedov_eqp_mw_1r/basisV0.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 12 basis vectors
+For energy fraction: 0.99, take first 2 of 12 basis vectors
+For energy fraction: 0.999, take first 2 of 12 basis vectors
+For energy fraction: 0.9999, take first 3 of 12 basis vectors
+Take first 3 of 12 basis vectors
+Loading snapshots for E in basis window 0
+Opening file: run/sedov_eqp_mw_1r/param0_varE0_snapshot.000000
+12 columns read. Columns 0 to 11
+Creating file: run/sedov_eqp_mw_1r/mparam0_varE0_snapshot.000000
+Computing SVD for E in basis window 0
+Creating file: run/sedov_eqp_mw_1r/basisE0.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 12 basis vectors
+For energy fraction: 0.99, take first 1 of 12 basis vectors
+For energy fraction: 0.999, take first 1 of 12 basis vectors
+For energy fraction: 0.9999, take first 2 of 12 basis vectors
+Take first 2 of 12 basis vectors
+Loading snapshots for X in basis window 1
+Opening file: run/sedov_eqp_mw_1r/param0_varX0_snapshot.000000
+12 columns read. Columns 11 to 22
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initX1.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varX1_snapshot.000000
+Computing SVD for X in basis window 1
+Creating file: run/sedov_eqp_mw_1r/basisX1.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for V in basis window 1
+Opening file: run/sedov_eqp_mw_1r/param0_varV0_snapshot.000000
+12 columns read. Columns 11 to 22
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initV1.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varV1_snapshot.000000
+Computing SVD for V in basis window 1
+Creating file: run/sedov_eqp_mw_1r/basisV1.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 4 of 11 basis vectors
+Take first 4 of 11 basis vectors
+Loading snapshots for E in basis window 1
+Opening file: run/sedov_eqp_mw_1r/param0_varE0_snapshot.000000
+12 columns read. Columns 11 to 22
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initE1.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varE1_snapshot.000000
+Computing SVD for E in basis window 1
+Creating file: run/sedov_eqp_mw_1r/basisE1.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for X in basis window 2
+Opening file: run/sedov_eqp_mw_1r/param0_varX0_snapshot.000000
+12 columns read. Columns 22 to 33
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initX2.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varX2_snapshot.000000
+Computing SVD for X in basis window 2
+Creating file: run/sedov_eqp_mw_1r/basisX2.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 1 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for V in basis window 2
+Opening file: run/sedov_eqp_mw_1r/param0_varV0_snapshot.000000
+12 columns read. Columns 22 to 33
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initV2.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varV2_snapshot.000000
+Computing SVD for V in basis window 2
+Creating file: run/sedov_eqp_mw_1r/basisV2.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 3 of 11 basis vectors
+Take first 3 of 11 basis vectors
+Loading snapshots for E in basis window 2
+Opening file: run/sedov_eqp_mw_1r/param0_varE0_snapshot.000000
+12 columns read. Columns 22 to 33
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initE2.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varE2_snapshot.000000
+Computing SVD for E in basis window 2
+Creating file: run/sedov_eqp_mw_1r/basisE2.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 1 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for X in basis window 3
+Opening file: run/sedov_eqp_mw_1r/param0_varX0_snapshot.000000
+9 columns read. Columns 33 to 41
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initX3.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varX3_snapshot.000000
+Computing SVD for X in basis window 3
+Creating file: run/sedov_eqp_mw_1r/basisX3.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 8 basis vectors
+For energy fraction: 0.99, take first 1 of 8 basis vectors
+For energy fraction: 0.999, take first 1 of 8 basis vectors
+For energy fraction: 0.9999, take first 2 of 8 basis vectors
+Take first 2 of 8 basis vectors
+Loading snapshots for V in basis window 3
+Opening file: run/sedov_eqp_mw_1r/param0_varV0_snapshot.000000
+9 columns read. Columns 33 to 41
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initV3.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varV3_snapshot.000000
+Computing SVD for V in basis window 3
+Creating file: run/sedov_eqp_mw_1r/basisV3.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 8 basis vectors
+For energy fraction: 0.99, take first 1 of 8 basis vectors
+For energy fraction: 0.999, take first 3 of 8 basis vectors
+For energy fraction: 0.9999, take first 3 of 8 basis vectors
+Take first 3 of 8 basis vectors
+Loading snapshots for E in basis window 3
+Opening file: run/sedov_eqp_mw_1r/param0_varE0_snapshot.000000
+9 columns read. Columns 33 to 41
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/initE3.000000
+Creating file: run/sedov_eqp_mw_1r/mparam0_varE3_snapshot.000000
+Computing SVD for E in basis window 3
+Creating file: run/sedov_eqp_mw_1r/basisE3.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 8 basis vectors
+For energy fraction: 0.99, take first 1 of 8 basis vectors
+For energy fraction: 0.999, take first 1 of 8 basis vectors
+For energy fraction: 0.9999, take first 2 of 8 basis vectors
+Take first 2 of 8 basis vectors
+Elapsed time for merge: 0.244309 sec
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_eqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --no-sample-stages
+   --no-offline
+   --online
+   --no-restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 4
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --no-writesol
+   --no-soldiff
+   --no-romhr
+   --romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --romoffset
+   --norm_type l2
+   --sdim 0
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --no-romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam -1
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype eqp
+   --max-nnls 500
+   --tol-nnls 1e-14
+   --nnlsuselq
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Reading time window parameters from file run/sedov_eqp_mw_1r/twp.csv
+Using time window 0 with end time 0.0222949, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 1 with end time 0.04325, rdimx 2, rdimv 4, rdime 2, nsamx 4, nsamv 80, nsame 4
+Using time window 2 with end time 0.0645824, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 3 with end time 0.08, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 64 64
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+0: pmesh number of elements 64
+Opening file: run/sedov_eqp_mw_1r/basisV3.000000
+Read basis run/sedov_eqp_mw_1r/basisV3 of dimension 3
+Opening file: run/sedov_eqp_mw_1r/basisE3.000000
+Read basis run/sedov_eqp_mw_1r/basisE3 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX3.000000
+Read basis run/sedov_eqp_mw_1r/basisX3 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX3.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV3.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE3.000000
+Read init vectors X, V, E with norms 27.8531, 7.15572, 72.1766
+start preprocessing hyper-reduction
+Opening file: run/sedov_eqp_mw_1r/mparam0_varX3_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varV3_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varE3_snapshot.000000
+WINDOW 3
+NNLS using 3 basis dim for equation E 0 and 8 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 24 nearly linearly dependent constraints.
+0 0 24 4096 0 6.622561504842496e-02 1.497142567431540e-01
+1 1 24 4096 1 6.580532089858564e-02 1.447827532300738e-01
+2 2 24 4096 2 6.505350509568253e-02 1.293511360619039e-01
+3 3 24 4096 3 5.627090616988070e-02 1.155450861657858e-01
+4 4 24 4096 4 5.157922272692906e-02 1.108812277184864e-01
+5 5 24 4096 5 4.596297707326140e-02 1.064261367138757e-01
+6 6 24 4096 6 3.768047542033871e-02 7.929879781627455e-02
+7 7 24 4096 7 3.905857446528180e-02 7.253184795304730e-02
+8 8 24 4096 8 3.222887570902105e-02 6.448657713751431e-02
+9 9 24 4096 9 2.895278671198849e-02 6.140132181223353e-02
+10 10 24 4096 10 2.945002619785887e-02 6.062540069377709e-02
+11 11 24 4096 11 2.701208178486750e-02 5.588006178191122e-02
+12 12 24 4096 12 2.601950652391574e-02 5.438322039667786e-02
+13 13 24 4096 13 2.145461200115313e-02 4.498330604488456e-02
+14 14 24 4096 14 1.330018618901358e-02 2.703449102785257e-02
+15 15 24 4096 15 1.101431445649399e-02 1.934026753300593e-02
+16 16 24 4096 16 1.071789865024317e-02 1.682406907378234e-02
+17 17 24 4096 17 1.102255127115397e-02 1.595062893620403e-02
+18 18 24 4096 18 8.538078872620496e-03 1.342904275328894e-02
+19 19 24 4096 19 6.928043989870499e-03 1.180991561640662e-02
+20 20 24 4096 20 5.976608681914208e-03 1.093901122912019e-02
+21 21 24 4096 21 2.831877497309592e-03 7.726255615745269e-03
+22 23 24 4096 21 1.847980104753748e-03 4.341949492048763e-03
+23 24 24 4096 22 6.900360966626889e-04 1.661355074104179e-03
+24 25 24 4096 23 2.340479879524300e-04 4.334198870204196e-04
+25 26 24 4096 24 -1.600025708597170e-13 8.767666602734067e-17
+target tolerance met
+NNLS solver: m = 24, n = 4096, outer_iter = 25, inner_iter = 26: converged
+0: Number of nonzeros in NNLS solution: 24, out of 4096
+Global number of nonzeros in NNLS solution: 24
+0: relative residual norm for NNLS solution of Gs = Gw: 4.62696e-15
+Creating file: run/sedov_eqp_mw_1r/nnlsV3
+NNLS using 2 basis dim for equation E 1 and 8 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 16 nearly linearly dependent constraints.
+0 0 16 4096 0 8.473315831125874e-02 1.454682459779174e-01
+1 1 16 4096 1 8.191242467235239e-02 1.412827560123345e-01
+2 2 16 4096 2 7.632886637355818e-02 1.227408731748165e-01
+3 3 16 4096 3 6.417130666659328e-02 9.001355860451953e-02
+4 4 16 4096 4 5.569796800219452e-02 8.432063545533278e-02
+5 5 16 4096 5 3.215830566954286e-02 6.945528529428255e-02
+6 6 16 4096 6 2.877321235765396e-02 6.293140733630714e-02
+7 7 16 4096 7 1.987018659727298e-02 4.535805098042555e-02
+8 8 16 4096 8 1.961460962326492e-02 3.968263519276537e-02
+9 9 16 4096 9 1.752644088936103e-02 2.896034487342484e-02
+10 10 16 4096 10 1.107043498173652e-02 1.500352768312624e-02
+11 11 16 4096 11 4.502060812480710e-03 1.119044260308961e-02
+12 12 16 4096 12 3.652545211082650e-03 8.915156266147127e-03
+13 13 16 4096 13 3.611358560401435e-03 7.924967210590222e-03
+14 14 16 4096 14 3.911494455573133e-03 4.932198359384685e-03
+15 15 16 4096 15 3.846373091489888e-04 7.644624421117873e-04
+16 16 16 4096 16 -4.797362459301727e-13 7.040566972875091e-17
+target tolerance met
+NNLS solver: m = 16, n = 4096, outer_iter = 16, inner_iter = 16: converged
+0: Number of nonzeros in NNLS solution: 16, out of 4096
+Global number of nonzeros in NNLS solution: 16
+0: relative residual norm for NNLS solution of Gs = Gw: 1.92348e-15
+Creating file: run/sedov_eqp_mw_1r/nnlsE3
+Creating file: run/sedov_eqp_mw_1r/WelemsV3.000000
+Creating file: run/sedov_eqp_mw_1r/WelemsE3.000000
+Creating file: run/sedov_eqp_mw_1r/BXtBV3.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV3.000000
+number of samples for velocity: 0
+number of samples for energy  : 9
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 9 elements, 35 vertices
+Elapsed time for hyper-reduction preprocessing: 0.581468 sec
+Opening file: run/sedov_eqp_mw_1r/basisV2.000000
+Read basis run/sedov_eqp_mw_1r/basisV2 of dimension 3
+Opening file: run/sedov_eqp_mw_1r/basisE2.000000
+Read basis run/sedov_eqp_mw_1r/basisE2 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX2.000000
+Read basis run/sedov_eqp_mw_1r/basisX2 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX2.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV2.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE2.000000
+Read init vectors X, V, E with norms 27.8415, 6.75367, 83.6368
+start preprocessing hyper-reduction
+Opening file: run/sedov_eqp_mw_1r/mparam0_varX2_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varV2_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varE2_snapshot.000000
+WINDOW 2
+NNLS using 3 basis dim for equation E 0 and 11 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 33 nearly linearly dependent constraints.
+0 0 33 4096 0 7.594302661542797e-02 2.102983815223075e-01
+1 1 33 4096 1 7.226978482639229e-02 2.011865478496417e-01
+2 2 33 4096 2 6.341412689966294e-02 1.845928386144615e-01
+3 3 33 4096 3 5.814204734544404e-02 1.787735824341269e-01
+4 4 33 4096 4 6.491567162615833e-02 1.561251710758721e-01
+5 5 33 4096 5 6.444904289173926e-02 1.445770987839048e-01
+6 6 33 4096 6 5.812001538544131e-02 1.324084948612328e-01
+7 7 33 4096 7 4.731084176850899e-02 1.235869613121106e-01
+8 8 33 4096 8 5.152461864258225e-02 1.178356790056090e-01
+9 9 33 4096 9 4.408788491977298e-02 1.085652779564976e-01
+10 10 33 4096 10 3.894041813447909e-02 9.555172205827510e-02
+11 11 33 4096 11 3.070063192924881e-02 8.301688739895145e-02
+12 12 33 4096 12 3.020562123425805e-02 7.834758955501546e-02
+13 13 33 4096 13 3.056390478292726e-02 7.028112486686594e-02
+14 14 33 4096 14 2.083595076801643e-02 6.652031574509021e-02
+15 15 33 4096 15 2.514900295431542e-02 5.944119769478486e-02
+16 16 33 4096 16 2.592993629694456e-02 5.652225620926242e-02
+17 17 33 4096 17 2.608686092955754e-02 5.584085423042613e-02
+18 18 33 4096 18 2.537805682818088e-02 5.374885615066163e-02
+19 19 33 4096 19 1.648820303645683e-02 4.216755621673311e-02
+20 20 33 4096 20 1.523939958386530e-02 3.850435272057072e-02
+21 21 33 4096 21 1.390841137332556e-02 3.385971498722952e-02
+22 22 33 4096 22 1.390615727660229e-02 3.262390992872496e-02
+23 23 33 4096 23 1.386101042055608e-02 3.144935989147722e-02
+24 24 33 4096 24 1.303380131357357e-02 2.010544622997653e-02
+25 25 33 4096 25 1.345758419878534e-02 1.887502507053053e-02
+26 26 33 4096 26 7.713541280771782e-03 1.489348771513030e-02
+27 27 33 4096 27 5.986288553804034e-03 1.318794914937816e-02
+28 28 33 4096 28 5.444809882548008e-03 1.012236706280789e-02
+29 30 33 4096 28 4.436880537753902e-03 7.896218823027356e-03
+30 31 33 4096 29 4.238672224252959e-03 6.894122278118825e-03
+31 32 33 4096 30 3.187341638660084e-03 4.852776257786344e-03
+32 33 33 4096 31 1.152189971729552e-03 2.553947932787971e-03
+33 35 33 4096 31 9.879088830586338e-04 1.964730223718447e-03
+34 36 33 4096 32 2.270099047903548e-04 5.046371355703752e-04
+35 37 33 4096 33 -1.901570682681077e-13 1.230328287020056e-16
+target tolerance met
+NNLS solver: m = 33, n = 4096, outer_iter = 35, inner_iter = 37: converged
+0: Number of nonzeros in NNLS solution: 33, out of 4096
+Global number of nonzeros in NNLS solution: 33
+0: relative residual norm for NNLS solution of Gs = Gw: 7.22404e-15
+Creating file: run/sedov_eqp_mw_1r/nnlsV2
+NNLS using 2 basis dim for equation E 1 and 11 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 22 nearly linearly dependent constraints.
+0 0 22 4096 0 7.392656300899104e-02 1.476377039325004e-01
+1 1 22 4096 1 7.085528824908506e-02 1.350882443375261e-01
+2 2 22 4096 2 5.557753903557496e-02 1.263783351354927e-01
+3 3 22 4096 3 5.159891475824264e-02 1.060611518293814e-01
+4 4 22 4096 4 5.252222691495156e-02 1.001182782339833e-01
+5 5 22 4096 5 5.241046540483339e-02 9.519754385203380e-02
+6 6 22 4096 6 5.446070512532471e-02 9.111562738894399e-02
+7 7 22 4096 7 5.199247853454259e-02 8.452382182324186e-02
+8 8 22 4096 8 4.855756636911683e-02 7.172205108578086e-02
+9 9 22 4096 9 5.125800913491489e-02 6.678732639203395e-02
+10 10 22 4096 10 4.699946432875624e-02 6.285686291979130e-02
+11 11 22 4096 11 2.160328781718039e-02 4.623898261357561e-02
+12 12 22 4096 12 2.230723234133114e-02 4.183800588370483e-02
+13 13 22 4096 13 2.107231484025145e-02 3.881137138378048e-02
+14 14 22 4096 14 1.233635375979025e-02 3.314133249169082e-02
+15 15 22 4096 15 1.155156379325500e-02 2.459354315614585e-02
+16 16 22 4096 16 8.301116569764426e-03 2.130878526743330e-02
+17 17 22 4096 17 8.066295187493838e-03 1.981574358859374e-02
+18 18 22 4096 18 8.161843983189938e-03 1.858761076465519e-02
+19 19 22 4096 19 8.163215487562742e-03 1.623346562499239e-02
+20 20 22 4096 20 3.837796604556932e-03 6.587601389343038e-03
+21 21 22 4096 21 1.031924098285022e-03 1.531537157447594e-03
+22 22 22 4096 22 -3.536874536543580e-13 7.937468921126937e-17
+target tolerance met
+NNLS solver: m = 22, n = 4096, outer_iter = 22, inner_iter = 22: converged
+0: Number of nonzeros in NNLS solution: 22, out of 4096
+Global number of nonzeros in NNLS solution: 22
+0: relative residual norm for NNLS solution of Gs = Gw: 1.07528e-15
+Creating file: run/sedov_eqp_mw_1r/nnlsE2
+Creating file: run/sedov_eqp_mw_1r/WelemsV2.000000
+Creating file: run/sedov_eqp_mw_1r/WelemsE2.000000
+Creating file: run/sedov_eqp_mw_1r/BXtBV2.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV2.000000
+number of samples for velocity: 0
+number of samples for energy  : 9
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 9 elements, 34 vertices
+Elapsed time for hyper-reduction preprocessing: 0.768453 sec
+Opening file: run/sedov_eqp_mw_1r/basisV1.000000
+Read basis run/sedov_eqp_mw_1r/basisV1 of dimension 4
+Opening file: run/sedov_eqp_mw_1r/basisE1.000000
+Read basis run/sedov_eqp_mw_1r/basisE1 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX1.000000
+Read basis run/sedov_eqp_mw_1r/basisX1 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX1.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV1.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE1.000000
+Read init vectors X, V, E with norms 27.834, 5.75312, 103.053
+start preprocessing hyper-reduction
+Opening file: run/sedov_eqp_mw_1r/mparam0_varX1_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varV1_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varE1_snapshot.000000
+WINDOW 1
+NNLS using 4 basis dim for equation E 0 and 11 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 44 nearly linearly dependent constraints.
+0 0 44 4096 0 7.406004477749013e-02 2.254590028406440e-01
+1 1 44 4096 1 8.207614366852303e-02 2.159776042300419e-01
+2 2 44 4096 2 8.084749102878946e-02 2.096510143898043e-01
+3 3 44 4096 3 6.798518547017307e-02 1.935109403916228e-01
+4 4 44 4096 4 5.567184907366696e-02 1.844492830419565e-01
+5 5 44 4096 5 5.441004600530927e-02 1.713314702840637e-01
+6 6 44 4096 6 5.299957217109702e-02 1.664152348247203e-01
+7 7 44 4096 7 4.672931318580898e-02 1.612661140014924e-01
+8 8 44 4096 8 4.720422553789827e-02 1.525232103209069e-01
+9 9 44 4096 9 5.439418163258317e-02 1.477272745492446e-01
+10 10 44 4096 10 5.370071051647196e-02 1.439754453675341e-01
+11 11 44 4096 11 4.637519874218189e-02 1.351069500505500e-01
+12 12 44 4096 12 3.910559635109279e-02 1.273329763523594e-01
+13 13 44 4096 13 3.595206283927102e-02 1.142553909581405e-01
+14 14 44 4096 14 3.449571446422971e-02 1.099547148706841e-01
+15 15 44 4096 15 3.373810271414691e-02 1.043659375617466e-01
+16 16 44 4096 16 3.393479749884784e-02 1.029638997509998e-01
+17 17 44 4096 17 3.372701655811438e-02 9.699212636392326e-02
+18 18 44 4096 18 3.314661827255414e-02 9.048662730103840e-02
+19 19 44 4096 19 2.830385664847979e-02 8.524701342964913e-02
+20 20 44 4096 20 2.907105715082641e-02 8.306091982359300e-02
+21 21 44 4096 21 2.641987746030472e-02 7.911077560005737e-02
+22 22 44 4096 22 3.286163492752008e-02 7.088483858016940e-02
+23 23 44 4096 23 3.240562676234086e-02 6.653309342084107e-02
+24 24 44 4096 24 3.236451189865056e-02 6.438216447605487e-02
+25 25 44 4096 25 3.011101746561060e-02 6.122987755673209e-02
+26 26 44 4096 26 3.306266792426153e-02 5.902629793671739e-02
+27 27 44 4096 27 2.239432751682756e-02 5.254614829047317e-02
+28 28 44 4096 28 2.224546795284766e-02 5.055562350519805e-02
+29 29 44 4096 29 1.595885205136046e-02 4.597279634839140e-02
+30 30 44 4096 30 1.553346346254537e-02 4.452109661963129e-02
+31 31 44 4096 31 1.379123951959788e-02 3.710005040318040e-02
+32 32 44 4096 32 1.352575687343347e-02 3.554094568889367e-02
+33 34 44 4096 32 1.133974193294359e-02 3.153632793915098e-02
+34 35 44 4096 33 1.180599881210585e-02 2.966760116972240e-02
+35 36 44 4096 34 1.179882194388229e-02 2.927980935391389e-02
+36 37 44 4096 35 1.176459685347900e-02 2.815221886760642e-02
+37 38 44 4096 36 1.188012871224563e-02 2.703242175700269e-02
+38 39 44 4096 37 8.753675468031392e-03 1.870342986502346e-02
+39 40 44 4096 38 8.543338762776622e-03 1.791767896773511e-02
+40 41 44 4096 39 8.725919506916755e-03 1.773796989491549e-02
+41 42 44 4096 40 7.344727713108001e-03 1.545571592870160e-02
+42 43 44 4096 41 2.751206118121737e-03 6.660800085981466e-03
+43 45 44 4096 41 1.648841467885582e-03 4.102231195578718e-03
+44 46 44 4096 42 9.869520814726222e-04 1.820133472447110e-03
+45 47 44 4096 43 2.833028689158318e-04 6.642140673350501e-04
+46 48 44 4096 44 -8.780082230703316e-14 1.663782111790079e-16
+target tolerance met
+NNLS solver: m = 44, n = 4096, outer_iter = 46, inner_iter = 48: converged
+0: Number of nonzeros in NNLS solution: 44, out of 4096
+Global number of nonzeros in NNLS solution: 44
+0: relative residual norm for NNLS solution of Gs = Gw: 2.64015e-14
+Creating file: run/sedov_eqp_mw_1r/nnlsV1
+NNLS using 2 basis dim for equation E 1 and 11 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 22 nearly linearly dependent constraints.
+0 0 22 4096 0 4.986337919560701e-02 1.429699244017581e-01
+1 1 22 4096 1 4.732614054415181e-02 1.270597685464477e-01
+2 2 22 4096 2 4.979475110531072e-02 1.210149323222561e-01
+3 3 22 4096 3 3.879805515152668e-02 9.500543212233027e-02
+4 4 22 4096 4 3.578291526212807e-02 9.258527610655456e-02
+5 5 22 4096 5 4.519072025673247e-02 8.078658924570317e-02
+6 6 22 4096 6 3.493123900964267e-02 7.474952590428720e-02
+7 7 22 4096 7 2.685559601437870e-02 6.573050671980701e-02
+8 8 22 4096 8 2.407588681026364e-02 5.730788687188113e-02
+9 9 22 4096 9 2.177105691243625e-02 5.392235993458919e-02
+10 10 22 4096 10 2.177412578171405e-02 5.110317453005717e-02
+11 11 22 4096 11 2.139401372211348e-02 4.537662481839282e-02
+12 12 22 4096 12 2.168984665067668e-02 4.235615199102873e-02
+13 13 22 4096 13 2.118215406729184e-02 3.337780721558935e-02
+14 14 22 4096 14 1.189078127487806e-02 2.855976489522718e-02
+15 15 22 4096 15 1.096486978480501e-02 2.568191163745408e-02
+16 16 22 4096 16 8.168518581400885e-03 2.058026005724922e-02
+17 17 22 4096 17 8.399945055261419e-03 1.315021103518626e-02
+18 18 22 4096 18 4.214258772291020e-03 9.222160683226545e-03
+19 19 22 4096 19 3.332413769312870e-03 7.569200129623053e-03
+20 20 22 4096 20 1.368198121204341e-03 2.196258574895753e-03
+21 21 22 4096 21 4.409593995203112e-04 9.542838695301729e-04
+22 22 22 4096 22 -3.761384256491126e-13 6.027187007734373e-17
+target tolerance met
+NNLS solver: m = 22, n = 4096, outer_iter = 22, inner_iter = 22: converged
+0: Number of nonzeros in NNLS solution: 22, out of 4096
+Global number of nonzeros in NNLS solution: 22
+0: relative residual norm for NNLS solution of Gs = Gw: 9.05636e-16
+Creating file: run/sedov_eqp_mw_1r/nnlsE1
+Creating file: run/sedov_eqp_mw_1r/WelemsV1.000000
+Creating file: run/sedov_eqp_mw_1r/WelemsE1.000000
+Creating file: run/sedov_eqp_mw_1r/BXtBV1.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV1.000000
+number of samples for velocity: 0
+number of samples for energy  : 9
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 9 elements, 31 vertices
+Elapsed time for hyper-reduction preprocessing: 0.902646 sec
+Opening file: run/sedov_eqp_mw_1r/basisV0.000000
+Read basis run/sedov_eqp_mw_1r/basisV0 of dimension 3
+Opening file: run/sedov_eqp_mw_1r/basisE0.000000
+Read basis run/sedov_eqp_mw_1r/basisE0 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX0.000000
+Read basis run/sedov_eqp_mw_1r/basisX0 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX0.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV0.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE0.000000
+Read init vectors X, V, E with norms 27.831, 0, 128
+start preprocessing hyper-reduction
+Opening file: run/sedov_eqp_mw_1r/mparam0_varX0_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varV0_snapshot.000000
+Opening file: run/sedov_eqp_mw_1r/mparam0_varE0_snapshot.000000
+WINDOW 0
+NNLS using 3 basis dim for equation E 0 and 12 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 39 nearly linearly dependent constraints.
+0 0 39 4096 0 7.205129678741626e-02 2.235280749090273e-01
+1 1 39 4096 1 7.059151087186920e-02 2.201598513665142e-01
+2 2 39 4096 2 6.780183354512220e-02 2.113423795076929e-01
+3 3 39 4096 3 6.481498995463142e-02 2.025107560465769e-01
+4 4 39 4096 4 6.481771177222390e-02 1.995181326631534e-01
+5 5 39 4096 5 5.647121304313115e-02 1.898854312387291e-01
+6 6 39 4096 6 6.165066788024200e-02 1.774844032152407e-01
+7 7 39 4096 7 6.171864184958101e-02 1.723192728299043e-01
+8 8 39 4096 8 4.931542872553897e-02 1.597127501073838e-01
+9 9 39 4096 9 5.256292100970731e-02 1.544708690293369e-01
+10 10 39 4096 10 4.824253729046155e-02 1.471000613763480e-01
+11 11 39 4096 11 5.092114727183829e-02 1.335109094061424e-01
+12 12 39 4096 12 5.103535052174474e-02 1.295198449273612e-01
+13 13 39 4096 13 5.103333886144268e-02 1.254885943577073e-01
+14 14 39 4096 14 5.084763858174782e-02 1.171190459969249e-01
+15 15 39 4096 15 4.652049465341569e-02 1.089855309035289e-01
+16 16 39 4096 16 4.447028332640936e-02 1.052989829514666e-01
+17 17 39 4096 17 4.207414224666906e-02 9.731023785906881e-02
+18 18 39 4096 18 4.359022392945393e-02 9.186415766439135e-02
+19 19 39 4096 19 4.326166155092973e-02 8.963828762931375e-02
+20 20 39 4096 20 3.389177229379478e-02 8.028709413284545e-02
+21 21 39 4096 21 2.818761922506490e-02 7.234355311109762e-02
+22 22 39 4096 22 3.048038555433673e-02 6.893523318226108e-02
+23 23 39 4096 23 2.769718041316864e-02 6.156328525085433e-02
+24 24 39 4096 24 2.958219999415193e-02 5.914647913865716e-02
+25 25 39 4096 25 2.896449106080159e-02 5.664768171030848e-02
+26 26 39 4096 26 2.893268607827792e-02 5.404926394650000e-02
+27 27 39 4096 27 2.325012890056994e-02 4.903775726989010e-02
+28 28 39 4096 28 2.364766675173504e-02 4.661119746962436e-02
+29 29 39 4096 29 2.351537742263923e-02 4.139673698600925e-02
+30 30 39 4096 30 2.352514096912992e-02 3.542656185559542e-02
+31 31 39 4096 31 1.220474577451605e-02 2.601039156971157e-02
+32 32 39 4096 32 8.344547418274471e-03 2.302148586329961e-02
+33 33 39 4096 33 8.288930672886755e-03 2.112181524532137e-02
+34 34 39 4096 34 8.307719767902195e-03 2.045187809632682e-02
+35 35 39 4096 35 8.130736202205021e-03 1.833836918044814e-02
+36 36 39 4096 36 6.730633383129816e-03 1.283170486871377e-02
+37 37 39 4096 37 4.663801376245064e-03 1.085188888866907e-02
+38 38 39 4096 38 4.114139484386237e-03 1.067821763731738e-02
+39 39 39 4096 39 -2.271024175046637e-13 1.193528921569529e-16
+target tolerance met
+NNLS solver: m = 39, n = 4096, outer_iter = 39, inner_iter = 39: converged
+0: Number of nonzeros in NNLS solution: 39, out of 4096
+Global number of nonzeros in NNLS solution: 39
+0: relative residual norm for NNLS solution of Gs = Gw: 6.91658e-15
+Creating file: run/sedov_eqp_mw_1r/nnlsV0
+NNLS using 2 basis dim for equation E 1 and 12 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+0, 1, 
+Found 2 / 26 nearly linearly dependent constraints.
+0 0 26 4096 0 7.236232414519962e-02 1.557831033878942e-01
+1 1 26 4096 1 6.115375018177139e-02 1.377717568509576e-01
+2 2 26 4096 2 4.369975074391044e-02 1.206749711977362e-01
+3 3 26 4096 3 4.514889089255890e-02 1.155961832830625e-01
+4 4 26 4096 4 4.773429840611156e-02 1.111025142612994e-01
+5 5 26 4096 5 5.157793164465562e-02 1.024286096112864e-01
+6 6 26 4096 6 4.332141222851403e-02 9.805131415642461e-02
+7 7 26 4096 7 4.450496479445049e-02 9.192118558544909e-02
+8 8 26 4096 8 4.299105604068697e-02 8.793815364632830e-02
+9 9 26 4096 9 3.312109373893492e-02 8.086758113468705e-02
+10 10 26 4096 10 3.252729611061429e-02 7.338687227180915e-02
+11 11 26 4096 11 2.961713027033517e-02 6.767954032825284e-02
+12 12 26 4096 12 2.667024196693152e-02 6.058310236146123e-02
+13 13 26 4096 13 2.712262668696813e-02 5.811474224695519e-02
+14 14 26 4096 14 2.712262668696813e-02 5.727151093236262e-02
+15 15 26 4096 15 2.677494123624684e-02 5.554767993552564e-02
+16 16 26 4096 16 2.243616973481314e-02 5.008777919067406e-02
+17 17 26 4096 17 2.245472598211557e-02 4.719831873940626e-02
+18 18 26 4096 18 2.246486157309400e-02 4.080979916336014e-02
+19 19 26 4096 19 2.176591543920207e-02 3.114211736728874e-02
+20 20 26 4096 20 2.257050487018234e-02 2.868702930794243e-02
+21 21 26 4096 21 2.249628353139889e-02 2.807657088256396e-02
+22 22 26 4096 22 2.247057321172789e-02 2.649023913068536e-02
+23 23 26 4096 23 2.247027351995637e-02 2.481924060807778e-02
+24 24 26 4096 24 2.247027351995637e-02 2.425514397820148e-02
+25 25 26 4096 25 3.429927789296385e-03 5.976645594921294e-03
+26 26 26 4096 26 -3.846072765822939e-13 7.215150844321579e-17
+target tolerance met
+NNLS solver: m = 26, n = 4096, outer_iter = 26, inner_iter = 26: converged
+0: Number of nonzeros in NNLS solution: 26, out of 4096
+Global number of nonzeros in NNLS solution: 26
+0: relative residual norm for NNLS solution of Gs = Gw: 9.15512e-16
+Creating file: run/sedov_eqp_mw_1r/nnlsE0
+Creating file: run/sedov_eqp_mw_1r/WelemsV0.000000
+Creating file: run/sedov_eqp_mw_1r/WelemsE0.000000
+Creating file: run/sedov_eqp_mw_1r/BXtBV0.000000
+Creating file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV0.000000
+number of samples for velocity: 0
+number of samples for energy  : 6
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 6 elements, 26 vertices
+Elapsed time for hyper-reduction preprocessing: 0.895999 sec
+Writing SP files for window: 0
+Creating file: run/sedov_eqp_mw_1r/BsinvE_0.000000
+Creating file: run/sedov_eqp_mw_1r/BXsp_0.000000
+Creating file: run/sedov_eqp_mw_1r/BVsp_0.000000
+Creating file: run/sedov_eqp_mw_1r/BEsp_0.000000
+Creating file: run/sedov_eqp_mw_1r/spX_0.000000
+Creating file: run/sedov_eqp_mw_1r/spV_0.000000
+Creating file: run/sedov_eqp_mw_1r/spE_0.000000
+Creating file: run/sedov_eqp_mw_1r/initXsp_0.000000
+Creating file: run/sedov_eqp_mw_1r/initVsp_0.000000
+Creating file: run/sedov_eqp_mw_1r/initEsp_0.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffX_1.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffV_1.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffE_1.000000
+Writing SP files for window: 1
+Creating file: run/sedov_eqp_mw_1r/BsinvE_1.000000
+Creating file: run/sedov_eqp_mw_1r/BXsp_1.000000
+Creating file: run/sedov_eqp_mw_1r/BVsp_1.000000
+Creating file: run/sedov_eqp_mw_1r/BEsp_1.000000
+Creating file: run/sedov_eqp_mw_1r/spX_1.000000
+Creating file: run/sedov_eqp_mw_1r/spV_1.000000
+Creating file: run/sedov_eqp_mw_1r/spE_1.000000
+Creating file: run/sedov_eqp_mw_1r/initXsp_1.000000
+Creating file: run/sedov_eqp_mw_1r/initVsp_1.000000
+Creating file: run/sedov_eqp_mw_1r/initEsp_1.000000
+Creating file: run/sedov_eqp_mw_1r/BwinX_1.000000
+Creating file: run/sedov_eqp_mw_1r/BwinV_1.000000
+Creating file: run/sedov_eqp_mw_1r/BwinE_1.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffX_2.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffV_2.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffE_2.000000
+Writing SP files for window: 2
+Creating file: run/sedov_eqp_mw_1r/BsinvE_2.000000
+Creating file: run/sedov_eqp_mw_1r/BXsp_2.000000
+Creating file: run/sedov_eqp_mw_1r/BVsp_2.000000
+Creating file: run/sedov_eqp_mw_1r/BEsp_2.000000
+Creating file: run/sedov_eqp_mw_1r/spX_2.000000
+Creating file: run/sedov_eqp_mw_1r/spV_2.000000
+Creating file: run/sedov_eqp_mw_1r/spE_2.000000
+Creating file: run/sedov_eqp_mw_1r/initXsp_2.000000
+Creating file: run/sedov_eqp_mw_1r/initVsp_2.000000
+Creating file: run/sedov_eqp_mw_1r/initEsp_2.000000
+Creating file: run/sedov_eqp_mw_1r/BwinX_2.000000
+Creating file: run/sedov_eqp_mw_1r/BwinV_2.000000
+Creating file: run/sedov_eqp_mw_1r/BwinE_2.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffX_3.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffV_3.000000
+Creating file: run/sedov_eqp_mw_1r/BtInitDiffE_3.000000
+Writing SP files for window: 3
+Creating file: run/sedov_eqp_mw_1r/BsinvE_3.000000
+Creating file: run/sedov_eqp_mw_1r/BXsp_3.000000
+Creating file: run/sedov_eqp_mw_1r/BVsp_3.000000
+Creating file: run/sedov_eqp_mw_1r/BEsp_3.000000
+Creating file: run/sedov_eqp_mw_1r/spX_3.000000
+Creating file: run/sedov_eqp_mw_1r/spV_3.000000
+Creating file: run/sedov_eqp_mw_1r/spE_3.000000
+Creating file: run/sedov_eqp_mw_1r/initXsp_3.000000
+Creating file: run/sedov_eqp_mw_1r/initVsp_3.000000
+Creating file: run/sedov_eqp_mw_1r/initEsp_3.000000
+Creating file: run/sedov_eqp_mw_1r/BwinX_3.000000
+Creating file: run/sedov_eqp_mw_1r/BwinV_3.000000
+Creating file: run/sedov_eqp_mw_1r/BwinE_3.000000
+Offset Style: load
+Indicator Style: time
+Window 0: initial romS norm 0
+Hyperreduction pre-processing completed. 
+Elapsed time for online preprocess: 3.3874 sec
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_eqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --no-sample-stages
+   --no-offline
+   --online
+   --no-restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 4
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --no-writesol
+   --no-soldiff
+   --romhr
+   --no-romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --romoffset
+   --norm_type l2
+   --sdim 0
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --no-romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam -1
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype eqp
+   --max-nnls 0
+   --tol-nnls 1e-14
+   --nnlsuselq
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Reading time window parameters from file run/sedov_eqp_mw_1r/twp.csv
+Using time window 0 with end time 0.0222949, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 1 with end time 0.04325, rdimx 2, rdimv 4, rdime 2, nsamx 4, nsamv 80, nsame 4
+Using time window 2 with end time 0.0645824, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 3 with end time 0.08, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Opening file: run/sedov_eqp_mw_1r/BsinvE_3.000000
+Opening file: run/sedov_eqp_mw_1r/BXsp_3.000000
+Opening file: run/sedov_eqp_mw_1r/BVsp_3.000000
+Opening file: run/sedov_eqp_mw_1r/BEsp_3.000000
+Opening file: run/sedov_eqp_mw_1r/spX_3.000000
+Opening file: run/sedov_eqp_mw_1r/spV_3.000000
+Opening file: run/sedov_eqp_mw_1r/spE_3.000000
+Opening file: run/sedov_eqp_mw_1r/initXsp_3.000000
+Opening file: run/sedov_eqp_mw_1r/initVsp_3.000000
+Opening file: run/sedov_eqp_mw_1r/initEsp_3.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV3.000000
+Opening file: run/sedov_eqp_mw_1r/BXtBV3.000000
+Reading EQP solution for window 3
+Opening file: run/sedov_eqp_mw_1r/nnlsV3
+Reading EQP solution for window 3
+Opening file: run/sedov_eqp_mw_1r/nnlsE3
+ROM_Operator reading EQP elements for window 3
+Opening file: run/sedov_eqp_mw_1r/WelemsV3.000000
+Opening file: run/sedov_eqp_mw_1r/WelemsE3.000000
+Opening file: run/sedov_eqp_mw_1r/BsinvE_2.000000
+Opening file: run/sedov_eqp_mw_1r/BXsp_2.000000
+Opening file: run/sedov_eqp_mw_1r/BVsp_2.000000
+Opening file: run/sedov_eqp_mw_1r/BEsp_2.000000
+Opening file: run/sedov_eqp_mw_1r/spX_2.000000
+Opening file: run/sedov_eqp_mw_1r/spV_2.000000
+Opening file: run/sedov_eqp_mw_1r/spE_2.000000
+Opening file: run/sedov_eqp_mw_1r/initXsp_2.000000
+Opening file: run/sedov_eqp_mw_1r/initVsp_2.000000
+Opening file: run/sedov_eqp_mw_1r/initEsp_2.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV2.000000
+Opening file: run/sedov_eqp_mw_1r/BXtBV2.000000
+Reading EQP solution for window 2
+Opening file: run/sedov_eqp_mw_1r/nnlsV2
+Reading EQP solution for window 2
+Opening file: run/sedov_eqp_mw_1r/nnlsE2
+ROM_Operator reading EQP elements for window 2
+Opening file: run/sedov_eqp_mw_1r/WelemsV2.000000
+Opening file: run/sedov_eqp_mw_1r/WelemsE2.000000
+Opening file: run/sedov_eqp_mw_1r/BsinvE_1.000000
+Opening file: run/sedov_eqp_mw_1r/BXsp_1.000000
+Opening file: run/sedov_eqp_mw_1r/BVsp_1.000000
+Opening file: run/sedov_eqp_mw_1r/BEsp_1.000000
+Opening file: run/sedov_eqp_mw_1r/spX_1.000000
+Opening file: run/sedov_eqp_mw_1r/spV_1.000000
+Opening file: run/sedov_eqp_mw_1r/spE_1.000000
+Opening file: run/sedov_eqp_mw_1r/initXsp_1.000000
+Opening file: run/sedov_eqp_mw_1r/initVsp_1.000000
+Opening file: run/sedov_eqp_mw_1r/initEsp_1.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV1.000000
+Opening file: run/sedov_eqp_mw_1r/BXtBV1.000000
+Reading EQP solution for window 1
+Opening file: run/sedov_eqp_mw_1r/nnlsV1
+Reading EQP solution for window 1
+Opening file: run/sedov_eqp_mw_1r/nnlsE1
+ROM_Operator reading EQP elements for window 1
+Opening file: run/sedov_eqp_mw_1r/WelemsV1.000000
+Opening file: run/sedov_eqp_mw_1r/WelemsE1.000000
+Opening file: run/sedov_eqp_mw_1r/BsinvE_0.000000
+Opening file: run/sedov_eqp_mw_1r/BXsp_0.000000
+Opening file: run/sedov_eqp_mw_1r/BVsp_0.000000
+Opening file: run/sedov_eqp_mw_1r/BEsp_0.000000
+Opening file: run/sedov_eqp_mw_1r/spX_0.000000
+Opening file: run/sedov_eqp_mw_1r/spV_0.000000
+Opening file: run/sedov_eqp_mw_1r/spE_0.000000
+Opening file: run/sedov_eqp_mw_1r/initXsp_0.000000
+Opening file: run/sedov_eqp_mw_1r/initVsp_0.000000
+Opening file: run/sedov_eqp_mw_1r/initEsp_0.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/BXt_initV0.000000
+Opening file: run/sedov_eqp_mw_1r/BXtBV0.000000
+Reading EQP solution for window 0
+Opening file: run/sedov_eqp_mw_1r/nnlsV0
+Reading EQP solution for window 0
+Opening file: run/sedov_eqp_mw_1r/nnlsE0
+ROM_Operator reading EQP elements for window 0
+Opening file: run/sedov_eqp_mw_1r/WelemsV0.000000
+Opening file: run/sedov_eqp_mw_1r/WelemsE0.000000
+Offset Style: load
+Indicator Style: time
+Window 0: initial romS norm 0
+ROM online at t 0, dt 0.00365491, romS norm 0
+ROM online at t 0.00365491, dt 0.00372801, romS norm 2.43167
+ROM online at t 0.00738292, dt 0.00372801, romS norm 6.78633
+ROM online at t 0.0111109, dt 0.00372801, romS norm 12.243
+ROM online at t 0.0148389, dt 0.00372801, romS norm 17.9189
+ROM online at t 0.0185669, dt 0.00372801, romS norm 23.3901
+ROM online basis change for window 1 at t 0.022295, dt 0.00372801
+Opening file: run/sedov_eqp_mw_1r/BwinX_1.000000
+Opening file: run/sedov_eqp_mw_1r/BwinV_1.000000
+Opening file: run/sedov_eqp_mw_1r/BwinE_1.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffX_1.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffV_1.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffE_1.000000
+Window 1: initial romS norm 0.0994912
+ROM online at t 0.022295, dt 0.00372801, romS norm 0.0994912
+ROM online at t 0.026023, dt 0.00372801, romS norm 4.72368
+ROM online at t 0.029751, dt 0.00380257, romS norm 9.05518
+ROM online at t 0.0335535, dt 0.00387862, romS norm 12.9891
+ROM online at t 0.0374322, dt 0.00387862, romS norm 16.5756
+ROM online at t 0.0413108, dt 0.00387862, romS norm 19.7837
+ROM online basis change for window 2 at t 0.0451894, dt 0.00387862
+Opening file: run/sedov_eqp_mw_1r/BwinX_2.000000
+Opening file: run/sedov_eqp_mw_1r/BwinV_2.000000
+Opening file: run/sedov_eqp_mw_1r/BwinE_2.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffX_2.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffV_2.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffE_2.000000
+Window 2: initial romS norm 1.3626
+ROM online at t 0.0451894, dt 0.00387862, romS norm 1.3626
+ROM online at t 0.049068, dt 0.00387862, romS norm 4.02702
+ROM online at t 0.0529466, dt 0.00387862, romS norm 6.44196
+ROM online at t 0.0568253, dt 0.00387862, romS norm 8.63187
+ROM online at t 0.0607039, dt 0.00387862, romS norm 10.5978
+ROM online basis change for window 3 at t 0.0645825, dt 0.00387862
+Opening file: run/sedov_eqp_mw_1r/BwinX_3.000000
+Opening file: run/sedov_eqp_mw_1r/BwinV_3.000000
+Opening file: run/sedov_eqp_mw_1r/BwinE_3.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffX_3.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffV_3.000000
+Opening file: run/sedov_eqp_mw_1r/BtInitDiffE_3.000000
+Window 3: initial romS norm 0.0506168
+ROM online at t 0.0645825, dt 0.00387862, romS norm 0.0506168
+ROM online at t 0.0684611, dt 0.00387862, romS norm 1.63309
+ROM online at t 0.0723397, dt 0.00387862, romS norm 3.16342
+ROM online at t 0.0762184, dt 0.00378165, romS norm 4.5836
+Elapsed time for online preprocess: 0.152004 sec
+Elapsed time for time loop: 0.0722642 sec
+Total time: 0.226875 sec
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_eqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --no-sample-stages
+   --no-offline
+   --no-online
+   --restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 4
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --no-writesol
+   --soldiff
+   --no-romhr
+   --no-romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --romoffset
+   --norm_type l2
+   --sdim 0
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam -1
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype eqp
+   --max-nnls 0
+   --tol-nnls 1e-14
+   --no-lq-nnls
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Reading time window parameters from file run/sedov_eqp_mw_1r/twp.csv
+Using time window 0 with end time 0.0222949, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 1 with end time 0.04325, rdimx 2, rdimv 4, rdime 2, nsamx 4, nsamv 80, nsame 4
+Using time window 2 with end time 0.0645824, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 3 with end time 0.08, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 64 64
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+0: pmesh number of elements 64
+Opening file: run/sedov_eqp_mw_1r/basisV0.000000
+Read basis run/sedov_eqp_mw_1r/basisV0 of dimension 3
+Opening file: run/sedov_eqp_mw_1r/basisE0.000000
+Read basis run/sedov_eqp_mw_1r/basisE0 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX0.000000
+Read basis run/sedov_eqp_mw_1r/basisX0 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX0.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV0.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE0.000000
+Read init vectors X, V, E with norms 27.831, 0, 128
+Restoring 5-th solution
+Opening file: run/sedov_eqp_mw_1r/basisV1.000000
+Read basis run/sedov_eqp_mw_1r/basisV1 of dimension 4
+Opening file: run/sedov_eqp_mw_1r/basisE1.000000
+Read basis run/sedov_eqp_mw_1r/basisE1 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX1.000000
+Read basis run/sedov_eqp_mw_1r/basisX1 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX1.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV1.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE1.000000
+Read init vectors X, V, E with norms 27.834, 5.75312, 103.053
+Restoring 10-th solution
+Opening file: run/sedov_eqp_mw_1r/basisV2.000000
+Read basis run/sedov_eqp_mw_1r/basisV2 of dimension 3
+Opening file: run/sedov_eqp_mw_1r/basisE2.000000
+Read basis run/sedov_eqp_mw_1r/basisE2 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX2.000000
+Read basis run/sedov_eqp_mw_1r/basisX2 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX2.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV2.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE2.000000
+Read init vectors X, V, E with norms 27.8415, 6.75367, 83.6368
+Restoring 15-th solution
+Opening file: run/sedov_eqp_mw_1r/basisV3.000000
+Read basis run/sedov_eqp_mw_1r/basisV3 of dimension 3
+Opening file: run/sedov_eqp_mw_1r/basisE3.000000
+Read basis run/sedov_eqp_mw_1r/basisE3 of dimension 2
+Opening file: run/sedov_eqp_mw_1r/basisX3.000000
+Read basis run/sedov_eqp_mw_1r/basisX3 of dimension 2
+Reading: run/sedov_eqp_mw_1r/ROMoffset/init
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initX3.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initV3.000000
+Opening file: run/sedov_eqp_mw_1r/ROMoffset/initE3.000000
+Read init vectors X, V, E with norms 27.8531, 7.15572, 72.1766
+Restoring 20-th solution
+Restoring 21-th solution
+solDiff mode 
+L2 norm error:
+0: run/sedov_eqp_mw_1r/Sol_Position FOM norm 0.577352
+0: run/sedov_eqp_mw_1r/Sol_Position ROM norm 0.57735
+0: run/sedov_eqp_mw_1r/Sol_Position DIFF norm 1.3681e-05
+0: run/sedov_eqp_mw_1r/Sol_Position Rel. DIFF norm 2.36961e-05
+L2 norm error:
+0: run/sedov_eqp_mw_1r/Sol_Velocity FOM norm 0.148755
+0: run/sedov_eqp_mw_1r/Sol_Velocity ROM norm 0.148785
+0: run/sedov_eqp_mw_1r/Sol_Velocity DIFF norm 0.000142361
+0: run/sedov_eqp_mw_1r/Sol_Velocity Rel. DIFF norm 0.000957017
+L2 norm error:
+0: run/sedov_eqp_mw_1r/Sol_Energy FOM norm 3.94337
+0: run/sedov_eqp_mw_1r/Sol_Energy ROM norm 3.94566
+0: run/sedov_eqp_mw_1r/Sol_Energy DIFF norm 0.00232999
+0: run/sedov_eqp_mw_1r/Sol_Energy Rel. DIFF norm 0.000590864
+
+CG (H1) total time: 0
+CG (H1) rate (megadofs x cg_iterations / second): -nan
+
+CG (L2) total time: 0
+CG (L2) rate (megadofs x cg_iterations / second): -nan
+
+Forces total time: 0
+Forces rate (megadofs x timesteps / second): -nan
+
+UpdateQuadData total time: 0.00361966
+UpdateQuadData rate (megaquads x timesteps / second): 1.1316
+
+Major kernels total time (seconds): 0.00361966
+Major kernels total rate (megadofs x time steps / second): 0
+
+Initial energy: 2.50000e-01
+Energy diff: 1.91626e-05
+Rel. energy diff: 7.66506e-05
+Elapsed time for restore phase: 6.96126e-02 sec
+Elapsed time for time loop: 0.00000e+00 sec
+Total time: 1.11255e-01 sec
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_ceqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --sample-stages
+   --offline
+   --no-online
+   --no-restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 0
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --writesol
+   --no-soldiff
+   --no-romhr
+   --no-romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --romoffset
+   --norm_type l2
+   --sdim 1000
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam 0
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype gnat
+   --max-nnls 0
+   --tol-nnls 1e-14
+   --no-lq-nnls
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 64 64
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+0: pmesh number of elements 64
+0: max_model_dim 1000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initE0.000000
+X taking sample #0 at t 0
+WARNING: BasisGenerator::takeSample skipped trivial sample.
+V taking sample #0 at t 0
+WARNING: BasisGenerator::takeSample skipped trivial sample.
+E taking sample #0 at t 0
+WARNING: BasisGenerator::takeSample skipped trivial sample.
+Sampling once every 1 timestep(s).
+FOM simulation at t 0, dt 0.00365491
+X taking sample #0 at t 0.00182745
+V taking sample #0 at t 0.00182745
+E taking sample #0 at t 0.00182745
+Runge-Kutta stage 1 sampled
+X taking sample #1 at t 0.00365491
+V taking sample #1 at t 0.00365491
+E taking sample #1 at t 0.00365491
+FOM simulation at t 0.00365491, dt 0.003728
+X taking sample #2 at t 0.00551891
+V taking sample #2 at t 0.00551891
+E taking sample #2 at t 0.00551891
+Runge-Kutta stage 1 sampled
+X taking sample #3 at t 0.00738291
+V taking sample #3 at t 0.00738291
+E taking sample #3 at t 0.00738291
+FOM simulation at t 0.00738291, dt 0.003728
+X taking sample #4 at t 0.00924691
+V taking sample #4 at t 0.00924691
+E taking sample #4 at t 0.00924691
+Runge-Kutta stage 1 sampled
+X taking sample #5 at t 0.0111109
+V taking sample #5 at t 0.0111109
+E taking sample #5 at t 0.0111109
+FOM simulation at t 0.0111109, dt 0.003728
+X taking sample #6 at t 0.0129749
+V taking sample #6 at t 0.0129749
+E taking sample #6 at t 0.0129749
+Runge-Kutta stage 1 sampled
+X taking sample #7 at t 0.0148389
+V taking sample #7 at t 0.0148389
+E taking sample #7 at t 0.0148389
+FOM simulation at t 0.0148389, dt 0.003728
+X taking sample #8 at t 0.0167029
+V taking sample #8 at t 0.0167029
+E taking sample #8 at t 0.0167029
+Runge-Kutta stage 1 sampled
+X taking sample #9 at t 0.0185669
+V taking sample #9 at t 0.0185669
+E taking sample #9 at t 0.0185669
+step     5,	t = 0.0186,	dt = 0.003728,	|e| = 107.7313427149
+FOM simulation at t 0.0185669229, dt 0.0037280042
+X taking sample #10 at t 0.0204309250
+V taking sample #10 at t 0.0204309250
+E taking sample #10 at t 0.0204309250
+Runge-Kutta stage 1 sampled
+X taking sample #11 at t 0.0222949271
+V taking sample #11 at t 0.0222949271
+E taking sample #11 at t 0.0222949271
+FOM simulation at t 0.0222949271, dt 0.0037280042
+X taking sample #12 at t 0.0241589291
+V taking sample #12 at t 0.0241589291
+E taking sample #12 at t 0.0241589291
+Runge-Kutta stage 1 sampled
+X taking sample #13 at t 0.0260229312
+V taking sample #13 at t 0.0260229312
+E taking sample #13 at t 0.0260229312
+FOM simulation at t 0.0260229312, dt 0.0037280042
+X taking sample #14 at t 0.0278869333
+V taking sample #14 at t 0.0278869333
+E taking sample #14 at t 0.0278869333
+Runge-Kutta stage 1 sampled
+X taking sample #15 at t 0.0297509354
+V taking sample #15 at t 0.0297509354
+E taking sample #15 at t 0.0297509354
+FOM simulation at t 0.0297509354, dt 0.0038025643
+X taking sample #16 at t 0.0316522176
+V taking sample #16 at t 0.0316522176
+E taking sample #16 at t 0.0316522176
+Runge-Kutta stage 1 sampled
+X taking sample #17 at t 0.0335534997
+V taking sample #17 at t 0.0335534997
+E taking sample #17 at t 0.0335534997
+FOM simulation at t 0.0335534997, dt 0.0038786156
+X taking sample #18 at t 0.0354928075
+V taking sample #18 at t 0.0354928075
+E taking sample #18 at t 0.0354928075
+Runge-Kutta stage 1 sampled
+X taking sample #19 at t 0.0374321153
+V taking sample #19 at t 0.0374321153
+E taking sample #19 at t 0.0374321153
+step    10,	t = 0.0374,	dt = 0.003879,	|e| = 88.0168680551
+FOM simulation at t 0.0374321153, dt 0.0038786156
+X taking sample #20 at t 0.0393714231
+V taking sample #20 at t 0.0393714231
+E taking sample #20 at t 0.0393714231
+Runge-Kutta stage 1 sampled
+X taking sample #21 at t 0.0413107309
+V taking sample #21 at t 0.0413107309
+E taking sample #21 at t 0.0413107309
+FOM simulation at t 0.0413107309, dt 0.0038786156
+X taking sample #22 at t 0.0432500386
+V taking sample #22 at t 0.0432500386
+E taking sample #22 at t 0.0432500386
+Runge-Kutta stage 1 sampled
+X taking sample #23 at t 0.0451893464
+V taking sample #23 at t 0.0451893464
+E taking sample #23 at t 0.0451893464
+FOM simulation at t 0.0451893464, dt 0.0038786156
+X taking sample #24 at t 0.0471286542
+V taking sample #24 at t 0.0471286542
+E taking sample #24 at t 0.0471286542
+Runge-Kutta stage 1 sampled
+X taking sample #25 at t 0.0490679620
+V taking sample #25 at t 0.0490679620
+E taking sample #25 at t 0.0490679620
+FOM simulation at t 0.0490679620, dt 0.0038786156
+X taking sample #26 at t 0.0510072698
+V taking sample #26 at t 0.0510072698
+E taking sample #26 at t 0.0510072698
+Runge-Kutta stage 1 sampled
+X taking sample #27 at t 0.0529465775
+V taking sample #27 at t 0.0529465775
+E taking sample #27 at t 0.0529465775
+FOM simulation at t 0.0529465775, dt 0.0038786156
+X taking sample #28 at t 0.0548858853
+V taking sample #28 at t 0.0548858853
+E taking sample #28 at t 0.0548858853
+Runge-Kutta stage 1 sampled
+X taking sample #29 at t 0.0568251931
+V taking sample #29 at t 0.0568251931
+E taking sample #29 at t 0.0568251931
+step    15,	t = 0.0568,	dt = 0.003879,	|e| = 75.6482917418
+FOM simulation at t 0.0568251931, dt 0.0038786156
+X taking sample #30 at t 0.0587645009
+V taking sample #30 at t 0.0587645009
+E taking sample #30 at t 0.0587645009
+Runge-Kutta stage 1 sampled
+X taking sample #31 at t 0.0607038087
+V taking sample #31 at t 0.0607038087
+E taking sample #31 at t 0.0607038087
+FOM simulation at t 0.0607038087, dt 0.0038786156
+X taking sample #32 at t 0.0626431165
+V taking sample #32 at t 0.0626431165
+E taking sample #32 at t 0.0626431165
+Runge-Kutta stage 1 sampled
+X taking sample #33 at t 0.0645824242
+V taking sample #33 at t 0.0645824242
+E taking sample #33 at t 0.0645824242
+FOM simulation at t 0.0645824242, dt 0.0038786156
+X taking sample #34 at t 0.0665217320
+V taking sample #34 at t 0.0665217320
+E taking sample #34 at t 0.0665217320
+Runge-Kutta stage 1 sampled
+X taking sample #35 at t 0.0684610398
+V taking sample #35 at t 0.0684610398
+E taking sample #35 at t 0.0684610398
+FOM simulation at t 0.0684610398, dt 0.0038786156
+X taking sample #36 at t 0.0704003476
+V taking sample #36 at t 0.0704003476
+E taking sample #36 at t 0.0704003476
+Runge-Kutta stage 1 sampled
+X taking sample #37 at t 0.0723396554
+V taking sample #37 at t 0.0723396554
+E taking sample #37 at t 0.0723396554
+FOM simulation at t 0.0723396554, dt 0.0038786156
+X taking sample #38 at t 0.0742789632
+V taking sample #38 at t 0.0742789632
+E taking sample #38 at t 0.0742789632
+Runge-Kutta stage 1 sampled
+X taking sample #39 at t 0.0762182709
+V taking sample #39 at t 0.0762182709
+E taking sample #39 at t 0.0762182709
+step    20,	t = 0.0762,	dt = 0.003879,	|e| = 67.9623882647
+FOM simulation at t 0.0762182709, dt 0.0037817291
+X taking sample #40 at t 0.0781091355
+V taking sample #40 at t 0.0781091355
+E taking sample #40 at t 0.0781091355
+Runge-Kutta stage 1 sampled
+X taking sample #41 at t 0.0800000000
+V taking sample #41 at t 0.0800000000
+E taking sample #41 at t 0.0800000000
+step    21,	t = 0.0800,	dt = 0.003782,	|e| = 66.7862656298
+Creating file: run/sedov_ceqp_mw_1r/param0_varX0_snapshot.000000
+Creating file: run/sedov_ceqp_mw_1r/param0_varV0_snapshot.000000
+Creating file: run/sedov_ceqp_mw_1r/param0_varE0_snapshot.000000
+X snapshot size: 42
+V snapshot size: 42
+E snapshot size: 42
+
+CG (H1) total time: 0.1362981480
+CG (H1) rate (megadofs x cg_iterations / second): 14.0079012666
+
+CG (L2) total time: 0.0093047400
+CG (L2) rate (megadofs x cg_iterations / second): 8.7972366772
+
+Forces total time: 0.0191861480
+Forces rate (megadofs x timesteps / second): 5.9083251104
+
+UpdateQuadData total time: 0.1990280300
+UpdateQuadData rate (megaquads x timesteps / second): 0.8849406790
+
+Major kernels total time (seconds): 0.3545123260
+Major kernels total rate (megadofs x time steps / second): 0.3197575703
+
+Initial energy: 2.50000e-01
+Energy diff: -2.87345e-12
+Rel. energy diff: -1.14938e-11
+Elapsed time for sampling in the offline phase: 3.57551e-02 sec
+Elapsed time for basis construction in the offline phase: 2.61714e-02 sec
+Elapsed time for time loop: 3.69391e-01 sec
+Total time: 4.39784e-01 sec
+Options used:
+   --numsets 1
+   --numwindows 0
+   --numwindowsamples 10
+   --numwindowoverlap 0
+   --bi 
+   --rom-ef 0.9999
+   --sv-shift 1
+   --romoffset
+   --romoffsettype load
+   --romindicatortype time
+   --romsns
+   --outputfilename sedov_ceqp_mw_1r
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --eqp
+   --square-sv
+run/sedov_ceqp_mw_1r/param0_tSnapX
+run/sedov_ceqp_mw_1r/param0_tSnapV
+run/sedov_ceqp_mw_1r/param0_tSnapE
+Opening file: run/sedov_ceqp_mw_1r/param0_varX0_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/param0_varV0_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/param0_varE0_snapshot.000000
+Loading snapshots for X in basis window 0
+Opening file: run/sedov_ceqp_mw_1r/param0_varX0_snapshot.000000
+12 columns read. Columns 0 to 11
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varX0_snapshot.000000
+Computing SVD for X in basis window 0
+Creating file: run/sedov_ceqp_mw_1r/basisX0.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 12 basis vectors
+For energy fraction: 0.99, take first 1 of 12 basis vectors
+For energy fraction: 0.999, take first 2 of 12 basis vectors
+For energy fraction: 0.9999, take first 2 of 12 basis vectors
+Take first 2 of 12 basis vectors
+Loading snapshots for V in basis window 0
+Opening file: run/sedov_ceqp_mw_1r/param0_varV0_snapshot.000000
+12 columns read. Columns 0 to 11
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varV0_snapshot.000000
+Computing SVD for V in basis window 0
+Creating file: run/sedov_ceqp_mw_1r/basisV0.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 12 basis vectors
+For energy fraction: 0.99, take first 2 of 12 basis vectors
+For energy fraction: 0.999, take first 2 of 12 basis vectors
+For energy fraction: 0.9999, take first 3 of 12 basis vectors
+Take first 3 of 12 basis vectors
+Loading snapshots for E in basis window 0
+Opening file: run/sedov_ceqp_mw_1r/param0_varE0_snapshot.000000
+12 columns read. Columns 0 to 11
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varE0_snapshot.000000
+Computing SVD for E in basis window 0
+Creating file: run/sedov_ceqp_mw_1r/basisE0.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 12 basis vectors
+For energy fraction: 0.99, take first 1 of 12 basis vectors
+For energy fraction: 0.999, take first 1 of 12 basis vectors
+For energy fraction: 0.9999, take first 2 of 12 basis vectors
+Take first 2 of 12 basis vectors
+Loading snapshots for X in basis window 1
+Opening file: run/sedov_ceqp_mw_1r/param0_varX0_snapshot.000000
+12 columns read. Columns 11 to 22
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initX1.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varX1_snapshot.000000
+Computing SVD for X in basis window 1
+Creating file: run/sedov_ceqp_mw_1r/basisX1.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for V in basis window 1
+Opening file: run/sedov_ceqp_mw_1r/param0_varV0_snapshot.000000
+12 columns read. Columns 11 to 22
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initV1.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varV1_snapshot.000000
+Computing SVD for V in basis window 1
+Creating file: run/sedov_ceqp_mw_1r/basisV1.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 4 of 11 basis vectors
+Take first 4 of 11 basis vectors
+Loading snapshots for E in basis window 1
+Opening file: run/sedov_ceqp_mw_1r/param0_varE0_snapshot.000000
+12 columns read. Columns 11 to 22
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initE1.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varE1_snapshot.000000
+Computing SVD for E in basis window 1
+Creating file: run/sedov_ceqp_mw_1r/basisE1.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for X in basis window 2
+Opening file: run/sedov_ceqp_mw_1r/param0_varX0_snapshot.000000
+12 columns read. Columns 22 to 33
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initX2.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varX2_snapshot.000000
+Computing SVD for X in basis window 2
+Creating file: run/sedov_ceqp_mw_1r/basisX2.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 1 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for V in basis window 2
+Opening file: run/sedov_ceqp_mw_1r/param0_varV0_snapshot.000000
+12 columns read. Columns 22 to 33
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initV2.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varV2_snapshot.000000
+Computing SVD for V in basis window 2
+Creating file: run/sedov_ceqp_mw_1r/basisV2.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 2 of 11 basis vectors
+For energy fraction: 0.9999, take first 3 of 11 basis vectors
+Take first 3 of 11 basis vectors
+Loading snapshots for E in basis window 2
+Opening file: run/sedov_ceqp_mw_1r/param0_varE0_snapshot.000000
+12 columns read. Columns 22 to 33
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initE2.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varE2_snapshot.000000
+Computing SVD for E in basis window 2
+Creating file: run/sedov_ceqp_mw_1r/basisE2.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 11 basis vectors
+For energy fraction: 0.99, take first 1 of 11 basis vectors
+For energy fraction: 0.999, take first 1 of 11 basis vectors
+For energy fraction: 0.9999, take first 2 of 11 basis vectors
+Take first 2 of 11 basis vectors
+Loading snapshots for X in basis window 3
+Opening file: run/sedov_ceqp_mw_1r/param0_varX0_snapshot.000000
+9 columns read. Columns 33 to 41
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initX3.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varX3_snapshot.000000
+Computing SVD for X in basis window 3
+Creating file: run/sedov_ceqp_mw_1r/basisX3.000000
+X basis summary output: For energy fraction: 0.9, take first 1 of 8 basis vectors
+For energy fraction: 0.99, take first 1 of 8 basis vectors
+For energy fraction: 0.999, take first 1 of 8 basis vectors
+For energy fraction: 0.9999, take first 2 of 8 basis vectors
+Take first 2 of 8 basis vectors
+Loading snapshots for V in basis window 3
+Opening file: run/sedov_ceqp_mw_1r/param0_varV0_snapshot.000000
+9 columns read. Columns 33 to 41
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initV3.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varV3_snapshot.000000
+Computing SVD for V in basis window 3
+Creating file: run/sedov_ceqp_mw_1r/basisV3.000000
+V basis summary output: For energy fraction: 0.9, take first 1 of 8 basis vectors
+For energy fraction: 0.99, take first 1 of 8 basis vectors
+For energy fraction: 0.999, take first 3 of 8 basis vectors
+For energy fraction: 0.9999, take first 3 of 8 basis vectors
+Take first 3 of 8 basis vectors
+Loading snapshots for E in basis window 3
+Opening file: run/sedov_ceqp_mw_1r/param0_varE0_snapshot.000000
+9 columns read. Columns 33 to 41
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/initE3.000000
+Creating file: run/sedov_ceqp_mw_1r/mparam0_varE3_snapshot.000000
+Computing SVD for E in basis window 3
+Creating file: run/sedov_ceqp_mw_1r/basisE3.000000
+E basis summary output: For energy fraction: 0.9, take first 1 of 8 basis vectors
+For energy fraction: 0.99, take first 1 of 8 basis vectors
+For energy fraction: 0.999, take first 1 of 8 basis vectors
+For energy fraction: 0.9999, take first 2 of 8 basis vectors
+Take first 2 of 8 basis vectors
+Elapsed time for merge: 0.200466 sec
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_ceqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --no-sample-stages
+   --no-offline
+   --online
+   --no-restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 4
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --no-writesol
+   --no-soldiff
+   --no-romhr
+   --romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --no-romoffset
+   --norm_type l2
+   --sdim 0
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --no-romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam -1
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype eqp_energy
+   --max-nnls 500
+   --tol-nnls 1e-14
+   --nnlsuselq
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Reading time window parameters from file run/sedov_ceqp_mw_1r/twp.csv
+Using time window 0 with end time 0.0222949, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 1 with end time 0.04325, rdimx 2, rdimv 4, rdime 2, nsamx 4, nsamv 80, nsame 4
+Using time window 2 with end time 0.0645824, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 3 with end time 0.08, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 64 64
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+0: pmesh number of elements 64
+Opening file: run/sedov_ceqp_mw_1r/basisV3.000000
+Read basis run/sedov_ceqp_mw_1r/basisV3 of dimension 3
+Opening file: run/sedov_ceqp_mw_1r/basisE3.000000
+Read basis run/sedov_ceqp_mw_1r/basisE3 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX3.000000
+Read basis run/sedov_ceqp_mw_1r/basisX3 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX3.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV3.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE3.000000
+Loaded absorption offsets X, V, E with norms 27.8531, 7.15572, 72.1766
+Appended unit-energy column to energy basis, rdime = 3
+start preprocessing hyper-reduction
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varX3_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varV3_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varE3_snapshot.000000
+WINDOW 3
+Energy-conserving NNLS using 4 velocity and 4 energy basis dim and 8 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 64 nearly linearly dependent constraints.
+0 0 64 4096 0 1.463633476329391e-01 3.818078992240528e-01
+1 1 64 4096 1 1.389614900294097e-01 3.770416679278609e-01
+2 2 64 4096 2 1.413054054799512e-01 3.754310901064755e-01
+3 3 64 4096 3 1.353319319689179e-01 3.738274100225008e-01
+4 4 64 4096 4 1.391200823685980e-01 3.690198457740146e-01
+5 5 64 4096 5 1.347348498750400e-01 3.525950216650427e-01
+6 6 64 4096 6 1.188694230279699e-01 3.229520866435583e-01
+7 7 64 4096 7 1.133826717458641e-01 3.130477021151213e-01
+8 8 64 4096 8 1.075618955809898e-01 2.993601138500155e-01
+9 9 64 4096 9 9.458775247595042e-02 2.836741922059088e-01
+10 10 64 4096 10 8.741140200670000e-02 2.797175728666475e-01
+11 11 64 4096 11 8.734591831195143e-02 2.522968845584097e-01
+12 12 64 4096 12 8.828582315063910e-02 2.483920428687151e-01
+13 13 64 4096 13 8.898673190428852e-02 2.311579910552509e-01
+14 14 64 4096 14 9.014575125569312e-02 2.248175597959171e-01
+15 15 64 4096 15 9.114719281330261e-02 2.197444782074910e-01
+16 16 64 4096 16 9.028865717586314e-02 2.147611345548234e-01
+17 17 64 4096 17 9.125658513954445e-02 2.021630660711664e-01
+18 18 64 4096 18 9.100122917315995e-02 1.888199845637061e-01
+19 19 64 4096 19 8.415531899568533e-02 1.852684802757588e-01
+20 20 64 4096 20 7.210763228569299e-02 1.790973857722051e-01
+21 21 64 4096 21 6.569018642694167e-02 1.760254624939340e-01
+22 22 64 4096 22 5.852532127428522e-02 1.730773842456051e-01
+23 23 64 4096 23 5.548664527878225e-02 1.644484372503409e-01
+24 24 64 4096 24 5.071390792698542e-02 1.609722378792158e-01
+25 25 64 4096 25 5.065831043087047e-02 1.497685650984698e-01
+26 26 64 4096 26 4.996054201362944e-02 1.434978916290534e-01
+27 27 64 4096 27 4.561369356127468e-02 1.277775886927723e-01
+28 28 64 4096 28 4.167350779360871e-02 1.248303870832314e-01
+29 29 64 4096 29 4.082993180251514e-02 1.125120615521348e-01
+30 30 64 4096 30 4.049519737314870e-02 1.094868670310553e-01
+31 31 64 4096 31 3.409352235114849e-02 1.049277670018460e-01
+32 32 64 4096 32 3.165267417204139e-02 1.027174398016795e-01
+33 33 64 4096 33 2.960229920148455e-02 9.855346183389983e-02
+34 34 64 4096 34 2.782222979850795e-02 9.645436837095965e-02
+35 35 64 4096 35 2.880082279915289e-02 9.283803554054852e-02
+36 36 64 4096 36 2.423666718784671e-02 8.962640581653115e-02
+37 37 64 4096 37 2.314725729602681e-02 8.801826907271271e-02
+38 38 64 4096 38 2.307676734595481e-02 8.641327615696480e-02
+39 39 64 4096 39 2.282537564993480e-02 8.480238139933098e-02
+40 40 64 4096 40 2.261959793274925e-02 8.275185418630882e-02
+41 41 64 4096 41 2.273556562111875e-02 7.980262842335624e-02
+42 42 64 4096 42 2.552806014596746e-02 6.987868995486307e-02
+43 43 64 4096 43 2.752065255988857e-02 6.513993603618047e-02
+44 44 64 4096 44 2.552204868393803e-02 6.435714647556737e-02
+45 45 64 4096 45 2.449899828505360e-02 6.037033250693594e-02
+46 46 64 4096 46 1.881646151871795e-02 5.712786061939350e-02
+47 47 64 4096 47 1.880811643198390e-02 5.636134009637754e-02
+48 48 64 4096 48 1.881002988554286e-02 5.611105687806386e-02
+49 49 64 4096 49 1.697614989305580e-02 5.298053646739728e-02
+50 50 64 4096 50 1.691428308310643e-02 5.229233161237178e-02
+51 51 64 4096 51 1.688791024042543e-02 5.172400433057923e-02
+52 52 64 4096 52 1.499115011686395e-02 4.771681996144605e-02
+53 53 64 4096 53 1.299515288895534e-02 4.174045998834645e-02
+54 54 64 4096 54 1.087204737452373e-02 3.823093534290791e-02
+55 56 64 4096 54 7.804645088019914e-03 3.075114752275267e-02
+56 57 64 4096 55 8.861835508239010e-03 2.723327421156848e-02
+57 58 64 4096 56 8.082272799092445e-03 2.503502946638488e-02
+58 59 64 4096 57 5.997235493282962e-03 1.643842950194107e-02
+59 60 64 4096 58 5.063101189320591e-03 1.445797410506310e-02
+60 61 64 4096 59 4.462017895653002e-03 1.184654102835688e-02
+61 62 64 4096 60 2.633970824565134e-03 7.340194466746946e-03
+62 63 64 4096 61 1.985984085794848e-03 5.628306355247182e-03
+63 65 64 4096 61 1.820010465474118e-03 4.998505890106567e-03
+64 66 64 4096 62 1.468349023993675e-03 3.776014750625158e-03
+65 67 64 4096 63 1.401327089475593e-03 3.567872674393802e-03
+66 69 64 4096 63 1.176196264196765e-03 2.939905470714857e-03
+67 71 64 4096 63 9.638962060458673e-04 2.412649343677560e-03
+68 73 64 4096 63 6.492757124680704e-04 1.936107129717429e-03
+69 75 64 4096 63 6.185614241438550e-05 2.069403129220543e-04
+70 76 64 4096 64 -6.791615387914661e-14 2.444827141953584e-16
+target tolerance met
+NNLS solver: m = 64, n = 4096, outer_iter = 70, inner_iter = 76: converged
+0: Number of nonzeros in NNLS solution: 64, out of 4096
+Global number of nonzeros in NNLS solution: 64
+0: relative residual norm for NNLS solution of Gs = Gw: 1.38132e-15
+Creating file: run/sedov_ceqp_mw_1r/nnlsV3
+Creating file: run/sedov_ceqp_mw_1r/nnlsE3
+Creating file: run/sedov_ceqp_mw_1r/WelemsV3.000000
+Creating file: run/sedov_ceqp_mw_1r/WelemsE3.000000
+Creating file: run/sedov_ceqp_mw_1r/oneEhat3.000000
+Creating file: run/sedov_ceqp_mw_1r/energyOffset3.000000
+Creating file: run/sedov_ceqp_mw_1r/BXtBV3.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV3.000000
+number of samples for velocity: 0
+number of samples for energy  : 13
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 13 elements, 43 vertices
+Elapsed time for hyper-reduction preprocessing: 0.797719 sec
+Opening file: run/sedov_ceqp_mw_1r/basisV2.000000
+Read basis run/sedov_ceqp_mw_1r/basisV2 of dimension 3
+Opening file: run/sedov_ceqp_mw_1r/basisE2.000000
+Read basis run/sedov_ceqp_mw_1r/basisE2 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX2.000000
+Read basis run/sedov_ceqp_mw_1r/basisX2 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX2.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV2.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE2.000000
+Loaded absorption offsets X, V, E with norms 27.8415, 6.75367, 83.6368
+Appended unit-energy column to energy basis, rdime = 3
+start preprocessing hyper-reduction
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varX2_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varV2_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varE2_snapshot.000000
+WINDOW 2
+Energy-conserving NNLS using 4 velocity and 4 energy basis dim and 11 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 88 nearly linearly dependent constraints.
+0 0 88 4096 0 1.415605934194664e-01 3.885821100866090e-01
+1 1 88 4096 1 1.407335758195738e-01 3.664668696880381e-01
+2 2 88 4096 2 1.385590868524390e-01 3.515475134199166e-01
+3 3 88 4096 3 1.390297782198905e-01 3.369403991082878e-01
+4 4 88 4096 4 1.341114709902928e-01 3.351261406376365e-01
+5 5 88 4096 5 1.210873566976245e-01 3.297023545298112e-01
+6 6 88 4096 6 1.181094592535162e-01 3.278763385006653e-01
+7 7 88 4096 7 1.009801253705632e-01 3.223486179441166e-01
+8 8 88 4096 8 9.754482488745951e-02 3.112597725339994e-01
+9 9 88 4096 9 9.746547799703485e-02 3.049161300849161e-01
+10 10 88 4096 10 9.494907083885068e-02 3.002868676659464e-01
+11 11 88 4096 11 9.503122168738606e-02 2.824520882337410e-01
+12 12 88 4096 12 9.495110417506616e-02 2.655980266482358e-01
+13 13 88 4096 13 9.457246198474255e-02 2.613685604013275e-01
+14 14 88 4096 14 9.473496533790843e-02 2.481291913692215e-01
+15 15 88 4096 15 9.468154358158114e-02 2.419050345352609e-01
+16 16 88 4096 16 9.387242351235253e-02 2.337000599798903e-01
+17 17 88 4096 17 9.324984544713792e-02 2.302727325756194e-01
+18 18 88 4096 18 8.693583728853703e-02 2.239853142586619e-01
+19 19 88 4096 19 8.691983515589689e-02 2.194836500411591e-01
+20 20 88 4096 20 8.702880797202789e-02 2.128424247118217e-01
+21 21 88 4096 21 8.678388138251932e-02 2.068641389623798e-01
+22 22 88 4096 22 8.317073906169631e-02 2.039697557871190e-01
+23 23 88 4096 23 7.884158119348147e-02 2.013395483950822e-01
+24 24 88 4096 24 6.999761971454979e-02 1.987518058284598e-01
+25 25 88 4096 25 6.514266167401976e-02 1.961374307662264e-01
+26 26 88 4096 26 6.172315265907628e-02 1.935042362429681e-01
+27 27 88 4096 27 5.871575732735707e-02 1.881321892242968e-01
+28 28 88 4096 28 5.005395463465397e-02 1.826572630172347e-01
+29 29 88 4096 29 5.010961114351541e-02 1.754292476208976e-01
+30 30 88 4096 30 5.000177259191837e-02 1.669784927458910e-01
+31 31 88 4096 31 5.014150111262385e-02 1.599011754616380e-01
+32 32 88 4096 32 4.577991628441753e-02 1.549316584182363e-01
+33 33 88 4096 33 4.402087288034168e-02 1.503113024874460e-01
+34 34 88 4096 34 4.172505735333581e-02 1.463573884463296e-01
+35 35 88 4096 35 4.229785300051801e-02 1.440384237849056e-01
+36 36 88 4096 36 4.236687712110068e-02 1.414540869197263e-01
+37 37 88 4096 37 4.232471862295168e-02 1.362273420268953e-01
+38 38 88 4096 38 4.231791036211181e-02 1.317211970607407e-01
+39 39 88 4096 39 4.047772158867637e-02 1.280649500663638e-01
+40 40 88 4096 40 3.912117307454508e-02 1.243902754866996e-01
+41 41 88 4096 41 3.951070429629502e-02 1.207111818620061e-01
+42 42 88 4096 42 3.953654461795987e-02 1.142717088913595e-01
+43 43 88 4096 43 3.978506496634446e-02 1.076752960749272e-01
+44 44 88 4096 44 3.419052169338061e-02 1.040311276847011e-01
+45 45 88 4096 45 3.352092497481901e-02 1.025135179515107e-01
+46 46 88 4096 46 3.257944050229517e-02 9.941369939071797e-02
+47 47 88 4096 47 2.964885728234443e-02 9.793235857116987e-02
+48 48 88 4096 48 2.809640089483581e-02 9.642970907614681e-02
+49 49 88 4096 49 2.714394537190408e-02 9.336590546544464e-02
+50 50 88 4096 50 2.192994617982662e-02 9.020712479800844e-02
+51 51 88 4096 51 2.119029058565649e-02 8.699178968554090e-02
+52 52 88 4096 52 1.876271425110197e-02 8.536045808875715e-02
+53 53 88 4096 53 1.931094756553410e-02 8.369708700501891e-02
+54 54 88 4096 54 1.958394368447825e-02 8.071628937790030e-02
+55 55 88 4096 55 2.184834651116925e-02 7.734004393416574e-02
+56 56 88 4096 56 2.232833273596698e-02 7.354029677767807e-02
+57 57 88 4096 57 2.202705324521452e-02 7.204284146823403e-02
+58 58 88 4096 58 2.397684003943323e-02 6.912469313044250e-02
+59 59 88 4096 59 1.722867713413271e-02 6.231592152572055e-02
+60 60 88 4096 60 1.626966860143310e-02 5.821307823709838e-02
+61 61 88 4096 61 1.572933194348284e-02 5.654222333239461e-02
+62 62 88 4096 62 1.586740506014781e-02 5.489018230109942e-02
+63 63 88 4096 63 1.401873254940210e-02 5.226397121560732e-02
+64 64 88 4096 64 1.382458419198959e-02 5.108281879848885e-02
+65 65 88 4096 65 1.441283486341870e-02 4.988245799625299e-02
+66 66 88 4096 66 1.439609738839535e-02 4.892405564480192e-02
+67 67 88 4096 67 1.681915702747618e-02 4.350785966486480e-02
+68 68 88 4096 68 1.685020352529876e-02 4.128022204702599e-02
+69 69 88 4096 69 1.685014563967874e-02 4.026175680908203e-02
+70 70 88 4096 70 1.685012935642227e-02 3.991664306669149e-02
+71 71 88 4096 71 1.684949696810772e-02 3.889522905865243e-02
+72 72 88 4096 72 1.671826259915935e-02 3.680903817058558e-02
+73 73 88 4096 73 7.951182825353386e-03 2.650629384700682e-02
+74 74 88 4096 74 6.848934732028871e-03 2.385629933370816e-02
+75 75 88 4096 75 6.426660103633003e-03 2.260480539408374e-02
+76 76 88 4096 76 6.290701295940180e-03 2.221964228458058e-02
+77 77 88 4096 77 5.310671224036748e-03 2.082505864281746e-02
+78 78 88 4096 78 5.421644384410448e-03 2.006791096560047e-02
+79 79 88 4096 79 5.325143493479163e-03 1.989098960719705e-02
+80 80 88 4096 80 5.896567501458544e-03 1.694731938827041e-02
+81 81 88 4096 81 4.677779739870872e-03 1.383126692919200e-02
+82 82 88 4096 82 3.635078434764641e-03 1.198175647657346e-02
+83 83 88 4096 83 2.514878711761552e-03 9.284179963256712e-03
+84 84 88 4096 84 2.484354801862195e-03 8.656230508076630e-03
+85 85 88 4096 85 2.478287429461370e-03 8.500768044294735e-03
+86 86 88 4096 86 2.093873699046110e-03 5.721652912550388e-03
+87 88 88 4096 86 2.339061645727971e-04 5.324511198728456e-04
+88 89 88 4096 87 2.125832333067712e-04 4.618863630866633e-04
+89 90 88 4096 88 -3.371085301631322e-14 2.734519351051262e-16
+target tolerance met
+NNLS solver: m = 88, n = 4096, outer_iter = 89, inner_iter = 90: converged
+0: Number of nonzeros in NNLS solution: 88, out of 4096
+Global number of nonzeros in NNLS solution: 88
+0: relative residual norm for NNLS solution of Gs = Gw: 4.1062e-15
+Creating file: run/sedov_ceqp_mw_1r/nnlsV2
+Creating file: run/sedov_ceqp_mw_1r/nnlsE2
+Creating file: run/sedov_ceqp_mw_1r/WelemsV2.000000
+Creating file: run/sedov_ceqp_mw_1r/WelemsE2.000000
+Creating file: run/sedov_ceqp_mw_1r/oneEhat2.000000
+Creating file: run/sedov_ceqp_mw_1r/energyOffset2.000000
+Creating file: run/sedov_ceqp_mw_1r/BXtBV2.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV2.000000
+number of samples for velocity: 0
+number of samples for energy  : 12
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 12 elements, 41 vertices
+Elapsed time for hyper-reduction preprocessing: 1.08091 sec
+Opening file: run/sedov_ceqp_mw_1r/basisV1.000000
+Read basis run/sedov_ceqp_mw_1r/basisV1 of dimension 4
+Opening file: run/sedov_ceqp_mw_1r/basisE1.000000
+Read basis run/sedov_ceqp_mw_1r/basisE1 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX1.000000
+Read basis run/sedov_ceqp_mw_1r/basisX1 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX1.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV1.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE1.000000
+Loaded absorption offsets X, V, E with norms 27.834, 5.75312, 103.053
+Appended unit-energy column to energy basis, rdime = 3
+start preprocessing hyper-reduction
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varX1_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varV1_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varE1_snapshot.000000
+WINDOW 1
+Energy-conserving NNLS using 5 velocity and 4 energy basis dim and 11 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+
+Found 0 / 99 nearly linearly dependent constraints.
+0 0 99 4096 0 1.416637862909238e-01 3.680309645639774e-01
+1 1 99 4096 1 1.387426924457789e-01 3.567935071925937e-01
+2 2 99 4096 2 1.385963829517553e-01 3.495845029389817e-01
+3 3 99 4096 3 1.297045478786822e-01 3.375322876214517e-01
+4 4 99 4096 4 1.171117017673905e-01 3.266021481720182e-01
+5 5 99 4096 5 1.117331515042746e-01 3.210051488333711e-01
+6 6 99 4096 6 1.089720744912733e-01 3.191233969869786e-01
+7 7 99 4096 7 1.028151568960305e-01 3.172341780970712e-01
+8 8 99 4096 8 9.207004862255307e-02 3.114997222620914e-01
+9 9 99 4096 9 8.658741217067445e-02 3.056585304425077e-01
+10 10 99 4096 10 7.913927017908035e-02 2.999046558253045e-01
+11 11 99 4096 11 7.266835728019379e-02 2.946127154891429e-01
+12 12 99 4096 12 7.269111523786972e-02 2.893901997029805e-01
+13 13 99 4096 13 7.268316895285938e-02 2.764941115353654e-01
+14 14 99 4096 14 7.269015791088285e-02 2.724545629209605e-01
+15 15 99 4096 15 7.268237479644980e-02 2.646142923477298e-01
+16 16 99 4096 16 7.267377835199215e-02 2.575604983230144e-01
+17 17 99 4096 17 7.260793994777644e-02 2.510412897386844e-01
+18 18 99 4096 18 7.259054178097445e-02 2.459554608609877e-01
+19 19 99 4096 19 7.260176638435435e-02 2.410505982842668e-01
+20 20 99 4096 20 7.276382437922212e-02 2.364498827670652e-01
+21 21 99 4096 21 7.286343583622758e-02 2.318457145820997e-01
+22 22 99 4096 22 7.145242907228933e-02 2.271736477723457e-01
+23 23 99 4096 23 7.147629099830348e-02 2.224967831329101e-01
+24 24 99 4096 24 6.873791937108570e-02 2.201284510650079e-01
+25 25 99 4096 25 6.630170183142364e-02 2.153642935126861e-01
+26 26 99 4096 26 6.211350466085284e-02 2.129610884296511e-01
+27 27 99 4096 27 6.205079629446920e-02 2.080751560453174e-01
+28 28 99 4096 28 6.415737698842540e-02 2.055941534124380e-01
+29 29 99 4096 29 5.380172934913129e-02 2.030831986406383e-01
+30 30 99 4096 30 5.447060760960652e-02 1.979660664233048e-01
+31 31 99 4096 31 5.856517330351023e-02 1.953576021043401e-01
+32 32 99 4096 32 5.496344578610200e-02 1.900342998487484e-01
+33 33 99 4096 33 5.185139211373210e-02 1.873187313927153e-01
+34 34 99 4096 34 4.694946190987856e-02 1.818093291662175e-01
+35 35 99 4096 35 4.685045959322366e-02 1.789919609183897e-01
+36 36 99 4096 36 4.684613278511279e-02 1.761209017807816e-01
+37 37 99 4096 37 4.541326963303569e-02 1.703521757030312e-01
+38 38 99 4096 38 4.363085576871002e-02 1.644898090894110e-01
+39 39 99 4096 39 4.519303680395539e-02 1.585816352193978e-01
+40 40 99 4096 40 4.630574549816366e-02 1.532147233555955e-01
+41 41 99 4096 41 4.695015420017510e-02 1.475587970304838e-01
+42 42 99 4096 42 4.629863558765399e-02 1.443605691471437e-01
+43 43 99 4096 43 4.637874363225800e-02 1.380342252869087e-01
+44 44 99 4096 44 4.263048717266060e-02 1.338601505646325e-01
+45 45 99 4096 45 4.066525389769236e-02 1.288108704734290e-01
+46 46 99 4096 46 4.066903958830228e-02 1.249763383302464e-01
+47 47 99 4096 47 4.066871870185981e-02 1.233291670240040e-01
+48 48 99 4096 48 4.066415103060216e-02 1.201804388303848e-01
+49 49 99 4096 49 4.074815186863073e-02 1.172177381469843e-01
+50 50 99 4096 50 4.079966931828486e-02 1.159150336329081e-01
+51 51 99 4096 51 4.077142587877303e-02 1.132908132602685e-01
+52 52 99 4096 52 3.881149563812983e-02 1.119590557951965e-01
+53 53 99 4096 53 3.203769470454258e-02 1.093054365254764e-01
+54 54 99 4096 54 3.485430818922192e-02 1.079575695111015e-01
+55 55 99 4096 55 3.203772893563708e-02 1.065945613298344e-01
+56 56 99 4096 56 3.439868820683940e-02 1.038177730609289e-01
+57 57 99 4096 57 3.472097426658519e-02 1.024012993963713e-01
+58 58 99 4096 58 3.293588818205442e-02 9.950876213426227e-02
+59 59 99 4096 59 3.416824710608381e-02 9.803385502777165e-02
+60 60 99 4096 60 3.397979530996615e-02 9.501961484541672e-02
+61 61 99 4096 61 3.204829139731568e-02 9.193864549048068e-02
+62 62 99 4096 62 3.204014023594073e-02 8.875455534338222e-02
+63 63 99 4096 63 3.203217341212155e-02 8.712201317929286e-02
+64 64 99 4096 64 3.202139390322702e-02 8.376512043658438e-02
+65 65 99 4096 65 3.211982530479651e-02 8.037321018123689e-02
+66 66 99 4096 66 3.207460139364863e-02 7.863197687711604e-02
+67 67 99 4096 67 3.207735899460312e-02 7.689719605662215e-02
+68 68 99 4096 68 3.246744722596479e-02 7.403922295754034e-02
+69 69 99 4096 69 2.399874397441440e-02 7.039322245204921e-02
+70 70 99 4096 70 1.855706338387686e-02 6.388686572056974e-02
+71 71 99 4096 71 1.918252760950937e-02 6.255854393751541e-02
+72 72 99 4096 72 1.793790893794308e-02 6.015335899702497e-02
+73 73 99 4096 73 1.838718358270432e-02 5.897513642247130e-02
+74 74 99 4096 74 1.837517215086786e-02 5.791962474676040e-02
+75 75 99 4096 75 1.783257896335825e-02 5.573069381046874e-02
+76 76 99 4096 76 1.755746160882687e-02 5.480467469110673e-02
+77 77 99 4096 77 1.777969710748941e-02 5.305156517782791e-02
+78 78 99 4096 78 1.778347017759846e-02 5.277804299351103e-02
+79 79 99 4096 79 1.777221272770138e-02 5.195562464779425e-02
+80 80 99 4096 80 1.808848938603273e-02 5.026363972771175e-02
+81 81 99 4096 81 1.808305254948419e-02 4.855386274386998e-02
+82 82 99 4096 82 1.808049518410021e-02 4.768666139950357e-02
+83 83 99 4096 83 1.808041079435647e-02 4.680384710805593e-02
+84 84 99 4096 84 1.808041083071234e-02 4.650717346069834e-02
+85 85 99 4096 85 1.808030461276233e-02 4.560787247504588e-02
+86 86 99 4096 86 1.807681158026153e-02 4.469219197883893e-02
+87 87 99 4096 87 1.808243230081037e-02 4.377742663733864e-02
+88 88 99 4096 88 2.007706193240676e-02 4.188436407021965e-02
+89 89 99 4096 89 2.005011118625530e-02 4.160858807129082e-02
+90 90 99 4096 90 2.012927357138034e-02 4.079310189225067e-02
+91 91 99 4096 91 1.876866258106471e-02 3.067808816583605e-02
+92 92 99 4096 92 1.240038521871692e-02 2.469693300976444e-02
+93 93 99 4096 93 9.838276856649659e-03 2.182793058747766e-02
+94 94 99 4096 94 9.617320807863561e-03 2.003105195273222e-02
+95 95 99 4096 95 7.378933952758355e-03 1.402603887806300e-02
+96 96 99 4096 96 7.026136464331088e-03 1.252451454400658e-02
+97 97 99 4096 97 7.045486237818071e-03 1.142003661696990e-02
+98 99 99 4096 97 1.163365221474957e-03 2.140950961547340e-03
+99 100 99 4096 98 1.122665535408409e-03 1.757765509843784e-03
+100 102 99 4096 98 1.981654095129163e-04 4.806550453031783e-04
+101 103 99 4096 99 -3.320081639057964e-14 2.536860656876375e-16
+target tolerance met
+NNLS solver: m = 99, n = 4096, outer_iter = 101, inner_iter = 103: converged
+0: Number of nonzeros in NNLS solution: 99, out of 4096
+Global number of nonzeros in NNLS solution: 99
+0: relative residual norm for NNLS solution of Gs = Gw: 4.95454e-15
+Creating file: run/sedov_ceqp_mw_1r/nnlsV1
+Creating file: run/sedov_ceqp_mw_1r/nnlsE1
+Creating file: run/sedov_ceqp_mw_1r/WelemsV1.000000
+Creating file: run/sedov_ceqp_mw_1r/WelemsE1.000000
+Creating file: run/sedov_ceqp_mw_1r/oneEhat1.000000
+Creating file: run/sedov_ceqp_mw_1r/energyOffset1.000000
+Creating file: run/sedov_ceqp_mw_1r/BXtBV1.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV1.000000
+number of samples for velocity: 0
+number of samples for energy  : 13
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 13 elements, 43 vertices
+Elapsed time for hyper-reduction preprocessing: 1.2196 sec
+Opening file: run/sedov_ceqp_mw_1r/basisV0.000000
+Read basis run/sedov_ceqp_mw_1r/basisV0 of dimension 3
+Opening file: run/sedov_ceqp_mw_1r/basisE0.000000
+Read basis run/sedov_ceqp_mw_1r/basisE0 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX0.000000
+Read basis run/sedov_ceqp_mw_1r/basisX0 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX0.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV0.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE0.000000
+Loaded absorption offsets X, V, E with norms 27.831, 0, 128
+Appended unit-energy column to energy basis, rdime = 3
+start preprocessing hyper-reduction
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varX0_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varV0_snapshot.000000
+Opening file: run/sedov_ceqp_mw_1r/mparam0_varE0_snapshot.000000
+WINDOW 0
+Energy-conserving NNLS using 3 velocity and 4 energy basis dim and 12 snapshots
+NNLSSolver init on rank 0 out of 1 processes
+3, 4, 5, 6, 
+Found 4 / 91 nearly linearly dependent constraints.
+0 0 91 4096 0 8.303516194734449e-02 3.518191841301260e-01
+1 1 91 4096 1 9.569505562784569e-02 3.414232904670952e-01
+2 2 91 4096 2 8.191135415462955e-02 3.335876643374267e-01
+3 3 91 4096 3 8.463218277619880e-02 3.278919179441748e-01
+4 4 91 4096 4 8.404052211333360e-02 3.222760054894531e-01
+5 5 91 4096 5 7.945275728938848e-02 3.107972939988247e-01
+6 6 91 4096 6 7.945356429449590e-02 3.088575885665632e-01
+7 7 91 4096 7 8.026486505903202e-02 3.069056295774963e-01
+8 8 91 4096 8 1.007965634295581e-01 3.009965071698908e-01
+9 9 91 4096 9 9.595595548746574e-02 2.949736648894603e-01
+10 10 91 4096 10 1.002443783176874e-01 2.889015775918549e-01
+11 11 91 4096 11 9.530901664043616e-02 2.768331021274681e-01
+12 12 91 4096 12 9.481849954660677e-02 2.700893871299213e-01
+13 13 91 4096 13 8.574972343899032e-02 2.613779717018931e-01
+14 14 91 4096 14 8.461131263113898e-02 2.522395763221037e-01
+15 15 91 4096 15 8.466970654488945e-02 2.498367981549944e-01
+16 16 91 4096 16 8.462068347274167e-02 2.446306769074705e-01
+17 17 91 4096 17 8.310841809334321e-02 2.415149038966574e-01
+18 18 91 4096 18 8.006346505496562e-02 2.352399693636558e-01
+19 19 91 4096 19 8.019210165096850e-02 2.327421333227878e-01
+20 20 91 4096 20 7.386053939946374e-02 2.277292129028978e-01
+21 21 91 4096 21 6.874415388528199e-02 2.252934050682967e-01
+22 22 91 4096 22 6.874101843784274e-02 2.244714191340539e-01
+23 23 91 4096 23 6.853142386974180e-02 2.187905030193515e-01
+24 24 91 4096 24 6.947142420631283e-02 2.139172136276414e-01
+25 25 91 4096 25 6.941252659156355e-02 2.114462020946206e-01
+26 26 91 4096 26 6.290132807218488e-02 2.064343028845686e-01
+27 27 91 4096 27 6.287610526513814e-02 2.051481235572749e-01
+28 28 91 4096 28 6.288304806374137e-02 2.042016948341821e-01
+29 29 91 4096 29 6.094971830498071e-02 2.016612735572624e-01
+30 30 91 4096 30 5.504544901406763e-02 1.964954397354060e-01
+31 31 91 4096 31 5.430941396036781e-02 1.911985349100570e-01
+32 32 91 4096 32 5.431325056039758e-02 1.884947205819862e-01
+33 33 91 4096 33 5.419409965957401e-02 1.829851543262852e-01
+34 34 91 4096 34 5.418324373407238e-02 1.801771610002688e-01
+35 35 91 4096 35 5.429288700292987e-02 1.744651770987441e-01
+36 36 91 4096 36 5.415495332257838e-02 1.685975771551946e-01
+37 37 91 4096 37 5.326315554608015e-02 1.634145665587050e-01
+38 38 91 4096 38 5.256959673861265e-02 1.617475576003143e-01
+39 39 91 4096 39 5.327754284379622e-02 1.608362494227534e-01
+40 40 91 4096 40 5.270899196502032e-02 1.557332081697915e-01
+41 41 91 4096 41 4.473611149479612e-02 1.500336357514013e-01
+42 42 91 4096 42 4.505022710803691e-02 1.476854891048019e-01
+43 43 91 4096 43 3.886699283004914e-02 1.448701265570006e-01
+44 44 91 4096 44 4.952217322756087e-02 1.357636217279947e-01
+45 45 91 4096 45 4.423146321497887e-02 1.318555031469323e-01
+46 46 91 4096 46 4.773593169794029e-02 1.299763727985691e-01
+47 47 91 4096 47 3.425316662218168e-02 1.267545867893496e-01
+48 48 91 4096 48 3.423819434091321e-02 1.231988851574775e-01
+49 49 91 4096 49 3.398482390704613e-02 1.201735096229706e-01
+50 50 91 4096 50 3.396805660391349e-02 1.172130881546211e-01
+51 51 91 4096 51 3.406935229631881e-02 1.142225132092821e-01
+52 52 91 4096 52 3.384248943871443e-02 1.114027520698801e-01
+53 53 91 4096 53 2.933228494523717e-02 1.085249126063931e-01
+54 54 91 4096 54 2.985189678685847e-02 1.056725203002485e-01
+55 55 91 4096 55 2.985567749600167e-02 1.042322946889996e-01
+56 56 91 4096 56 2.985726177976253e-02 1.013261119998645e-01
+57 57 91 4096 57 2.973583746054788e-02 9.833921137198322e-02
+58 58 91 4096 58 2.976344353762823e-02 9.683202282861671e-02
+59 59 91 4096 59 2.922396126586645e-02 9.530690732697336e-02
+60 60 91 4096 60 2.922550422975416e-02 9.219137566647907e-02
+61 61 91 4096 61 2.922469313206526e-02 9.059379706346223e-02
+62 62 91 4096 62 2.922350819588711e-02 8.896795125272229e-02
+63 63 91 4096 63 2.922251089286514e-02 8.562509679194240e-02
+64 64 91 4096 64 2.922280564857898e-02 8.215129752302071e-02
+65 65 91 4096 65 2.887920594979093e-02 8.036396294736957e-02
+66 66 91 4096 66 2.888468614417599e-02 7.667487297756903e-02
+67 67 91 4096 67 2.777521712049388e-02 7.279379687891659e-02
+68 68 91 4096 68 2.781274854100543e-02 7.082243818085326e-02
+69 69 91 4096 69 2.065864415518325e-02 6.628265026955457e-02
+70 70 91 4096 70 1.993427192028622e-02 6.493490681644710e-02
+71 71 91 4096 71 2.042271717761759e-02 6.140691864505299e-02
+72 72 91 4096 72 2.070371720180533e-02 5.995056262251473e-02
+73 73 91 4096 73 1.461545285687537e-02 5.605875800639393e-02
+74 74 91 4096 74 1.475260082698340e-02 5.286468771118454e-02
+75 75 91 4096 75 1.242728696694903e-02 4.892960582192880e-02
+76 76 91 4096 76 1.245768387401377e-02 4.587480746965321e-02
+77 77 91 4096 77 1.196585469814565e-02 4.456400306891963e-02
+78 78 91 4096 78 1.240643140396418e-02 4.203744842041594e-02
+79 79 91 4096 79 1.144748578583154e-02 4.094169701996080e-02
+80 80 91 4096 80 1.144025905465297e-02 3.986102540569916e-02
+81 81 91 4096 81 1.054433136244456e-02 3.523762448569337e-02
+82 82 91 4096 82 1.054004082785089e-02 3.402848015480105e-02
+83 83 91 4096 83 1.054009491904660e-02 3.277703231698253e-02
+84 84 91 4096 84 1.054011443740624e-02 3.235178657453195e-02
+85 85 91 4096 85 1.054321648466488e-02 2.967322718199766e-02
+86 86 91 4096 86 1.054321648262774e-02 2.920304293035857e-02
+87 87 91 4096 87 1.054630144607958e-02 2.780471778026896e-02
+88 88 91 4096 88 7.176378879368820e-03 1.335222501938589e-02
+89 89 91 4096 89 4.311702664934740e-03 1.001356231263283e-02
+90 90 91 4096 90 4.331676411399268e-03 9.280823720415884e-03
+91 91 91 4096 91 -7.055798192639875e-14 2.781953253587070e-16
+target tolerance met
+NNLS solver: m = 91, n = 4096, outer_iter = 91, inner_iter = 91: converged
+0: Number of nonzeros in NNLS solution: 91, out of 4096
+Global number of nonzeros in NNLS solution: 91
+0: relative residual norm for NNLS solution of Gs = Gw: 2.41852e-15
+Creating file: run/sedov_ceqp_mw_1r/nnlsV0
+Creating file: run/sedov_ceqp_mw_1r/nnlsE0
+Creating file: run/sedov_ceqp_mw_1r/WelemsV0.000000
+Creating file: run/sedov_ceqp_mw_1r/WelemsE0.000000
+Creating file: run/sedov_ceqp_mw_1r/oneEhat0.000000
+Creating file: run/sedov_ceqp_mw_1r/energyOffset0.000000
+Creating file: run/sedov_ceqp_mw_1r/BXtBV0.000000
+Creating file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV0.000000
+number of samples for velocity: 0
+number of samples for energy  : 12
+number of prescribed samples for velocity: 0
+number of prescribed samples for energy  : 0
+sample mesh has 12 elements, 41 vertices
+Elapsed time for hyper-reduction preprocessing: 1.12344 sec
+Writing SP files for window: 0
+Creating file: run/sedov_ceqp_mw_1r/BsinvE_0.000000
+Creating file: run/sedov_ceqp_mw_1r/BXsp_0.000000
+Creating file: run/sedov_ceqp_mw_1r/BVsp_0.000000
+Creating file: run/sedov_ceqp_mw_1r/BEsp_0.000000
+Creating file: run/sedov_ceqp_mw_1r/spX_0.000000
+Creating file: run/sedov_ceqp_mw_1r/spV_0.000000
+Creating file: run/sedov_ceqp_mw_1r/spE_0.000000
+Writing SP files for window: 1
+Creating file: run/sedov_ceqp_mw_1r/BsinvE_1.000000
+Creating file: run/sedov_ceqp_mw_1r/BXsp_1.000000
+Creating file: run/sedov_ceqp_mw_1r/BVsp_1.000000
+Creating file: run/sedov_ceqp_mw_1r/BEsp_1.000000
+Creating file: run/sedov_ceqp_mw_1r/spX_1.000000
+Creating file: run/sedov_ceqp_mw_1r/spV_1.000000
+Creating file: run/sedov_ceqp_mw_1r/spE_1.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinX_1.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinV_1.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinE_1.000000
+Writing SP files for window: 2
+Creating file: run/sedov_ceqp_mw_1r/BsinvE_2.000000
+Creating file: run/sedov_ceqp_mw_1r/BXsp_2.000000
+Creating file: run/sedov_ceqp_mw_1r/BVsp_2.000000
+Creating file: run/sedov_ceqp_mw_1r/BEsp_2.000000
+Creating file: run/sedov_ceqp_mw_1r/spX_2.000000
+Creating file: run/sedov_ceqp_mw_1r/spV_2.000000
+Creating file: run/sedov_ceqp_mw_1r/spE_2.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinX_2.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinV_2.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinE_2.000000
+Writing SP files for window: 3
+Creating file: run/sedov_ceqp_mw_1r/BsinvE_3.000000
+Creating file: run/sedov_ceqp_mw_1r/BXsp_3.000000
+Creating file: run/sedov_ceqp_mw_1r/BVsp_3.000000
+Creating file: run/sedov_ceqp_mw_1r/BEsp_3.000000
+Creating file: run/sedov_ceqp_mw_1r/spX_3.000000
+Creating file: run/sedov_ceqp_mw_1r/spV_3.000000
+Creating file: run/sedov_ceqp_mw_1r/spE_3.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinX_3.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinV_3.000000
+Creating file: run/sedov_ceqp_mw_1r/BwinE_3.000000
+Offset Style: load
+Indicator Style: time
+Window 0: initial romS norm 28.0008
+Hyperreduction pre-processing completed. 
+Elapsed time for online preprocess: 4.3891 sec
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_ceqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --no-sample-stages
+   --no-offline
+   --online
+   --no-restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 4
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --no-writesol
+   --no-soldiff
+   --romhr
+   --no-romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --no-romoffset
+   --norm_type l2
+   --sdim 0
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --no-romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam -1
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype eqp_energy
+   --max-nnls 0
+   --tol-nnls 1e-14
+   --nnlsuselq
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Reading time window parameters from file run/sedov_ceqp_mw_1r/twp.csv
+Using time window 0 with end time 0.0222949, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 1 with end time 0.04325, rdimx 2, rdimv 4, rdime 2, nsamx 4, nsamv 80, nsame 4
+Using time window 2 with end time 0.0645824, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 3 with end time 0.08, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Opening file: run/sedov_ceqp_mw_1r/BsinvE_3.000000
+Opening file: run/sedov_ceqp_mw_1r/BXsp_3.000000
+Opening file: run/sedov_ceqp_mw_1r/BVsp_3.000000
+Opening file: run/sedov_ceqp_mw_1r/BEsp_3.000000
+Opening file: run/sedov_ceqp_mw_1r/spX_3.000000
+Opening file: run/sedov_ceqp_mw_1r/spV_3.000000
+Opening file: run/sedov_ceqp_mw_1r/spE_3.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV3.000000
+Opening file: run/sedov_ceqp_mw_1r/BXtBV3.000000
+Reading EQP solution for window 3
+Opening file: run/sedov_ceqp_mw_1r/nnlsV3
+Reading EQP solution for window 3
+Opening file: run/sedov_ceqp_mw_1r/nnlsE3
+ROM_Operator reading EQP elements for window 3
+Opening file: run/sedov_ceqp_mw_1r/WelemsV3.000000
+Opening file: run/sedov_ceqp_mw_1r/WelemsE3.000000
+Opening file: run/sedov_ceqp_mw_1r/oneEhat3.000000
+Opening file: run/sedov_ceqp_mw_1r/energyOffset3.000000
+Opening file: run/sedov_ceqp_mw_1r/BsinvE_2.000000
+Opening file: run/sedov_ceqp_mw_1r/BXsp_2.000000
+Opening file: run/sedov_ceqp_mw_1r/BVsp_2.000000
+Opening file: run/sedov_ceqp_mw_1r/BEsp_2.000000
+Opening file: run/sedov_ceqp_mw_1r/spX_2.000000
+Opening file: run/sedov_ceqp_mw_1r/spV_2.000000
+Opening file: run/sedov_ceqp_mw_1r/spE_2.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV2.000000
+Opening file: run/sedov_ceqp_mw_1r/BXtBV2.000000
+Reading EQP solution for window 2
+Opening file: run/sedov_ceqp_mw_1r/nnlsV2
+Reading EQP solution for window 2
+Opening file: run/sedov_ceqp_mw_1r/nnlsE2
+ROM_Operator reading EQP elements for window 2
+Opening file: run/sedov_ceqp_mw_1r/WelemsV2.000000
+Opening file: run/sedov_ceqp_mw_1r/WelemsE2.000000
+Opening file: run/sedov_ceqp_mw_1r/oneEhat2.000000
+Opening file: run/sedov_ceqp_mw_1r/energyOffset2.000000
+Opening file: run/sedov_ceqp_mw_1r/BsinvE_1.000000
+Opening file: run/sedov_ceqp_mw_1r/BXsp_1.000000
+Opening file: run/sedov_ceqp_mw_1r/BVsp_1.000000
+Opening file: run/sedov_ceqp_mw_1r/BEsp_1.000000
+Opening file: run/sedov_ceqp_mw_1r/spX_1.000000
+Opening file: run/sedov_ceqp_mw_1r/spV_1.000000
+Opening file: run/sedov_ceqp_mw_1r/spE_1.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV1.000000
+Opening file: run/sedov_ceqp_mw_1r/BXtBV1.000000
+Reading EQP solution for window 1
+Opening file: run/sedov_ceqp_mw_1r/nnlsV1
+Reading EQP solution for window 1
+Opening file: run/sedov_ceqp_mw_1r/nnlsE1
+ROM_Operator reading EQP elements for window 1
+Opening file: run/sedov_ceqp_mw_1r/WelemsV1.000000
+Opening file: run/sedov_ceqp_mw_1r/WelemsE1.000000
+Opening file: run/sedov_ceqp_mw_1r/oneEhat1.000000
+Opening file: run/sedov_ceqp_mw_1r/energyOffset1.000000
+Opening file: run/sedov_ceqp_mw_1r/BsinvE_0.000000
+Opening file: run/sedov_ceqp_mw_1r/BXsp_0.000000
+Opening file: run/sedov_ceqp_mw_1r/BVsp_0.000000
+Opening file: run/sedov_ceqp_mw_1r/BEsp_0.000000
+Opening file: run/sedov_ceqp_mw_1r/spX_0.000000
+Opening file: run/sedov_ceqp_mw_1r/spV_0.000000
+Opening file: run/sedov_ceqp_mw_1r/spE_0.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/BXt_initV0.000000
+Opening file: run/sedov_ceqp_mw_1r/BXtBV0.000000
+Reading EQP solution for window 0
+Opening file: run/sedov_ceqp_mw_1r/nnlsV0
+Reading EQP solution for window 0
+Opening file: run/sedov_ceqp_mw_1r/nnlsE0
+ROM_Operator reading EQP elements for window 0
+Opening file: run/sedov_ceqp_mw_1r/WelemsV0.000000
+Opening file: run/sedov_ceqp_mw_1r/WelemsE0.000000
+Opening file: run/sedov_ceqp_mw_1r/oneEhat0.000000
+Opening file: run/sedov_ceqp_mw_1r/energyOffset0.000000
+Offset Style: load
+Indicator Style: time
+Window 0: initial romS norm 28.0008
+ROM online at t 0, dt 0.00365491, romS norm 28.0008
+	E_tot = 0.25,	E_diff = -2.7755575615629e-17
+ROM online at t 0.00365491, dt 0.0037280082, romS norm 27.998412694521
+	E_tot = 0.25,	E_diff = -2.7755575615629e-17
+ROM online at t 0.0073829182, dt 0.0037280082, romS norm 27.992542139249
+	E_tot = 0.25,	E_diff = -5.5511151231258e-17
+ROM online at t 0.0111109264, dt 0.0037280082, romS norm 27.985357692474
+	E_tot = 0.25,	E_diff = -5.5511151231258e-17
+ROM online at t 0.0148389346, dt 0.0037280082, romS norm 27.97805318798
+	E_tot = 0.25,	E_diff = -5.5511151231258e-17
+ROM online at t 0.0185669428, dt 0.0037280082, romS norm 27.971166698793
+	E_tot = 0.25,	E_diff = -5.5511151231258e-17
+ROM online basis change for window 1 at t 0.022294951, dt 0.0037280082
+Opening file: run/sedov_ceqp_mw_1r/BwinX_1.000000
+Opening file: run/sedov_ceqp_mw_1r/BwinV_1.000000
+Opening file: run/sedov_ceqp_mw_1r/BwinE_1.000000
+Window 1: initial romS norm 27.964818167532
+ROM online at t 0.022294951, dt 0.0037280082, romS norm 27.964818167532
+	E_tot = 0.25,	E_diff = 8.3266726846887e-17
+ROM online at t 0.0260229592, dt 0.003802568364, romS norm 27.959155833293
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online at t 0.029825527564, dt 0.00387861973128, romS norm 27.953988207783
+	E_tot = 0.25,	E_diff = 8.3266726846887e-17
+ROM online at t 0.03370414729528, dt 0.0039561921259056, romS norm 27.94945293658
+	E_tot = 0.25,	E_diff = 8.3266726846887e-17
+ROM online at t 0.037660339421186, dt 0.0039561921259056, romS norm 27.94548567216
+	E_tot = 0.25,	E_diff = 8.3266726846887e-17
+ROM online at t 0.041616531547091, dt 0.0039561921259056, romS norm 27.942016645746
+	E_tot = 0.25,	E_diff = 8.3266726846887e-17
+ROM online basis change for window 2 at t 0.045572723672997, dt 0.0039561921259056
+Opening file: run/sedov_ceqp_mw_1r/BwinX_2.000000
+Opening file: run/sedov_ceqp_mw_1r/BwinV_2.000000
+Opening file: run/sedov_ceqp_mw_1r/BwinE_2.000000
+Window 2: initial romS norm 27.939138311187
+ROM online at t 0.045572723672997, dt 0.0039561921259056, romS norm 27.939138311187
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online at t 0.049528915798902, dt 0.0039561921259056, romS norm 27.936791043079
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online at t 0.053485107924808, dt 0.0039561921259056, romS norm 27.934937995093
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online at t 0.057441300050714, dt 0.0039561921259056, romS norm 27.933574195458
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online at t 0.061397492176619, dt 0.0039561921259056, romS norm 27.932624239362
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online basis change for window 3 at t 0.065353684302525, dt 0.0039561921259056
+Opening file: run/sedov_ceqp_mw_1r/BwinX_3.000000
+Opening file: run/sedov_ceqp_mw_1r/BwinV_3.000000
+Opening file: run/sedov_ceqp_mw_1r/BwinE_3.000000
+Window 3: initial romS norm 27.932064980695
+ROM online at t 0.065353684302525, dt 0.0039561921259056, romS norm 27.932064980695
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online at t 0.06930987642843, dt 0.0039561921259056, romS norm 27.931874216611
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+ROM online at t 0.073266068554336, dt 0.0039561921259056, romS norm 27.932052720311
+	E_tot = 0.25,	E_diff = 8.3266726846887e-17
+ROM online at t 0.077222260680242, dt 0.0027777393197584, romS norm 27.932554244016
+	E_tot = 0.25,	E_diff = 2.7755575615629e-17
+
+Initial energy: 2.50000e-01
+Energy diff: 2.77556e-17
+Rel. energy diff: 1.11022e-16
+Elapsed time for online preprocess: 1.13581e-01 sec
+Elapsed time for time loop: 6.15001e-02 sec
+Total time: 1.77358e-01 sec
+
+       __                __                 
+      / /   ____  ____  / /_  ____  _____   
+     / /   / __ `/ __ `/ __ \/ __ \/ ___/ 
+    / /___/ /_/ / /_/ / / / / /_/ (__  )    
+   /_____/\__,_/\__, /_/ /_/\____/____/  
+               /____/                       
+
+Options used:
+   --mesh data/cube01_hex.mesh
+   --refine-serial 1
+   --refine-parallel 0
+   --problem 1
+   --order-kinematic 2
+   --order-thermo 1
+   --ode-solver 7
+   --t-final 0.08
+   --cfl 0.5
+   --cg-tol 1e-08
+   --ftz-tol 0
+   --cg-max-steps 300
+   --max-steps -1
+   --partial-assembly
+   --no-impose-viscosity
+   --no-visualization
+   --visualization-steps 5
+   --no-match-end-time
+   --no-visit
+   --no-print
+   --outputfilename sedov_ceqp_mw_1r
+   --visitfilename Laghos
+   --param_dir 
+   --timewindowfilename tw.csv
+   --timewindowparamfilename twp.csv
+   --initsamplesfilename initSamples
+   --partition 211
+   --no-build-database
+   --no-use-database
+   --no-sample-stages
+   --no-offline
+   --no-online
+   --restore
+   --rom_dimx -1
+   --rom_dimv -1
+   --rom_dime -1
+   --rom_dimfv -1
+   --rom_dimfe -1
+   --numsamplex 0
+   --numsamplev 0
+   --numsamplee 0
+   --numtsamplev 1
+   --numtsamplee 1
+   --sfactorx 2
+   --sfactorv 20
+   --sfactore 2
+   --rom-ef 0.9999
+   --rom-efx 0.9999
+   --sv-shift 1
+   --bi 
+   --numwindows 4
+   --numwindowsamples 0
+   --numwindowoverlap 0
+   --dtFactor 1
+   --dtc 0
+   --window-tol 1
+   --dmd
+   --dmdtbegin 0
+   --dtime-step -1
+   --dmdcrbf 0.9
+   --no-dmdnuf
+   --visdiff -1
+   --no-writesol
+   --soldiff
+   --no-romhr
+   --no-romhrprep
+   --romsvdstatic
+   --no-romsvdrm
+   --rand_dimx -1
+   --rand_dimv -1
+   --rand_dime -1
+   --rand_dimfv -1
+   --rand_dimfe -1
+   --no-romoffset
+   --norm_type l2
+   --sdim 0
+   --linearitytol 1e-07
+   --singularvaluetol 1e-14
+   --samplingtol 1e-07
+   --greedy-param bef
+   --greedy-param-min 0
+   --greedy-param-max 0
+   --greedy-param-size 0
+   --greedytf -1
+   --greedytol 0.1
+   --greedyalpha 1.05
+   --greedymaxclamp 2
+   --greedysubsize 0
+   --greedyconvsize 0
+   --greedysamplingtype random
+   --greedyerrorindtype useLastLifted
+   --romsns
+   --romgramschmidt
+   --rhofactor 1
+   --atwoodfactor 0.333333
+   --blastefactor 1
+   --romparam -1
+   --romoffsettype load
+   --romindicatortype time
+   --romspacetimetype spatial
+   --no-romusexv
+   --no-romusevx
+   --no-romusexandv
+   --hrsamplingtype eqp_energy
+   --max-nnls 0
+   --tol-nnls 1e-14
+   --no-lq-nnls
+   --samp-freq 1
+   --nnls-window0 -1
+   --nnls-window1 -1
+Reading time window parameters from file run/sedov_ceqp_mw_1r/twp.csv
+Using time window 0 with end time 0.0222949, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 1 with end time 0.04325, rdimx 2, rdimv 4, rdime 2, nsamx 4, nsamv 80, nsame 4
+Using time window 2 with end time 0.0645824, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Using time window 3 with end time 0.08, rdimx 2, rdimv 3, rdime 2, nsamx 4, nsamv 60, nsame 4
+Non-Cartesian partitioning through METIS will be used.
+Zones min/max: 64 64
+Number of kinematic (position, velocity) dofs: 2187
+Number of specific internal energy dofs: 512
+0: pmesh number of elements 64
+Opening file: run/sedov_ceqp_mw_1r/basisV0.000000
+Read basis run/sedov_ceqp_mw_1r/basisV0 of dimension 3
+Opening file: run/sedov_ceqp_mw_1r/basisE0.000000
+Read basis run/sedov_ceqp_mw_1r/basisE0 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX0.000000
+Read basis run/sedov_ceqp_mw_1r/basisX0 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX0.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV0.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE0.000000
+Loaded absorption offsets X, V, E with norms 27.831, 0, 128
+Appended unit-energy column to energy basis, rdime = 3
+Restoring 5-th solution
+Opening file: run/sedov_ceqp_mw_1r/basisV1.000000
+Read basis run/sedov_ceqp_mw_1r/basisV1 of dimension 4
+Opening file: run/sedov_ceqp_mw_1r/basisE1.000000
+Read basis run/sedov_ceqp_mw_1r/basisE1 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX1.000000
+Read basis run/sedov_ceqp_mw_1r/basisX1 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX1.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV1.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE1.000000
+Loaded absorption offsets X, V, E with norms 27.834, 5.75312, 103.053
+Appended unit-energy column to energy basis, rdime = 3
+Restoring 10-th solution
+Opening file: run/sedov_ceqp_mw_1r/basisV2.000000
+Read basis run/sedov_ceqp_mw_1r/basisV2 of dimension 3
+Opening file: run/sedov_ceqp_mw_1r/basisE2.000000
+Read basis run/sedov_ceqp_mw_1r/basisE2 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX2.000000
+Read basis run/sedov_ceqp_mw_1r/basisX2 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX2.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV2.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE2.000000
+Loaded absorption offsets X, V, E with norms 27.8415, 6.75367, 83.6368
+Appended unit-energy column to energy basis, rdime = 3
+Restoring 15-th solution
+Opening file: run/sedov_ceqp_mw_1r/basisV3.000000
+Read basis run/sedov_ceqp_mw_1r/basisV3 of dimension 3
+Opening file: run/sedov_ceqp_mw_1r/basisE3.000000
+Read basis run/sedov_ceqp_mw_1r/basisE3 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/basisX3.000000
+Read basis run/sedov_ceqp_mw_1r/basisX3 of dimension 2
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initX3.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initV3.000000
+Opening file: run/sedov_ceqp_mw_1r/ROMoffset/initE3.000000
+Loaded absorption offsets X, V, E with norms 27.8531, 7.15572, 72.1766
+Appended unit-energy column to energy basis, rdime = 3
+Restoring 20-th solution
+Restoring 21-th solution
+solDiff mode 
+L2 norm error:
+0: run/sedov_ceqp_mw_1r/Sol_Position FOM norm 0.577352
+0: run/sedov_ceqp_mw_1r/Sol_Position ROM norm 0.577349
+0: run/sedov_ceqp_mw_1r/Sol_Position DIFF norm 2.0634e-05
+0: run/sedov_ceqp_mw_1r/Sol_Position Rel. DIFF norm 3.5739e-05
+L2 norm error:
+0: run/sedov_ceqp_mw_1r/Sol_Velocity FOM norm 0.14875
+0: run/sedov_ceqp_mw_1r/Sol_Velocity ROM norm 0.148522
+0: run/sedov_ceqp_mw_1r/Sol_Velocity DIFF norm 0.000352857
+0: run/sedov_ceqp_mw_1r/Sol_Velocity Rel. DIFF norm 0.00237216
+L2 norm error:
+0: run/sedov_ceqp_mw_1r/Sol_Energy FOM norm 3.94037
+0: run/sedov_ceqp_mw_1r/Sol_Energy ROM norm 3.94479
+0: run/sedov_ceqp_mw_1r/Sol_Energy DIFF norm 0.00462989
+0: run/sedov_ceqp_mw_1r/Sol_Energy Rel. DIFF norm 0.00117499
+
+CG (H1) total time: 0
+CG (H1) rate (megadofs x cg_iterations / second): -nan
+
+CG (L2) total time: 0
+CG (L2) rate (megadofs x cg_iterations / second): -nan
+
+Forces total time: 0
+Forces rate (megadofs x timesteps / second): -nan
+
+UpdateQuadData total time: 0.00361053
+UpdateQuadData rate (megaquads x timesteps / second): 1.13446
+
+Major kernels total time (seconds): 0.00361053
+Major kernels total rate (megadofs x time steps / second): 0
+
+Initial energy: 2.50000e-01
+Energy diff: 1.38778e-16
+Rel. energy diff: 5.55112e-16
+Elapsed time for restore phase: 7.32344e-02 sec
+Elapsed time for time loop: 0.00000e+00 sec
+Total time: 1.12815e-01 sec
