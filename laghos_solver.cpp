@@ -1283,6 +1283,8 @@ class QUpdatePA
    ParGridFunction &gamma_gf, &nodes_gf;
    ParFiniteElementSpace &H1, &L2, &L0;
    QuadratureSpace qspace;
+   VectorQuadratureSpace scalar_qspace;
+   VectorQuadratureSpace dimsqr_qspace;
    QuadratureFunction scalar_qft, dimsqr_qft;
    Vector Jac0inv, rho0DetJ0w, stressJiT, dt;
 
@@ -1358,8 +1360,10 @@ public:
       nodes_gf(*static_cast<ParGridFunction*>(pmesh.GetNodes())),
       H1(h1), L2(l2), L0(*gamma_gf.ParFESpace()),
       qspace(pmesh, ir),
-      scalar_qft(qspace, 1),
-      dimsqr_qft(qspace, DIM*DIM),
+      scalar_qspace(qspace, 1),
+      dimsqr_qspace(qspace, DIM*DIM),
+      scalar_qft(scalar_qspace),
+      dimsqr_qft(dimsqr_qspace),
       Jac0inv(qdata.Jac0inv.ReadWrite(), qdata.Jac0inv.TotalSize()),
       rho0DetJ0w(qdata.rho0DetJ0w.ReadWrite(), qdata.rho0DetJ0w.Size()),
       stressJiT(qdata.stressJinvT.ReadWrite(), qdata.stressJinvT.TotalSize()),
@@ -1368,14 +1372,14 @@ public:
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
       qupdate_dop(// input field descriptors
                   {{Velocity, &H1},
-                   {Coordinates, &H1}, 
-                   {Energy, &L2}, 
-                   {Gamma, &L0}, 
-                   {InvJac0, &dimsqr_qft},
-                   {Rho0DetJ0W, &scalar_qft},
-                   {DeltaTEst, &scalar_qft}}, 
+                   {Coordinates, &H1},
+                   {Energy, &L2},
+                   {Gamma, &L0},
+                   {InvJac0, &dimsqr_qspace},
+                   {Rho0DetJ0W, &scalar_qspace},
+                   {DeltaTEst, &scalar_qspace}},
                   // output field descriptors
-                  {{StressTensor, &dimsqr_qft}, {DeltaTEst, &scalar_qft}},
+                  {{StressTensor, &dimsqr_qspace}, {DeltaTEst, &scalar_qspace}},
                   pmesh)
       // *INDENT-ON*
    {
