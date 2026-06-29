@@ -1314,13 +1314,14 @@ class QUpdatePA
                       tensor_array<real_t, DIM, DIM> &TsJiT,
                       tensor_array<real_t> &dtest) const
       {
-         double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
-         double eig_val_data[DIM], eig_vec_data[DIM2];
-         double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
-         double sJiT[DIM2];
-
-         for (size_t q = 0; q < dvdxi.size(); q++)
+         const int NQ = dvdxi.size();
+         mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
+            double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
+            double eig_val_data[DIM], eig_vec_data[DIM2];
+            double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
+            double sJiT[DIM2];
+
             real_t d_dt_est = dtmin(q);
             QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
                              Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
@@ -1333,7 +1334,7 @@ class QUpdatePA
                              d_dt_est);
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
-         }
+         });
       };
    } qupdate_qf;
    DifferentiableOperator qupdate_dop;
@@ -1407,6 +1408,13 @@ public:
       MultiVector X{v, x, e, gamma_gf, Jac0inv, rho0DetJ0w, dt = qdata.dt_est};
       MultiVector Y{stressJiT, dt};
       qupdate_dop.Mult(X, Y);
+      // LVECTOR Mult redirects Y[0] to an internal buffer via NewMemoryAndSize.
+      // stressJiT = Y[0] would reallocate stressJiT and break the alias to
+      // qdata.stressJinvT, so we copy the data directly instead.
+      const int sz = Y[0].Size();
+      const double *src = Y[0].Read();
+      double *dst = qdata.stressJinvT.ReadWrite();
+      std::memcpy(dst, src, (size_t)sz * sizeof(double));
       qdata.dt_est = Y[1].Min();
    }
 };
