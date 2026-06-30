@@ -58,8 +58,21 @@ tensor<T, n * m> flatten_nm(tensor<T, n, m> A)
 
 #ifdef MFEM_USE_MPI
 
-// for benchmark timing purposes; for a regular run this can be a no-op
-#define LAGHOS_DEVICE_SYNC MFEM_DEVICE_SYNC
+// for benchmark timing purposes; for a regular run this can be a no-op.
+// Only synchronize when a GPU backend is actually enabled: in a CUDA-enabled
+// MFEM build MFEM_DEVICE_SYNC calls cudaDeviceSynchronize() unconditionally,
+// which on a CPU run would needlessly create a CUDA context (and abort if the
+// GPU has no free memory).
+#define LAGHOS_DEVICE_SYNC                                              \
+   do                                                                   \
+   {                                                                    \
+      if (mfem::Device::Allows(mfem::Backend::CUDA_MASK |               \
+                               mfem::Backend::HIP_MASK))                \
+      {                                                                 \
+         MFEM_DEVICE_SYNC;                                              \
+      }                                                                 \
+   }                                                                    \
+   while (0)
 
 namespace mfem
 {
@@ -378,6 +391,13 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       LAGHOS_DEVICE_SYNC;
       timer.sw_force.Start();
       LAGHOS_CALI_MARK_BEGIN("SolveVelocity-ForcePA");
+      // 'rhs' is aliased per velocity component below (rhs_c_gf) and read by
+      // host-side operators (e.g. the Hypre prolongation), which can leave its
+      // device page protected while its memory flags still claim device
+      // validity. ForcePA fully overwrites 'rhs', so reset it to a clean write
+      // state first; otherwise the restriction's device write hits a stale
+      // protected page and segfaults under the debug device.
+      rhs.HostWrite();
       ForcePA->Mult(one, rhs);
       LAGHOS_DEVICE_SYNC;
       LAGHOS_CALI_MARK_END("SolveVelocity-ForcePA");
@@ -1365,9 +1385,6 @@ public:
       dimsqr_qspace(qspace, DIM*DIM),
       scalar_qft(scalar_qspace),
       dimsqr_qft(dimsqr_qspace),
-      Jac0inv(qdata.Jac0inv.ReadWrite(), qdata.Jac0inv.TotalSize()),
-      rho0DetJ0w(qdata.rho0DetJ0w.ReadWrite(), qdata.rho0DetJ0w.Size()),
-      stressJiT(qdata.stressJinvT.ReadWrite(), qdata.stressJinvT.TotalSize()),
       dt(scalar_qft.Size()),
       // *INDENT-OFF*
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
@@ -1384,6 +1401,18 @@ public:
                   pmesh)
       // *INDENT-ON*
    {
+      // Alias the qdata storage *through the memory manager* (MakeRef /
+      // MakeAlias) instead of wrapping the raw ReadWrite() pointers. Wrapping a
+      // device pointer as a host pointer registers the same address twice and
+      // corrupts the manager's bookkeeping, leaving qdata's device buffers
+      // stale for later consumers (e.g. InternalEnergy). These aliases keep the
+      // host/device valid flags in sync with the underlying qdata objects.
+      rho0DetJ0w.MakeRef(qdata.rho0DetJ0w, 0, qdata.rho0DetJ0w.Size());
+      Jac0inv.NewMemoryAndSize(qdata.Jac0inv.GetMemory(),
+                               qdata.Jac0inv.TotalSize(), false);
+      stressJiT.NewMemoryAndSize(qdata.stressJinvT.GetMemory(),
+                                 qdata.stressJinvT.TotalSize(), false);
+
       domain_attr = 1;
       qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}}});
       qupdate_dop.AddDomainIntegrator(qupdate_qf,
@@ -1410,11 +1439,14 @@ public:
       qupdate_dop.Mult(X, Y);
       // LVECTOR Mult redirects Y[0] to an internal buffer via NewMemoryAndSize.
       // stressJiT = Y[0] would reallocate stressJiT and break the alias to
-      // qdata.stressJinvT, so we copy the data directly instead.
+      // qdata.stressJinvT, so we copy the data directly instead. The copy must
+      // be device-aware: Read()/Write() return device-memory-class pointers, so
+      // a host std::memcpy would corrupt the memory manager's valid flags (and
+      // segfault under the debug/CUDA device).
       const int sz = Y[0].Size();
       const double *src = Y[0].Read();
-      double *dst = qdata.stressJinvT.ReadWrite();
-      std::memcpy(dst, src, (size_t)sz * sizeof(double));
+      double *dst = Write(qdata.stressJinvT.GetMemory(), sz);
+      mfem::forall(sz, [=] MFEM_HOST_DEVICE (int i) { dst[i] = src[i]; });
       qdata.dt_est = Y[1].Min();
    }
 };
