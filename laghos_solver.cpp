@@ -1086,45 +1086,76 @@ double FNorm(const T * __restrict__ data)
    return s*sqrt(n2);
 }
 
+// Pass 1: prepare the per-quadrature-point data. Computes the inverse
+// Jacobian, the current density R and the (clamped) internal energy E that the
+// material model and the stress evaluation need.
 template<int DIM> MFEM_HOST_DEVICE static inline
-void QUpdateBody(const bool use_viscosity,
-                 const bool use_vorticity,
-                 const double h0,
-                 const double h1order,
-                 const double cfl,
-                 const double infinity,
-                 double* __restrict__ Jinv,
-                 double* __restrict__ stress,
-                 double* __restrict__ sgrad_v,
-                 double* __restrict__ eig_val_data,
-                 double* __restrict__ eig_vec_data,
-                 double* __restrict__ compr_dir,
-                 double* __restrict__ Jpi,
-                 double* __restrict__ ph_dir,
-                 double* __restrict__ stressJiT,
-                 const double &d_gamma,
-                 const double &d_weights,
-                 const double* __restrict__ d_Jacobians,
-                 const double &d_rho0DetJ0w,
-                 const double &d_e_quads,
-                 const double* __restrict__ d_grad_v_ext,
-                 const double* __restrict__ d_Jac0inv,
-                 double &d_dt_est)
+void QUpdateBody1(double* __restrict__ Jinv,
+                  const double &d_weights,
+                  const double* __restrict__ d_Jacobians,
+                  const double &d_rho0DetJ0w,
+                  const double &d_e_quads,
+                  double &detJ_out,
+                  double &R_out,
+                  double &E_out)
 {
-   constexpr int DIM2 = DIM*DIM;
-   double min_detJ = infinity;
-
-   const double gamma = d_gamma;
-   const double weight =  d_weights;
+   const double weight = d_weights;
    const double inv_weight = 1. / weight;
    const double *J = d_Jacobians;
    const double detJ = kernels::Det<DIM>(J);
-   min_detJ = fmin(min_detJ, detJ);
    kernels::CalcInverse<DIM>(J, Jinv);
-   const double R = inv_weight * d_rho0DetJ0w / detJ;
-   const double E = fmax(0.0, d_e_quads);
-   const double P = (gamma - 1.0) * R * E;
-   const double S = sqrt(gamma * (gamma - 1.0) * E);
+   detJ_out = detJ;
+   R_out = inv_weight * d_rho0DetJ0w / detJ;
+   E_out = fmax(0.0, d_e_quads);
+}
+
+// Pass 2: the material model. From the prepared density R and energy E it
+// computes all material parameters: the pressure P and the sound speed S. The
+// stress tensor itself is assembled later, in pass 3.
+template<int DIM> MFEM_HOST_DEVICE static inline
+void MaterialModel(const double &d_gamma,
+                   const double R,
+                   const double E,
+                   double &P_out,
+                   double &S_out)
+{
+   const double gamma = d_gamma;
+   P_out = (gamma - 1.0) * R * E;
+   S_out = sqrt(gamma * (gamma - 1.0) * E);
+}
+
+// Pass 3: assemble the stress from the material pressure P, add possible
+// artificial viscosity, produce the (weighted) stress * Jinv^T tensor and
+// update the time step estimate.
+template<int DIM> MFEM_HOST_DEVICE static inline
+void QUpdateBody2(const bool use_viscosity,
+                  const bool use_vorticity,
+                  const double h0,
+                  const double h1order,
+                  const double cfl,
+                  double* __restrict__ stress,
+                  double* __restrict__ sgrad_v,
+                  double* __restrict__ eig_val_data,
+                  double* __restrict__ eig_vec_data,
+                  double* __restrict__ compr_dir,
+                  double* __restrict__ Jpi,
+                  double* __restrict__ ph_dir,
+                  double* __restrict__ stressJiT,
+                  const double &d_weights,
+                  const double* __restrict__ d_Jacobians,
+                  const double* __restrict__ Jinv,
+                  const double* __restrict__ d_grad_v_ext,
+                  const double* __restrict__ d_Jac0inv,
+                  const double P,
+                  const double R,
+                  const double S,
+                  const double detJ,
+                  double &d_dt_est)
+{
+   constexpr int DIM2 = DIM*DIM;
+   const double weight = d_weights;
+   const double *J = d_Jacobians;
+   const double min_detJ = detJ;
    for (int k = 0; k < DIM2; k++) { stress[k] = 0.0; }
    for (int d = 0; d < DIM; d++) { stress[d*DIM+d] = -P; }
    double visc_coeff = 0.0;
@@ -1335,23 +1366,55 @@ class QUpdatePA
                       tensor_array<real_t> &dtest) const
       {
          const int NQ = dvdxi.size();
+
+         // Per-quadrature-point scratch shared across the three passes below.
+         // Pass 1 fills detJ/R/E/Jinv, pass 2 fills the material parameters
+         // P/S, pass 3 consumes all of them. Kept in device-aware Vectors so
+         // the pointers stay in the active memory space between the separate
+         // forall kernels.
+         Vector detJ_v(NQ), R_v(NQ), E_v(NQ), P_v(NQ), S_v(NQ);
+         Vector Jinv_v(NQ*DIM2);
+         detJ_v.UseDevice(true); R_v.UseDevice(true); E_v.UseDevice(true);
+         P_v.UseDevice(true); S_v.UseDevice(true); Jinv_v.UseDevice(true);
+         double *d_detJ = detJ_v.Write();
+         double *d_R = R_v.Write();
+         double *d_E = E_v.Write();
+         double *d_P = P_v.Write();
+         double *d_S = S_v.Write();
+         double *d_Jinv = Jinv_v.Write();
+
+         // Pass 1: prepare the per-point data.
          mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
-            double Jinv[DIM2], stress[DIM2], sgrad_v[DIM2];
-            double eig_val_data[DIM], eig_vec_data[DIM2];
-            double compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
-            double sJiT[DIM2];
+            QUpdateBody1<DIM>(&d_Jinv[q*DIM2],
+                              weight(q), flatten_nm(J(q)).values,
+                              rhoDetJw(q), E(q),
+                              d_detJ[q], d_R[q], d_E[q]);
+         });
 
+         // Pass 2: material model -> all material parameters.
+         mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
+         {
+            MaterialModel<DIM>(gamma(q), d_R[q], d_E[q], d_P[q], d_S[q]);
+         });
+
+         // Pass 3: assemble the stress (incl. viscosity) and time step estimate.
+         mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
+         {
+            real_t stress[DIM2], sgrad_v[DIM2];
+            real_t eig_val_data[DIM], eig_vec_data[DIM2];
+            real_t compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
+            real_t sJiT[DIM2];
             real_t d_dt_est = dtmin(q);
-            QUpdateBody<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl, infinity,
-                             Jinv, stress, sgrad_v, eig_val_data, eig_vec_data,
-                             compr_dir, Jpi, ph_dir, sJiT,
-                             gamma(q), weight(q),
-                             flatten_nm(J(q)).values,
-                             rhoDetJw(q), E(q),
-                             flatten_nm(dvdxi(q)).values,
-                             flatten_nm(invJ0(q)).values,
-                             d_dt_est);
+            QUpdateBody2<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
+                              stress, sgrad_v, eig_val_data, eig_vec_data,
+                              compr_dir, Jpi, ph_dir, sJiT,
+                              weight(q), flatten_nm(J(q)).values,
+                              &d_Jinv[q*DIM2],
+                              flatten_nm(dvdxi(q)).values,
+                              flatten_nm(invJ0(q)).values,
+                              d_P[q], d_R[q], d_S[q], d_detJ[q],
+                              d_dt_est);
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
          });
