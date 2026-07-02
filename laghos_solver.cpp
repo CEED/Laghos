@@ -1338,6 +1338,7 @@ class QUpdatePA
    VectorQuadratureSpace dimsqr_qspace;
    QuadratureFunction scalar_qft, dimsqr_qft;
    Vector Jac0inv, rho0DetJ0w, stressJiT, dt;
+   Vector detJ_v, R_v, E_v, P_v, S_v, Jinv_v;
 
    using matd_t = tensor<real_t, DIM, DIM>;
 
@@ -1346,12 +1347,24 @@ class QUpdatePA
       const bool use_viscosity, use_vorticity;
       const real_t h0, h1order, cfl;
       const double infinity = std::numeric_limits<double>::infinity();
+      int nq = 0;
+      real_t *d_detJ = nullptr, *d_R = nullptr, *d_E = nullptr;
+      real_t *d_P = nullptr, *d_S = nullptr, *d_Jinv = nullptr;
 
       UpdateQF() = delete;
       explicit UpdateQF(const bool use_viscosity, const bool use_vorticity,
                         const real_t h0, const real_t h1order, const real_t cfl):
          use_viscosity(use_viscosity), use_vorticity(use_vorticity),
          h0(h0), h1order(h1order), cfl(cfl) {}
+
+      void SetScratch(const int nq_, real_t *d_detJ_, real_t *d_R_,
+                      real_t *d_E_, real_t *d_P_, real_t *d_S_,
+                      real_t *d_Jinv_)
+      {
+         nq = nq_;
+         d_detJ = d_detJ_; d_R = d_R_; d_E = d_E_;
+         d_P = d_P_; d_S = d_S_; d_Jinv = d_Jinv_;
+      }
 
       inline MFEM_HOST_DEVICE
       void operator()(tensor_array<const real_t, DIM, DIM> &dvdxi,
@@ -1365,37 +1378,34 @@ class QUpdatePA
                       tensor_array<real_t, DIM, DIM> &TsJiT,
                       tensor_array<real_t> &dtest) const
       {
-         const int NQ = dvdxi.size();
-
-         // Per-quadrature-point scratch shared across the three passes below.
-         // Pass 1 fills detJ/R/E/Jinv, pass 2 fills the material parameters
-         // P/S, pass 3 consumes all of them. Kept in device-aware Vectors so
-         // the pointers stay in the active memory space between the separate
-         // forall kernels.
-         Vector detJ_v(NQ), R_v(NQ), E_v(NQ), P_v(NQ), S_v(NQ);
-         Vector Jinv_v(NQ*DIM2);
-         detJ_v.UseDevice(true); R_v.UseDevice(true); E_v.UseDevice(true);
-         P_v.UseDevice(true); S_v.UseDevice(true); Jinv_v.UseDevice(true);
-         double *d_detJ = detJ_v.Write();
-         double *d_R = R_v.Write();
-         double *d_E = E_v.Write();
-         double *d_P = P_v.Write();
-         double *d_S = S_v.Write();
-         double *d_Jinv = Jinv_v.Write();
+         const int NQ = nq;
+         MFEM_ASSERT(NQ == static_cast<int>(dvdxi.size()),
+                     "unexpected number of quadrature points");
+         const bool qf_use_viscosity = use_viscosity;
+         const bool qf_use_vorticity = use_vorticity;
+         const real_t qf_h0 = h0;
+         const real_t qf_h1order = h1order;
+         const real_t qf_cfl = cfl;
+         real_t *qf_detJ = d_detJ;
+         real_t *qf_R = d_R;
+         real_t *qf_E = d_E;
+         real_t *qf_P = d_P;
+         real_t *qf_S = d_S;
+         real_t *qf_Jinv = d_Jinv;
 
          // Pass 1: prepare the per-point data.
          mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
-            QUpdateBody1<DIM>(&d_Jinv[q*DIM2],
+            QUpdateBody1<DIM>(&qf_Jinv[q*DIM2],
                               weight(q), flatten_nm(J(q)).values,
                               rhoDetJw(q), E(q),
-                              d_detJ[q], d_R[q], d_E[q]);
+                              qf_detJ[q], qf_R[q], qf_E[q]);
          });
 
          // Pass 2: material model -> all material parameters.
          mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
-            MaterialModel<DIM>(gamma(q), d_R[q], d_E[q], d_P[q], d_S[q]);
+            MaterialModel<DIM>(gamma(q), qf_R[q], qf_E[q], qf_P[q], qf_S[q]);
          });
 
          // Pass 3: assemble the stress (incl. viscosity) and time step estimate.
@@ -1406,14 +1416,15 @@ class QUpdatePA
             real_t compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
             real_t sJiT[DIM2];
             real_t d_dt_est = dtmin(q);
-            QUpdateBody2<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
+            QUpdateBody2<DIM>(qf_use_viscosity, qf_use_vorticity,
+                              qf_h0, qf_h1order, qf_cfl,
                               stress, sgrad_v, eig_val_data, eig_vec_data,
                               compr_dir, Jpi, ph_dir, sJiT,
                               weight(q), flatten_nm(J(q)).values,
-                              &d_Jinv[q*DIM2],
+                              &qf_Jinv[q*DIM2],
                               flatten_nm(dvdxi(q)).values,
                               flatten_nm(invJ0(q)).values,
-                              d_P[q], d_R[q], d_S[q], d_detJ[q],
+                              qf_P[q], qf_R[q], qf_S[q], qf_detJ[q],
                               d_dt_est);
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
@@ -1449,6 +1460,12 @@ public:
       scalar_qft(scalar_qspace),
       dimsqr_qft(dimsqr_qspace),
       dt(scalar_qft.Size()),
+      detJ_v(pmesh.GetNE() * ir.GetNPoints()),
+      R_v(pmesh.GetNE() * ir.GetNPoints()),
+      E_v(pmesh.GetNE() * ir.GetNPoints()),
+      P_v(pmesh.GetNE() * ir.GetNPoints()),
+      S_v(pmesh.GetNE() * ir.GetNPoints()),
+      Jinv_v(pmesh.GetNE() * ir.GetNPoints() * DIM2),
       // *INDENT-OFF*
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
       qupdate_dop(// input field descriptors
@@ -1475,6 +1492,12 @@ public:
                                qdata.Jac0inv.TotalSize(), false);
       stressJiT.NewMemoryAndSize(qdata.stressJinvT.GetMemory(),
                                  qdata.stressJinvT.TotalSize(), false);
+
+      detJ_v.UseDevice(true); R_v.UseDevice(true); E_v.UseDevice(true);
+      P_v.UseDevice(true); S_v.UseDevice(true); Jinv_v.UseDevice(true);
+      qupdate_qf.SetScratch(pmesh.GetNE() * ir.GetNPoints(),
+                            detJ_v.Write(), R_v.Write(), E_v.Write(),
+                            P_v.Write(), S_v.Write(), Jinv_v.Write());
 
       domain_attr = 1;
       qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}}});
