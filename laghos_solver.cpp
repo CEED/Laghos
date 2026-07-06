@@ -1338,7 +1338,6 @@ class QUpdatePA
    VectorQuadratureSpace dimsqr_qspace;
    QuadratureFunction scalar_qft, dimsqr_qft;
    Vector Jac0inv, rho0DetJ0w, stressJiT, dt;
-   Vector detJ_v, R_v, E_v, P_v, S_v, Jinv_v;
 
    using matd_t = tensor<real_t, DIM, DIM>;
 
@@ -1348,6 +1347,7 @@ class QUpdatePA
       const real_t h0, h1order, cfl;
       const double infinity = std::numeric_limits<double>::infinity();
       int nq = 0;
+      mutable Vector detJ_v, R_v, E_v, P_v, S_v, Jinv_v;
       real_t *d_detJ = nullptr, *d_R = nullptr, *d_E = nullptr;
       real_t *d_P = nullptr, *d_S = nullptr, *d_Jinv = nullptr;
 
@@ -1357,13 +1357,24 @@ class QUpdatePA
          use_viscosity(use_viscosity), use_vorticity(use_vorticity),
          h0(h0), h1order(h1order), cfl(cfl) {}
 
-      void SetScratch(const int nq_, real_t *d_detJ_, real_t *d_R_,
-                      real_t *d_E_, real_t *d_P_, real_t *d_S_,
-                      real_t *d_Jinv_)
+      void SetScratch(const int nq_)
       {
          nq = nq_;
-         d_detJ = d_detJ_; d_R = d_R_; d_E = d_E_;
-         d_P = d_P_; d_S = d_S_; d_Jinv = d_Jinv_;
+         detJ_v.SetSize(nq); R_v.SetSize(nq); E_v.SetSize(nq);
+         P_v.SetSize(nq); S_v.SetSize(nq); Jinv_v.SetSize(nq * DIM2);
+         detJ_v.UseDevice(true); R_v.UseDevice(true); E_v.UseDevice(true);
+         P_v.UseDevice(true); S_v.UseDevice(true); Jinv_v.UseDevice(true);
+         detJ_v = 0.0; R_v = 0.0; E_v = 0.0;
+         P_v = 0.0; S_v = 0.0; Jinv_v = 0.0;
+         d_detJ = detJ_v.ReadWrite(); d_R = R_v.ReadWrite(); d_E = E_v.ReadWrite();
+         d_P = P_v.ReadWrite(); d_S = S_v.ReadWrite(); d_Jinv = Jinv_v.ReadWrite();
+      }
+
+      UpdateQF CreateShadow() const
+      {
+         UpdateQF shadow(use_viscosity, use_vorticity, h0, h1order, cfl);
+         shadow.SetScratch(nq);
+         return shadow;
       }
 
       inline MFEM_HOST_DEVICE
@@ -1376,13 +1387,7 @@ class QUpdatePA
                       tensor_array<const real_t> &dtmin,
                       tensor_array<const real_t> &weight,
                       tensor_array<real_t, DIM, DIM> &TsJiT,
-                      tensor_array<real_t> &dtest,
-                      tensor_array<real_t> &detJ_q,
-                      tensor_array<real_t> &R_q,
-                      tensor_array<real_t> &E_q,
-                      tensor_array<real_t> &P_q,
-                      tensor_array<real_t> &S_q,
-                      tensor_array<real_t, DIM, DIM> &Jinv_q) const
+                      tensor_array<real_t> &dtest) const
       {
          const int NQ = nq;
          MFEM_ASSERT(NQ == static_cast<int>(dvdxi.size()),
@@ -1392,10 +1397,17 @@ class QUpdatePA
          const real_t qf_h0 = h0;
          const real_t qf_h1order = h1order;
          const real_t qf_cfl = cfl;
+         auto detJ_q = make_tensor_array<>(d_detJ, NQ);
+         auto R_q = make_tensor_array<>(d_R, NQ);
+         auto E_q = make_tensor_array<>(d_E, NQ);
+         auto P_q = make_tensor_array<>(d_P, NQ);
+         auto S_q = make_tensor_array<>(d_S, NQ);
+         auto Jinv_q = make_tensor_array<DIM, DIM>(d_Jinv, NQ);
+
          // Pass 1: prepare the per-point data. These intermediates are written
-         // to qfunction outputs (not raw side-effect scratch), so Enzyme/dFEM
-         // has primal and tangent storage for values that are read by later
-         // forall kernels in this same qfunction.
+         // to member scratch storage on the qfunction object. Enzyme sees the
+         // scratch and its shadow because the qfunction object is passed as
+         // enzyme_dup.
          mfem::forall<UseEnzyme>(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
             real_t Jinv_loc[DIM2], detJ_loc, R_loc, E_loc;
@@ -1451,8 +1463,7 @@ class QUpdatePA
    enum
    {
       Velocity, Coordinates, Energy, InvJac0,
-      Rho0DetJ0W, Gamma, DeltaTEst, StressTensor,
-      DetJ, Rho, EnergyQ, Pressure, SoundSpeed, InvJac
+      Rho0DetJ0W, Gamma, DeltaTEst, StressTensor
    };
 
 public:
@@ -1477,12 +1488,6 @@ public:
       scalar_qft(scalar_qspace),
       dimsqr_qft(dimsqr_qspace),
       dt(scalar_qft.Size()),
-      detJ_v(pmesh.GetNE() * ir.GetNPoints()),
-      R_v(pmesh.GetNE() * ir.GetNPoints()),
-      E_v(pmesh.GetNE() * ir.GetNPoints()),
-      P_v(pmesh.GetNE() * ir.GetNPoints()),
-      S_v(pmesh.GetNE() * ir.GetNPoints()),
-      Jinv_v(pmesh.GetNE() * ir.GetNPoints() * DIM2),
       // *INDENT-OFF*
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
       qupdate_dop(// input field descriptors
@@ -1495,13 +1500,7 @@ public:
                    {DeltaTEst, &scalar_qspace}},
                   // output field descriptors
                   {{StressTensor, &dimsqr_qspace},
-                   {DeltaTEst, &scalar_qspace},
-                   {DetJ, &scalar_qspace},
-                   {Rho, &scalar_qspace},
-                   {EnergyQ, &scalar_qspace},
-                   {Pressure, &scalar_qspace},
-                   {SoundSpeed, &scalar_qspace},
-                   {InvJac, &dimsqr_qspace}},
+                   {DeltaTEst, &scalar_qspace}},
                   pmesh)
       // *INDENT-ON*
    {
@@ -1517,15 +1516,10 @@ public:
       stressJiT.NewMemoryAndSize(qdata.stressJinvT.GetMemory(),
                                  qdata.stressJinvT.TotalSize(), false);
 
-      detJ_v.UseDevice(true); R_v.UseDevice(true); E_v.UseDevice(true);
-      P_v.UseDevice(true); S_v.UseDevice(true); Jinv_v.UseDevice(true);
-      qupdate_qf.SetScratch(pmesh.GetNE() * ir.GetNPoints(),
-                            detJ_v.Write(), R_v.Write(), E_v.Write(),
-                            P_v.Write(), S_v.Write(), Jinv_v.Write());
+      qupdate_qf.SetScratch(pmesh.GetNE() * ir.GetNPoints());
 
       domain_attr = 1;
-      qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}},
-                                   {Identity<InvJac>{}, {0,2,1}}});
+      qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}}});
       qupdate_dop.AddDomainIntegrator(qupdate_qf,
                                       // inputs
                                       tuple{Gradient<Velocity> {},
@@ -1538,13 +1532,7 @@ public:
                                             Weight{}},
                                       // outputs
                                       tuple{Identity<StressTensor>{},
-                                            Identity<DeltaTEst>{},
-                                            Identity<DetJ>{},
-                                            Identity<Rho>{},
-                                            Identity<EnergyQ>{},
-                                            Identity<Pressure>{},
-                                            Identity<SoundSpeed>{},
-                                            Identity<InvJac>{}},
+                                            Identity<DeltaTEst>{}},
                                       ir, domain_attr, Derivatives<Energy>{});
       qupdate_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
@@ -1552,7 +1540,7 @@ public:
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
       MultiVector X{v, x, e, gamma_gf, Jac0inv, rho0DetJ0w, dt = qdata.dt_est};
-      MultiVector Y{stressJiT, dt, detJ_v, R_v, E_v, P_v, S_v, Jinv_v};
+      MultiVector Y{stressJiT, dt};
       qupdate_dop.Mult(X, Y);
 
 #define LAGHOS_QUPDATE_DERIVATIVE_TEST
@@ -1566,19 +1554,11 @@ public:
       {
          constexpr real_t eps = 1.0e-7;
          Vector de(e.Size()), d_stress_ad(stressJiT.Size()), d_dt_ad(dt.Size()),
-                d_detJ_ad(detJ_v.Size()), d_R_ad(R_v.Size()), d_E_ad(E_v.Size()),
-                d_P_ad(P_v.Size()), d_S_ad(S_v.Size()),
-                d_Jinv_ad(Jinv_v.Size()), d_stress_fd(stressJiT.Size()),
-                stress_p(stressJiT.Size()), stress_m(stressJiT.Size());
+                d_stress_fd(stressJiT.Size()), stress_p(stressJiT.Size()),
+                stress_m(stressJiT.Size());
          de.UseDevice(true);
          d_stress_ad.UseDevice(true);
          d_dt_ad.UseDevice(true);
-         d_detJ_ad.UseDevice(true);
-         d_R_ad.UseDevice(true);
-         d_E_ad.UseDevice(true);
-         d_P_ad.UseDevice(true);
-         d_S_ad.UseDevice(true);
-         d_Jinv_ad.UseDevice(true);
          d_stress_fd.UseDevice(true);
          stress_p.UseDevice(true);
          stress_m.UseDevice(true);
@@ -1588,8 +1568,7 @@ public:
          if (de_norm > 0.0) { de *= 1.0 / de_norm; }
 
          auto dqupdate_de = qupdate_dop.GetDerivative(Energy, X, false);
-         MultiVector dY{d_stress_ad, d_dt_ad, d_detJ_ad, d_R_ad, d_E_ad,
-                        d_P_ad, d_S_ad, d_Jinv_ad};
+         MultiVector dY{d_stress_ad, d_dt_ad};
          dqupdate_de->Mult(de, dY);
 
          add(e, eps, de, e);
