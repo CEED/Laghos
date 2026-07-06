@@ -1376,7 +1376,13 @@ class QUpdatePA
                       tensor_array<const real_t> &dtmin,
                       tensor_array<const real_t> &weight,
                       tensor_array<real_t, DIM, DIM> &TsJiT,
-                      tensor_array<real_t> &dtest) const
+                      tensor_array<real_t> &dtest,
+                      tensor_array<real_t> &detJ_q,
+                      tensor_array<real_t> &R_q,
+                      tensor_array<real_t> &E_q,
+                      tensor_array<real_t> &P_q,
+                      tensor_array<real_t> &S_q,
+                      tensor_array<real_t, DIM, DIM> &Jinv_q) const
       {
          const int NQ = nq;
          MFEM_ASSERT(NQ == static_cast<int>(dvdxi.size()),
@@ -1386,45 +1392,55 @@ class QUpdatePA
          const real_t qf_h0 = h0;
          const real_t qf_h1order = h1order;
          const real_t qf_cfl = cfl;
-         real_t *qf_detJ = d_detJ;
-         real_t *qf_R = d_R;
-         real_t *qf_E = d_E;
-         real_t *qf_P = d_P;
-         real_t *qf_S = d_S;
-         real_t *qf_Jinv = d_Jinv;
-
-         // Pass 1: prepare the per-point data.
-         mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
+         // Pass 1: prepare the per-point data. These intermediates are written
+         // to qfunction outputs (not raw side-effect scratch), so Enzyme/dFEM
+         // has primal and tangent storage for values that are read by later
+         // forall kernels in this same qfunction.
+         mfem::forall<UseEnzyme>(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
-            QUpdateBody1<DIM>(&qf_Jinv[q*DIM2],
+            real_t Jinv_loc[DIM2], detJ_loc, R_loc, E_loc;
+            QUpdateBody1<DIM>(Jinv_loc,
                               weight(q), flatten_nm(J(q)).values,
                               rhoDetJw(q), E(q),
-                              qf_detJ[q], qf_R[q], qf_E[q]);
+                              detJ_loc, R_loc, E_loc);
+            detJ_q(q) = detJ_loc;
+            R_q(q) = R_loc;
+            E_q(q) = E_loc;
+            Jinv_q(q) = make_tensor<DIM, DIM>([&](int i, int j)
+            {
+               return Jinv_loc[i + DIM*j];
+            });
          });
 
          // Pass 2: material model -> all material parameters.
-         mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
+         mfem::forall<UseEnzyme>(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
-            MaterialModel<DIM>(gamma(q), qf_R[q], qf_E[q], qf_P[q], qf_S[q]);
+            real_t P_loc, S_loc;
+            MaterialModel<DIM>(gamma(q), R_q.get_tensor(q), E_q.get_tensor(q),
+                               P_loc, S_loc);
+            P_q(q) = P_loc;
+            S_q(q) = S_loc;
          });
 
          // Pass 3: assemble the stress (incl. viscosity) and time step estimate.
-         mfem::forall(NQ, [=] MFEM_HOST_DEVICE (int q)
+         mfem::forall<UseEnzyme>(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
             real_t stress[DIM2], sgrad_v[DIM2];
             real_t eig_val_data[DIM], eig_vec_data[DIM2];
             real_t compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
             real_t sJiT[DIM2];
             real_t d_dt_est = dtmin(q);
+            const auto Jinv_qp = Jinv_q.get_tensor(q);
             QUpdateBody2<DIM>(qf_use_viscosity, qf_use_vorticity,
                               qf_h0, qf_h1order, qf_cfl,
                               stress, sgrad_v, eig_val_data, eig_vec_data,
                               compr_dir, Jpi, ph_dir, sJiT,
                               weight(q), flatten_nm(J(q)).values,
-                              &qf_Jinv[q*DIM2],
+                              flatten_nm(Jinv_qp).values,
                               flatten_nm(dvdxi(q)).values,
                               flatten_nm(invJ0(q)).values,
-                              qf_P[q], qf_R[q], qf_S[q], qf_detJ[q],
+                              P_q.get_tensor(q), R_q.get_tensor(q),
+                              S_q.get_tensor(q), detJ_q.get_tensor(q),
                               d_dt_est);
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
@@ -1435,7 +1451,8 @@ class QUpdatePA
    enum
    {
       Velocity, Coordinates, Energy, InvJac0,
-      Rho0DetJ0W, Gamma, DeltaTEst, StressTensor
+      Rho0DetJ0W, Gamma, DeltaTEst, StressTensor,
+      DetJ, Rho, EnergyQ, Pressure, SoundSpeed, InvJac
    };
 
 public:
@@ -1477,7 +1494,14 @@ public:
                    {Rho0DetJ0W, &scalar_qspace},
                    {DeltaTEst, &scalar_qspace}},
                   // output field descriptors
-                  {{StressTensor, &dimsqr_qspace}, {DeltaTEst, &scalar_qspace}},
+                  {{StressTensor, &dimsqr_qspace},
+                   {DeltaTEst, &scalar_qspace},
+                   {DetJ, &scalar_qspace},
+                   {Rho, &scalar_qspace},
+                   {EnergyQ, &scalar_qspace},
+                   {Pressure, &scalar_qspace},
+                   {SoundSpeed, &scalar_qspace},
+                   {InvJac, &dimsqr_qspace}},
                   pmesh)
       // *INDENT-ON*
    {
@@ -1500,7 +1524,8 @@ public:
                             P_v.Write(), S_v.Write(), Jinv_v.Write());
 
       domain_attr = 1;
-      qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}}});
+      qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}},
+                                   {Identity<InvJac>{}, {0,2,1}}});
       qupdate_dop.AddDomainIntegrator(qupdate_qf,
                                       // inputs
                                       tuple{Gradient<Velocity> {},
@@ -1513,16 +1538,91 @@ public:
                                             Weight{}},
                                       // outputs
                                       tuple{Identity<StressTensor>{},
-                                            Identity<DeltaTEst>{}},
-                                      ir, domain_attr);
+                                            Identity<DeltaTEst>{},
+                                            Identity<DetJ>{},
+                                            Identity<Rho>{},
+                                            Identity<EnergyQ>{},
+                                            Identity<Pressure>{},
+                                            Identity<SoundSpeed>{},
+                                            Identity<InvJac>{}},
+                                      ir, domain_attr, Derivatives<Energy>{});
       qupdate_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
 
    void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
    {
       MultiVector X{v, x, e, gamma_gf, Jac0inv, rho0DetJ0w, dt = qdata.dt_est};
-      MultiVector Y{stressJiT, dt};
+      MultiVector Y{stressJiT, dt, detJ_v, R_v, E_v, P_v, S_v, Jinv_v};
       qupdate_dop.Mult(X, Y);
+
+#define LAGHOS_QUPDATE_DERIVATIVE_TEST
+#ifdef LAGHOS_QUPDATE_DERIVATIVE_TEST
+      // Spot-check the dFEM derivative of the force quadrature data
+      // stressJinvT with respect to the L2 energy field against central finite
+      // differences. This test is intentionally local to Update() and guarded
+      // by LAGHOS_QUPDATE_DERIVATIVE_TEST because it performs two extra
+      // qdata evaluations and is destructive to Y (the real output is restored
+      // by the final qupdate_dop.Mult below).
+      {
+         constexpr real_t eps = 1.0e-7;
+         Vector de(e.Size()), d_stress_ad(stressJiT.Size()), d_dt_ad(dt.Size()),
+                d_detJ_ad(detJ_v.Size()), d_R_ad(R_v.Size()), d_E_ad(E_v.Size()),
+                d_P_ad(P_v.Size()), d_S_ad(S_v.Size()),
+                d_Jinv_ad(Jinv_v.Size()), d_stress_fd(stressJiT.Size()),
+                stress_p(stressJiT.Size()), stress_m(stressJiT.Size());
+         de.UseDevice(true);
+         d_stress_ad.UseDevice(true);
+         d_dt_ad.UseDevice(true);
+         d_detJ_ad.UseDevice(true);
+         d_R_ad.UseDevice(true);
+         d_E_ad.UseDevice(true);
+         d_P_ad.UseDevice(true);
+         d_S_ad.UseDevice(true);
+         d_Jinv_ad.UseDevice(true);
+         d_stress_fd.UseDevice(true);
+         stress_p.UseDevice(true);
+         stress_m.UseDevice(true);
+
+         de.Randomize(0x5eed);
+         const real_t de_norm = de.Norml2();
+         if (de_norm > 0.0) { de *= 1.0 / de_norm; }
+
+         auto dqupdate_de = qupdate_dop.GetDerivative(Energy, X, false);
+         MultiVector dY{d_stress_ad, d_dt_ad, d_detJ_ad, d_R_ad, d_E_ad,
+                        d_P_ad, d_S_ad, d_Jinv_ad};
+         dqupdate_de->Mult(de, dY);
+
+         add(e, eps, de, e);
+         qupdate_dop.Mult(X, Y);
+         stress_p = Y[0];
+
+         add(e, -2.0 * eps, de, e);
+         qupdate_dop.Mult(X, Y);
+         stress_m = Y[0];
+
+         add(e, eps, de, e); // restore input energy
+
+         add(stress_p, -1.0, stress_m, d_stress_fd);
+         d_stress_fd *= 0.5 / eps;
+
+         d_stress_fd -= d_stress_ad;
+         const real_t err = d_stress_fd.Norml2();
+         const real_t ad_norm = d_stress_ad.Norml2();
+         d_stress_fd += d_stress_ad;
+         const real_t fd_norm = d_stress_fd.Norml2();
+         if (Mpi::Root())
+         {
+            mfem::out << "QUpdate d(stressJinvT)/d(e) finite-difference check: "
+                      << "abs=" << err << ", rel="
+                      << err / std::max(fd_norm, real_t(1.0e-30))
+                      << ", |ad|=" << ad_norm
+                      << ", |fd|=" << fd_norm << std::endl;
+         }
+
+         qupdate_dop.Mult(X, Y); // restore unperturbed output
+      }
+#endif
+
       // LVECTOR Mult redirects Y[0] to an internal buffer via NewMemoryAndSize.
       // stressJiT = Y[0] would reallocate stressJiT and break the alias to
       // qdata.stressJinvT, so we copy the data directly instead. The copy must
