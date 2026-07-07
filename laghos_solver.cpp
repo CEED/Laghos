@@ -672,18 +672,26 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
    qdata.dt_est = std::numeric_limits<double>::infinity();
 }
 
-void LagrangianHydroOperator::ComputeDensity(QuadratureFunction &rho) const
+void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
-   const int nqp = ir.GetNPoints();
+   rho.SetSpace(&L2);
+   DenseMatrix Mrho(l2dofs_cnt);
+   Vector rhs(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Array<int> dofs(l2dofs_cnt);
+   DenseMatrixInverse inv(&Mrho);
+   MassIntegrator mi(&ir);
+   DensityIntegrator di(qdata.rho0DetJ0w);
+   di.SetIntRule(&ir);
    for (int e = 0; e < NE; e++)
    {
-      ElementTransformation &Tr = *L2.GetElementTransformation(e);
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = ir.IntPoint(q);
-         Tr.SetIntPoint(&ip);
-         rho(e*nqp + q) = qdata.rho0DetJ0w(e*nqp + q) / ip.weight / Tr.Weight();
-      }
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &eltr = *L2.GetElementTransformation(e);
+      di.AssembleRHSElementVect(fe, eltr, rhs);
+      mi.AssembleElementMatrix(fe, eltr, Mrho);
+      inv.Factor();
+      inv.Mult(rhs, rho_z);
+      L2.GetElementDofs(e, dofs);
+      rho.SetSubVector(dofs, rho_z);
    }
 }
 

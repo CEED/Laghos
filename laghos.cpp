@@ -882,11 +882,15 @@ int main(int argc, char *argv[])
    int  visport   = 19916;
 
    QuadratureSpace qs(*pmesh, hydro.GetIntRule());
-   QuadratureFunction rho_qf(qs), p_qf(qs);
+   ParGridFunction rho_gf(&L2FESpace);
+   QuadratureFunction p_qf(qs);
 
+   if (visualization || visit || gfprint)
+   {
+      hydro.ComputeDensity(rho_gf);
+   }
    if (visualization || visit)
    {
-      hydro.ComputeDensity(rho_qf);
       hydro.ComputePressure(e_gf, mat_gf(0), p_qf);
    }
    const double energy_init = hydro.InternalEnergy(e_gf) +
@@ -906,8 +910,8 @@ int main(int argc, char *argv[])
       int offx = Ww+10; // window offsets
       if (problem != 0 && problem != 4)
       {
-         hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_qf,
-                                       "Density QF", Wx, Wy, Ww, Wh);
+         hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
+                                       "Density", Wx, Wy, Ww, Wh);
       }
       Wx += offx;
       hydrodynamics::VisualizeField(vis_v, vishost, visport, v_gf,
@@ -924,6 +928,7 @@ int main(int argc, char *argv[])
    VisItDataCollection visit_dc(basename, pmesh);
    if (visit)
    {
+      visit_dc.RegisterField("Density", &rho_gf);
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
       visit_dc.SetCycle(0);
@@ -1096,7 +1101,10 @@ int main(int argc, char *argv[])
 
          if (visualization || visit || gfprint)
          {
-            hydro.ComputeDensity(rho_qf);
+            hydro.ComputeDensity(rho_gf);
+         }
+         if (visualization || visit)
+         {
             hydro.ComputePressure(e_gf, mat_gf(0), p_qf);
          }
          if (visualization)
@@ -1106,8 +1114,8 @@ int main(int argc, char *argv[])
             int offx = Ww+10; // window offsets
             if (problem != 0 && problem != 4)
             {
-               hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_qf,
-                                             "Density QF", Wx, Wy, Ww, Wh);
+               hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho_gf,
+                                             "Density", Wx, Wy, Ww, Wh);
             }
             Wx += offx;
             hydrodynamics::VisualizeField(vis_v, vishost, visport,
@@ -1140,6 +1148,11 @@ int main(int argc, char *argv[])
             mesh_ofs.precision(8);
             pmesh->PrintAsOne(mesh_ofs);
             mesh_ofs.close();
+
+            std::ofstream rho_ofs(rho_name.str().c_str());
+            rho_ofs.precision(8);
+            rho_gf.SaveAsOne(rho_ofs);
+            rho_ofs.close();
 
             std::ofstream v_ofs(v_name.str().c_str());
             v_ofs.precision(8);

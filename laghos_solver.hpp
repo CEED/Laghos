@@ -190,7 +190,7 @@ public:
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
-   void ComputeDensity(QuadratureFunction &rho) const;
+   void ComputeDensity(ParGridFunction &rho) const;
    void ComputePressure(const ParGridFunction &e, double gamma,
                         QuadratureFunction &p) const;
    double InternalEnergy(const ParGridFunction &e) const;
