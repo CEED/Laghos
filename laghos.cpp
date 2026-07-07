@@ -91,6 +91,8 @@
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 // mpirun -np 6 laghos -m data/cube_corner.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.06 -rd 0.02 -rvs
 // mpirun -np 6 laghos -m data/cube_a02_b01_c11.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.06 -rd 0.02 -rvs
+// mpirun -np 6 laghos -m data/solid_torus.msh -p 1 -rs 1 -s 7 -fa -vs 20 -ct 0 -vis -tf 5.0 -ale 0.5 -rd 0.02 -rvs
+// mpirun -np 6 laghos -m data/solid_torus.msh -p 1 -rs 1 -s 7 -fa -vs 20 -ct 1 -vis -tf 5.0 -ale 0.5 -rd 0.02 -rvs
 
 
 
@@ -144,7 +146,7 @@ int main(int argc, char *argv[])
    double penalty_param = 20.0;
    double ale_period = -1.0;
    double remesh_dist = 0.05;
-   int    circ_type   = 0;
+   int    case_type   = 0;
    double cfl = 0.5;
    double cg_tol = 1e-8;
    double ftz_tol = 0.0;
@@ -198,7 +200,7 @@ int main(int argc, char *argv[])
                   "ALE period interval in physical time.");
    args.AddOption(&remesh_dist, "-rd", "--rd",
                   "Remesh physical distance.");
-   args.AddOption(&circ_type, "-ct", "--ct",
+   args.AddOption(&case_type, "-ct", "--ct",
                   "Type of circles test (0 is outside, 1 is inside).");
    args.AddOption(&cfl, "-cfl", "--cfl", "CFL-condition number.");
    args.AddOption(&cg_tol, "-cgt", "--cg-tol",
@@ -280,7 +282,7 @@ int main(int argc, char *argv[])
    if (strcmp(mesh_file, "data/circles3.mesh") == 0 ||
        strcmp(mesh_file, "data/circles4.mesh") == 0)
    {
-      blast_position[0] =  (circ_type == 0) ? -1.0 : 0.4;
+      blast_position[0] =  (case_type == 0) ? -1.0 : 0.4;
       blast_position[1] =  0.0;
    }
    if (strcmp(mesh_file, "data/cube_corner.mesh") == 0)
@@ -297,6 +299,12 @@ int main(int argc, char *argv[])
       blast_position[0] = corner_coord;
       blast_position[1] = corner_coord;
       blast_position[2] = corner_coord;
+   }
+   if (strcmp(mesh_file, "data/solid_torus.msh") == 0)
+   {
+      blast_position[0] = (case_type == 0) ? 3.0 : 1.0;
+      blast_position[1] = 0.0;
+      blast_position[2] = 0.0;
    }
 
    // Configure the device from the command line options
@@ -393,6 +401,8 @@ int main(int argc, char *argv[])
       (strcmp(mesh_file, "data/cube_corner.mesh") == 0);
    const bool sine_cube_mesh =
       (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0);
+   const bool torus_mesh =
+      (strcmp(mesh_file, "data/solid_torus.msh") == 0);
    const bool cube_3d_mesh = cube_corner_mesh || sine_cube_mesh;
    Array<bool> fit_marker_top(H1FESpace.GetNDofs());
    Array<bool> fit_marker_right(H1FESpace.GetNDofs());
@@ -400,6 +410,7 @@ int main(int argc, char *argv[])
    Array<bool> fit_marker_left(H1FESpace.GetNDofs());
    Array<bool> fit_marker_out(H1FESpace.GetNDofs());
    Array<bool> fit_marker_in(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_torus(H1FESpace.GetNDofs());
    Array<bool> fit_marker_face_x0(H1FESpace.GetNDofs());
    Array<bool> fit_marker_face_x1(H1FESpace.GetNDofs());
    Array<bool> fit_marker_face_y0(H1FESpace.GetNDofs());
@@ -424,6 +435,7 @@ int main(int argc, char *argv[])
    fit_marker_left   = false;
    fit_marker_out    = false;
    fit_marker_in     = false;
+   fit_marker_torus  = false;
    fit_marker_face_x0 = false;
    fit_marker_face_x1 = false;
    fit_marker_face_y0 = false;
@@ -460,6 +472,12 @@ int main(int argc, char *argv[])
          else if (attr == 4) { be_to_surface[e] = 3; }
          else if (attr == 5) { be_to_surface[e] = 0; }
          else if (attr == 6) { be_to_surface[e] = 5; }
+         continue;
+      }
+      if (torus_mesh)
+      {
+         be_to_surface[e] = 0;
+         for (int j = 0; j < nd; j++) { fit_marker_torus[vdofs[j]] = true; }
          continue;
       }
 
@@ -594,6 +612,7 @@ int main(int argc, char *argv[])
    Line_Left line_left(fit_marker_left);
    Circle circle_out(fit_marker_out, 1.0);
    Circle circle_in(fit_marker_in, 0.4);
+   TorusSurface torus(fit_marker_torus, 2.0, 1.0);
    AxisAlignedPlane plane_x0(fit_marker_face_x0, 0, 0.0);
    CubeCornerFace face_x1(fit_marker_face_x1, 0, b);
    AxisAlignedPlane plane_y0(fit_marker_face_y0, 1, 0.0);
@@ -632,6 +651,10 @@ int main(int argc, char *argv[])
    {
       surf_array.Append(&circle_out);
       surf_array.Append(&circle_in);
+   }
+   else if (torus_mesh)
+   {
+      surf_array.Append(&torus);
    }
    else if (cube_corner_mesh)
    {

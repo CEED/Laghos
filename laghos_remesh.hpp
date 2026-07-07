@@ -330,6 +330,75 @@ public:
    double dz_dvdv(double, double) const override { return 0.0; }
 };
 
+class TorusSurface : public Analytic3DSurface
+{
+private:
+   const double major_radius;
+   const double minor_radius;
+
+   double tube_radius(double v) const
+   {
+      return major_radius + minor_radius * cos(v);
+   }
+
+public:
+   TorusSurface(const Array<bool> &marker,
+                double major_radius_, double minor_radius_)
+      : Analytic3DSurface(marker),
+        major_radius(major_radius_), minor_radius(minor_radius_) { }
+
+   void uv_of_xyz(double x, double y, double z,
+                  double &dist, double &u, double &v) const override
+   {
+      const double radial_xy = sqrt(x * x + y * y);
+      const double radial_tube = radial_xy - major_radius;
+      u = atan2(y, x);
+      v = atan2(z, radial_tube);
+      dist = sqrt(radial_tube * radial_tube + z * z) - minor_radius;
+   }
+
+   void xyz_of_uv(double u, double v, double dist,
+                  double &x, double &y, double &z) const override
+   {
+      const double radius = tube_radius(v) + dist * cos(v);
+      x = radius * cos(u);
+      y = radius * sin(u);
+      z = (minor_radius + dist) * sin(v);
+   }
+
+   double dx_du(double u, double v) const override
+   { return -tube_radius(v) * sin(u); }
+   double dy_du(double u, double v) const override
+   { return tube_radius(v) * cos(u); }
+   double dz_du(double, double) const override
+   { return 0.0; }
+   double dx_dv(double u, double v) const override
+   { return -minor_radius * sin(v) * cos(u); }
+   double dy_dv(double u, double v) const override
+   { return -minor_radius * sin(v) * sin(u); }
+   double dz_dv(double, double v) const override
+   { return minor_radius * cos(v); }
+
+   double dx_dudu(double u, double v) const override
+   { return -tube_radius(v) * cos(u); }
+   double dy_dudu(double u, double v) const override
+   { return -tube_radius(v) * sin(u); }
+   double dz_dudu(double, double) const override
+   { return 0.0; }
+   double dx_dudv(double u, double v) const override
+   { return minor_radius * sin(v) * sin(u); }
+   double dy_dudv(double u, double v) const override
+   { return -minor_radius * sin(v) * cos(u); }
+   double dz_dudv(double, double) const override
+   { return 0.0; }
+   double dx_dvdv(double u, double v) const override
+   { return -minor_radius * cos(v) * cos(u); }
+   double dy_dvdv(double u, double v) const override
+   { return -minor_radius * cos(v) * sin(u); }
+   double dz_dvdv(double, double v) const override
+   { return -minor_radius * sin(v); }
+};
+
 class CubeCornerEdge : public Analytic3DCurve
 {
 private:
