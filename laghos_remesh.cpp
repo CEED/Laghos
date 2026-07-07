@@ -71,69 +71,38 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
    // Mark which nodes to move tangentially.
 
-   Array<int> vdofs, ess_vdofs;
-   for (int e = 0; e < pmesh->GetNBE(); e++)
-   {
-      const int attr = pmesh->GetBdrElement(e)->GetAttribute();
-      const int nd = pfes_mesh->GetBE(e)->GetDof();
-      pfes_mesh->GetBdrElementVDofs(e, vdofs);
-
-      // Top boundary.
-      if (attr == 1)
-      {
-         for (int j = 0; j < nd; j++)
-         {
-            // Eliminate y component.
-            ess_vdofs.Append(vdofs[j+nd]);
-         }
-      }
-      // Right boundary.
-      else if (attr == 2)
-      {
-         for (int j = 0; j < nd; j++)
-         {
-            // Eliminate y component.
-            ess_vdofs.Append(vdofs[j+nd]);
-         }
-      }
-      // Bottom boundary.
-      else if (attr == 3)
-      {
-         for (int j = 0; j < nd; j++)
-         {
-            // Eliminate y component.
-            ess_vdofs.Append(vdofs[j+nd]);
-         }
-      }
-      else if (attr == 4)
-      {
-         for (int j = 0; j < nd; j++)
-         {
-            // Eliminate y component.
-            ess_vdofs.Append(vdofs[j+nd]);
-         }
-      }
-      else if (attr == 5)
-      {
-         for (int j = 0; j < nd; j++)
-         {
-            // Eliminate y component.
-            ess_vdofs.Append(vdofs[j+nd]);
-         }
-      }
-      else if (attr == 7)
-      {
-         for (int j = 0; j < nd; j++)
-         {
-            // Eliminate y component.
-            ess_vdofs.Append(vdofs[j+nd]);
-         }
-      }
-   }
-
    ParFiniteElementSpace pfes_scalar(pmesh, pfes_mesh->FEColl(), 1);
    ParGridFunction fit_marker_vis_gf(&pfes_scalar);
    fit_marker_vis_gf = 0.0;
+
+   Array<int> ess_vdofs_marker(pfes_mesh->GetVSize());
+   ess_vdofs_marker = 0;
+   for (int dof = 0; dof < pfes_mesh->GetNDofs(); dof++)
+   {
+      int cnt = 0, params = dim;
+      for (int s = 0; s < surfaces.GetNumSurfaces(); s++)
+      {
+         const AnalyticSurface *surf = surfaces.GetSurfaceID(s);
+         const Array<bool> &m = surf->GetMarker();
+         if (m[dof])
+         {
+            cnt++;
+            params = min(params, surf->NumParams());
+         }
+      }
+
+      fit_marker_vis_gf(dof) = cnt;
+      if (cnt == 0) { continue; }
+      if (cnt > 1) { params = 0; }
+
+      for (int d = params; d < dim; d++)
+      {
+         ess_vdofs_marker[pfes_mesh->DofToVDof(dof, d)] = 1;
+      }
+   }
+
+   Array<int> vdofs, ess_vdofs;
+   FiniteElementSpace::MarkerToList(ess_vdofs_marker, ess_vdofs);
 
    for (int e = 0; e < pmesh->GetNBE(); e++)
    {
@@ -142,16 +111,12 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
 
       for (int j = 0; j < nd; j++)
       {
-         int cnt = 0;
-         for (int s = 0; s < surfaces.GetNumSurfaces(); s++)
+         int nconstrained = 0;
+         for (int d = 0; d < dim; d++)
          {
-            const Array<bool> &m = surfaces.GetSurfaceID(s)->GetMarker();
-            if (m[vdofs[j]]) { cnt++; }
+            nconstrained += ess_vdofs_marker[pfes_mesh->DofToVDof(vdofs[j], d)];
          }
-
-         fit_marker_vis_gf(vdofs[j]) = cnt;
-
-         if (cnt > 1) { ess_vdofs.Append(vdofs[j]); }
+         fit_marker_vis_gf(vdofs[j]) = nconstrained;
       }
    }
 

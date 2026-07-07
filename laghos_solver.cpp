@@ -524,8 +524,6 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
 void LagrangianHydroOperator::RemoveBdrNormalPart(ParGridFunction &v,
                                                   const ParGridFunction &x)
 {
-   MFEM_VERIFY(dim == 2, "only 2d");
-
    Array<int> vdofs;
    Vector v_vals;
    for (int be = 0; be < H1.GetNBE(); be++)
@@ -1057,7 +1055,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
          if (surf_id >= 0)
          {
             const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
-            Vector pos(2), nor_s(2);
+            Vector pos(dim), nor_s(dim);
             tr_el.Transform(b_face_tr->GetElement1IntPoint(), pos);
             surf->NormalVector(pos.GetData(), nor_s.GetData());
 
@@ -1121,7 +1119,7 @@ void LagrangianHydroOperator::UpdateBdrQuadratureData() const
          if (surf_id >= 0)
          {
             const AnalyticSurface *surf = surfaces.GetSurfaceID(be_to_surface[be]);
-            Vector pos(2), nor_s(2);
+            Vector pos(dim), nor_s(dim);
             tr_el.Transform(b_face_tr->GetElement1IntPoint(), pos);
             surf->NormalVector(pos.GetData(), nor_s.GetData());
 

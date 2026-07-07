@@ -89,6 +89,8 @@
 // mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 0 -vis -tf 7.0 -ale 0.5 -rvs -rd 0.3
 // mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 1 -vis -tf 0.6 -ale 0.02 -rvs -rd 2.0 -ok 3 -ot 2
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
+// mpirun -np 6 laghos -m data/cube_corner.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.02 -rd 0.02 -rvs
+// mpirun -np 6 laghos -m data/cube_a02_b01_c11.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.02 -rd 0.02 -rvs
 
 
 
@@ -281,6 +283,21 @@ int main(int argc, char *argv[])
       blast_position[0] =  (circ_type == 0) ? -1.0 : 0.4;
       blast_position[1] =  0.0;
    }
+   if (strcmp(mesh_file, "data/cube_corner.mesh") == 0)
+   {
+      a = 0.0; b = 0.2; c = 0.0;
+      blast_position[0] = 1.2;
+      blast_position[1] = 1.2;
+      blast_position[2] = 1.2;
+   }
+   if (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0)
+   {
+      a = 0.2; b = 0.1; c = 1.1;
+      const double corner_coord = 1.0 + a * sin(c * M_PI) * sin(c * M_PI) + b;
+      blast_position[0] = corner_coord;
+      blast_position[1] = corner_coord;
+      blast_position[2] = corner_coord;
+   }
 
    // Configure the device from the command line options
    Device backend;
@@ -372,26 +389,79 @@ int main(int argc, char *argv[])
    // Construct the boundary curves.
    //
    // Mark which nodes to move tangentially.
+   const bool cube_corner_mesh =
+      (strcmp(mesh_file, "data/cube_corner.mesh") == 0);
+   const bool sine_cube_mesh =
+      (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0);
+   const bool cube_3d_mesh = cube_corner_mesh || sine_cube_mesh;
    Array<bool> fit_marker_top(H1FESpace.GetNDofs());
    Array<bool> fit_marker_right(H1FESpace.GetNDofs());
    Array<bool> fit_marker_bottom(H1FESpace.GetNDofs());
    Array<bool> fit_marker_left(H1FESpace.GetNDofs());
    Array<bool> fit_marker_out(H1FESpace.GetNDofs());
    Array<bool> fit_marker_in(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_face_x0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_face_x1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_face_y0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_face_y1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_face_z0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_face_z1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x0y0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x0y1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x1y0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x1y1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x0z0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x0z1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x1z0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_x1z1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_y0z0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_y0z1(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_y1z0(H1FESpace.GetNDofs());
+   Array<bool> fit_marker_edge_y1z1(H1FESpace.GetNDofs());
    fit_marker_top    = false;
    fit_marker_right  = false;
    fit_marker_bottom = false;
    fit_marker_left   = false;
    fit_marker_out    = false;
    fit_marker_in     = false;
+   fit_marker_face_x0 = false;
+   fit_marker_face_x1 = false;
+   fit_marker_face_y0 = false;
+   fit_marker_face_y1 = false;
+   fit_marker_face_z0 = false;
+   fit_marker_face_z1 = false;
+   fit_marker_edge_x0y0 = false;
+   fit_marker_edge_x0y1 = false;
+   fit_marker_edge_x1y0 = false;
+   fit_marker_edge_x1y1 = false;
+   fit_marker_edge_x0z0 = false;
+   fit_marker_edge_x0z1 = false;
+   fit_marker_edge_x1z0 = false;
+   fit_marker_edge_x1z1 = false;
+   fit_marker_edge_y0z0 = false;
+   fit_marker_edge_y0z1 = false;
+   fit_marker_edge_y1z0 = false;
+   fit_marker_edge_y1z1 = false;
    Array<int> vdofs;
    Array<int> be_to_surface(pmesh->GetNBE());
    be_to_surface = -1;
+   Array<int> ess_tdofs, ess_vdofs;
    for (int e = 0; e < pmesh->GetNBE(); e++)
    {
       const int attr = pmesh->GetBdrElement(e)->GetAttribute();
       const int nd = H1FESpace.GetBE(e)->GetDof();
       H1FESpace.GetBdrElementVDofs(e, vdofs);
+
+      if (cube_3d_mesh)
+      {
+         if      (attr == 1) { be_to_surface[e] = 4; }
+         else if (attr == 2) { be_to_surface[e] = 2; }
+         else if (attr == 3) { be_to_surface[e] = 1; }
+         else if (attr == 4) { be_to_surface[e] = 3; }
+         else if (attr == 5) { be_to_surface[e] = 0; }
+         else if (attr == 6) { be_to_surface[e] = 5; }
+         continue;
+      }
 
       // Top boundary.
       if (attr == 1)
@@ -428,12 +498,126 @@ int main(int argc, char *argv[])
          for (int j = 0; j < nd; j++) { fit_marker_in[vdofs[j]] = true; }
       }
    }
+
+   if (cube_3d_mesh)
+   {
+      Array<int> x0_marker, x1_marker, y0_marker, y1_marker;
+      Array<int> z0_marker, z1_marker;
+      Array<int> x0_bdr(pmesh->bdr_attributes.Max());
+      Array<int> x1_bdr(pmesh->bdr_attributes.Max());
+      Array<int> y0_bdr(pmesh->bdr_attributes.Max());
+      Array<int> y1_bdr(pmesh->bdr_attributes.Max());
+      Array<int> z0_bdr(pmesh->bdr_attributes.Max());
+      Array<int> z1_bdr(pmesh->bdr_attributes.Max());
+      x0_bdr = 0;
+      x1_bdr = 0;
+      y0_bdr = 0;
+      y1_bdr = 0;
+      z0_bdr = 0;
+      z1_bdr = 0;
+
+      // Boundary attributes: 1 -> z0, 2 -> y0, 3 -> x1,
+      // 4 -> y1, 5 -> x0, 6 -> z1.
+      z0_bdr[0] = 1;
+      y0_bdr[1] = 1;
+      x1_bdr[2] = 1;
+      y1_bdr[3] = 1;
+      x0_bdr[4] = 1;
+      z1_bdr[5] = 1;
+
+      H1FESpace.GetEssentialVDofs(x0_bdr, x0_marker, 0);
+      H1FESpace.GetEssentialVDofs(x1_bdr, x1_marker, 0);
+      H1FESpace.GetEssentialVDofs(y0_bdr, y0_marker, 0);
+      H1FESpace.GetEssentialVDofs(y1_bdr, y1_marker, 0);
+      H1FESpace.GetEssentialVDofs(z0_bdr, z0_marker, 0);
+      H1FESpace.GetEssentialVDofs(z1_bdr, z1_marker, 0);
+
+      for (int dof = 0; dof < H1FESpace.GetNDofs(); dof++)
+      {
+         const int vdof = H1FESpace.DofToVDof(dof, 0);
+         const bool on_x0 = x0_marker[vdof];
+         const bool on_x1 = x1_marker[vdof];
+         const bool on_y0 = y0_marker[vdof];
+         const bool on_y1 = y1_marker[vdof];
+         const bool on_z0 = z0_marker[vdof];
+         const bool on_z1 = z1_marker[vdof];
+         const int boundary_count =
+            int(on_x0) + int(on_x1) + int(on_y0) +
+            int(on_y1) + int(on_z0) + int(on_z1);
+
+         if (boundary_count == 3)
+         {
+            if (on_x0) { fit_marker_face_x0[dof] = true; }
+            if (on_x1) { fit_marker_face_x1[dof] = true; }
+            if (on_y0) { fit_marker_face_y0[dof] = true; }
+            if (on_y1) { fit_marker_face_y1[dof] = true; }
+            if (on_z0) { fit_marker_face_z0[dof] = true; }
+            if (on_z1) { fit_marker_face_z1[dof] = true; }
+            for (int d = 0; d < dim; d++)
+            {
+               const int vd = H1FESpace.DofToVDof(dof, d);
+               ess_vdofs.Append(vd);
+               int tdof = H1FESpace.GetLocalTDofNumber(vd);
+               if (tdof >= 0) { ess_tdofs.Append(tdof); }
+            }
+         }
+         else if (boundary_count == 2)
+         {
+            if (on_x0 && on_y0) { fit_marker_edge_x0y0[dof] = true; }
+            if (on_x0 && on_y1) { fit_marker_edge_x0y1[dof] = true; }
+            if (on_x1 && on_y0) { fit_marker_edge_x1y0[dof] = true; }
+            if (on_x1 && on_y1) { fit_marker_edge_x1y1[dof] = true; }
+            if (on_x0 && on_z0) { fit_marker_edge_x0z0[dof] = true; }
+            if (on_x0 && on_z1) { fit_marker_edge_x0z1[dof] = true; }
+            if (on_x1 && on_z0) { fit_marker_edge_x1z0[dof] = true; }
+            if (on_x1 && on_z1) { fit_marker_edge_x1z1[dof] = true; }
+            if (on_y0 && on_z0) { fit_marker_edge_y0z0[dof] = true; }
+            if (on_y0 && on_z1) { fit_marker_edge_y0z1[dof] = true; }
+            if (on_y1 && on_z0) { fit_marker_edge_y1z0[dof] = true; }
+            if (on_y1 && on_z1) { fit_marker_edge_y1z1[dof] = true; }
+         }
+         else if (boundary_count == 1)
+         {
+            if (on_x0) { fit_marker_face_x0[dof] = true; }
+            if (on_x1) { fit_marker_face_x1[dof] = true; }
+            if (on_y0) { fit_marker_face_y0[dof] = true; }
+            if (on_y1) { fit_marker_face_y1[dof] = true; }
+            if (on_z0) { fit_marker_face_z0[dof] = true; }
+            if (on_z1) { fit_marker_face_z1[dof] = true; }
+         }
+      }
+   }
+
    Curve_Sine_Top curve_top(fit_marker_top, a, b, c);
    Curve_Sine_Right curve_right(fit_marker_right, a, b, c);
    Line_Bottom line_bottom(fit_marker_bottom);
    Line_Left line_left(fit_marker_left);
    Circle circle_out(fit_marker_out, 1.0);
    Circle circle_in(fit_marker_in, 0.4);
+   AxisAlignedPlane plane_x0(fit_marker_face_x0, 0, 0.0);
+   CubeCornerFace face_x1(fit_marker_face_x1, 0, b);
+   AxisAlignedPlane plane_y0(fit_marker_face_y0, 1, 0.0);
+   CubeCornerFace face_y1(fit_marker_face_y1, 1, b);
+   AxisAlignedPlane plane_z0(fit_marker_face_z0, 2, 0.0);
+   CubeCornerFace face_z1(fit_marker_face_z1, 2, b);
+   AxisAlignedEdge edge_x0y0(fit_marker_edge_x0y0, 2, 0.0, 0.0);
+   AxisAlignedEdge edge_x0y1(fit_marker_edge_x0y1, 2, 0.0, 1.0);
+   AxisAlignedEdge edge_x1y0(fit_marker_edge_x1y0, 2, 1.0, 0.0);
+   CubeCornerEdge edge_x1y1(fit_marker_edge_x1y1, 2, b);
+   AxisAlignedEdge edge_x0z0(fit_marker_edge_x0z0, 1, 0.0, 0.0);
+   AxisAlignedEdge edge_x0z1(fit_marker_edge_x0z1, 1, 0.0, 1.0);
+   AxisAlignedEdge edge_x1z0(fit_marker_edge_x1z0, 1, 1.0, 0.0);
+   CubeCornerEdge edge_x1z1(fit_marker_edge_x1z1, 1, b);
+   AxisAlignedEdge edge_y0z0(fit_marker_edge_y0z0, 0, 0.0, 0.0);
+   AxisAlignedEdge edge_y0z1(fit_marker_edge_y0z1, 0, 0.0, 1.0);
+   AxisAlignedEdge edge_y1z0(fit_marker_edge_y1z0, 0, 1.0, 0.0);
+   CubeCornerEdge edge_y1z1(fit_marker_edge_y1z1, 0, b);
+   SineCubeFace sine_face_x1(fit_marker_face_x1, 0, a, b, c);
+   SineCubeFace sine_face_y1(fit_marker_face_y1, 1, a, b, c);
+   SineCubeFace sine_face_z1(fit_marker_face_z1, 2, a, b, c);
+   SineCubeEdge sine_edge_x1y1(fit_marker_edge_x1y1, 2, a, b, c);
+   SineCubeEdge sine_edge_x1z1(fit_marker_edge_x1z1, 1, a, b, c);
+   SineCubeEdge sine_edge_y1z1(fit_marker_edge_y1z1, 0, a, b, c);
    Array<AnalyticSurface *> surf_array;
    if (strcmp(mesh_file, "data/wall_linear.mesh") == 0 ||
        strcmp(mesh_file, "data/wall_a02_b05_c15.mesh") == 0)
@@ -449,37 +633,80 @@ int main(int argc, char *argv[])
       surf_array.Append(&circle_out);
       surf_array.Append(&circle_in);
    }
+   else if (cube_corner_mesh)
+   {
+      surf_array.Append(&plane_x0);
+      surf_array.Append(&face_x1);
+      surf_array.Append(&plane_y0);
+      surf_array.Append(&face_y1);
+      surf_array.Append(&plane_z0);
+      surf_array.Append(&face_z1);
+      surf_array.Append(&edge_x0y0);
+      surf_array.Append(&edge_x0y1);
+      surf_array.Append(&edge_x1y0);
+      surf_array.Append(&edge_x1y1);
+      surf_array.Append(&edge_x0z0);
+      surf_array.Append(&edge_x0z1);
+      surf_array.Append(&edge_x1z0);
+      surf_array.Append(&edge_x1z1);
+      surf_array.Append(&edge_y0z0);
+      surf_array.Append(&edge_y0z1);
+      surf_array.Append(&edge_y1z0);
+      surf_array.Append(&edge_y1z1);
+   }
+   else if (sine_cube_mesh)
+   {
+      surf_array.Append(&plane_x0);
+      surf_array.Append(&sine_face_x1);
+      surf_array.Append(&plane_y0);
+      surf_array.Append(&sine_face_y1);
+      surf_array.Append(&plane_z0);
+      surf_array.Append(&sine_face_z1);
+      surf_array.Append(&edge_x0y0);
+      surf_array.Append(&edge_x0y1);
+      surf_array.Append(&edge_x1y0);
+      surf_array.Append(&sine_edge_x1y1);
+      surf_array.Append(&edge_x0z0);
+      surf_array.Append(&edge_x0z1);
+      surf_array.Append(&edge_x1z0);
+      surf_array.Append(&sine_edge_x1z1);
+      surf_array.Append(&edge_y0z0);
+      surf_array.Append(&edge_y0z1);
+      surf_array.Append(&edge_y1z0);
+      surf_array.Append(&sine_edge_y1z1);
+   }
    else { MFEM_ABORT("bad setup"); }
 
    AnalyticCompositeSurface surfaces(surf_array);
 
    // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
    // that the boundaries are straight.
-   Array<int> ess_tdofs, ess_vdofs;
-
-   for (int e = 0; e < pmesh->GetNBE(); e++)
+   if (!cube_3d_mesh)
    {
-      H1FESpace.GetBdrElementVDofs(e, vdofs);
-      const int nd = H1FESpace.GetBE(e)->GetDof();
-
-      for (int j = 0; j < nd; j++)
+      for (int e = 0; e < pmesh->GetNBE(); e++)
       {
-         int cnt = 0;
-         for (int s = 0; s < surfaces.GetNumSurfaces(); s++)
-         {
-            const Array<bool> &m = surfaces.GetSurfaceID(s)->GetMarker();
-            if (m[vdofs[j]]) { cnt++; }
-         }
+         H1FESpace.GetBdrElementVDofs(e, vdofs);
+         const int nd = H1FESpace.GetBE(e)->GetDof();
 
-         if (cnt > 1)
+         for (int j = 0; j < nd; j++)
          {
-            ess_vdofs.Append(vdofs[j]);
-            int tdof = H1FESpace.GetLocalTDofNumber(vdofs[j]);
-            if (tdof >= 0) { ess_tdofs.Append(tdof); }
+            int cnt = 0;
+            for (int s = 0; s < surfaces.GetNumSurfaces(); s++)
+            {
+               const Array<bool> &m = surfaces.GetSurfaceID(s)->GetMarker();
+               if (m[vdofs[j]]) { cnt++; }
+            }
 
-            ess_vdofs.Append(vdofs[j + nd]);
-            tdof = H1FESpace.GetLocalTDofNumber(vdofs[j + nd]);
-            if (tdof >= 0) { ess_tdofs.Append(tdof); }
+            if (cnt > 1)
+            {
+               ess_vdofs.Append(vdofs[j]);
+               int tdof = H1FESpace.GetLocalTDofNumber(vdofs[j]);
+               if (tdof >= 0) { ess_tdofs.Append(tdof); }
+
+               ess_vdofs.Append(vdofs[j + nd]);
+               tdof = H1FESpace.GetLocalTDofNumber(vdofs[j + nd]);
+               if (tdof >= 0) { ess_tdofs.Append(tdof); }
+            }
          }
       }
    }
