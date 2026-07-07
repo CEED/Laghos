@@ -292,6 +292,7 @@ int main(int argc, char *argv[])
    using GRAD = QuadratureInterpolator::GradKernels;
    // 2D Q1Q0.
    TENS::Specialization<2,QVectorLayout::byNODES,1,1,2>::Opt<1>::Add();
+   TENS::Specialization<2,QVectorLayout::byVDIM,1,1,4>::Opt<1>::Add();
    TENS::Specialization<2,QVectorLayout::byVDIM,1,1,2>::Opt<1>::Add();
    TENS::Specialization<2,QVectorLayout::byVDIM,2,2,2>::Opt<1>::Add();
    GRAD::Specialization<2,QVectorLayout::byVDIM,0,2,2,2>::Add();
