@@ -89,8 +89,8 @@
 // mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 0 -vis -tf 7.0 -ale 0.5 -rvs -rd 0.3
 // mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 1 -vis -tf 0.6 -ale 0.02 -rvs -rd 2.0 -ok 3 -ot 2
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
-// mpirun -np 6 laghos -m data/cube_corner.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.02 -rd 0.02 -rvs
-// mpirun -np 6 laghos -m data/cube_a02_b01_c11.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.02 -rd 0.02 -rvs
+// mpirun -np 6 laghos -m data/cube_corner.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.06 -rd 0.02 -rvs
+// mpirun -np 6 laghos -m data/cube_a02_b01_c11.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.06 -rd 0.02 -rvs
 
 
 
