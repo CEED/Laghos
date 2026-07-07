@@ -524,6 +524,104 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
 void LagrangianHydroOperator::RemoveBdrNormalPart(ParGridFunction &v,
                                                   const ParGridFunction &x)
 {
+   if (dim == 3)
+   {
+      Vector pos(dim), v_i(dim), nor1(dim), nor2(dim), tangent(dim);
+      for (int dof = 0; dof < H1.GetNDofs(); dof++)
+      {
+         const Analytic3DCurve *edge = nullptr;
+         int face_count = 0;
+
+         for (int s = 0; s < surfaces.GetNumSurfaces(); s++)
+         {
+            const AnalyticSurface *surf = surfaces.GetSurfaceID(s);
+            const Array<bool> &marker = surf->GetMarker();
+            if (!marker[dof]) { continue; }
+
+            if (const auto *curve = dynamic_cast<const Analytic3DCurve *>(surf))
+            {
+               edge = curve;
+               break;
+            }
+            if (dynamic_cast<const Analytic3DSurface *>(surf))
+            {
+               if (face_count == 0)
+               {
+                  for (int d = 0; d < dim; d++)
+                  {
+                     pos(d) = x(H1.DofToVDof(dof, d));
+                  }
+                  surf->NormalVector(pos.GetData(), nor1.GetData());
+               }
+               else if (face_count == 1)
+               {
+                  surf->NormalVector(pos.GetData(), nor2.GetData());
+               }
+               face_count++;
+            }
+         }
+
+         if (!edge && face_count == 0) { continue; }
+
+         for (int d = 0; d < dim; d++)
+         {
+            const int vdof = H1.DofToVDof(dof, d);
+            pos(d) = x(vdof);
+            v_i(d) = v(vdof);
+         }
+
+         if (edge)
+         {
+            double dist1, dist2, t;
+            edge->t_of_xyz(pos(0), pos(1), pos(2), dist1, dist2, t);
+            tangent(0) = edge->dx_dt(t);
+            tangent(1) = edge->dy_dt(t);
+            tangent(2) = edge->dz_dt(t);
+         }
+         else if (face_count == 1)
+         {
+            const double nor_norm = sqrt(nor1 * nor1);
+            if (nor_norm == 0.0) { continue; }
+            tangent = nor1;
+            tangent /= nor_norm;
+            const double v_dot_n = v_i * tangent;
+            for (int d = 0; d < dim; d++)
+            {
+               v_i(d) -= v_dot_n * tangent(d);
+            }
+            for (int d = 0; d < dim; d++)
+            {
+               v(H1.DofToVDof(dof, d)) = v_i(d);
+            }
+            continue;
+         }
+         else if (face_count == 2)
+         {
+            tangent(0) = nor1(1) * nor2(2) - nor1(2) * nor2(1);
+            tangent(1) = nor1(2) * nor2(0) - nor1(0) * nor2(2);
+            tangent(2) = nor1(0) * nor2(1) - nor1(1) * nor2(0);
+         }
+         else
+         {
+            v(H1.DofToVDof(dof, 0)) = 0.0;
+            v(H1.DofToVDof(dof, 1)) = 0.0;
+            v(H1.DofToVDof(dof, 2)) = 0.0;
+            continue;
+         }
+
+         const double tan_norm2 = tangent * tangent;
+         if (tan_norm2 == 0.0) { continue; }
+         const double v_dot_t = (v_i * tangent) / tan_norm2;
+         v_i = tangent;
+         v_i *= v_dot_t;
+         for (int d = 0; d < dim; d++)
+         {
+            v(H1.DofToVDof(dof, d)) = v_i(d);
+         }
+      }
+      return;
+   }
+
    Array<int> vdofs;
    Vector v_vals;
    for (int be = 0; be < H1.GetNBE(); be++)
