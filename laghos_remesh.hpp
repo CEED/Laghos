@@ -30,6 +30,12 @@ void OptimizeMesh(ParGridFunction &coord_x_in,
                   const IntegrationRule &ir, const IntegrationRule &ir_bdr,
                   double remesh_dist, ParGridFunction &coord_x_out, bool vis);
 
+double EvaluateBoundaryDistance(ParGridFunction &coord_x,
+                                const IntegrationRule &ir_bdr,
+                                const AnalyticCompositeSurface &surfaces,
+                                const Array<int> &be_to_surface,
+                                bool visualize);
+
 // x = [1.0 + a sin(c pi) + b] t.
 // y = 1 + a sin(c pi t) + b t.
 // The distance is the error in y.

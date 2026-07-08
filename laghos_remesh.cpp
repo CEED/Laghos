@@ -27,6 +27,142 @@ namespace hydrodynamics
 
 socketstream vism;
 
+double EvaluateBoundaryDistance(ParGridFunction &coord_x,
+                                const IntegrationRule &ir_bdr,
+                                const AnalyticCompositeSurface &surfaces,
+                                const Array<int> &be_to_surface,
+                                bool visualize)
+{
+   // Compute the distance to the analytical boundary at the boundary
+   // quadrature points and use that same field for the max norm and
+   // visualization.
+   ParMesh *pmesh = coord_x.ParFESpace()->GetParMesh();
+   const int dim = pmesh->Dimension();
+   Vector pos(dim);
+   FaceQuadratureSpace distance_qs(*pmesh, ir_bdr, FaceType::Boundary);
+   QuadratureFunction distance_qf(&distance_qs);
+   double local_qp_max = 0.0;
+
+   pmesh->NewNodes(coord_x, false);
+   distance_qf = 0.0;
+
+   for (int be = 0; be < pmesh->GetNBE(); be++)
+   {
+      const int surf_id = be_to_surface[be];
+      if (surf_id < 0) { MFEM_ABORT("Boundary element not mapped to surface.") }
+
+      FaceElementTransformations *bdr_face_tr = pmesh->GetBdrFaceTransformations(be);
+      if (bdr_face_tr == NULL) { MFEM_ABORT("Null boundary face transformation.") }
+
+      const AnalyticSurface *surface = surfaces.GetSurfaceID(surf_id);
+      const int qf_be = distance_qf.GetSpace()->GetEntityIndex(*bdr_face_tr);
+      Vector qval;
+
+      for (int q = 0; q < ir_bdr.GetNPoints(); q++)
+      {
+         const IntegrationPoint &ip = ir_bdr.IntPoint(q);
+         bdr_face_tr->SetAllIntPoints(&ip);
+         coord_x.GetVectorValue(*bdr_face_tr, ip, pos);
+         distance_qf.GetValues(qf_be, q, qval);
+         qval(0) = surface->DistanceToSurface(pos);
+         local_qp_max = max(local_qp_max, qval(0));
+      }
+   }
+
+   double global_qp_max = 0.0;
+   MPI_Allreduce(&local_qp_max, &global_qp_max, 1, MPI_DOUBLE, MPI_MAX,
+                 pmesh->GetComm());
+
+   if (visualize)
+   {
+      ParFiniteElementSpace pfes_scalar(pmesh, coord_x.ParFESpace()->FEColl(), 1);
+      ParGridFunction distance_sum(&pfes_scalar);
+      ParGridFunction distance_count(&pfes_scalar);
+      ParGridFunction distance_vis_gf(&pfes_scalar);
+      Array<int> dofs;
+      Vector vis_vals, count_vals, node_pos(dim), q_pos(dim), qval;
+      DofTransformation dof_tr;
+
+      distance_sum = 0.0;
+      distance_count = 0.0;
+
+      for (int be = 0; be < pmesh->GetNBE(); be++)
+      {
+         const FiniteElement *fe = pfes_scalar.GetBE(be);
+         const IntegrationRule &nodes = fe->GetNodes();
+         ElementTransformation *bdr_tr =
+            pfes_scalar.GetBdrElementTransformation(be);
+         FaceElementTransformations *bdr_face_tr =
+            pmesh->GetBdrFaceTransformations(be);
+         const int qf_be = distance_qf.GetSpace()->GetEntityIndex(*bdr_face_tr);
+
+         if (bdr_tr == NULL || bdr_face_tr == NULL || qf_be < 0) { continue; }
+
+         const IntegrationRule &ir_q = distance_qf.GetSpace()->GetIntRule(qf_be);
+         pfes_scalar.GetBdrElementDofs(be, dofs, dof_tr);
+         vis_vals.SetSize(nodes.GetNPoints());
+         count_vals.SetSize(nodes.GetNPoints());
+         count_vals = 1.0;
+
+         for (int j = 0; j < nodes.GetNPoints(); j++)
+         {
+            const IntegrationPoint &node_ip = nodes.IntPoint(j);
+            bdr_tr->SetIntPoint(&node_ip);
+            coord_x.GetVectorValue(*bdr_tr, node_ip, node_pos);
+
+            double min_dist2 = infinity();
+            int best_q = 0;
+            for (int q = 0; q < ir_q.GetNPoints(); q++)
+            {
+               const IntegrationPoint &q_ip = ir_q.IntPoint(q);
+               bdr_face_tr->SetAllIntPoints(&q_ip);
+               coord_x.GetVectorValue(*bdr_face_tr, q_ip, q_pos);
+
+               double dist2 = 0.0;
+               for (int d = 0; d < q_pos.Size(); d++)
+               {
+                  const double delta = node_pos(d) - q_pos(d);
+                  dist2 += delta * delta;
+               }
+               if (dist2 < min_dist2)
+               {
+                  min_dist2 = dist2;
+                  best_q = q;
+               }
+            }
+
+            distance_qf.GetValues(qf_be, best_q, qval);
+            vis_vals(j) = qval(0);
+         }
+
+         dof_tr.TransformPrimal(vis_vals);
+         dof_tr.TransformPrimal(count_vals);
+         distance_sum.AddElementVector(dofs, vis_vals);
+         distance_count.AddElementVector(dofs, count_vals);
+      }
+
+      HypreParVector *true_sum = distance_sum.ParallelAssemble();
+      HypreParVector *true_count = distance_count.ParallelAssemble();
+      for (int i = 0; i < true_sum->Size(); i++)
+      {
+         const double count = (*true_count)[i];
+         (*true_sum)[i] = (count > 0.0) ? ((*true_sum)[i] / count) : 0.0;
+      }
+      distance_vis_gf.SetFromTrueDofs(*true_sum);
+
+      // Open a fresh GLVis connection so each ALE step gets its own window.
+      socketstream vis;
+      VisualizeField(vis, "localhost", 19916, distance_vis_gf,
+                     "Distance to analytical boundary",
+                     800, 0, 400, 400);
+
+      delete true_sum;
+      delete true_count;
+   }
+
+   return global_qp_max;
+}
+
 void OptimizeMesh(ParGridFunction &coord_x_in,
                   AnalyticCompositeSurface &surfaces,
                   const IntegrationRule &ir,

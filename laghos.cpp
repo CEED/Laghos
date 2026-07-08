@@ -120,11 +120,6 @@ void v0(const Vector &, Vector &);
 static long GetMaxRssMB();
 static void display_banner(std::ostream&);
 static void Checks(const int ti, const double norm, int &checks);
-static double BoundarySurfaceHausdorff(ParMesh &pmesh,
-                                       const ParGridFunction &x_gf,
-                                       const IntegrationRule &ir_bdr,
-                                       const AnalyticCompositeSurface &surfaces,
-                                       const Array<int> &be_to_surface);
 
 int main(int argc, char *argv[])
 {
@@ -1079,10 +1074,11 @@ int main(int argc, char *argv[])
 
          // Compute the Hausdorff distance between the current mesh boundary
          // and the analytical boundary.
-         // The maximum is taken over quadrature points on the boundary.
+         // The maximum absolute distance is taken over the boundary quadrature
+         // points.
          const double boundary_surface_hausdorff =
-            BoundarySurfaceHausdorff(*pmesh, x_gf, hydro.GetIntRule_b(),
-                                     surfaces, be_to_surface);
+            EvaluateBoundaryDistance(x_gf, hydro.GetIntRule_b(), surfaces,
+                                     be_to_surface, vis_remesh);
          if (Mpi::Root())
          {
             cout << "Boundary surface Hausdorff distance: "
@@ -1625,39 +1621,4 @@ static void Checks(const int ti, const double nrm, int &chk)
          check(p, it, norm);
       }
    }
-}
-
-double BoundarySurfaceHausdorff(ParMesh &pmesh,
-                                const ParGridFunction &x_gf,
-                                const IntegrationRule &ir_bdr,
-                                const AnalyticCompositeSurface &surfaces,
-                                const Array<int> &be_to_surface)
-{
-   const int dim = pmesh.Dimension();
-   double local_max = 0.0;
-   Vector pos(dim);
-
-   for (int be = 0; be < pmesh.GetNBE(); be++)
-   {
-      const int surf_id = be_to_surface[be];
-      if (surf_id < 0) { MFEM_ABORT("Boundary element not mapped to surface.") }
-
-      auto bdr_tr = pmesh.GetBdrFaceTransformations(be);
-      if (bdr_tr == NULL) { MFEM_ABORT("Null boundary transformation.") }
-
-      const AnalyticSurface *surface = surfaces.GetSurfaceID(surf_id);
-      for (int q = 0; q < ir_bdr.GetNPoints(); q++)
-      {
-         const IntegrationPoint &ip = ir_bdr.IntPoint(q);
-         bdr_tr->SetAllIntPoints(&ip);
-         x_gf.GetVectorValue(*bdr_tr, ip, pos);
-         local_max = std::max(local_max, surface->DistanceToSurface(pos));
-      }
-   }
-
-   double global_max = 0.0;
-   MPI_Allreduce(&local_max, &global_max, 1, MPI_DOUBLE, MPI_MAX,
-                 pmesh.GetComm());
-
-   return global_max;
 }
