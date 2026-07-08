@@ -295,10 +295,9 @@ int main(int argc, char *argv[])
    if (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0)
    {
       a = 0.2; b = 0.1; c = 1.1;
-      const double corner_coord = 1.0 + a * sin(c * M_PI) * sin(c * M_PI) + b;
-      blast_position[0] = corner_coord;
-      blast_position[1] = corner_coord;
-      blast_position[2] = corner_coord;
+      blast_position[0] = 0.0;
+      blast_position[1] = 1.0;
+      blast_position[2] = 0.0;
    }
    if (strcmp(mesh_file, "data/solid_torus.msh") == 0)
    {
