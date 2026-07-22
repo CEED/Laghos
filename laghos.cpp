@@ -91,8 +91,8 @@
 // mpirun -np 7 laghos -m data/circles4.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -tf 1.0 -ale 0.2
 // mpirun -np 6 laghos -m data/cube_corner.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.06 -rd 0.02 -rvs
 // mpirun -np 6 laghos -m data/cube_a02_b01_c11.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -vis -tf 0.12 -ale 0.06 -rd 0.02 -rvs
-// mpirun -np 6 laghos -m data/solid_torus.msh -p 1 -rs 1 -s 7 -fa -vs 20 -ct 0 -vis -tf 5.0 -ale 0.5 -rd 0.02 -rvs
-// mpirun -np 6 laghos -m data/solid_torus.msh -p 1 -rs 1 -s 7 -fa -vs 20 -ct 1 -vis -tf 5.0 -ale 0.5 -rd 0.02 -rvs
+// mpirun -np 6 laghos -m data/solid_torus_nurbs.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -ct 0 -vis -tf 5.0 -ale 0.5 -rd 0.02 -rvs
+// mpirun -np 6 laghos -m data/solid_torus_nurbs.mesh -p 1 -rs 1 -s 7 -fa -vs 20 -ct 1 -vis -tf 5.0 -ale 0.5 -rd 0.02 -rvs
 
 
 
@@ -295,11 +295,11 @@ int main(int argc, char *argv[])
    if (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0)
    {
       a = 0.2; b = 0.1; c = 1.1;
-      blast_position[0] = 0.0;
-      blast_position[1] = 1.0;
+      blast_position[0] = 1.0;
+      blast_position[1] = 0.0;
       blast_position[2] = 0.0;
    }
-   if (strcmp(mesh_file, "data/solid_torus.msh") == 0)
+   if (strcmp(mesh_file, "data/solid_torus_nurbs.mesh") == 0)
    {
       blast_position[0] = (case_type == 0) ? 3.0 : 1.0;
       blast_position[1] = 0.0;
@@ -401,7 +401,7 @@ int main(int argc, char *argv[])
    const bool sine_cube_mesh =
       (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0);
    const bool torus_mesh =
-      (strcmp(mesh_file, "data/solid_torus.msh") == 0);
+      (strcmp(mesh_file, "data/solid_torus_nurbs.mesh") == 0);
    const bool cube_3d_mesh = cube_corner_mesh || sine_cube_mesh;
    Array<bool> fit_marker_top(H1FESpace.GetNDofs());
    Array<bool> fit_marker_right(H1FESpace.GetNDofs());
