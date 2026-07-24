@@ -84,6 +84,7 @@
 // ALE tests:
 // -rvg is remap v with gslib.
 // -rvs is remap v stabilized.
+// mpirun -np 4 laghos -m data/square01_quad.mesh -p 1 -rs 3 -s 7 -fa -vs 20 -vis -vis-r -rd 0.05 -tf 0.8 -ale 0.2
 // mpirun -np 4 laghos -m data/wall_linear.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -vis-r -rd 0.05 -tf 2.5 -ale 0.25
 // mpirun -np 6 laghos -m data/wall_a02_b05_c15.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -vis -vis-r -rd 0.02 -tf 1.2 -ale 0.2
 // mpirun -np 6 laghos -m data/circles3.mesh -p 1 -rs 0 -s 7 -fa -vs 20 -ct 0 -vis -tf 7.0 -ale 0.5 -rvs -rd 0.3
@@ -170,7 +171,7 @@ int main(int argc, char *argv[])
    double blast_energy = 0.25;
 
    double blast_position[] = {1.0, 0.0, 0.0};
-   double a, b, c;
+   double a = 0.0, b = 0.0, c = 0.0;
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -278,6 +279,11 @@ int main(int argc, char *argv[])
       a = 0.2; b = 0.5; c = 1.5;
       blast_position[0] = 1.0;
       blast_position[1] = 0.0;
+   }
+   if (strcmp(mesh_file, "data/square01_quad.mesh") == 0)
+   {
+      blast_position[0] = 0.5;
+      blast_position[1] = 0.5;
    }
    if (strcmp(mesh_file, "data/circles3.mesh") == 0 ||
        strcmp(mesh_file, "data/circles4.mesh") == 0)
@@ -400,6 +406,8 @@ int main(int argc, char *argv[])
       (strcmp(mesh_file, "data/cube_corner.mesh") == 0);
    const bool sine_cube_mesh =
       (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0);
+   const bool square_mesh =
+      (strcmp(mesh_file, "data/square01_quad.mesh") == 0);
    const bool torus_mesh =
       (strcmp(mesh_file, "data/solid_torus_nurbs.mesh") == 0);
    const bool cube_3d_mesh = cube_corner_mesh || sine_cube_mesh;
@@ -457,6 +465,7 @@ int main(int argc, char *argv[])
    Array<int> be_to_surface(pmesh->GetNBE());
    be_to_surface = -1;
    Array<int> ess_tdofs, ess_vdofs;
+   Vector dof_coord(dim);
    for (int e = 0; e < pmesh->GetNBE(); e++)
    {
       const int attr = pmesh->GetBdrElement(e)->GetAttribute();
@@ -477,6 +486,37 @@ int main(int argc, char *argv[])
       {
          be_to_surface[e] = 0;
          for (int j = 0; j < nd; j++) { fit_marker_torus[vdofs[j]] = true; }
+         continue;
+      }
+      // TODO: make square mesh with distinct boundary attributes
+      if (square_mesh)
+      {
+         const IntegrationRule &nodes = H1FESpace.GetBE(e)->GetNodes();
+         ElementTransformation *bdr_tr = H1FESpace.GetBdrElementTransformation(e);
+         for (int j = 0; j < nd; j++)
+         {
+            bdr_tr->Transform(nodes.IntPoint(j), dof_coord);
+            if (fabs(dof_coord(1) - 1.0) < 1e-12)
+            {
+               fit_marker_top[vdofs[j]] = true;
+               be_to_surface[e] = 0;
+            }
+            else if (fabs(dof_coord(0) - 1.0) < 1e-12)
+            {
+               fit_marker_right[vdofs[j]] = true;
+               be_to_surface[e] = 1;
+            }
+            else if (fabs(dof_coord(1)) < 1e-12)
+            {
+               fit_marker_bottom[vdofs[j]] = true;
+               be_to_surface[e] = 2;
+            }
+            else if (fabs(dof_coord(0)) < 1e-12)
+            {
+               fit_marker_left[vdofs[j]] = true;
+               be_to_surface[e] = 3;
+            }
+         }
          continue;
       }
 
@@ -637,7 +677,8 @@ int main(int argc, char *argv[])
    SineCubeEdge sine_edge_x1z1(fit_marker_edge_x1z1, 1, a, b, c);
    SineCubeEdge sine_edge_y1z1(fit_marker_edge_y1z1, 0, a, b, c);
    Array<AnalyticSurface *> surf_array;
-   if (strcmp(mesh_file, "data/wall_linear.mesh") == 0 ||
+   if (square_mesh ||
+       strcmp(mesh_file, "data/wall_linear.mesh") == 0 ||
        strcmp(mesh_file, "data/wall_a02_b05_c15.mesh") == 0)
    {
       surf_array.Append(&curve_top);
