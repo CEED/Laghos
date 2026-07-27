@@ -403,6 +403,16 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
     M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
     Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
 {
+   // construct offsets
+   const int vdofs_h1 = pfes_H1.GetVSize();
+   const int ndofs_l2 = pfes_L2.GetVSize();
+   offsets.SetSize(NVARS+1);
+   offsets = 0;
+   offsets[VELOCITY+1] = vdofs_h1; // velocity
+   offsets[DENSITY+1] = ndofs_l2; // density
+   offsets[ENERGY+1] = ndofs_l2; // energy
+   offsets.PartialSum();
+
    // no need for Vector Massmatrix in stablised velocity remap
    // MCL only uses the first component of this, but unstable remap needs vector mass matrix
    if (remap_v_stable)
@@ -494,8 +504,9 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 
    dU = 0.0;
 
-   // Arrangement: interface (1), velocity (dim), density (1), energy (1).
-   Vector *U_ptr = const_cast<Vector *>(&U);
+   // Block view
+   const BlockVector bU(const_cast<Vector&>(U), offsets);
+   BlockVector bdU(dU, offsets);
 
    if (remap_v)
    {
@@ -518,14 +529,13 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
          Kr_H1.Assemble();
          HypreParMatrix *A = Mr_H1.ParallelAssemble();
          lin_solver.SetOperator(*A);
-         Vector v, d_v, rhs_v(dofs_h1*dim);
-         v.MakeRef(*U_ptr, 0, dofs_h1*dim);
-         d_v.MakeRef(dU,   0, dofs_h1*dim);
-         Vector v_comp, rhs_v_comp;
+         const Vector &v = bU.GetBlock(VELOCITY);
+         Vector &d_v = bdU.GetBlock(VELOCITY);
+         Vector rhs_v(dofs_h1*dim);
          for (int d = 0; d < dim; d++)
          {
-            v_comp.MakeRef(v, d * dofs_h1, dofs_h1);
-            rhs_v_comp.MakeRef(rhs_v, d * dofs_h1, dofs_h1);
+            const Vector v_comp(const_cast<Vector&>(v), d * dofs_h1, dofs_h1);
+            Vector rhs_v_comp(rhs_v, d * dofs_h1, dofs_h1);
             Kr_H1.Mult(v_comp, rhs_v_comp);
          }
          const Operator *P_v = pfes_H1.GetProlongationMatrix();
@@ -570,9 +580,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
          K_hpm->MergeDiagAndOffd(K_glb);
          KT_hpm->MergeDiagAndOffd(KT_glb);
 
-         Vector v, v_d, d_v;
-         v.MakeRef(*U_ptr, 0, dofs_h1*dim);
-         d_v.MakeRef(dU, 0, dofs_h1*dim);
+         const Vector &v = bU.GetBlock(VELOCITY);
+         Vector &d_v = bdU.GetBlock(VELOCITY);
          int scheme = 3;
          switch(scheme)
          {
@@ -594,7 +603,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    M_L2.Assemble();
    M_L2_Lump.BilinearForm::operator=(0.0);
    M_L2_Lump.Assemble();
-   Vector rho, d_rho, d_rho_HO(size_L2), d_rho_LO(size_L2);
+   Vector d_rho_HO(size_L2), d_rho_LO(size_L2);
    Vector lumpedM; M_L2_Lump.SpMat().GetDiag(lumpedM);
    DiscreteUpwindLOSolver lo_solver(pfes_L2, K_L2.SpMat(), lumpedM);
    LocalInverseHOSolver ho_solver(M_L2, K_L2);
@@ -602,8 +611,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    ParGridFunction rho_gf(&pfes_L2);
    FluxBasedFCT fct_solver(pfes_L2, dt,
                            K_L2.SpMat(), lo_solver.GetKmap(), M_L2.SpMat());
-   rho.MakeRef(*U_ptr, dim * dofs_h1, size_L2);
-   d_rho.MakeRef(dU,   dim * dofs_h1, size_L2);
+   const Vector &rho = bU.GetBlock(DENSITY);
+   Vector &d_rho = bdU.GetBlock(DENSITY);
    lo_solver.CalcLOSolution(rho, d_rho_LO);
    ho_solver.CalcHOSolution(rho, d_rho_HO);
    rho_gf = rho;
@@ -624,7 +633,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    Mr_L2.Assemble();
    Mr_L2_Lump.BilinearForm::operator=(0.0);
    Mr_L2_Lump.Assemble();
-   Vector e, d_e, d_e_HO(size_L2), d_e_LO(size_L2), Me_lumped;
+   Vector d_e_HO(size_L2), d_e_LO(size_L2), Me_lumped;
    Vector e_min(size_L2), e_max(size_L2);
    ParGridFunction e_gf(&pfes_L2);
    Mr_L2_Lump.SpMat().GetDiag(Me_lumped);
@@ -632,8 +641,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    LocalInverseHOSolver ho_e_solver(Mr_L2, Kr_L2);
    FluxBasedFCT fct_e_solver(pfes_L2, dt, Kr_L2.SpMat(),
                              lo_e_solver.GetKmap(), Mr_L2.SpMat());
-   e.MakeRef(*U_ptr, dim * dofs_h1 + size_L2, size_L2);
-   d_e.MakeRef(dU,   dim * dofs_h1 + size_L2, size_L2);
+   const Vector &e = bU.GetBlock(ENERGY);
+   Vector &d_e = bdU.GetBlock(ENERGY);
    lo_e_solver.CalcLOSolution(e, d_e_LO);
    ho_e_solver.CalcHOSolution(e, d_e_HO);
    e_gf = e;
@@ -644,7 +653,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
                                 e_min, e_max, d_e);
 }
 
-void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, Vector &v, Vector &d_v) const
+void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const Vector &v, Vector &d_v) const
 {
    GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
 
@@ -654,7 +663,6 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
    const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    d_v = 0.0;
-   Vector v_d;
    Array<double> rhs_array(dofs_h1);
    HypreParVector v_d_hpr(&pfes_H1_s);
 
@@ -665,7 +673,7 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
 
    for(int d = 0; d < dim; d++)
    {
-      v_d.MakeRef(v, d * dofs_h1, dofs_h1);
+      const Vector v_d(const_cast<Vector&>(v), d * dofs_h1, dofs_h1);
       for(int i = 0; i < dofs_h1; i++)
       {
          int i_td = pfes_H1_s.GetLocalTDofNumber(i);
@@ -723,7 +731,7 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
 }
 
 
-void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, Vector &v, Vector &d_v) const
+void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v, Vector &d_v) const
 {
    GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
    //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
@@ -736,7 +744,6 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
    const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    d_v = 0.0;
-   Vector v_d;
    Array<double> rhs_array(dofs_h1), udot_array(dofs_h1);
    HypreParVector v_d_hpr(&pfes_H1_s), vdot(&pfes_H1_s);
 
@@ -748,7 +755,7 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
 
    for(int d = 0; d < dim; d++)
    {
-      v_d.MakeRef(v, d * dofs_h1, dofs_h1);
+      const Vector v_d(const_cast<Vector&>(v), d * dofs_h1, dofs_h1);
       for(int i = 0; i < dofs_h1; i++)
       {
          int i_td = pfes_H1_s.GetLocalTDofNumber(i);
@@ -819,7 +826,7 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
    }
 }
 
-void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, Vector &v, Vector &d_v) const
+void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v, Vector &d_v) const
 {
    GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
    //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
@@ -832,7 +839,6 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
    const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    d_v = 0.0;
-   Vector v_d;
    Array<double> rhs_array(dofs_h1), udot_array(dofs_h1);
    HypreParVector v_d_hpr(&pfes_H1_s), vdot(&pfes_H1_s), v_min(&pfes_H1_s), v_max(&pfes_H1_s);
    double fij, fij_bound, fij_star, wij, wji;
@@ -845,7 +851,7 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
 
    for(int d = 0; d < dim; d++)
    {
-      v_d.MakeRef(v, d * dofs_h1, dofs_h1);
+      const Vector v_d(const_cast<Vector&>(v), d * dofs_h1, dofs_h1);
       for(int i = 0; i < dofs_h1; i++)
       {
          int i_td = pfes_H1_s.GetLocalTDofNumber(i);
@@ -958,7 +964,7 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
    }
 }
 
-void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, Vector &v, Vector &d_v) const
+void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, const Vector &v, Vector &d_v) const
 {
    d_v = 0.0;
    auto conv_int = new ConvectionIntegrator(rho_u_coeff);

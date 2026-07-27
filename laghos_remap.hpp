@@ -95,6 +95,16 @@ protected:
    bool remap_v = true;
    bool remap_v_stable = false;
 
+   enum 
+   {
+      VELOCITY,
+      DENSITY,
+      ENERGY,
+      //------
+      NVARS
+   };
+
+   Array<int> offsets;
    const Vector &x0;
    Vector &x_now;
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
@@ -117,17 +127,17 @@ protected:
                               Vector &dof_min, Vector &dof_max) const;
 
    void LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
-                    Vector &v, Vector &dv) const;
+                    const Vector &v, Vector &dv) const;
 
    void HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
-                                 const SparseMatrix &M_glb, Vector &v,
+                                 const SparseMatrix &M_glb, const Vector &v,
                                  Vector &d_v) const;
 
    void MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
-               const SparseMatrix &M_glb, Vector &v,
+               const SparseMatrix &M_glb, const Vector &v,
                Vector &d_v) const;
 
-   void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, Vector &v, Vector &d_v) const;
+   void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, const Vector &v, Vector &d_v) const;
    void ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const;
    void ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
 
