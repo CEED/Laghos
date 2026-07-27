@@ -28,6 +28,7 @@ namespace hydrodynamics
 class SolutionMover;
 struct MaterialData;
 
+#ifdef MFEM_USE_GSLIB
 class InterpolationRemap
 {
    public:
@@ -36,6 +37,7 @@ class InterpolationRemap
    void Remap(const ParGridFunction &source, const ParGridFunction &x_new,
               ParGridFunction &interpolated);
 };
+#endif
 
 // Performs the full remap advection loop.
 class RemapAdvector

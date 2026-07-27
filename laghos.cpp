@@ -228,8 +228,10 @@ int main(int argc, char *argv[])
                   "Visualize every n-th timestep.");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
+#ifdef MFEM_USE_GSLIB
    args.AddOption(&remap_v_gslib, "-rvg", "--rvg", "-no-rvg", "--no-rvg",
                   "Remap v with GSLIB.");
+#endif
    args.AddOption(&remap_v_stable, "-rvs", "--rvs", "-no-rvs", "--no-rvs",
                   "Use limiter for the advection based remap of the velocity field.");
    args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
@@ -1096,8 +1098,10 @@ int main(int argc, char *argv[])
          ParGridFunction v_new(&H1FESpace);
          if (remap_v_gslib)
          {
+#ifdef MFEM_USE_GSLIB
             InterpolationRemap interp;
             interp.Remap(v_gf, x_gf_opt, v_new);
+#endif
          }
 
          x_gf = x_gf_opt;
