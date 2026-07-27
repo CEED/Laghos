@@ -417,8 +417,6 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    // MCL only uses the first component of this, but unstable remap needs vector mass matrix
    if (remap_v_stable)
    {
-      auto *mass_int = new MassIntegrator(rho_coeff);
-      //mass_int = new MassIntegrator(rho_coeff);
       Mr_H1_s.AddDomainIntegrator(new MassIntegrator(rho_coeff));
       Mr_H1_s.Assemble(0);
       Mr_H1_s.Finalize(0);
@@ -496,7 +494,6 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    const int dim     = pfes_H1_s.GetMesh()->Dimension();
    const int NE      = pfes_H1_s.GetNE();
    const int dofs_h1 = pfes_H1_s.GetVSize(), size_L2 = pfes_L2.GetVSize();
-   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    // Move the mesh.
    const double t = GetTime();
@@ -660,7 +657,6 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
    ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
    const int dim     = pfes_H1_s.GetMesh()->Dimension();
    const int dofs_h1 = pfes_H1_s.GetVSize();
-   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    d_v = 0.0;
    Array<double> rhs_array(dofs_h1);
@@ -741,7 +737,6 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
    ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
    const int dim     = pfes_H1_s.GetMesh()->Dimension();
    const int dofs_h1 = pfes_H1_s.GetVSize();
-   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    d_v = 0.0;
    Array<double> rhs_array(dofs_h1), udot_array(dofs_h1);
@@ -836,7 +831,6 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
    ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
    const int dim     = pfes_H1_s.GetMesh()->Dimension();
    const int dofs_h1 = pfes_H1_s.GetVSize();
-   const int dofs_h1_glb = pfes_H1_s.GlobalTrueVSize();
 
    d_v = 0.0;
    Array<double> rhs_array(dofs_h1), udot_array(dofs_h1);
