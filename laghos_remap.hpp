@@ -63,7 +63,7 @@ private:
    RK3SSPSolver ode_solver;
    Vector x0;
 
-   socketstream vis_v;
+   socketstream vis_rho, vis_v, vis_e;
 
 public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e,

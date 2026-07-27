@@ -24,7 +24,7 @@ namespace mfem
 
 namespace hydrodynamics
 {
-
+#ifdef MFEM_USE_GSLIB
 void InterpolationRemap::Remap(const ParGridFunction &source,
                                const ParGridFunction &x_new,
                                ParGridFunction &interpolated)
@@ -95,6 +95,8 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 
    interpolated = interp_vals;
 }
+
+#endif
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
                              double cfl, bool remap_v_, bool remap_v_stable_,
@@ -275,8 +277,14 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
 
       if (remap_v)
       {
+         VisualizeField(vis_rho, vishost, visport, rho,
+                        "Remapped Density", Wx, Wy, Ww, Wh);
+         Wx += offx;
          VisualizeField(vis_v, vishost, visport, v,
                         "Remapped Velocity", Wx, Wy, Ww, Wh);
+         Wx += offx;
+         VisualizeField(vis_e, vishost, visport, e,
+                        "Remapped Energy", Wx, Wy, Ww, Wh);
       }
    }
 
