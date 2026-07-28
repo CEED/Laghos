@@ -68,6 +68,15 @@ private:
    socketstream vis_rho, vis_v, vis_e;
 
 public:
+   enum StateVars 
+   {
+      Velocity,
+      Density,
+      Energy,
+      //------
+      NVars
+   };
+
    RemapAdvector(const ParMesh &m, int order_v, int order_e,
                  double cfl, bool remap_v_, bool remap_v_stable_,
                  const Array<int> &ess_tdofs);
@@ -94,15 +103,6 @@ class AdvectorOper : public TimeDependentOperator
 protected:
    bool remap_v = true;
    bool remap_v_stable = false;
-
-   enum 
-   {
-      VELOCITY,
-      DENSITY,
-      ENERGY,
-      //------
-      NVARS
-   };
 
    Array<int> offsets;
    const Vector &x0;

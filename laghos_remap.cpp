@@ -111,27 +111,29 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     v_ess_tdofs(ess_tdofs),
     remap_v(remap_v_), remap_v_stable(remap_v_stable_),
     cfl_factor(cfl),
-    offsets(4), S(), v(), rho(), e(), x0()
+    offsets(), S(), v(), rho(), e(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
 
    // Arrangement: velocity (dim), density (1), energy (1).
-   offsets[0] = 0;
-   offsets[1] = vsize_H1;
-   offsets[2] = offsets[1] + vsize_L2;
-   offsets[3] = offsets[2] + vsize_L2;
+   offsets.SetSize(NVars+1);
+   offsets = 0;
+   offsets[Velocity+1] = vsize_H1;
+   offsets[Density+1] = vsize_L2;
+   offsets[Energy+1] = vsize_L2;
+   offsets.PartialSum();
    S.Update(offsets);
 
    if (remap_v_stable)
    {
-      v.MakeRef(&pfes_H1, S, offsets[0]);
+      v.MakeRef(&pfes_H1, S, offsets[Velocity]);
    }
    else
    {
-      v.MakeRef(&pfes_H1Lag, S, offsets[0]);
+      v.MakeRef(&pfes_H1Lag, S, offsets[Velocity]);
    }
-   rho.MakeRef(&pfes_L2, S, offsets[1]);
-   e.MakeRef(&pfes_L2, S, offsets[2]);
+   rho.MakeRef(&pfes_L2, S, offsets[Density]);
+   e.MakeRef(&pfes_L2, S, offsets[Energy]);
 }
 
 void RemapAdvector::InitFromLagr(const Vector &nodes0,
@@ -405,12 +407,12 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
 {
    // construct offsets
    const int vdofs_h1 = pfes_H1.GetVSize();
-   const int ndofs_l2 = pfes_L2.GetVSize();
-   offsets.SetSize(NVARS+1);
+   const int vdofs_l2 = pfes_L2.GetVSize();
+   offsets.SetSize(RemapAdvector::NVars+1);
    offsets = 0;
-   offsets[VELOCITY+1] = vdofs_h1; // velocity
-   offsets[DENSITY+1] = ndofs_l2; // density
-   offsets[ENERGY+1] = ndofs_l2; // energy
+   offsets[RemapAdvector::Velocity+1] = vdofs_h1; // velocity
+   offsets[RemapAdvector::Density+1] = vdofs_l2; // density
+   offsets[RemapAdvector::Energy+1] = vdofs_l2; // energy
    offsets.PartialSum();
 
    // no need for Vector Massmatrix in stablised velocity remap
@@ -526,8 +528,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
          Kr_H1.Assemble();
          HypreParMatrix *A = Mr_H1.ParallelAssemble();
          lin_solver.SetOperator(*A);
-         const Vector &v = bU.GetBlock(VELOCITY);
-         Vector &d_v = bdU.GetBlock(VELOCITY);
+         const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
+         Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
          Vector rhs_v(dofs_h1*dim);
          for (int d = 0; d < dim; d++)
          {
@@ -577,8 +579,8 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
          K_hpm->MergeDiagAndOffd(K_glb);
          KT_hpm->MergeDiagAndOffd(KT_glb);
 
-         const Vector &v = bU.GetBlock(VELOCITY);
-         Vector &d_v = bdU.GetBlock(VELOCITY);
+         const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
+         Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
          int scheme = 3;
          switch(scheme)
          {
@@ -605,15 +607,15 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    DiscreteUpwindLOSolver lo_solver(pfes_L2, K_L2.SpMat(), lumpedM);
    LocalInverseHOSolver ho_solver(M_L2, K_L2);
    Vector rho_min(size_L2), rho_max(size_L2);
-   ParGridFunction rho_gf(&pfes_L2);
    FluxBasedFCT fct_solver(pfes_L2, dt,
                            K_L2.SpMat(), lo_solver.GetKmap(), M_L2.SpMat());
-   const Vector &rho = bU.GetBlock(DENSITY);
-   Vector &d_rho = bdU.GetBlock(DENSITY);
+   const Vector &rho = bU.GetBlock(RemapAdvector::Density);
+   Vector &d_rho = bdU.GetBlock(RemapAdvector::Density);
    lo_solver.CalcLOSolution(rho, d_rho_LO);
    ho_solver.CalcHOSolution(rho, d_rho_HO);
-   rho_gf = rho;
-   rho_gf.ExchangeFaceNbrData();
+   const ParGridFunction rho_gf(const_cast<ParFiniteElementSpace*>(&pfes_L2),
+                                const_cast<Vector&>(rho));
+   const_cast<ParGridFunction&>(rho_gf).ExchangeFaceNbrData();
    ComputeElementsMinMax(rho_gf, el_min, el_max);
    ComputeSparsityBounds(pfes_L2, el_min, el_max, rho_min, rho_max);
    fct_solver.CalcFCTSolution(rho_gf, lumpedM, d_rho_HO, d_rho_LO,
@@ -632,18 +634,18 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    Mr_L2_Lump.Assemble();
    Vector d_e_HO(size_L2), d_e_LO(size_L2), Me_lumped;
    Vector e_min(size_L2), e_max(size_L2);
-   ParGridFunction e_gf(&pfes_L2);
    Mr_L2_Lump.SpMat().GetDiag(Me_lumped);
    DiscreteUpwindLOSolver lo_e_solver(pfes_L2, Kr_L2.SpMat(), Me_lumped);
    LocalInverseHOSolver ho_e_solver(Mr_L2, Kr_L2);
    FluxBasedFCT fct_e_solver(pfes_L2, dt, Kr_L2.SpMat(),
                              lo_e_solver.GetKmap(), Mr_L2.SpMat());
-   const Vector &e = bU.GetBlock(ENERGY);
-   Vector &d_e = bdU.GetBlock(ENERGY);
+   const Vector &e = bU.GetBlock(RemapAdvector::Energy);
+   Vector &d_e = bdU.GetBlock(RemapAdvector::Energy);
    lo_e_solver.CalcLOSolution(e, d_e_LO);
    ho_e_solver.CalcHOSolution(e, d_e_HO);
-   e_gf = e;
-   e_gf.ExchangeFaceNbrData();
+   const ParGridFunction e_gf(const_cast<ParFiniteElementSpace*>(&pfes_L2),
+                              const_cast<Vector&>(e));
+   const_cast<ParGridFunction&>(e_gf).ExchangeFaceNbrData();
    ComputeElementsMinMax(e_gf, el_min, el_max);
    ComputeSparsityBounds(pfes_L2, el_min, el_max, e_min, e_max);
    fct_e_solver.CalcFCTSolution(e_gf, Me_lumped, d_e_HO, d_e_LO,
