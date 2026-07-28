@@ -476,8 +476,8 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    Mr_L2_Lump.Finalize();
 
    Kr_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
-   auto dgt_ir_1 = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
-   auto dgt_br_1 = new DGTraceIntegrator(rho_u_coeff, -1.0, -0.5);
+   auto dgt_ir_1 = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
+   auto dgt_br_1 = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
    Kr_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_ir_1));
    Kr_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_br_1));
    Kr_L2.KeepNbrBlock(true);
