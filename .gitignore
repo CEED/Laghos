@@ -1,0 +1,30 @@
+# Build artifacts
+*.o
+*.bc
+laghos
+
+# Output from running Laghos
+results/
+
+# CMake-specific exclusions
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# OS-specific: Mac
+*.dSYM
+.DS_Store
+
+# Typical build directory
+/build/
+
+# Visual Studio Code
+/.vscode/
+
+# CMake user configuration files
+user.cmake
