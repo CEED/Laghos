@@ -42,6 +42,25 @@ class InterpolationRemap
 // Performs the full remap advection loop.
 class RemapAdvector
 {
+public:
+   enum StateVars 
+   {
+      Velocity,
+      Density,
+      Energy,
+      //------
+      NVars
+   };
+
+   enum class VelocityRemap
+   {
+      None = -1,
+      LowOrder,
+      HighOrderTarget,
+      MCL,
+      ClipAndScale,
+   };
+
 private:
    ParMesh pmesh;
    int dim;
@@ -50,7 +69,7 @@ private:
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
    const Array<int> &v_ess_tdofs;
 
-   bool remap_v;
+   VelocityRemap remap_v;
    bool remap_v_stable;
 
    const double cfl_factor;
@@ -68,18 +87,9 @@ private:
    socketstream vis_rho, vis_v, vis_e;
 
 public:
-   enum StateVars 
-   {
-      Velocity,
-      Density,
-      Energy,
-      //------
-      NVars
-   };
-
    RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                 double cfl, bool remap_v_, bool remap_v_stable_,
-                 const Array<int> &ess_tdofs);
+                 double cfl, VelocityRemap remap_v_,
+                 bool remap_v_stable_, const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
@@ -101,7 +111,7 @@ public:
 class AdvectorOper : public TimeDependentOperator
 {
 protected:
-   bool remap_v = true;
+   RemapAdvector::VelocityRemap remap_v = RemapAdvector::VelocityRemap::ClipAndScale;
    bool remap_v_stable = false;
 
    Array<int> offsets;
@@ -153,7 +163,7 @@ public:
                 ParFiniteElementSpace &pfes_L2,
                 bool remap_v_s);
 
-   void SetVelocityRemap(bool flag) { remap_v = flag; }
+   void SetVelocityRemap(RemapAdvector::VelocityRemap scheme) { remap_v = scheme; }
 
    // Single RK stage solve for all fields contained in U.
    virtual void Mult(const Vector &U, Vector &dU) const;

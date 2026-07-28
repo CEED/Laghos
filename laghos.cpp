@@ -165,6 +165,7 @@ int main(int argc, char *argv[])
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
+   int remap_v = (int)RemapAdvector::VelocityRemap::ClipAndScale;
    bool remap_v_gslib  = false;
    bool remap_v_stable = false;
    int dev = 0;
@@ -228,6 +229,8 @@ int main(int argc, char *argv[])
                   "Visualize every n-th timestep.");
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
+   args.AddOption(&remap_v, "-rv", "--remap-vel",
+                  "Velocity remap scheme (0 - LO, 1 - HO Target, 2 - MCL, 3 - Clip&Scale)");
 #ifdef MFEM_USE_GSLIB
    args.AddOption(&remap_v_gslib, "-rvg", "--rvg", "-no-rvg", "--no-rvg",
                   "Remap v with GSLIB.");
@@ -1035,7 +1038,9 @@ int main(int argc, char *argv[])
    //   }
 
    // Setup the remap operator.
-   const bool remap_v_adv   = !remap_v_gslib;
+   RemapAdvector::VelocityRemap remap_v_adv
+      = (!remap_v_gslib) ? ((RemapAdvector::VelocityRemap)remap_v)
+      : RemapAdvector::VelocityRemap::None;
    const double cfl_remap = 0.1;
 
    RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,

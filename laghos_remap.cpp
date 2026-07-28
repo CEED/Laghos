@@ -99,7 +99,7 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 #endif
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                             double cfl, bool remap_v_, bool remap_v_stable_,
+                             double cfl, VelocityRemap remap_v_, bool remap_v_stable_,
                              const Array<int> &ess_tdofs)
     : pmesh(m, true), dim(pmesh.Dimension()),
     fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
@@ -277,7 +277,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       oper->SetDt(dt);
       ode_solver.Step(S, t, dt);
 
-      if (remap_v)
+      if (remap_v != VelocityRemap::None)
       {
          VisualizeField(vis_rho, vishost, visport, rho,
                         "Remapped Density", Wx, Wy, Ww, Wh);
@@ -507,7 +507,7 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    const BlockVector bU(const_cast<Vector&>(U), offsets);
    BlockVector bdU(dU, offsets);
 
-   if (remap_v)
+   if (remap_v != RemapAdvector::VelocityRemap::None)
    {
       if (remap_v_stable == false)
       {
@@ -581,13 +581,20 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 
          const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
          Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
-         int scheme = 3;
-         switch(scheme)
+         switch(remap_v)
          {
-         case 0: LowOrderVel(K_glb, KT_glb, v, d_v); break;
-         case 1: HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v); break;
-         case 2: MCLVel(K_glb, KT_glb, M_glb, v, d_v); break;
-         case 3: ClipAndScale(pfes_H1_s, v, d_v); break;
+         case RemapAdvector::VelocityRemap::LowOrder:
+            LowOrderVel(K_glb, KT_glb, v, d_v);
+            break;
+         case RemapAdvector::VelocityRemap::HighOrderTarget:
+            HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v);
+            break;
+         case RemapAdvector::VelocityRemap::MCL:
+            MCLVel(K_glb, KT_glb, M_glb, v, d_v);
+            break;
+         case RemapAdvector::VelocityRemap::ClipAndScale:
+            ClipAndScale(pfes_H1_s, v, d_v);
+            break;
          default: MFEM_ABORT("Unknown scheme for velocity remap!");
          }
       }
