@@ -122,6 +122,22 @@ public:
                                        Vector &elvect);
 };
 
+class InternalEnergyIntegrator : public LinearFormIntegrator
+{
+   using LinearFormIntegrator::AssembleRHSElementVect;
+private:
+   const Vector &rhoDetJ;
+   const GridFunction &eps;
+
+public:
+   InternalEnergyIntegrator(const Vector &rdj, const GridFunction &eps_)
+   : rhoDetJ(rdj), eps(eps_) { }
+
+   void AssembleRHSElementVect(const FiniteElement &fe,
+                               ElementTransformation &Tr,
+                               Vector &elvect) override;
+};
+
 class PressureIntegrator : public LinearFormIntegrator
 {
    using LinearFormIntegrator::AssembleRHSElementVect;
