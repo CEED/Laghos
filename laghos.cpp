@@ -108,6 +108,7 @@ using std::cout;
 using std::endl;
 using namespace mfem;
 using namespace hydrodynamics;
+using namespace ale;
 
 // Choice for the problem setup.
 static int problem, dim;

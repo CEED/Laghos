@@ -22,7 +22,7 @@
 namespace mfem
 {
 
-namespace hydrodynamics
+namespace ale
 {
 
 class SolutionMover;

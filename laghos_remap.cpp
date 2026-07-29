@@ -22,7 +22,7 @@ using namespace std;
 namespace mfem
 {
 
-namespace hydrodynamics
+namespace ale
 {
 #ifdef MFEM_USE_GSLIB
 void InterpolationRemap::Remap(const ParGridFunction &source,
@@ -279,14 +279,14 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
 
       if (remap_v != VelocityRemap::None)
       {
-         VisualizeField(vis_rho, vishost, visport, rho,
-                        "Remapped Density", Wx, Wy, Ww, Wh);
+         hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho,
+                                       "Remapped Density", Wx, Wy, Ww, Wh);
          Wx += offx;
-         VisualizeField(vis_v, vishost, visport, v,
-                        "Remapped Velocity", Wx, Wy, Ww, Wh);
+         hydrodynamics::VisualizeField(vis_v, vishost, visport, v,
+                                       "Remapped Velocity", Wx, Wy, Ww, Wh);
          Wx += offx;
-         VisualizeField(vis_e, vishost, visport, e,
-                        "Remapped Energy", Wx, Wy, Ww, Wh);
+         hydrodynamics::VisualizeField(vis_e, vishost, visport, e,
+                                       "Remapped Energy", Wx, Wy, Ww, Wh);
       }
    }
 
