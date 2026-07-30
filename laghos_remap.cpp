@@ -222,17 +222,16 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       // Bernstein scalar space.
       // Scalar space only used when velocity remap with limiter
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1.FEColl(), 1);
-      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho,
-                              pfes_H1, *pfes_H1_s, pfes_L2, true);
+      oper = new AdvectorOper(x0, ess_tdofs, ess_vdofs, u, rho,
+                              pfes_H1, *pfes_H1_s, pfes_L2, remap_v, true);
    }
    else
    {
       // Define scalar FE spaces for the solution, and the advection operator.
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1Lag.FEColl(), 1);
-      oper = new AdvectorOper(S.Size(), x0, ess_tdofs, ess_vdofs, u, rho,
-                              pfes_H1Lag, *pfes_H1_s, pfes_L2, false);
+      oper = new AdvectorOper(x0, ess_tdofs, ess_vdofs, u, rho,
+                              pfes_H1Lag, *pfes_H1_s, pfes_L2, remap_v, false);
    }
-   oper->SetVelocityRemap(remap_v);
    ode_solver.Init(*oper);
 
    // Compute some time step [mesh_size / speed].
@@ -419,7 +418,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    }
 }
 
-AdvectorOper::AdvectorOper(int size, const Vector &x_start,
+AdvectorOper::AdvectorOper(const Vector &x_start,
                            const Array<int> &v_ess_td,
                            const Array<int> &v_ess_vd,
                            ParGridFunction &mesh_vel,
@@ -427,21 +426,13 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
                            ParFiniteElementSpace &pfes_H1,
                            ParFiniteElementSpace &pfes_H1_s,
                            ParFiniteElementSpace &pfes_L2,
+                           RemapAdvector::VelocityRemap remap_v,
                            bool remap_v_s)
-    : TimeDependentOperator(size),
-    x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
-    v_ess_tdofs(v_ess_td),
-    v_ess_vdofs(v_ess_vd),
+    : x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
     u(mesh_vel), u_coeff(&u),
-    rho_coeff(&rho),
-    rho_u_coeff(rho_coeff, u_coeff),
-    Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s),
-    Mr_H1_s(&pfes_H1_s),
-    remap_v_stable(remap_v_s),
-    M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
-    Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
+    rho_coeff(&rho)
 {
-   // construct offsets
+   // Construct offsets
    const int vdofs_h1 = pfes_H1.GetVSize();
    const int vdofs_l2 = pfes_L2.GetVSize();
    offsets.SetSize(RemapAdvector::NVars+1);
@@ -451,88 +442,24 @@ AdvectorOper::AdvectorOper(int size, const Vector &x_start,
    offsets[RemapAdvector::Energy+1] = vdofs_l2; // energy
    offsets.PartialSum();
 
-   // no need for Vector Massmatrix in stablised velocity remap
-   // MCL only uses the first component of this, but unstable remap needs vector mass matrix
-   if (remap_v_stable)
-   {
-      Mr_H1_s.AddDomainIntegrator(new MassIntegrator(rho_coeff));
-      Mr_H1_s.Assemble(0);
-      Mr_H1_s.Finalize(0);
+   width = height = offsets.Last();
 
-      // lumped Massmatrix only needed for limiter
-      //lumped_mass_int = new LumpedIntegrator(new MassIntegrator(rho_coeff));
-      lummpedMr_H1.AddDomainIntegrator( new LumpedIntegrator(new MassIntegrator(rho_coeff)));
-      lummpedMr_H1.Assemble(0);
-      lummpedMr_H1.Finalize(0);
+   // Velocity advector
+   if (remap_v != RemapAdvector::VelocityRemap::None)
+      op_v = make_unique<AdvectorVelocityOper>(
+         v_ess_td, v_ess_vd, rho_coeff, u_coeff,
+         pfes_H1, pfes_H1_s, remap_v, remap_v_s);
 
-      // to get the transposed entries, which we don't have acces for when j is a tdof an another core.
-      // only needed for limiter
-      KrT_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
-      KrT_H1.Assemble(0);
-      KrT_H1.Finalize(0);
-   }
-   else
-   {
-      Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
-      Mr_H1.Assemble(0);
-      Mr_H1.Finalize(0);
-   }
-
-   // discrete convection operator
-   // NOTE: since the velocity is convected with the negative mesh velocity
-   // we technically are assembling - K
-   Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
-   Kr_H1.Assemble(0);
-   Kr_H1.Finalize(0);
-
-   M_L2.AddDomainIntegrator(new MassIntegrator);
-   M_L2.Assemble(0);
-   M_L2.Finalize(0);
-
-   M_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(new MassIntegrator));
-   M_L2_Lump.Assemble(0);
-   M_L2_Lump.Finalize(0);
-
-   K_L2.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
-   auto dgt_i = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
-   auto dgt_b = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
-   K_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_i));
-   K_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_b));
-   K_L2.KeepNbrBlock(true);
-   K_L2.Assemble(0);
-   K_L2.Finalize(0);
-
-   Mr_L2.AddDomainIntegrator(new MassIntegrator(rho_coeff));
-   Mr_L2.Assemble(0);
-   Mr_L2.Finalize(0);
-
-   auto *minteg = new MassIntegrator(rho_coeff);
-   Mr_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(minteg));
-   Mr_L2_Lump.Assemble();
-   Mr_L2_Lump.Finalize();
-
-   Kr_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
-   auto dgt_ir_1 = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
-   auto dgt_br_1 = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
-   Kr_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_ir_1));
-   Kr_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_br_1));
-   Kr_L2.KeepNbrBlock(true);
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
    rho.ExchangeFaceNbrData();
-   Kr_L2.Assemble(0);
-   Kr_L2.Finalize(0);
+
+   op_th = make_unique<AdvectorThermoOper>(
+      rho_coeff, u_coeff, pfes_L2);
 }
 
 void AdvectorOper::Mult(const Vector &U, Vector &dU) const
 {
-   ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace(),
-                         &pfes_L2 = *M_L2.ParFESpace(),
-                         &pfes_H1 = *Mr_H1.ParFESpace(); // only needed for unstable velocity remap
-   const int dim     = pfes_H1_s.GetMesh()->Dimension();
-   const int NE      = pfes_H1_s.GetNE();
-   const int dofs_h1 = pfes_H1_s.GetVSize(), size_L2 = pfes_L2.GetVSize();
-
    // Move the mesh.
    const double t = GetTime();
    add(x0, t, u, x_now);
@@ -543,159 +470,52 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    const BlockVector bU(const_cast<Vector&>(U), offsets);
    BlockVector bdU(dU, offsets);
 
-   if (remap_v != RemapAdvector::VelocityRemap::None)
+   // Velocity remap.
+   if (op_v)
    {
-      if (remap_v_stable == false)
-      {
-         // Solver for H1 fields (no monotonicity).
-         HypreSmoother prec;
-         prec.SetType(HypreSmoother::Jacobi, 1);
-         CGSolver lin_solver(pfes_H1.GetComm());
-         lin_solver.SetPreconditioner(prec);
-         lin_solver.SetRelTol(1e-8);
-         lin_solver.SetAbsTol(0.0);
-         lin_solver.SetMaxIter(100);
-         lin_solver.SetPrintLevel(0);
-
-         // Velocity remap.
-         Mr_H1.BilinearForm::operator=(0.0);
-         Mr_H1.Assemble();
-         Kr_H1.BilinearForm::operator=(0.0);
-         Kr_H1.Assemble();
-         HypreParMatrix *A = Mr_H1.ParallelAssemble();
-         lin_solver.SetOperator(*A);
-         const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
-         Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
-         Vector rhs_v(dofs_h1*dim);
-         for (int d = 0; d < dim; d++)
-         {
-            const Vector v_comp(const_cast<Vector&>(v), d * dofs_h1, dofs_h1);
-            Vector rhs_v_comp(rhs_v, d * dofs_h1, dofs_h1);
-            Kr_H1.Mult(v_comp, rhs_v_comp);
-         }
-         const Operator *P_v = pfes_H1.GetProlongationMatrix();
-         Vector RHS_V(P_v->Width()), X_V(P_v->Width());
-         P_v->MultTranspose(rhs_v, RHS_V);
-         X_V = 0.0;
-         OperatorHandle M_elim;
-         //M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
-         //Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
-         lin_solver.Mult(RHS_V, X_V);
-         P_v->Mult(X_V, d_v);
-      }
-      else
-      {
-         Mr_H1_s.BilinearForm::operator=(0.0);
-         Mr_H1_s.Assemble();
-         Kr_H1.BilinearForm::operator=(0.0);
-         Kr_H1.Assemble();
-         KrT_H1.BilinearForm::operator=(0.0);
-         KrT_H1.Assemble();
-
-         lummpedMr_H1.BilinearForm::operator=(0.0);
-         lummpedMr_H1.Assemble();
-         lummpedMr_H1.SpMat().GetDiag(lumpedMr_H1_vec);
-
-         // Sum up to get global entries of the lumped mass matrix
-         GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
-         Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
-         gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
-         gcomm.Bcast(lumpedmassmatrix_array);
-         for(int i = 0; i < lumpedMr_H1_vec.Size(); i++)
-         {
-            MFEM_VERIFY(lumpedMr_H1_vec(i) > 1e-12, "lumped mass matrix entry negative or zero!");
-         }
-
-         // Get the global stencil of the local truedofs
-         HypreParMatrix *M_hpm = Mr_H1_s.ParallelAssemble();
-         HypreParMatrix *K_hpm = Kr_H1.ParallelAssemble();
-         HypreParMatrix *KT_hpm = KrT_H1.ParallelAssemble();
-         SparseMatrix M_glb, K_glb, KT_glb;
-         M_hpm->MergeDiagAndOffd(M_glb);
-         K_hpm->MergeDiagAndOffd(K_glb);
-         KT_hpm->MergeDiagAndOffd(KT_glb);
-
-         const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
-         Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
-         switch(remap_v)
-         {
-         case RemapAdvector::VelocityRemap::LowOrder:
-            LowOrderVel(K_glb, KT_glb, v, d_v);
-            break;
-         case RemapAdvector::VelocityRemap::HighOrderTarget:
-            HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v);
-            break;
-         case RemapAdvector::VelocityRemap::MCL:
-            MCLVel(K_glb, KT_glb, M_glb, v, d_v);
-            break;
-         case RemapAdvector::VelocityRemap::ClipAndScale:
-            ClipAndScale(pfes_H1_s, v, d_v);
-            break;
-         default: MFEM_ABORT("Unknown scheme for velocity remap!");
-         }
-      }
+      const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
+      Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
+      op_v->Mult(v, d_v);
    }
 
-   Vector el_min(NE), el_max(NE);
-
-   // Density remap.
-   K_L2.BilinearForm::operator=(0.0);
-   K_L2.Assemble();
-   M_L2.BilinearForm::operator=(0.0);
-   M_L2.Assemble();
-   M_L2_Lump.BilinearForm::operator=(0.0);
-   M_L2_Lump.Assemble();
-   Vector d_rho_HO(size_L2), d_rho_LO(size_L2);
-   Vector lumpedM; M_L2_Lump.SpMat().GetDiag(lumpedM);
-   DiscreteUpwindLOSolver lo_solver(pfes_L2, K_L2.SpMat(), lumpedM);
-   LocalInverseHOSolver ho_solver(M_L2, K_L2);
-   Vector rho_min(size_L2), rho_max(size_L2);
-   FluxBasedFCT fct_solver(pfes_L2, dt,
-                           K_L2.SpMat(), lo_solver.GetKmap(), M_L2.SpMat());
-   const Vector &rho = bU.GetBlock(RemapAdvector::Density);
-   Vector &d_rho = bdU.GetBlock(RemapAdvector::Density);
-   lo_solver.CalcLOSolution(rho, d_rho_LO);
-   ho_solver.CalcHOSolution(rho, d_rho_HO);
-   const ParGridFunction rho_gf(const_cast<ParFiniteElementSpace*>(&pfes_L2),
-                                const_cast<Vector&>(rho));
-   const_cast<ParGridFunction&>(rho_gf).ExchangeFaceNbrData();
-   ComputeElementsMinMax(rho_gf, el_min, el_max);
-   ComputeSparsityBounds(pfes_L2, el_min, el_max, rho_min, rho_max);
-   fct_solver.CalcFCTSolution(rho_gf, lumpedM, d_rho_HO, d_rho_LO,
-                              rho_min, rho_max, d_rho);
-
-   // Energy remap.
+   // In parallel, rho_coeff must be evaluated in MPI-neighbor zones.
    auto rho_gf_const = dynamic_cast<const ParGridFunction *>
                        (rho_coeff.GetGridFunction());
    auto rho_pgf = const_cast<ParGridFunction *>(rho_gf_const);
    rho_pgf->ExchangeFaceNbrData();
-   Kr_L2.BilinearForm::operator=(0.0);
-   Kr_L2.Assemble();
-   Mr_L2.BilinearForm::operator=(0.0);
-   Mr_L2.Assemble();
-   Mr_L2_Lump.BilinearForm::operator=(0.0);
-   Mr_L2_Lump.Assemble();
-   Vector d_e_HO(size_L2), d_e_LO(size_L2), Me_lumped;
-   Vector e_min(size_L2), e_max(size_L2);
-   Mr_L2_Lump.SpMat().GetDiag(Me_lumped);
-   DiscreteUpwindLOSolver lo_e_solver(pfes_L2, Kr_L2.SpMat(), Me_lumped);
-   LocalInverseHOSolver ho_e_solver(Mr_L2, Kr_L2);
-   FluxBasedFCT fct_e_solver(pfes_L2, dt, Kr_L2.SpMat(),
-                             lo_e_solver.GetKmap(), Mr_L2.SpMat());
-   const Vector &e = bU.GetBlock(RemapAdvector::Energy);
-   Vector &d_e = bdU.GetBlock(RemapAdvector::Energy);
-   lo_e_solver.CalcLOSolution(e, d_e_LO);
-   ho_e_solver.CalcHOSolution(e, d_e_HO);
-   const ParGridFunction e_gf(const_cast<ParFiniteElementSpace*>(&pfes_L2),
-                              const_cast<Vector&>(e));
-   const_cast<ParGridFunction&>(e_gf).ExchangeFaceNbrData();
-   ComputeElementsMinMax(e_gf, el_min, el_max);
-   ComputeSparsityBounds(pfes_L2, el_min, el_max, e_min, e_max);
-   fct_e_solver.CalcFCTSolution(e_gf, Me_lumped, d_e_HO, d_e_LO,
-                                e_min, e_max, d_e);
+
+   // Thermodynamic remap.
+   if (op_th)
+   {
+      // Here we assume the thermodynamic state is in one piece
+      const Vector th(const_cast<Vector&>(U), offsets[RemapAdvector::Density], op_th->Width());
+      Vector dth(dU, offsets[RemapAdvector::Density], op_th->Width());
+      op_th->Mult(th, dth);
+   }
 }
 
-void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const Vector &v, Vector &d_v) const
+void AdvectorOper::SetDt(real_t delta_t)
+{
+   if (op_v) { op_v->SetDt(delta_t); }
+   if (op_th) { op_th->SetDt(delta_t); }
+}
+
+real_t AdvectorOper::Momentum(ParGridFunction &v, real_t t)
+{
+   add(x0, t, u, x_now);
+
+   if (op_v) { return op_v->Momentum(v); }
+   return 0.;
+}
+
+real_t AdvectorOper::InternalEnergy(ParGridFunction &e, real_t t)
+{
+   add(x0, t, u, x_now);
+   if (op_th) { return op_th->InternalEnergy(e); }
+   return 0.;
+}
+
+void AdvectorVelocityOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const Vector &v, Vector &d_v) const
 {
    GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
 
@@ -772,7 +592,7 @@ void AdvectorOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT
 }
 
 
-void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v, Vector &d_v) const
+void AdvectorVelocityOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v, Vector &d_v) const
 {
    GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
    //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
@@ -866,7 +686,7 @@ void AdvectorOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, const Spa
    }
 }
 
-void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v, Vector &d_v) const
+void AdvectorVelocityOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v, Vector &d_v) const
 {
    GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
    //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
@@ -1003,7 +823,7 @@ void AdvectorOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
    }
 }
 
-void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, const Vector &v, Vector &d_v) const
+void AdvectorVelocityOper::ClipAndScale(const ParFiniteElementSpace &pfes, const Vector &v, Vector &d_v) const
 {
    d_v = 0.0;
    auto conv_int = new ConvectionIntegrator(rho_u_coeff);
@@ -1147,7 +967,7 @@ void AdvectorOper::ClipAndScale(const ParFiniteElementSpace &pfes, const Vector 
    delete mass_int;
 }
 
-void AdvectorOper::ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const
+void AdvectorVelocityOper::ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const
 {
    vdot = 0.0;
 
@@ -1213,7 +1033,7 @@ void AdvectorOper::ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator*
    }
 }
 
-void AdvectorOper::ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const
+void AdvectorVelocityOper::ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const
 {
    v_min.SetSize(v.Size());
    v_max.SetSize(v.Size());
@@ -1253,42 +1073,8 @@ void AdvectorOper::ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, 
 
 }
 
-double AdvectorOper::Momentum(ParGridFunction &v, double t)
-{
-   add(x0, t, u, x_now);
-
-   Mr_H1.BilinearForm::operator=(0.0);
-   Mr_H1.Assemble();
-
-   Vector one(Mr_H1.SpMat().Height());
-   one = 1.0;
-   double loc_m  = Mr_H1.InnerProduct(one, v);
-
-   double glob_m;
-   MPI_Allreduce(&loc_m, &glob_m, 1, MPI_DOUBLE, MPI_SUM,
-                 Mr_H1.ParFESpace()->GetComm());
-   return glob_m;
-}
-
-double AdvectorOper::Energy(ParGridFunction &e, double t)
-{
-   add(x0, t, u, x_now);
-
-   Mr_L2.BilinearForm::operator=(0.0);
-   Mr_L2.Assemble();
-
-   Vector one(Mr_L2.SpMat().Height());
-   one = 1.0;
-   double loc_e = Mr_L2.InnerProduct(one, e);
-
-   double glob_e;
-   MPI_Allreduce(&loc_e, &glob_e, 1, MPI_DOUBLE, MPI_SUM,
-                 Mr_L2.ParFESpace()->GetComm());
-   return glob_e;
-}
-
-void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &gf,
-                                         Vector &el_min, Vector &el_max) const
+void AdvectorThermoOper::ComputeElementsMinMax(
+   const ParGridFunction &gf, Vector &el_min, Vector &el_max) const
 {
    ParFiniteElementSpace &pfes = *gf.ParFESpace();
    const int NE = pfes.GetNE(), ndof = pfes.GetFE(0)->GetDof();
@@ -1305,10 +1091,9 @@ void AdvectorOper::ComputeElementsMinMax(const ParGridFunction &gf,
    }
 }
 
-void AdvectorOper::ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
-                                         const Vector &el_min,
-                                         const Vector &el_max,
-                                         Vector &dof_min, Vector &dof_max) const
+void AdvectorThermoOper::ComputeSparsityBounds(
+   const ParFiniteElementSpace &pfes, const Vector &el_min, const Vector &el_max,
+   Vector &dof_min, Vector &dof_max) const
 {
    ParMesh *pmesh = pfes.GetParMesh();
    L2_FECollection fec_bounds(0, pmesh->Dimension());
@@ -1351,6 +1136,300 @@ void AdvectorOper::ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
          dof_max(k*ndofs + j) = k_max;
       }
    }
+}
+
+AdvectorVelocityOper::AdvectorVelocityOper(
+   const Array<int> &v_ess_td, const Array<int> &v_ess_vd, Coefficient &rho_coeff_,
+   VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
+   RemapAdvector::VelocityRemap scheme, bool remap_v_s)
+:   v_ess_tdofs(v_ess_td),
+    v_ess_vdofs(v_ess_vd),
+    rho_coeff(rho_coeff_), u_coeff(u_coeff_),
+    rho_u_coeff(rho_coeff, u_coeff),
+    Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s),
+    Mr_H1_s(&pfes_H1_s),
+    remap_v_stable(remap_v_s)
+{
+   // no need for Vector Massmatrix in stablised velocity remap
+   // MCL only uses the first component of this, but unstable remap needs vector mass matrix
+   if (remap_v_stable)
+   {
+      Mr_H1_s.AddDomainIntegrator(new MassIntegrator(rho_coeff));
+      Mr_H1_s.Assemble(0);
+      Mr_H1_s.Finalize(0);
+
+      // lumped Massmatrix only needed for limiter
+      //lumped_mass_int = new LumpedIntegrator(new MassIntegrator(rho_coeff));
+      lummpedMr_H1.AddDomainIntegrator( new LumpedIntegrator(new MassIntegrator(rho_coeff)));
+      lummpedMr_H1.Assemble(0);
+      lummpedMr_H1.Finalize(0);
+
+      // to get the transposed entries, which we don't have acces for when j is a tdof an another core.
+      // only needed for limiter
+      KrT_H1.AddDomainIntegrator(new TransposeIntegrator(new ConvectionIntegrator(rho_u_coeff)));
+      KrT_H1.Assemble(0);
+      KrT_H1.Finalize(0);
+   }
+   else
+   {
+      Mr_H1.AddDomainIntegrator(new VectorMassIntegrator(rho_coeff));
+      Mr_H1.Assemble(0);
+      Mr_H1.Finalize(0);
+   }
+
+   // discrete convection operator
+   // NOTE: since the velocity is convected with the negative mesh velocity
+   // we technically are assembling - K
+   Kr_H1.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
+   Kr_H1.Assemble(0);
+   Kr_H1.Finalize(0);
+}
+
+void AdvectorVelocityOper::Mult(const Vector &v, Vector &d_v) const
+{
+   d_v = 0.0;
+
+   if (remap_v == RemapAdvector::VelocityRemap::None) { return; }
+
+   ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace(),
+                         &pfes_H1 = *Mr_H1.ParFESpace(); // only needed for unstable velocity remap
+   const int dim     = pfes_H1_s.GetMesh()->Dimension();
+   const int dofs_h1 = pfes_H1_s.GetVSize();
+
+   if (remap_v_stable == false)
+   {
+      // Solver for H1 fields (no monotonicity).
+      HypreSmoother prec;
+      prec.SetType(HypreSmoother::Jacobi, 1);
+      CGSolver lin_solver(pfes_H1.GetComm());
+      lin_solver.SetPreconditioner(prec);
+      lin_solver.SetRelTol(1e-8);
+      lin_solver.SetAbsTol(0.0);
+      lin_solver.SetMaxIter(100);
+      lin_solver.SetPrintLevel(0);
+
+      // Velocity remap.
+      Mr_H1.BilinearForm::operator=(0.0);
+      Mr_H1.Assemble();
+      Kr_H1.BilinearForm::operator=(0.0);
+      Kr_H1.Assemble();
+      HypreParMatrix *A = Mr_H1.ParallelAssemble();
+      lin_solver.SetOperator(*A);
+      Vector rhs_v(dofs_h1*dim);
+      for (int d = 0; d < dim; d++)
+      {
+         const Vector v_comp(const_cast<Vector&>(v), d * dofs_h1, dofs_h1);
+         Vector rhs_v_comp(rhs_v, d * dofs_h1, dofs_h1);
+         Kr_H1.Mult(v_comp, rhs_v_comp);
+      }
+      const Operator *P_v = pfes_H1.GetProlongationMatrix();
+      Vector RHS_V(P_v->Width()), X_V(P_v->Width());
+      P_v->MultTranspose(rhs_v, RHS_V);
+      X_V = 0.0;
+      OperatorHandle M_elim;
+      //M_elim.EliminateRowsCols(Mass_oper, v_ess_tdofs);
+      //Mass_oper.EliminateBC(M_elim, v_ess_tdofs, X_V, RHS_V);
+      lin_solver.Mult(RHS_V, X_V);
+      P_v->Mult(X_V, d_v);
+   }
+   else
+   {
+      Mr_H1_s.BilinearForm::operator=(0.0);
+      Mr_H1_s.Assemble();
+      Kr_H1.BilinearForm::operator=(0.0);
+      Kr_H1.Assemble();
+      KrT_H1.BilinearForm::operator=(0.0);
+      KrT_H1.Assemble();
+
+      lummpedMr_H1.BilinearForm::operator=(0.0);
+      lummpedMr_H1.Assemble();
+      lummpedMr_H1.SpMat().GetDiag(lumpedMr_H1_vec);
+
+      // Sum up to get global entries of the lumped mass matrix
+      GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
+      Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
+      gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+      gcomm.Bcast(lumpedmassmatrix_array);
+      for(int i = 0; i < lumpedMr_H1_vec.Size(); i++)
+      {
+         MFEM_VERIFY(lumpedMr_H1_vec(i) > 1e-12, "lumped mass matrix entry negative or zero!");
+      }
+
+      // Get the global stencil of the local truedofs
+      HypreParMatrix *M_hpm = Mr_H1_s.ParallelAssemble();
+      HypreParMatrix *K_hpm = Kr_H1.ParallelAssemble();
+      HypreParMatrix *KT_hpm = KrT_H1.ParallelAssemble();
+      SparseMatrix M_glb, K_glb, KT_glb;
+      M_hpm->MergeDiagAndOffd(M_glb);
+      K_hpm->MergeDiagAndOffd(K_glb);
+      KT_hpm->MergeDiagAndOffd(KT_glb);
+
+      switch(remap_v)
+      {
+      case RemapAdvector::VelocityRemap::LowOrder:
+         LowOrderVel(K_glb, KT_glb, v, d_v);
+         break;
+      case RemapAdvector::VelocityRemap::HighOrderTarget:
+         HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v);
+         break;
+      case RemapAdvector::VelocityRemap::MCL:
+         MCLVel(K_glb, KT_glb, M_glb, v, d_v);
+         break;
+      case RemapAdvector::VelocityRemap::ClipAndScale:
+         ClipAndScale(pfes_H1_s, v, d_v);
+         break;
+      default: MFEM_ABORT("Unknown scheme for velocity remap!");
+      }
+   }
+}
+
+real_t AdvectorVelocityOper::Momentum(ParGridFunction &v)
+{
+   Mr_H1.BilinearForm::operator=(0.0);
+   Mr_H1.Assemble();
+
+   Vector one(Mr_H1.SpMat().Height());
+   one = 1.0;
+   double loc_m  = Mr_H1.InnerProduct(one, v);
+
+   double glob_m;
+   MPI_Allreduce(&loc_m, &glob_m, 1, MPI_DOUBLE, MPI_SUM,
+                 Mr_H1.ParFESpace()->GetComm());
+   return glob_m;
+}
+
+AdvectorThermoOper::AdvectorThermoOper(Coefficient &rho_coeff_, VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_L2)
+   :  rho_coeff(rho_coeff_), u_coeff(u_coeff_),
+      rho_u_coeff(rho_coeff, u_coeff),
+      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
+      Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
+{
+   // Construct offsets
+   const int vdofs_l2 = pfes_L2.GetVSize();
+   offsets.SetSize(NVars+1);
+   offsets = 0;
+   offsets[Density+1] = vdofs_l2; // density
+   offsets[Energy+1] = vdofs_l2; // energy
+   offsets.PartialSum();
+
+   width = height = offsets.Last();
+
+   // Assemble mass matrices
+   M_L2.AddDomainIntegrator(new MassIntegrator);
+   M_L2.Assemble(0);
+   M_L2.Finalize(0);
+
+   M_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(new MassIntegrator));
+   M_L2_Lump.Assemble(0);
+   M_L2_Lump.Finalize(0);
+
+   K_L2.AddDomainIntegrator(new ConvectionIntegrator(u_coeff));
+   auto dgt_i = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
+   auto dgt_b = new DGTraceIntegrator(u_coeff, -1.0, -0.5);
+   K_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_i));
+   K_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_b));
+   K_L2.KeepNbrBlock(true);
+   K_L2.Assemble(0);
+   K_L2.Finalize(0);
+
+   Mr_L2.AddDomainIntegrator(new MassIntegrator(rho_coeff));
+   Mr_L2.Assemble(0);
+   Mr_L2.Finalize(0);
+
+   auto *minteg = new MassIntegrator(rho_coeff);
+   Mr_L2_Lump.AddDomainIntegrator(new LumpedIntegrator(minteg));
+   Mr_L2_Lump.Assemble();
+   Mr_L2_Lump.Finalize();
+
+   Kr_L2.AddDomainIntegrator(new ConvectionIntegrator(rho_u_coeff));
+   auto dgt_ir_1 = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
+   auto dgt_br_1 = new DGTraceIntegrator(rho_coeff, u_coeff, -1.0, -0.5);
+   Kr_L2.AddInteriorFaceIntegrator(new TransposeIntegrator(dgt_ir_1));
+   Kr_L2.AddBdrFaceIntegrator(new TransposeIntegrator(dgt_br_1));
+   Kr_L2.KeepNbrBlock(true);
+   Kr_L2.Assemble(0);
+   Kr_L2.Finalize(0);
+}
+
+void AdvectorThermoOper::Mult(const Vector &U, Vector &dU) const
+{
+   ParFiniteElementSpace &pfes_L2 = *M_L2.ParFESpace();
+   const int NE      = pfes_L2.GetNE();
+   const int size_L2 = pfes_L2.GetVSize();
+
+   dU = 0.0;
+
+   // Block view
+   const BlockVector bU(const_cast<Vector&>(U), offsets);
+   BlockVector bdU(dU, offsets);
+
+   // Density remap.
+   Vector el_min(NE), el_max(NE);
+   K_L2.BilinearForm::operator=(0.0);
+   K_L2.Assemble();
+   M_L2.BilinearForm::operator=(0.0);
+   M_L2.Assemble();
+   M_L2_Lump.BilinearForm::operator=(0.0);
+   M_L2_Lump.Assemble();
+   Vector d_rho_HO(size_L2), d_rho_LO(size_L2);
+   Vector lumpedM; M_L2_Lump.SpMat().GetDiag(lumpedM);
+   DiscreteUpwindLOSolver lo_solver(pfes_L2, K_L2.SpMat(), lumpedM);
+   LocalInverseHOSolver ho_solver(M_L2, K_L2);
+   Vector rho_min(size_L2), rho_max(size_L2);
+   FluxBasedFCT fct_solver(pfes_L2, dt,
+                           K_L2.SpMat(), lo_solver.GetKmap(), M_L2.SpMat());
+   const Vector &rho = bU.GetBlock(Density);
+   Vector &d_rho = bdU.GetBlock(Density);
+   lo_solver.CalcLOSolution(rho, d_rho_LO);
+   ho_solver.CalcHOSolution(rho, d_rho_HO);
+   const ParGridFunction rho_gf(const_cast<ParFiniteElementSpace*>(&pfes_L2),
+                                const_cast<Vector&>(rho));
+   const_cast<ParGridFunction&>(rho_gf).ExchangeFaceNbrData();
+   ComputeElementsMinMax(rho_gf, el_min, el_max);
+   ComputeSparsityBounds(pfes_L2, el_min, el_max, rho_min, rho_max);
+   fct_solver.CalcFCTSolution(rho_gf, lumpedM, d_rho_HO, d_rho_LO,
+                              rho_min, rho_max, d_rho);
+
+   // Energy remap.
+   Kr_L2.BilinearForm::operator=(0.0);
+   Kr_L2.Assemble();
+   Mr_L2.BilinearForm::operator=(0.0);
+   Mr_L2.Assemble();
+   Mr_L2_Lump.BilinearForm::operator=(0.0);
+   Mr_L2_Lump.Assemble();
+   Vector d_e_HO(size_L2), d_e_LO(size_L2), Me_lumped;
+   Vector e_min(size_L2), e_max(size_L2);
+   Mr_L2_Lump.SpMat().GetDiag(Me_lumped);
+   DiscreteUpwindLOSolver lo_e_solver(pfes_L2, Kr_L2.SpMat(), Me_lumped);
+   LocalInverseHOSolver ho_e_solver(Mr_L2, Kr_L2);
+   FluxBasedFCT fct_e_solver(pfes_L2, dt, Kr_L2.SpMat(),
+                             lo_e_solver.GetKmap(), Mr_L2.SpMat());
+   const Vector &e = bU.GetBlock(Energy);
+   Vector &d_e = bdU.GetBlock(Energy);
+   lo_e_solver.CalcLOSolution(e, d_e_LO);
+   ho_e_solver.CalcHOSolution(e, d_e_HO);
+   const ParGridFunction e_gf(const_cast<ParFiniteElementSpace*>(&pfes_L2),
+                              const_cast<Vector&>(e));
+   const_cast<ParGridFunction&>(e_gf).ExchangeFaceNbrData();
+   ComputeElementsMinMax(e_gf, el_min, el_max);
+   ComputeSparsityBounds(pfes_L2, el_min, el_max, e_min, e_max);
+   fct_e_solver.CalcFCTSolution(e_gf, Me_lumped, d_e_HO, d_e_LO,
+                                e_min, e_max, d_e);
+}
+
+real_t AdvectorThermoOper::InternalEnergy(ParGridFunction &e)
+{
+   Mr_L2.BilinearForm::operator=(0.0);
+   Mr_L2.Assemble();
+
+   Vector one(Mr_L2.SpMat().Height());
+   one = 1.0;
+   double loc_e = Mr_L2.InnerProduct(one, e);
+
+   double glob_e;
+   MPI_Allreduce(&loc_e, &glob_e, 1, MPI_DOUBLE, MPI_SUM,
+                 Mr_L2.ParFESpace()->GetComm());
+   return glob_e;
 }
 
 SolutionTransfer::SolutionTransfer(const ParMesh &pmesh, const IntegrationRule &ir)

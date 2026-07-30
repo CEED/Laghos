@@ -117,34 +117,60 @@ public:
                        ParGridFunction &energy);
 };
 
+class AdvectorVelocityOper;
+class AdvectorThermoOper;
+
 // Performs a single remap advection step.
 class AdvectorOper : public TimeDependentOperator
+{
+protected:
+   std::unique_ptr<AdvectorVelocityOper> op_v;
+   std::unique_ptr<AdvectorThermoOper> op_th;
+
+   Array<int> offsets;
+   const Vector &x0;
+   Vector &x_now;
+   ParGridFunction &u;
+   VectorGridFunctionCoefficient u_coeff;
+   GridFunctionCoefficient rho_coeff;
+
+public:
+   // Here pfes is the ParFESpace of the function that will be moved.
+   // Mult() moves the nodes of the mesh corresponding to pfes.
+   AdvectorOper(const Vector &x_start, const Array<int> &v_ess_td,
+                const Array<int> &v_ess_vd,
+                ParGridFunction &mesh_vel,
+                ParGridFunction &rho,
+                ParFiniteElementSpace &pfes_H1,
+                ParFiniteElementSpace &pfes_H1_s,
+                ParFiniteElementSpace &pfes_L2,
+                RemapAdvector::VelocityRemap scheme_v,
+                bool remap_v_s);
+
+   // Single RK stage solve for all fields contained in U.
+   void Mult(const Vector &U, Vector &dU) const override;
+
+   void SetDt(real_t delta_t);
+
+   real_t Momentum(ParGridFunction &v, real_t t);
+   //real_t Interface(ParGridFunction &xi, real_t t);
+   real_t InternalEnergy(ParGridFunction &e, real_t t);
+};
+
+// Performs a single velocity remap advection step.
+class AdvectorVelocityOper : public TimeDependentOperator
 {
 protected:
    RemapAdvector::VelocityRemap remap_v = RemapAdvector::VelocityRemap::ClipAndScale;
    bool remap_v_stable = false;
 
-   Array<int> offsets;
-   const Vector &x0;
-   Vector &x_now;
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
-   ParGridFunction &u;
-   VectorGridFunctionCoefficient u_coeff;
-   mutable GridFunctionCoefficient rho_coeff;
+   VectorCoefficient &u_coeff;
+   Coefficient &rho_coeff;
    mutable ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
    mutable Vector lumpedMr_H1_vec;
-   mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
-   mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
-   double dt = 0.0;
-
-   // Piecewise min and max of gf over all elements.
-   void ComputeElementsMinMax(const ParGridFunction &gf,
-                              Vector &el_min, Vector &el_max) const;
-   // Bounds at dofs taking the current element and its face-neighbors.
-   void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
-                              const Vector &el_min, const Vector &el_max,
-                              Vector &dof_min, Vector &dof_max) const;
+   real_t dt = 0.0;
 
    void LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
                     const Vector &v, Vector &dv) const;
@@ -164,25 +190,65 @@ protected:
 public:
    // Here pfes is the ParFESpace of the function that will be moved.
    // Mult() moves the nodes of the mesh corresponding to pfes.
-   AdvectorOper(int size, const Vector &x_start, const Array<int> &v_ess_td,
-                const Array<int> &v_ess_vd,
-                ParGridFunction &mesh_vel,
-                ParGridFunction &rho,
-                ParFiniteElementSpace &pfes_H1,
-                ParFiniteElementSpace &pfes_H1_s,
-                ParFiniteElementSpace &pfes_L2,
-                bool remap_v_s);
-
-   void SetVelocityRemap(RemapAdvector::VelocityRemap scheme) { remap_v = scheme; }
+   AdvectorVelocityOper(const Array<int> &v_ess_td,
+                        const Array<int> &v_ess_vd,
+                        Coefficient &rho_coeff,
+                        VectorCoefficient &u_coeff,
+                        ParFiniteElementSpace &pfes_H1,
+                        ParFiniteElementSpace &pfes_H1_s,
+                        RemapAdvector::VelocityRemap scheme,
+                        bool remap_v_s);
 
    // Single RK stage solve for all fields contained in U.
-   virtual void Mult(const Vector &U, Vector &dU) const;
+   void Mult(const Vector &U, Vector &dU) const override;
+
+   void SetDt(real_t delta_t) { dt = delta_t; }
+
+   real_t Momentum(ParGridFunction &v);
+};
+
+// Performs a single thermodynamic remap advection step.
+class AdvectorThermoOper : public TimeDependentOperator
+{
+public:
+   enum StateVars 
+   {
+      Density,
+      Energy,
+      //------
+      NVars
+   };
+
+protected:
+   Array<int> offsets;
+   Coefficient &rho_coeff;
+   VectorCoefficient &u_coeff;
+   mutable ScalarVectorProductCoefficient rho_u_coeff;
+   mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
+   mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
+   real_t dt = 0.0;
+
+   // Piecewise min and max of gf over all elements.
+   void ComputeElementsMinMax(const ParGridFunction &gf,
+                              Vector &el_min, Vector &el_max) const;
+   // Bounds at dofs taking the current element and its face-neighbors.
+   void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
+                              const Vector &el_min, const Vector &el_max,
+                              Vector &dof_min, Vector &dof_max) const;
+
+public:
+   // Here pfes is the ParFESpace of the function that will be moved.
+   // Mult() moves the nodes of the mesh corresponding to pfes.
+   AdvectorThermoOper(Coefficient &rho_coeff,
+                      VectorCoefficient &u_coeff,
+                      ParFiniteElementSpace &pfes_L2);
+
+   // Single RK stage solve for all fields contained in U.
+   void Mult(const Vector &U, Vector &dU) const override;
 
    void SetDt(double delta_t) { dt = delta_t; }
 
-   double Momentum(ParGridFunction &v, double t);
-   //double Interface(ParGridFunction &xi, double t);
-   double Energy(ParGridFunction &e, double t);
+   real_t InternalEnergy(ParGridFunction &e);
 };
 
 // Transfer of data between the Lagrange and the remap phases.
