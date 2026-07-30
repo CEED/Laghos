@@ -141,7 +141,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
                                  const ParGridFunction &vel,
                                  const IntegrationRule &rho_ir,
                                  const Vector &rhoDetJw,
-                                 const ParGridFunction &energy)
+                                 const ParGridFunction &lagr_eps)
 {
    // Original positions of the local mesh.
    x0 = nodes0;
@@ -189,12 +189,13 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    {
    case ThermoRemap::Nonconservative:
       transfer.TransferDensity_Lagr2Remap(rhoDetJw, rho);
-      e  = energy;
+      e  = lagr_eps;
       break;
    case ThermoRemap::GeomConsistent:
+      detJ.SetSpace(rho.ParFESpace()); detJ = 0.;
       transfer.TransferJac_Larg2Remap(detJ);
       transfer.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ, rho);
-      transfer.TransferEnergyJac_Lagr2Remap(rhoDetJw, rho, energy, e);
+      transfer.TransferEnergyJac_Lagr2Remap(rhoDetJw, rho, lagr_eps, e);
       break;
    }
 }
@@ -308,7 +309,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
                                    Vector &rhoDetJw,
                                    const IntegrationRule &ir_rho_b,
                                    Vector &rhoDetJ_be,
-                                   ParGridFunction &energy)
+                                   ParGridFunction &lagr_eps)
 {
    // Velocity
    if (remap_v_stable)
@@ -361,7 +362,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       // This is used to update the mass matrices.
       rho0_gf = rho;
       // Just copy energy.
-      energy = e;
+      lagr_eps = e;
       break;
    case ThermoRemap::GeomConsistent:
       transfer.TransferDensityJac_Remap2Lagr(detJ, rho, rho0_gf);
@@ -410,10 +411,10 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    {
    case ThermoRemap::Nonconservative:
       // Just copy energy.
-      energy = e;
+      lagr_eps = e;
       break;
    case ThermoRemap::GeomConsistent:
-      transfer.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, energy);
+      transfer.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, lagr_eps);
       break;
    }
 }
@@ -1539,7 +1540,7 @@ void SolutionTransfer::TransferXYL2Monotonous(
    DenseMatrix M_z(dof_cnt), F(dof_cnt);
    DenseMatrixInverse M_zi(&M_z);
    Vector x_z(dof_cnt), rhs(dof_cnt), xy_HO(dof_cnt), y_z(dof_cnt), m_z(dof_cnt),
-          beta(dof_cnt), z(dof_cnt), gp(dof_cnt), gm(dof_cnt);
+          beta(dof_cnt), z(dof_cnt);
    Array<int> dofs(dof_cnt);
 
    for (int k = 0; k < NE; k++)
@@ -1589,18 +1590,7 @@ void SolutionTransfer::TransferXYL2Monotonous(
       {
          for (int j = 0; j < i; j++)
          {
-            real_t fij = F(i, j), aij;
-
-            if (fij >= 0.0)
-            {
-               aij = min(gp(i), gm(j));
-            }
-            else
-            {
-               aij = min(gm(i), gp(j));
-            }
-
-            fij *= aij;
+            real_t fij = F(i, j);
             y_z(i) += (x_z(i) != 0.) ? (fij / (m_z(i) * x_z(i))) : (0.);
             y_z(j) -= (x_z(j) != 0.) ? (fij / (m_z(j) * x_z(j))) : (0.);
          }
