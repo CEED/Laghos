@@ -18,6 +18,7 @@
 #define MFEM_LAGHOS_ALE
 
 #include "mfem.hpp"
+#include <functional>
 
 namespace mfem
 {
@@ -25,7 +26,7 @@ namespace mfem
 namespace ale
 {
 
-class SolutionMover;
+class SolutionTransfer;
 struct MaterialData;
 
 #ifdef MFEM_USE_GSLIB
@@ -61,6 +62,12 @@ public:
       ClipAndScale,
    };
 
+   enum class ThermoRemap
+   {
+      Nonconservative,
+      GeomConsistent,
+   };
+
 private:
    ParMesh pmesh;
    int dim;
@@ -71,6 +78,7 @@ private:
 
    VelocityRemap remap_v;
    bool remap_v_stable;
+   ThermoRemap remap_th;
 
    const double cfl_factor;
 
@@ -78,6 +86,7 @@ private:
    Array<int> offsets;
    BlockVector S;
    ParGridFunction v, rho, e;
+   ParGridFunction detJ;
 
    double e_max;
 
@@ -87,9 +96,10 @@ private:
    socketstream vis_rho, vis_v, vis_e;
 
 public:
-   RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                 double cfl, VelocityRemap remap_v_,
-                 bool remap_v_stable_, const Array<int> &ess_tdofs);
+   RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl,
+                 VelocityRemap remap_v_, bool remap_v_stable_,
+                 ThermoRemap remap_th_,
+                 const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
@@ -171,23 +181,44 @@ public:
    void SetDt(double delta_t) { dt = delta_t; }
 
    double Momentum(ParGridFunction &v, double t);
-   double Interface(ParGridFunction &xi, double t);
+   //double Interface(ParGridFunction &xi, double t);
    double Energy(ParGridFunction &e, double t);
 };
 
 // Transfer of data between the Lagrange and the remap phases.
-class SolutionMover
+class SolutionTransfer
 {
+   L2_FECollection fec0;
+   ParFiniteElementSpace pfes0;
+
    // Integration points for the density.
    const IntegrationRule &ir_rho;
 
+   void ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs);
+   void LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, std::function<real_t(int)> &&w_z, DenseMatrix &F);
+   void TransferL2Monotonous(std::function<void(int, DenseMatrix &)> &&M, const Vector &mins, const Vector &maxs,
+                             std::function<void(int, Vector&)> &&b, ParGridFunction &y);
+   void TransferXYL2Monotonous(std::function<void(int, DenseMatrix &)> &&M, const Vector &mins, const Vector &maxs,
+                               const ParGridFunction &x, std::function<void(int, Vector&)> &&b, ParGridFunction &y);
+
 public:
-   SolutionMover(const IntegrationRule &ir) : ir_rho(ir) { }
+   SolutionTransfer(const ParMesh &pmesh, const IntegrationRule &ir);
+
+   // Nonconservative
 
    // Density transfer: Lagrange -> Remap.
    // Projects the quad points data to a GridFunction, while preserving the
    // bounds for rho taken from the current element and its face-neighbors.
-   void MoveDensityLR(const Vector &quad_rho, ParGridFunction &rho);
+   void TransferDensity_Lagr2Remap(const Vector &rhoDetJw, ParGridFunction &rho);
+
+   // Geometrically consistent
+
+   void TransferJac_Larg2Remap(ParGridFunction &detJ);
+   void TransferDensityJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ);
+   void TransferEnergyJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &eps, ParGridFunction &rhoeJ);
+   
+   void TransferDensityJac_Remap2Lagr(const ParGridFunction &detJ, const ParGridFunction &rhoJ, ParGridFunction &rho);
+   void TransferEnergyJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &rhoeJ, ParGridFunction &eps);
 };
 
 class LocalInverseHOSolver

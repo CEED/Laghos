@@ -100,7 +100,7 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
                              double cfl, VelocityRemap remap_v_, bool remap_v_stable_,
-                             const Array<int> &ess_tdofs)
+                             ThermoRemap remap_th_, const Array<int> &ess_tdofs)
     : pmesh(m, true), dim(pmesh.Dimension()),
     fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
     fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
@@ -110,6 +110,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     pfes_H1Lag(&pmesh, &fec_H1Lag, pmesh.Dimension()),
     v_ess_tdofs(ess_tdofs),
     remap_v(remap_v_), remap_v_stable(remap_v_stable_),
+    remap_th(remap_th_),
     cfl_factor(cfl),
     offsets(), S(), v(), rho(), e(), x0()
 {
@@ -147,8 +148,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    GridFunction *x = pmesh.GetNodes();
    *x = x0;
 
-   e  = energy;
-
+   // Velocity
    if (remap_v_stable)
    {
       // project velocity field into Bernstein FE space via lumped L2 projection
@@ -182,12 +182,21 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    }
    else { v = vel; }
 
-   e_max = e.Max();
-   MPI_Allreduce(MPI_IN_PLACE, &e_max, 1, MPI_DOUBLE, MPI_MAX, pmesh.GetComm());
+   // Thermodynamic quantities
+   SolutionTransfer transfer(pmesh, rho_ir);
 
-   // Get densities as GridFunctions.
-   SolutionMover mover(rho_ir);
-   mover.MoveDensityLR(rhoDetJw, rho);
+   switch (remap_th)
+   {
+   case ThermoRemap::Nonconservative:
+      transfer.TransferDensity_Lagr2Remap(rhoDetJw, rho);
+      e  = energy;
+      break;
+   case ThermoRemap::GeomConsistent:
+      transfer.TransferJac_Larg2Remap(detJ);
+      transfer.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ, rho);
+      transfer.TransferEnergyJac_Lagr2Remap(rhoDetJw, rho, energy, e);
+      break;
+   }
 }
 
 void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
@@ -301,9 +310,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
                                    Vector &rhoDetJ_be,
                                    ParGridFunction &energy)
 {
-   // This is used to update the mass matrices.
-   rho0_gf = rho;
-
+   // Velocity
    if (remap_v_stable)
    {
       VectorGridFunctionCoefficient v_coeff(&v);
@@ -344,6 +351,25 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       vel = v;
    }
 
+   // Thermodynamic quantities
+   SolutionTransfer transfer(pmesh, ir_rho);
+
+   // Density
+   switch (remap_th)
+   {
+   case ThermoRemap::Nonconservative:
+      // This is used to update the mass matrices.
+      rho0_gf = rho;
+      // Just copy energy.
+      energy = e;
+      break;
+   case ThermoRemap::GeomConsistent:
+      transfer.TransferDensityJac_Remap2Lagr(detJ, rho, rho0_gf);
+      break;
+   }
+
+   // Update the quadrature of the Lagrangian invariant
+
    ParMesh &pmesh_lagr = *vel.ParFESpace()->GetParMesh();
    const int NE  = pmesh_lagr.GetNE();
    const int nqp = ir_rho.GetNPoints();
@@ -353,7 +379,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    {
       // Must use the space of the results.
       ElementTransformation &T = *pmesh_lagr.GetElementTransformation(k);
-      rho.GetValues(T, ir_rho, rho_vals);
+      rho0_gf.GetValues(T, ir_rho, rho_vals);
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
@@ -379,8 +405,17 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    //    }
    // }
 
-   // Just copy energy.
-   energy = e;
+   // Energy
+   switch (remap_th)
+   {
+   case ThermoRemap::Nonconservative:
+      // Just copy energy.
+      energy = e;
+      break;
+   case ThermoRemap::GeomConsistent:
+      transfer.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, energy);
+      break;
+   }
 }
 
 AdvectorOper::AdvectorOper(int size, const Vector &x_start,
@@ -1317,41 +1352,26 @@ void AdvectorOper::ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
    }
 }
 
-void SolutionMover::MoveDensityLR(const Vector &quad_rho,
-                                  ParGridFunction &rho)
+SolutionTransfer::SolutionTransfer(const ParMesh &pmesh, const IntegrationRule &ir)
+: fec0(0, pmesh.Dimension()), pfes0(const_cast<ParMesh*>(&pmesh), &fec0), ir_rho(ir)
 {
-   ParMesh &pmesh = *rho.ParFESpace()->GetParMesh();
-   L2_FECollection fec0(0, pmesh.Dimension());
-   ParFiniteElementSpace pfes0(&pmesh, &fec0);
-   ParGridFunction rho_min_loc(&pfes0), rho_max_loc(&pfes0);
+}
 
-   // Local max / min.
-   const int NE = pmesh.GetNE(), nqp = ir_rho.GetNPoints();
-   for (int k = 0; k < NE; k++)
-   {
-      ElementTransformation &T = *pmesh.GetElementTransformation(k);
-      rho_min_loc(k) =   std::numeric_limits<double>::infinity();
-      rho_max_loc(k) = - std::numeric_limits<double>::infinity();
-
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = ir_rho.IntPoint(q);
-         T.SetIntPoint(&ip);
-         const double detJ = T.Jacobian().Det();
-         const double rho = quad_rho(k * nqp + q) / detJ / ip.weight;
-
-         rho_min_loc(k) = std::min(rho_min_loc(k), rho);
-         rho_max_loc(k) = std::max(rho_max_loc(k), rho);
-      }
-   }
-
-   Vector rho_min(rho_min_loc), rho_max(rho_max_loc);
+void SolutionTransfer::ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs)
+{
+   ParMesh &pmesh = *pfes0.GetParMesh();
+   const int NE = pmesh.GetNE();
+   
+   mins = lmins;
+   maxs = lmaxs;
 
    // One-level face neighbors max / min.
-   rho_min_loc.ExchangeFaceNbrData();
-   rho_max_loc.ExchangeFaceNbrData();
-   const Vector &rho_min_nbr = rho_min_loc.FaceNbrData(),
-                &rho_max_nbr = rho_max_loc.FaceNbrData();
+   ParGridFunction min_pgf(&pfes0, const_cast<Vector&>(lmins));
+   ParGridFunction max_pgf(&pfes0, const_cast<Vector&>(lmaxs));
+   min_pgf.ExchangeFaceNbrData();
+   max_pgf.ExchangeFaceNbrData();
+   const Vector &gmins = min_pgf.FaceNbrData();
+   const Vector &gmaxs = max_pgf.FaceNbrData();
    const Table &el_to_el = pmesh.ElementToElementTable();
    Array<int> face_nbr_el;
    for (int k = 0; k < NE; k++)
@@ -1362,92 +1382,214 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho,
          if (face_nbr_el[n] < NE)
          {
             // Local neighbor.
-            rho_min(k) = std::min(rho_min(k), rho_min_loc(face_nbr_el[n]));
-            rho_max(k) = std::max(rho_max(k), rho_max_loc(face_nbr_el[n]));
+            mins(k) = std::min(mins(k), lmins(face_nbr_el[n]));
+            maxs(k) = std::max(maxs(k), lmaxs(face_nbr_el[n]));
          }
          else
          {
             // MPI face neighbor.
-            rho_min(k) = std::min(rho_min(k), rho_min_nbr(face_nbr_el[n] - NE));
-            rho_max(k) = std::max(rho_max(k), rho_max_nbr(face_nbr_el[n] - NE));
+            mins(k) = std::min(mins(k), gmins(face_nbr_el[n] - NE));
+            maxs(k) = std::max(maxs(k), gmaxs(face_nbr_el[n] - NE));
+         }
+      }
+   }
+}
+
+void SolutionTransfer::LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, std::function<real_t(int)> &&w_z, DenseMatrix &F)
+{
+   const int dof_cnt = F.Width();
+   Vector gp(dof_cnt), gm(dof_cnt);
+
+   // Calculate incoming/outgoing fluxes
+   gp = 0.0;
+   gm = 0.0;
+   for (int i = 1; i < dof_cnt; i++)
+   {
+      for (int j = 0; j < i; j++)
+      {
+         real_t fij = F(i, j);
+         if (fij >= 0.0)
+         {
+            gp(i) += fij;
+            gm(j) -= fij;
+         }
+         else
+         {
+            gm(i) += fij;
+            gp(j) -= fij;
          }
       }
    }
 
+   // Calculate Zalesak limiter
+   for (int i = 0; i < dof_cnt; i++)
+   {
+      real_t rp = max(w_z(i) * (y_max - y_avg), 0.0);
+      real_t rm = min(w_z(i) * (y_min - y_avg), 0.0);
+      real_t sp = gp(i), sm = gm(i);
+
+      gp(i) = (rp < sp) ? rp / sp : 1.0;
+      gm(i) = (rm > sm) ? rm / sm : 1.0;
+   }
+
+   // Calculate local increments
+   for (int i = 1; i < dof_cnt; i++)
+   {
+      for (int j = 0; j < i; j++)
+      {
+         real_t &fij = F(i, j), aij;
+
+         if (fij >= 0.0)
+         {
+            aij = std::min(gp(i), gm(j));
+         }
+         else
+         {
+            aij = std::min(gm(i), gp(j));
+         }
+
+         fij *= aij;
+      }
+   }
+}
+
+void SolutionTransfer::TransferL2Monotonous(
+    std::function<void(int, DenseMatrix &)> &&M, const Vector &lmins, const Vector &lmaxs,
+    std::function<void(int, Vector &)> &&b, ParGridFunction &y)
+{
+   ParMesh &pmesh = *y.ParFESpace()->GetParMesh();
+   const int NE = pmesh.GetNE();
+
+   Vector mins, maxs;
+   ComputeMinMax(lmins, lmaxs, mins, maxs);
+
    // HO solution - FCT_Project.
-   const int dof_cnt = rho.Size() / NE;
-   DenseMatrix M(dof_cnt), F(dof_cnt);
-   DenseMatrixInverse M_inv(&M);
-   Vector rhs(dof_cnt), rho_HO(dof_cnt), rho_z(dof_cnt), ML(dof_cnt),
-          beta(dof_cnt), z(dof_cnt), gp(dof_cnt), gm(dof_cnt);
+   const int dof_cnt = y.Size() / NE;
+   DenseMatrix M_z(dof_cnt), F(dof_cnt);
+   DenseMatrixInverse M_zi(&M_z);
+   Vector rhs(dof_cnt), y_HO(dof_cnt), y_z(dof_cnt), m_z(dof_cnt),
+          beta(dof_cnt), z(dof_cnt);
    Array<int> dofs(dof_cnt);
-   MassIntegrator mi(&ir_rho);
-   DensityIntegrator di(quad_rho);
-   di.SetIntRule(&ir_rho);
+   
    for (int k = 0; k < NE; k++)
    {
-      const FiniteElement &fe = *rho.ParFESpace()->GetFE(k);
-      ElementTransformation &T = *pmesh.GetElementTransformation(k);
-      di.AssembleRHSElementVect(fe, T, rhs);
-      mi.AssembleElementMatrix(fe, T, M);
-      M.GetRowSums(ML);
+      // Get local rhs
+      b(k, rhs);
 
-      M_inv.Factor();
-      M_inv.Mult(rhs, rho_HO);
+      // Get local mass matrix
+      M(k, M_z);
 
-      const double rho_avg = rhs.Sum() / ML.Sum();
+      // Construct contracted mass matrix
+      M_z.GetRowSums(m_z);
 
-      beta = ML;
+      // Calculate high-order solution
+      M_zi.Factor();
+      M_zi.Mult(rhs, y_HO);
+
+      // Calculate the average
+      const real_t y_avg = rhs.Sum() / m_z.Sum();
+
+      beta = m_z;
       beta /= beta.Sum();
 
-      // The low order flux correction.
-      for (int i = 0; i < dof_cnt; i++) { z(i) = rhs(i) - ML(i) * rho_avg; }
+      // Calculate antisymmetric fluxes
+      for (int i = 0; i < dof_cnt; i++) { z(i) = rhs(i) - m_z(i) * y_avg; }
 
       for (int i = 1; i < dof_cnt; i++)
       {
          for (int j = 0; j < i; j++)
          {
-            F(i, j) = M(i, j) * (rho_HO(i) - rho_HO(j)) +
+            F(i, j) = M_z(i, j) * (y_HO(i) - y_HO(j)) +
                       (beta(j) * z(i) - beta(i) * z(j));
          }
       }
 
-      gp = 0.0;
-      gm = 0.0;
+      // Limit the fluxes
+      LimitFluxes(y_avg, mins(k), maxs(k), [&](int i) { return m_z(i); }, F);
+
+      // Calculate local increments
+      y_z = y_avg;
       for (int i = 1; i < dof_cnt; i++)
       {
          for (int j = 0; j < i; j++)
          {
-            double fij = F(i, j);
-            if (fij >= 0.0)
-            {
-               gp(i) += fij;
-               gm(j) -= fij;
-            }
-            else
-            {
-               gm(i) += fij;
-               gp(j) -= fij;
-            }
+            real_t fij = F(i, j);
+            y_z(i) += fij / m_z(i);
+            y_z(j) -= fij / m_z(j);
          }
       }
 
-      rho_z = rho_avg;
-      for (int i = 0; i < dof_cnt; i++)
-      {
-         double rp = max(ML(i) * (rho_max(k) - rho_z(i)), 0.0);
-         double rm = min(ML(i) * (rho_min(k) - rho_z(i)), 0.0);
-         double sp = gp(i), sm = gm(i);
+      y.ParFESpace()->GetElementDofs(k, dofs);
+      y.SetSubVector(dofs, y_z);
+   }
+}
 
-         gp(i) = (rp < sp) ? rp / sp : 1.0;
-         gm(i) = (rm > sm) ? rm / sm : 1.0;
-      }
+void SolutionTransfer::TransferXYL2Monotonous(
+   std::function<void(int, DenseMatrix &)> &&M, const Vector &lmins, const Vector &lmaxs,
+   const ParGridFunction &x, std::function<void(int, Vector &)> &&b, ParGridFunction &y)
+{
+      ParMesh &pmesh = *y.ParFESpace()->GetParMesh();
+   const int NE = pmesh.GetNE();
+
+   Vector mins, maxs;
+   ComputeMinMax(lmins, lmaxs, mins, maxs);
+
+   // HO solution - FCT_Project.
+   const int dof_cnt = y.Size() / NE;
+   DenseMatrix M_z(dof_cnt), F(dof_cnt);
+   DenseMatrixInverse M_zi(&M_z);
+   Vector x_z(dof_cnt), rhs(dof_cnt), xy_HO(dof_cnt), y_z(dof_cnt), m_z(dof_cnt),
+          beta(dof_cnt), z(dof_cnt), gp(dof_cnt), gm(dof_cnt);
+   Array<int> dofs(dof_cnt);
+
+   for (int k = 0; k < NE; k++)
+   {
+      // Get local x
+      y.ParFESpace()->GetElementDofs(k, dofs);
+      x.GetSubVector(dofs, x_z);
+
+      // Get local rhs
+      b(k, rhs);
+
+      // Get local mass matrix
+      M(k, M_z);
+
+      // Construct contracted mass matrix
+      M_z.GetRowSums(m_z);
+
+      // Calculate high-order solution
+      M_zi.Factor();
+      M_zi.Mult(rhs, xy_HO);
+
+      // Calculate the average
+      const real_t mx_sum = m_z * x_z;
+      const real_t y_avg = (mx_sum != 0.) ? (rhs.Sum() / mx_sum):(0.);
+
+      beta = m_z;
+      beta /= beta.Sum();
+
+      // Calculate antisymmetric fluxes
+      for (int i = 0; i < dof_cnt; i++) { z(i) = rhs(i) - m_z(i) * x_z(i) * y_avg; }
 
       for (int i = 1; i < dof_cnt; i++)
       {
          for (int j = 0; j < i; j++)
          {
-            double fij = F(i, j), aij;
+            F(i, j) = M_z(i, j) * (xy_HO(i) - xy_HO(j)) +
+                      (beta(j) * z(i) - beta(i) * z(j));
+         }
+      }
+
+      // Limit the fluxes
+      LimitFluxes(y_avg, mins(k), maxs(k), [&](int i) { return m_z(i) * x_z(i); }, F);
+
+      // Calculate local increments
+      y_z = y_avg;
+      for (int i = 1; i < dof_cnt; i++)
+      {
+         for (int j = 0; j < i; j++)
+         {
+            real_t fij = F(i, j), aij;
 
             if (fij >= 0.0)
             {
@@ -1459,14 +1601,338 @@ void SolutionMover::MoveDensityLR(const Vector &quad_rho,
             }
 
             fij *= aij;
-            rho_z(i) += fij / ML(i);
-            rho_z(j) -= fij / ML(j);
+            y_z(i) += (x_z(i) != 0.) ? (fij / (m_z(i) * x_z(i))) : (0.);
+            y_z(j) -= (x_z(j) != 0.) ? (fij / (m_z(j) * x_z(j))) : (0.);
          }
       }
 
-      rho.ParFESpace()->GetElementDofs(k, dofs);
-      rho.SetSubVector(dofs, rho_z);
+      y.SetSubVector(dofs, y_z);
    }
+}
+
+void SolutionTransfer::TransferDensity_Lagr2Remap(const Vector &rhoDetJw,
+                                                  ParGridFunction &rho)
+{
+   const ParFiniteElementSpace &pfes = *rho.ParFESpace();
+   const int NE = pfes.GetNE(), nqp = ir_rho.GetNPoints();
+   Vector rho_min_loc(NE), rho_max_loc(NE);
+
+   // Local max / min.
+   for (int k = 0; k < NE; k++)
+   {
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      rho_min_loc(k) = +infinity();
+      rho_max_loc(k) = -infinity();
+
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         T.SetIntPoint(&ip);
+         const real_t detJ = T.Jacobian().Det();
+         const real_t rho = rhoDetJw(k * nqp + q) / detJ / ip.weight;
+
+         rho_min_loc(k) = std::min(rho_min_loc(k), rho);
+         rho_max_loc(k) = std::max(rho_max_loc(k), rho);
+      }
+   }
+
+   // Mass matrix
+   MassIntegrator mi(&ir_rho);
+   auto M = [&pfes,&mi](int k, DenseMatrix &M_z) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      mi.AssembleElementMatrix(fe, T, M_z);
+   };
+
+   // Righ hand side
+   hydrodynamics::DensityIntegrator di(rhoDetJw);
+   di.SetIntRule(&ir_rho);
+
+   auto brho = [&pfes,&di](int k, Vector &rhs) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      di.AssembleRHSElementVect(fe, T, rhs);
+   };
+
+   TransferL2Monotonous(M, rho_min_loc, rho_max_loc, brho, rho);
+}
+
+void SolutionTransfer::TransferJac_Larg2Remap(ParGridFunction &detJ)
+{
+   const ParFiniteElementSpace &pfes = *detJ.ParFESpace();
+   const int NE = pfes.GetNE(), nqp = ir_rho.GetNPoints();
+   Vector detJ_min_loc(NE), detJ_max_loc(NE);
+
+   // Local max / min.
+   for (int k = 0; k < NE; k++)
+   {
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      detJ_min_loc(k) = +infinity();
+      detJ_max_loc(k) = 0.;
+
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         T.SetIntPoint(&ip);
+         const real_t detJ = T.Jacobian().Det();
+         MFEM_ASSERT(detJ > 0., "Non-positive Jacobian!");
+         detJ_min_loc(k) = std::min(detJ_min_loc(k), detJ);
+         detJ_max_loc(k) = std::max(detJ_max_loc(k), detJ);
+      }
+   }
+
+   // Interpolation matrix
+   auto MJ = [&pfes,this](int k, DenseMatrix &M_z) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      const int nqp = ir_rho.GetNPoints();
+      Vector shape(fe.GetDof());
+      M_z.SetSize(fe.GetDof());
+      M_z = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe.CalcShape(ip, shape);
+         AddMult_a_VVt(ip.weight, shape, M_z);
+      }
+   };
+
+   // Right hand side
+   ConstantCoefficient one;
+   DomainLFIntegrator dlfi(one, &ir_rho);
+
+   auto bdetJ = [&pfes,&dlfi](int k, Vector &rhs) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      dlfi.AssembleRHSElementVect(fe, T, rhs);
+   };
+
+   TransferL2Monotonous(MJ, detJ_min_loc, detJ_max_loc, bdetJ, detJ);
+}
+
+void SolutionTransfer::TransferDensityJac_Lagr2Remap(
+   const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ)
+{
+   const ParFiniteElementSpace &pfes = *rhoJ.ParFESpace();
+   const int NE = pfes.GetNE(), nqp = ir_rho.GetNPoints();
+   Vector rho_min_loc(NE), rho_max_loc(NE);
+
+   // Local max / min.
+   for (int k = 0; k < NE; k++)
+   {
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      rho_min_loc(k) = +infinity();
+      rho_max_loc(k) = -infinity();
+
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         T.SetIntPoint(&ip);
+         const real_t detJ = T.Jacobian().Det();
+         const real_t rho = rhoDetJw(k * nqp + q) / detJ / ip.weight;
+
+         rho_min_loc(k) = std::min(rho_min_loc(k), rho);
+         rho_max_loc(k) = std::max(rho_max_loc(k), rho);
+      }
+   }
+
+   // Interpolation matrix
+   auto MJ = [&pfes,this](int k, DenseMatrix &M_z) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      const int nqp = ir_rho.GetNPoints();
+      Vector shape(fe.GetDof());
+      M_z.SetSize(fe.GetDof());
+      M_z = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe.CalcShape(ip, shape);
+         AddMult_a_VVt(ip.weight, shape, M_z);
+      }
+   };
+
+   // Righ hand side
+   hydrodynamics::DensityIntegrator di(rhoDetJw);
+   di.SetIntRule(&ir_rho);
+
+   auto brho = [&pfes,&di](int k, Vector &rhs) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      di.AssembleRHSElementVect(fe, T, rhs);
+   };
+
+   TransferXYL2Monotonous(MJ, rho_min_loc, rho_max_loc, detJ, brho, rhoJ);
+
+   // Jacobian product
+   for (int i = 0; i < rhoJ.Size(); i++)
+      rhoJ(i) *= detJ(i);
+}
+
+void SolutionTransfer::TransferEnergyJac_Lagr2Remap(
+   const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &eps,
+   ParGridFunction &rhoeJ)
+{
+   const ParFiniteElementSpace &pfes = *rhoeJ.ParFESpace();
+   const int NE = pfes.GetNE();
+   Vector eps_min_loc(NE), eps_max_loc(NE);
+   Vector eps_z;
+
+   // Local max / min.
+   for (int k = 0; k < NE; k++)
+   {
+      eps.GetElementDofValues(k, eps_z);
+      eps_min_loc(k) = eps_z.Min();
+      eps_max_loc(k) = eps_z.Max();
+   }
+
+   // Interpolation matrix
+   auto MJ = [&pfes,this](int k, DenseMatrix &M_z) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      const int nqp = ir_rho.GetNPoints();
+      Vector shape(fe.GetDof());
+      M_z.SetSize(fe.GetDof());
+      M_z = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe.CalcShape(ip, shape);
+         AddMult_a_VVt(ip.weight, shape, M_z);
+      }
+   };
+
+   // Righ hand side
+   hydrodynamics::InternalEnergyIntegrator iei(rhoDetJw, eps);
+   iei.SetIntRule(&ir_rho);
+
+   auto beps = [&pfes,&iei](int k, Vector &rhs) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      iei.AssembleRHSElementVect(fe, T, rhs);
+   };
+
+   TransferXYL2Monotonous(MJ, eps_min_loc, eps_max_loc, rhoJ, beps, rhoeJ);
+
+   // density and Jacobian product
+   for (int i = 0; i < rhoJ.Size(); i++)
+      rhoeJ(i) *= rhoJ(i);
+}
+
+void SolutionTransfer::TransferDensityJac_Remap2Lagr(
+   const ParGridFunction &detJ, const ParGridFunction &rhoJ, ParGridFunction &rho)
+{
+   const ParFiniteElementSpace &pfes = *rhoJ.ParFESpace();
+   const int NE = pfes.GetNE();
+   Vector rho_min_loc(NE), rho_max_loc(NE);
+   Vector detJ_z, rhoJ_z;
+
+   // Local max / min.
+   for (int k = 0; k < NE; k++)
+   {
+      detJ.GetElementDofValues(k, detJ_z);
+      rhoJ.GetElementDofValues(k, rhoJ_z);
+      rho_min_loc(k) = +infinity();
+      rho_max_loc(k) = -infinity();
+      const int ndof = detJ_z.Size();
+
+      for (int i = 0; i < ndof; i++)
+      {
+         const real_t rho = rhoJ_z(i) / detJ_z(i);
+
+         rho_min_loc(k) = std::min(rho_min_loc(k), rho);
+         rho_max_loc(k) = std::max(rho_max_loc(k), rho);
+      }
+   }
+
+   // Mass matrix
+   MassIntegrator mi(&ir_rho);
+   auto M = [&pfes,&mi](int k, DenseMatrix &M_z) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      mi.AssembleElementMatrix(fe, T, M_z);
+   };
+
+   // Right hand side
+   auto brho = [&pfes,&rhoJ,this](int k, Vector &rhs) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      Vector shape(fe.GetDof()), rhoJ_z;
+      rhoJ.GetElementDofValues(T.ElementNo, rhoJ_z);
+      const int nqp = ir_rho.GetNPoints();
+      rhs.SetSize(fe.GetDof());
+      rhs = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         T.SetIntPoint(&ip);
+         fe.CalcShape(ip, shape);
+         const real_t rhoJ = rhoJ_z * shape;
+         rhs.Add(ip.weight * rhoJ, shape);
+      }
+   };
+
+   TransferL2Monotonous(M, rho_min_loc, rho_max_loc, brho, rho);
+}
+
+void SolutionTransfer::TransferEnergyJac_Remap2Lagr(
+   const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &rhoeJ, ParGridFunction &eps)
+{
+   const ParFiniteElementSpace &pfes = *rhoeJ.ParFESpace();
+   const int NE = pfes.GetNE();
+   Vector eps_min_loc(NE), eps_max_loc(NE);
+   Vector rhoJ_z, rhoeJ_z;
+
+   // Local max / min.
+   for (int k = 0; k < NE; k++)
+   {
+      rhoJ.GetElementDofValues(k, rhoJ_z);
+      rhoeJ.GetElementDofValues(k, rhoeJ_z);
+      eps_min_loc(k) = +infinity();
+      eps_max_loc(k) = -infinity();
+      const int ndof = rhoJ_z.Size();
+
+      for (int i = 0; i < ndof; i++)
+      {
+         const real_t eps = (rhoJ_z(i) != 0.) ? (rhoeJ_z(i) / rhoJ_z(i)) : (0.);
+
+         eps_min_loc(k) = std::min(eps_min_loc(k), eps);
+         eps_max_loc(k) = std::max(eps_max_loc(k), eps);
+      }
+   }
+
+   // Energy mass matrix
+   auto Me = [&pfes,&rhoDetJw,this](int k, DenseMatrix &M_z) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      const int nqp = ir_rho.GetNPoints();
+      Vector shape(fe.GetDof());
+      M_z.SetSize(fe.GetDof());
+      M_z = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe.CalcShape(ip, shape);
+         AddMult_a_VVt(rhoDetJw(k*nqp + q), shape, M_z);
+      }
+   };
+
+   // Right hand side
+   auto beps = [&pfes,&rhoeJ,this](int k, Vector &rhs) {
+      const FiniteElement &fe = *pfes.GetFE(k);
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      Vector shape(fe.GetDof()), rhoeJ_z;
+      rhoeJ.GetElementDofValues(T.ElementNo, rhoeJ_z);
+      const int nqp = ir_rho.GetNPoints();
+      rhs.SetSize(fe.GetDof());
+      rhs = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         T.SetIntPoint(&ip);
+         fe.CalcShape(ip, shape);
+         const real_t rhoJ = rhoeJ_z * shape;
+         rhs.Add(ip.weight * rhoJ, shape);
+      }
+   };
+
+   TransferL2Monotonous(Me, eps_min_loc, eps_max_loc, beps, eps);
 }
 
 void LocalInverseHOSolver::CalcHOSolution(const Vector &u, Vector &du) const
