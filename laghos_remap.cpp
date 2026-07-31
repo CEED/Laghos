@@ -17,6 +17,7 @@
 #include "laghos_remap.hpp"
 #include "laghos_assembly.hpp"
 #include "laghos_solver.hpp"
+#include "laghos_remap_solvers.hpp"
 
 using namespace std;
 namespace mfem
@@ -135,6 +136,16 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
    }
    rho.MakeRef(&pfes_L2, S, offsets[Density]);
    e.MakeRef(&pfes_L2, S, offsets[Energy]);
+
+   switch (remap_th)
+   {
+   case RemapThermo::Nonconservative:
+      ode_solver = make_unique<RK3SSPSolver>();
+      break;
+   case RemapThermo::GeomConsistent:
+      ode_solver = make_unique<geom_consistent_solvers::ForwardEulerSolver>();
+      break;
+   }
 }
 
 void RemapAdvector::InitFromLagr(const Vector &nodes0,
@@ -223,16 +234,18 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       // Scalar space only used when velocity remap with limiter
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1.FEColl(), 1);
       oper = new AdvectorOper(x0, ess_tdofs, ess_vdofs, u, rho,
-                              pfes_H1, *pfes_H1_s, pfes_L2, remap_v, true);
+                              pfes_H1, *pfes_H1_s, pfes_L2,
+                              remap_v, true, remap_th);
    }
    else
    {
       // Define scalar FE spaces for the solution, and the advection operator.
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1Lag.FEColl(), 1);
       oper = new AdvectorOper(x0, ess_tdofs, ess_vdofs, u, rho,
-                              pfes_H1Lag, *pfes_H1_s, pfes_L2, remap_v, false);
+                              pfes_H1Lag, *pfes_H1_s, pfes_L2,
+                              remap_v, false, remap_th);
    }
-   ode_solver.Init(*oper);
+   ode_solver->Init(*oper);
 
    // Compute some time step [mesh_size / speed].
    double h_min = std::numeric_limits<double>::infinity();
@@ -284,7 +297,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       if (pmesh.GetMyRank() == 0) { cout << ". " << ti << std::endl; }
 
       oper->SetDt(dt);
-      ode_solver.Step(S, t, dt);
+      ode_solver->Step(S, t, dt);
 
       if (remap_v != RemapVelocity::None)
       {
@@ -408,11 +421,11 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    // Energy
    switch (remap_th)
    {
-   case ThermoRemap::Nonconservative:
+   case RemapThermo::Nonconservative:
       // Just copy energy.
       lagr_eps = e;
       break;
-   case ThermoRemap::GeomConsistent:
+   case RemapThermo::GeomConsistent:
       transfer.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, lagr_eps);
       break;
    }
@@ -427,7 +440,8 @@ AdvectorOper::AdvectorOper(const Vector &x_start,
                            ParFiniteElementSpace &pfes_H1_s,
                            ParFiniteElementSpace &pfes_L2,
                            RemapAdvector::RemapVelocity remap_v,
-                           bool remap_v_s)
+                           bool remap_v_s,
+                           RemapAdvector::RemapThermo remap_th)
     : x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
     u(mesh_vel), u_coeff(&u),
     rho_coeff(&rho)
@@ -454,8 +468,18 @@ AdvectorOper::AdvectorOper(const Vector &x_start,
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
    rho.ExchangeFaceNbrData();
 
-   op_th = make_unique<AdvectorThermoOper>(
-      rho_coeff, u_coeff, pfes_L2);
+   switch (remap_th)
+   {
+   case RemapAdvector::RemapThermo::Nonconservative:
+      op_th = make_unique<AdvectorThermoNonconservativeOper>(
+         rho_coeff, u_coeff, pfes_L2);
+      break;
+   case RemapAdvector::RemapThermo::GeomConsistent:
+      op_th = make_unique<AdvectorThermoGeomConsistentOper>(
+         rho_coeff, u_coeff, pfes_L2);
+      break;
+   }
+   
 }
 
 void AdvectorOper::Mult(const Vector &U, Vector &dU) const
@@ -494,9 +518,58 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    }
 }
 
+void AdvectorOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
+{
+   // Move the mesh.
+   const double t = GetTime();
+   add(x0, t, u, x_now);
+
+   if (op_th) { op_th->ImplicitSolveFlux(dt, flux); }
+}
+
+void AdvectorOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+{
+   // Move the mesh.
+   const double t = GetTime();
+   add(x0, t, u, x_now);
+
+   dU = 0.0;
+
+   // Block view
+   const BlockVector bU(const_cast<Vector&>(U), offsets);
+   BlockVector bdU(dU, offsets);
+
+   // Velocity remap.
+   if (op_v)
+   {
+      const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
+      Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
+      op_v->Mult(v, d_v);
+   }
+
+   // In parallel, rho_coeff must be evaluated in MPI-neighbor zones.
+   auto rho_gf_const = dynamic_cast<const ParGridFunction *>
+                       (rho_coeff.GetGridFunction());
+   auto rho_pgf = const_cast<ParGridFunction *>(rho_gf_const);
+   rho_pgf->ExchangeFaceNbrData();
+
+   // Thermodynamic remap.
+   if (op_th)
+   {
+      // Here we assume the thermodynamic state is in one piece
+      const Vector th(const_cast<Vector&>(U), offsets[RemapAdvector::Density], op_th->Width());
+      Vector dth(dU, offsets[RemapAdvector::Density], op_th->Width());
+      op_th->MultConserv(flux, th, dth);
+   }
+}
+
+void AdvectorOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+{
+   if (op_th) { op_th->LimitUpdate(dt, U, dU); }
+}
+
 void AdvectorOper::SetDt(real_t delta_t)
 {
-   if (op_v) { op_v->SetDt(delta_t); }
    if (op_th) { op_th->SetDt(delta_t); }
 }
 
@@ -1073,7 +1146,7 @@ void AdvectorVelocityOper::ComputeVelocityMinMax(const Vector &v, Array<double> 
 
 }
 
-void AdvectorThermoOper::ComputeElementsMinMax(
+void AdvectorThermoNonconservativeOper::ComputeElementsMinMax(
    const ParGridFunction &gf, Vector &el_min, Vector &el_max) const
 {
    ParFiniteElementSpace &pfes = *gf.ParFESpace();
@@ -1091,7 +1164,7 @@ void AdvectorThermoOper::ComputeElementsMinMax(
    }
 }
 
-void AdvectorThermoOper::ComputeSparsityBounds(
+void AdvectorThermoNonconservativeOper::ComputeSparsityBounds(
    const ParFiniteElementSpace &pfes, const Vector &el_min, const Vector &el_max,
    Vector &dof_min, Vector &dof_max) const
 {
@@ -1141,7 +1214,7 @@ void AdvectorThermoOper::ComputeSparsityBounds(
 AdvectorVelocityOper::AdvectorVelocityOper(
    const Array<int> &v_ess_td, const Array<int> &v_ess_vd, Coefficient &rho_coeff_,
    VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
-   RemapAdvector::VelocityRemap scheme, bool remap_v_s)
+   RemapAdvector::RemapVelocity scheme, bool remap_v_s)
 :   v_ess_tdofs(v_ess_td),
     v_ess_vdofs(v_ess_vd),
     rho_coeff(rho_coeff_), u_coeff(u_coeff_),
@@ -1298,11 +1371,7 @@ real_t AdvectorVelocityOper::Momentum(ParGridFunction &v)
    return glob_m;
 }
 
-AdvectorThermoOper::AdvectorThermoOper(Coefficient &rho_coeff_, VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_L2)
-   :  rho_coeff(rho_coeff_), u_coeff(u_coeff_),
-      rho_u_coeff(rho_coeff, u_coeff),
-      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
-      Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
+AdvectorThermoOper::AdvectorThermoOper(ParFiniteElementSpace &pfes_L2)
 {
    // Construct offsets
    const int vdofs_l2 = pfes_L2.GetVSize();
@@ -1313,7 +1382,16 @@ AdvectorThermoOper::AdvectorThermoOper(Coefficient &rho_coeff_, VectorCoefficien
    offsets.PartialSum();
 
    width = height = offsets.Last();
+}
 
+AdvectorThermoNonconservativeOper::AdvectorThermoNonconservativeOper(
+   Coefficient &rho_coeff_, VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_L2)
+   :  AdvectorThermoOper(pfes_L2),
+      rho_coeff(rho_coeff_), u_coeff(u_coeff_),
+      rho_u_coeff(rho_coeff, u_coeff),
+      M_L2(&pfes_L2), M_L2_Lump(&pfes_L2), K_L2(&pfes_L2),
+      Mr_L2(&pfes_L2),  Mr_L2_Lump(&pfes_L2), Kr_L2(&pfes_L2)
+{
    // Assemble mass matrices
    M_L2.AddDomainIntegrator(new MassIntegrator);
    M_L2.Assemble(0);
@@ -1351,7 +1429,7 @@ AdvectorThermoOper::AdvectorThermoOper(Coefficient &rho_coeff_, VectorCoefficien
    Kr_L2.Finalize(0);
 }
 
-void AdvectorThermoOper::Mult(const Vector &U, Vector &dU) const
+void AdvectorThermoNonconservativeOper::Mult(const Vector &U, Vector &dU) const
 {
    ParFiniteElementSpace &pfes_L2 = *M_L2.ParFESpace();
    const int NE      = pfes_L2.GetNE();
@@ -1417,7 +1495,7 @@ void AdvectorThermoOper::Mult(const Vector &U, Vector &dU) const
                                 e_min, e_max, d_e);
 }
 
-real_t AdvectorThermoOper::InternalEnergy(ParGridFunction &e)
+real_t AdvectorThermoNonconservativeOper::InternalEnergy(ParGridFunction &e)
 {
    Mr_L2.BilinearForm::operator=(0.0);
    Mr_L2.Assemble();
@@ -1430,6 +1508,31 @@ real_t AdvectorThermoOper::InternalEnergy(ParGridFunction &e)
    MPI_Allreduce(&loc_e, &glob_e, 1, MPI_DOUBLE, MPI_SUM,
                  Mr_L2.ParFESpace()->GetComm());
    return glob_e;
+}
+
+AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
+   Coefficient &rho_coeff_, VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_L2)
+   :  AdvectorThermoOper(pfes_L2),
+      rho_coeff(rho_coeff_), u_coeff(u_coeff_),
+      rho_u_coeff(rho_coeff, u_coeff)
+{
+}
+
+void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
+{
+}
+
+void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+{
+}
+
+void AdvectorThermoGeomConsistentOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+{
+}
+
+real_t AdvectorThermoGeomConsistentOper::InternalEnergy(ParGridFunction &e)
+{
+   return 0.;
 }
 
 SolutionTransfer::SolutionTransfer(const ParMesh &pmesh, const IntegrationRule &ir)

@@ -90,7 +90,7 @@ private:
 
    double e_max;
 
-   RK3SSPSolver ode_solver;
+   std::unique_ptr<ODESolver> ode_solver;
    Vector x0;
 
    socketstream vis_rho, vis_v, vis_e;
@@ -117,11 +117,20 @@ public:
                        ParGridFunction &energy);
 };
 
+class TimeDependentGeomConsOperator : public TimeDependentOperator
+{
+public:
+   virtual void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) { }
+   virtual void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+   { this->Mult(U, dU); }
+   virtual void LimitUpdate(real_t dt, const Vector &U, Vector &dU) { }
+};
+
 class AdvectorVelocityOper;
 class AdvectorThermoOper;
 
 // Performs a single remap advection step.
-class AdvectorOper : public TimeDependentOperator
+class AdvectorOper : public TimeDependentGeomConsOperator
 {
 protected:
    std::unique_ptr<AdvectorVelocityOper> op_v;
@@ -145,10 +154,15 @@ public:
                 ParFiniteElementSpace &pfes_H1_s,
                 ParFiniteElementSpace &pfes_L2,
                 RemapAdvector::RemapVelocity scheme_v,
-                bool remap_v_s);
+                bool remap_v_s,
+                RemapAdvector::RemapThermo scheme_th);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
+
+   void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) override;
+   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
 
    void SetDt(real_t delta_t);
 
@@ -165,12 +179,11 @@ protected:
    bool remap_v_stable = false;
 
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
-   VectorCoefficient &u_coeff;
    Coefficient &rho_coeff;
+   VectorCoefficient &u_coeff;
    mutable ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
    mutable Vector lumpedMr_H1_vec;
-   real_t dt = 0.0;
 
    void LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
                     const Vector &v, Vector &dv) const;
@@ -188,8 +201,7 @@ protected:
    void ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
 
 public:
-   // Here pfes is the ParFESpace of the function that will be moved.
-   // Mult() moves the nodes of the mesh corresponding to pfes.
+   // Here pfes is the ParFESpace of the function that will be transferred.
    AdvectorVelocityOper(const Array<int> &v_ess_td,
                         const Array<int> &v_ess_vd,
                         Coefficient &rho_coeff,
@@ -202,13 +214,11 @@ public:
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
 
-   void SetDt(real_t delta_t) { dt = delta_t; }
-
    real_t Momentum(ParGridFunction &v);
 };
 
 // Performs a single thermodynamic remap advection step.
-class AdvectorThermoOper : public TimeDependentOperator
+class AdvectorThermoOper : public TimeDependentGeomConsOperator
 {
 public:
    enum StateVars 
@@ -221,12 +231,25 @@ public:
 
 protected:
    Array<int> offsets;
+   real_t dt = 0.0;
+
+public:
+   AdvectorThermoOper(ParFiniteElementSpace &pfes_L2);
+
+   void SetDt(double delta_t) { dt = delta_t; }
+
+   virtual real_t InternalEnergy(ParGridFunction &e) = 0;
+};
+
+// Performs a single thermodynamic remap advection step - nonsconservative scheme
+class AdvectorThermoNonconservativeOper : public AdvectorThermoOper
+{
+protected:
    Coefficient &rho_coeff;
    VectorCoefficient &u_coeff;
    mutable ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
-   real_t dt = 0.0;
 
    // Piecewise min and max of gf over all elements.
    void ComputeElementsMinMax(const ParGridFunction &gf,
@@ -237,18 +260,41 @@ protected:
                               Vector &dof_min, Vector &dof_max) const;
 
 public:
-   // Here pfes is the ParFESpace of the function that will be moved.
-   // Mult() moves the nodes of the mesh corresponding to pfes.
-   AdvectorThermoOper(Coefficient &rho_coeff,
-                      VectorCoefficient &u_coeff,
-                      ParFiniteElementSpace &pfes_L2);
+   // Here pfes is the ParFESpace of the function that will be transferred.
+   AdvectorThermoNonconservativeOper(Coefficient &rho_coeff,
+                                     VectorCoefficient &u_coeff,
+                                     ParFiniteElementSpace &pfes_L2);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
 
-   void SetDt(double delta_t) { dt = delta_t; }
+   real_t InternalEnergy(ParGridFunction &e) override;
+};
 
-   real_t InternalEnergy(ParGridFunction &e);
+// Performs a single thermodynamic remap advection step - geometrically consistent scheme
+class AdvectorThermoGeomConsistentOper : public AdvectorThermoOper
+{
+protected:
+   Array<int> offsets;
+   Coefficient &rho_coeff;
+   VectorCoefficient &u_coeff;
+   mutable ScalarVectorProductCoefficient rho_u_coeff;
+
+public:
+   // Here pfes is the ParFESpace of the function that will be transferred.
+   AdvectorThermoGeomConsistentOper(Coefficient &rho_coeff,
+                                    VectorCoefficient &u_coeff,
+                                    ParFiniteElementSpace &pfes_L2);
+
+   // Single RK stage solve for all fields contained in U.
+   void Mult(const Vector &U, Vector &dU) const override
+   { MFEM_ABORT("Geometrically conservative operator cannot be integrated classically!"); }
+
+   void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) override;
+   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+
+   real_t InternalEnergy(ParGridFunction &e) override;
 };
 
 // Transfer of data between the Lagrange and the remap phases.
