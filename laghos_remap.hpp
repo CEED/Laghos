@@ -14,8 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#ifndef MFEM_LAGHOS_ALE
-#define MFEM_LAGHOS_ALE
+#ifndef MFEM_LAGHOS_REMAP
+#define MFEM_LAGHOS_REMAP
 
 #include "mfem.hpp"
 #include <functional>
@@ -53,7 +53,7 @@ public:
       NVars
    };
 
-   enum class VelocityRemap
+   enum class RemapVelocity
    {
       None = -1,
       LowOrder,
@@ -62,7 +62,7 @@ public:
       ClipAndScale,
    };
 
-   enum class ThermoRemap
+   enum class RemapThermo
    {
       Nonconservative,
       GeomConsistent,
@@ -76,9 +76,9 @@ private:
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
    const Array<int> &v_ess_tdofs;
 
-   VelocityRemap remap_v;
+   RemapVelocity remap_v;
    bool remap_v_stable;
-   ThermoRemap remap_th;
+   RemapThermo remap_th;
 
    const double cfl_factor;
 
@@ -97,8 +97,8 @@ private:
 
 public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl,
-                 VelocityRemap remap_v_, bool remap_v_stable_,
-                 ThermoRemap remap_th_,
+                 RemapVelocity remap_v_, bool remap_v_stable_,
+                 RemapThermo remap_th_,
                  const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
@@ -144,7 +144,7 @@ public:
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,
                 ParFiniteElementSpace &pfes_L2,
-                RemapAdvector::VelocityRemap scheme_v,
+                RemapAdvector::RemapVelocity scheme_v,
                 bool remap_v_s);
 
    // Single RK stage solve for all fields contained in U.
@@ -161,7 +161,7 @@ public:
 class AdvectorVelocityOper : public TimeDependentOperator
 {
 protected:
-   RemapAdvector::VelocityRemap remap_v = RemapAdvector::VelocityRemap::ClipAndScale;
+   RemapAdvector::RemapVelocity remap_v = RemapAdvector::RemapVelocity::ClipAndScale;
    bool remap_v_stable = false;
 
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
@@ -196,7 +196,7 @@ public:
                         VectorCoefficient &u_coeff,
                         ParFiniteElementSpace &pfes_H1,
                         ParFiniteElementSpace &pfes_H1_s,
-                        RemapAdvector::VelocityRemap scheme,
+                        RemapAdvector::RemapVelocity scheme,
                         bool remap_v_s);
 
    // Single RK stage solve for all fields contained in U.
@@ -358,8 +358,8 @@ public:
                                 Vector &du) const;
 };
 
-} // namespace hydrodynamics
+} // namespace ale
 
 } // namespace mfem
 
-#endif // MFEM_LAGHOS_ALE
+#endif // MFEM_LAGHOS_REMAP

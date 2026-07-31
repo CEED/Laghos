@@ -99,8 +99,8 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 #endif
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                             double cfl, VelocityRemap remap_v_, bool remap_v_stable_,
-                             ThermoRemap remap_th_, const Array<int> &ess_tdofs)
+                             double cfl, RemapVelocity remap_v_, bool remap_v_stable_,
+                             RemapThermo remap_th_, const Array<int> &ess_tdofs)
     : pmesh(m, true), dim(pmesh.Dimension()),
     fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
     fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
@@ -187,11 +187,11 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
 
    switch (remap_th)
    {
-   case ThermoRemap::Nonconservative:
+   case RemapThermo::Nonconservative:
       transfer.TransferDensity_Lagr2Remap(rhoDetJw, rho);
       e  = lagr_eps;
       break;
-   case ThermoRemap::GeomConsistent:
+   case RemapThermo::GeomConsistent:
       detJ.SetSpace(rho.ParFESpace()); detJ = 0.;
       transfer.TransferJac_Larg2Remap(detJ);
       transfer.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ, rho);
@@ -286,7 +286,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       oper->SetDt(dt);
       ode_solver.Step(S, t, dt);
 
-      if (remap_v != VelocityRemap::None)
+      if (remap_v != RemapVelocity::None)
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho,
                                        "Remapped Density", Wx, Wy, Ww, Wh);
@@ -357,13 +357,13 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    // Density
    switch (remap_th)
    {
-   case ThermoRemap::Nonconservative:
+   case RemapThermo::Nonconservative:
       // This is used to update the mass matrices.
       rho0_gf = rho;
       // Just copy energy.
       lagr_eps = e;
       break;
-   case ThermoRemap::GeomConsistent:
+   case RemapThermo::GeomConsistent:
       transfer.TransferDensityJac_Remap2Lagr(detJ, rho, rho0_gf);
       break;
    }
@@ -426,7 +426,7 @@ AdvectorOper::AdvectorOper(const Vector &x_start,
                            ParFiniteElementSpace &pfes_H1,
                            ParFiniteElementSpace &pfes_H1_s,
                            ParFiniteElementSpace &pfes_L2,
-                           RemapAdvector::VelocityRemap remap_v,
+                           RemapAdvector::RemapVelocity remap_v,
                            bool remap_v_s)
     : x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
     u(mesh_vel), u_coeff(&u),
@@ -445,7 +445,7 @@ AdvectorOper::AdvectorOper(const Vector &x_start,
    width = height = offsets.Last();
 
    // Velocity advector
-   if (remap_v != RemapAdvector::VelocityRemap::None)
+   if (remap_v != RemapAdvector::RemapVelocity::None)
       op_v = make_unique<AdvectorVelocityOper>(
          v_ess_td, v_ess_vd, rho_coeff, u_coeff,
          pfes_H1, pfes_H1_s, remap_v, remap_v_s);
@@ -1189,7 +1189,7 @@ void AdvectorVelocityOper::Mult(const Vector &v, Vector &d_v) const
 {
    d_v = 0.0;
 
-   if (remap_v == RemapAdvector::VelocityRemap::None) { return; }
+   if (remap_v == RemapAdvector::RemapVelocity::None) { return; }
 
    ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace(),
                          &pfes_H1 = *Mr_H1.ParFESpace(); // only needed for unstable velocity remap
@@ -1266,16 +1266,16 @@ void AdvectorVelocityOper::Mult(const Vector &v, Vector &d_v) const
 
       switch(remap_v)
       {
-      case RemapAdvector::VelocityRemap::LowOrder:
+      case RemapAdvector::RemapVelocity::LowOrder:
          LowOrderVel(K_glb, KT_glb, v, d_v);
          break;
-      case RemapAdvector::VelocityRemap::HighOrderTarget:
+      case RemapAdvector::RemapVelocity::HighOrderTarget:
          HighOrderTargetSchemeVel(K_glb, KT_glb, M_glb, v, d_v);
          break;
-      case RemapAdvector::VelocityRemap::MCL:
+      case RemapAdvector::RemapVelocity::MCL:
          MCLVel(K_glb, KT_glb, M_glb, v, d_v);
          break;
-      case RemapAdvector::VelocityRemap::ClipAndScale:
+      case RemapAdvector::RemapVelocity::ClipAndScale:
          ClipAndScale(pfes_H1_s, v, d_v);
          break;
       default: MFEM_ABORT("Unknown scheme for velocity remap!");

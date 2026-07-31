@@ -166,8 +166,8 @@ int main(int argc, char *argv[])
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
-   int remap_v = (int)RemapAdvector::VelocityRemap::ClipAndScale;
-   int remap_th = (int)RemapAdvector::ThermoRemap::Nonconservative;
+   int remap_v = (int)RemapAdvector::RemapVelocity::ClipAndScale;
+   int remap_th = (int)RemapAdvector::RemapThermo::Nonconservative;
    bool remap_v_gslib  = false;
    bool remap_v_stable = false;
    int dev = 0;
@@ -1042,10 +1042,10 @@ int main(int argc, char *argv[])
    //   }
 
    // Setup the remap operator.
-   RemapAdvector::VelocityRemap remap_v_adv
-      = (!remap_v_gslib) ? ((RemapAdvector::VelocityRemap)remap_v)
-      : RemapAdvector::VelocityRemap::None;
-   RemapAdvector::ThermoRemap remap_th_adv = (RemapAdvector::ThermoRemap)remap_th;
+   RemapAdvector::RemapVelocity remap_v_adv
+      = (!remap_v_gslib) ? ((RemapAdvector::RemapVelocity)remap_v)
+      : RemapAdvector::RemapVelocity::None;
+   RemapAdvector::RemapThermo remap_th_adv = (RemapAdvector::RemapThermo)remap_th;
    const double cfl_remap = 0.1;
 
    RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
