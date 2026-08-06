@@ -20,8 +20,10 @@
 
 #include "linalg/tensor_arrays.hpp"
 #include "fem/dfem/doperator.hpp"
+#include "fem/qinterp/eval.hpp"
 #include "general/enzyme.hpp"
 using namespace mfem::future;
+#include "nvtx3/nvtx3.hpp"
 
 #ifdef NVTX_DEBUG_HPP
 #undef NVTX_COLOR
@@ -31,6 +33,40 @@ using namespace mfem::future;
 #define db1(...)
 #define dbg(...)
 #endif
+
+#define LAGHOS_NVTX_INACTIVE __attribute__((noinline)) MFEM_ENZYME_INACTIVE
+
+namespace laghos_nvtx
+{
+
+LAGHOS_NVTX_INACTIVE static void RangePushA(const char *message)
+{
+   nvtxRangePushA(message);
+}
+
+LAGHOS_NVTX_INACTIVE static void RangePop()
+{
+   nvtxRangePop();
+}
+
+class scoped_range
+{
+public:
+   LAGHOS_NVTX_INACTIVE explicit scoped_range(const char *message) noexcept
+   {
+      RangePushA(message);
+   }
+
+   LAGHOS_NVTX_INACTIVE ~scoped_range() noexcept
+   {
+      RangePop();
+   }
+
+   scoped_range(const scoped_range&) = delete;
+   scoped_range& operator=(const scoped_range&) = delete;
+};
+
+} // namespace laghos_nvtx
 
 template <typename T, int n, int m> MFEM_HOST_DEVICE
 tensor<T, n * m> flatten_nm(tensor<T, n, m> A)
@@ -1326,6 +1362,7 @@ static void Rho0DetJ0Vol(const int dim, const int NE,
    volume = vol * one;
 }
 
+
 template <int DIM, int DIM2 = DIM*DIM>
 class QUpdatePA
 {
@@ -1341,7 +1378,7 @@ class QUpdatePA
 
    using matd_t = tensor<real_t, DIM, DIM>;
 
-   struct UpdateQF
+   struct UpdateQF : QFWithScratchType
    {
       const bool use_viscosity, use_vorticity;
       const real_t h0, h1order, cfl;
@@ -1389,6 +1426,8 @@ class QUpdatePA
                       tensor_array<real_t, DIM, DIM> &TsJiT,
                       tensor_array<real_t> &dtest) const
       {
+         laghos_nvtx::scoped_range r{"qfunction"};
+
          const int NQ = nq;
          MFEM_ASSERT(NQ == static_cast<int>(dvdxi.size()),
                      "unexpected number of quadrature points");
@@ -1404,6 +1443,7 @@ class QUpdatePA
          auto S_q = make_tensor_array<>(d_S, NQ);
          auto Jinv_q = make_tensor_array<DIM, DIM>(d_Jinv, NQ);
 
+         laghos_nvtx::RangePushA("qfunction prepare");
          // Pass 1: prepare the per-point data. These intermediates are written
          // to member scratch storage on the qfunction object. Enzyme sees the
          // scratch and its shadow because the qfunction object is passed as
@@ -1423,7 +1463,9 @@ class QUpdatePA
                return Jinv_loc[i + DIM*j];
             });
          });
+         laghos_nvtx::RangePop();
 
+         laghos_nvtx::RangePushA("qfunction material");
          // Pass 2: material model -> all material parameters.
          mfem::forall<UseEnzyme>(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
@@ -1433,7 +1475,9 @@ class QUpdatePA
             P_q(q) = P_loc;
             S_q(q) = S_loc;
          });
+         laghos_nvtx::RangePop();
 
+         laghos_nvtx::RangePushA("qfunction stress");
          // Pass 3: assemble the stress (incl. viscosity) and time step estimate.
          mfem::forall<UseEnzyme>(NQ, [=] MFEM_HOST_DEVICE (int q)
          {
@@ -1457,9 +1501,63 @@ class QUpdatePA
             TsJiT(q) = make_tensor<DIM, DIM>([&](int i, int j) {return sJiT[i + DIM*j];});
             dtest(q) = d_dt_est;
          });
+         laghos_nvtx::RangePop();
       };
    } qupdate_qf;
-   DifferentiableOperator qupdate_dop;
+
+
+   struct LocalUpdateQF
+   {
+      const bool use_viscosity, use_vorticity;
+      const real_t h0, h1order, cfl;
+
+      LocalUpdateQF() = delete;
+      explicit LocalUpdateQF(const bool use_viscosity, const bool use_vorticity,
+                             const real_t h0, const real_t h1order, const real_t cfl):
+         use_viscosity(use_viscosity), use_vorticity(use_vorticity),
+         h0(h0), h1order(h1order), cfl(cfl) {}
+
+      inline MFEM_HOST_DEVICE
+      void operator()(const tensor<real_t, DIM, DIM> &dvdxi,
+                      const tensor<real_t, DIM, DIM> &J,
+                      const real_t &E,
+                      const real_t &gamma,
+                      const tensor<real_t, DIM, DIM> &invJ0,
+                      const real_t &rhoDetJw,
+                      const real_t &weight,
+                      tensor<real_t, DIM, DIM> &TsJiT) const
+      {
+         real_t Jinv_loc[DIM2], detJ_loc, R_loc, E_loc;
+         real_t P_loc, S_loc;
+         real_t stress[DIM2], sgrad_v[DIM2];
+         real_t eig_val_data[DIM], eig_vec_data[DIM2];
+         real_t compr_dir[DIM], Jpi[DIM2], ph_dir[DIM];
+         real_t sJiT[DIM2];
+         real_t d_dt_est = std::numeric_limits<real_t>::infinity();
+
+         const auto flat_J = flatten_nm(J);
+         const auto flat_dvdxi = flatten_nm(dvdxi);
+         const auto flat_invJ0 = flatten_nm(invJ0);
+
+         QUpdateBody1<DIM>(Jinv_loc, weight, flat_J.values, rhoDetJw, E,
+                           detJ_loc, R_loc, E_loc);
+         MaterialModel<DIM>(gamma, R_loc, E_loc, P_loc, S_loc);
+         QUpdateBody2<DIM>(use_viscosity, use_vorticity, h0, h1order, cfl,
+                           stress, sgrad_v, eig_val_data, eig_vec_data,
+                           compr_dir, Jpi, ph_dir, sJiT,
+                           weight, flat_J.values, Jinv_loc,
+                           flat_dvdxi.values, flat_invJ0.values,
+                           P_loc, R_loc, S_loc, detJ_loc, d_dt_est);
+
+         TsJiT = make_tensor<DIM, DIM>([&](int i, int j)
+         {
+            return sJiT[j + DIM*i];
+         });
+         MFEM_CONTRACT_VAR(d_dt_est);
+      };
+   } qupdate_qf_local;
+
+   DifferentiableOperator qupdate_dop, qupdate_dop_local;
    enum
    {
       Velocity, Coordinates, Energy, InvJac0,
@@ -1490,6 +1588,7 @@ public:
       dt(scalar_qft.Size()),
       // *INDENT-OFF*
       qupdate_qf(use_viscosity, use_vorticity, h0, h1order, cfl),
+      qupdate_qf_local(use_viscosity, use_vorticity, h0, h1order, cfl),
       qupdate_dop(// input field descriptors
                   {{Velocity, &H1},
                    {Coordinates, &H1},
@@ -1501,7 +1600,17 @@ public:
                   // output field descriptors
                   {{StressTensor, &dimsqr_qspace},
                    {DeltaTEst, &scalar_qspace}},
-                  pmesh)
+                  pmesh),
+      qupdate_dop_local(// input field descriptors
+                        {{Velocity, &H1},
+                         {Coordinates, &H1},
+                         {Energy, &L2},
+                         {Gamma, &L0},
+                         {InvJac0, &dimsqr_qspace},
+                         {Rho0DetJ0W, &scalar_qspace}},
+                        // output field descriptors
+                        {{StressTensor, &dimsqr_qspace}},
+                        pmesh)
       // *INDENT-ON*
    {
       // Alias the qdata storage *through the memory manager* (MakeRef /
@@ -1520,7 +1629,8 @@ public:
 
       domain_attr = 1;
       qupdate_dop.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}}});
-      qupdate_dop.AddDomainIntegrator(qupdate_qf,
+      qupdate_dop.AddDomainIntegrator<GlobalQFBackend>(
+                                      qupdate_qf,
                                       // inputs
                                       tuple{Gradient<Velocity> {},
                                             Gradient<Coordinates> {},
@@ -1535,70 +1645,221 @@ public:
                                             Identity<DeltaTEst>{}},
                                       ir, domain_attr, Derivatives<Energy>{});
       qupdate_dop.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
+
+      const auto local_inputs = tuple{Gradient<Velocity> {},
+                                      Gradient<Coordinates> {},
+                                      Value<Energy> {},
+                                      Value<Gamma> {},
+                                      Identity<InvJac0> {},
+                                      Identity<Rho0DetJ0W> {},
+                                      Weight{}};
+      const auto local_outputs = tuple{Identity<StressTensor>{}};
+
+      // Register the concrete LocalQF kernels used by Laghos' default PA
+      // quadrature (Q1D=4), so the diagnostic below does not go through the
+      // runtime fallback dispatch path.
+      AddLocalSpecializations<DIM, 4, LocalUpdateQF,
+                              std::decay_t<decltype(local_inputs)>,
+                              std::decay_t<decltype(local_outputs)>,
+                              Derivatives<Energy>>();
+
+      AddLocalSpecializations<DIM, 6, LocalUpdateQF,
+                              std::decay_t<decltype(local_inputs)>,
+                              std::decay_t<decltype(local_outputs)>,
+                              Derivatives<Energy>>();
+
+      // Avoid the QuadratureInterpolator TensorEval fallback used for scalar
+      // L2 value interpolation at p=0 with the Q1D=6 diagnostic path.
+      QuadratureInterpolator::TensorEvalKernels::
+      Specialization<2, QVectorLayout::byVDIM, 1, 1, 6>::Opt<1>::Add();
+
+      qupdate_dop_local.SetQLayouts({}, {{Identity<StressTensor>{}, {0,2,1}}});
+      qupdate_dop_local.AddDomainIntegrator<LocalQFBackend>(
+                                      qupdate_qf_local,
+                                      local_inputs,
+                                      local_outputs,
+                                      ir, domain_attr, Derivatives<Energy>{});
+      qupdate_dop_local.SetMultLevel(DifferentiableOperator::MultLevel::LVECTOR);
    }
 
-   void Update(Vector &x, Vector &v, Vector &e, QuadratureData &qdata)
+   void Update(ParGridFunction &x, ParGridFunction &v, ParGridFunction &e, QuadratureData &qdata)
    {
       MultiVector X{v, x, e, gamma_gf, Jac0inv, rho0DetJ0w, dt = qdata.dt_est};
       MultiVector Y{stressJiT, dt};
       qupdate_dop.Mult(X, Y);
 
-#define LAGHOS_QUPDATE_DERIVATIVE_TEST
-#ifdef LAGHOS_QUPDATE_DERIVATIVE_TEST
-      // Spot-check the dFEM derivative of the force quadrature data
+// Define LAGHOS_QUPDATE_DERIVATIVE_TEST for the expensive QUpdate derivative
+// finite-difference check. Define LAGHOS_QUPDATE_DERIVATIVE_TIMING for the
+// forward/derivative timing report. Keep both off by default: these diagnostics
+// mutate temporary dFEM LVECTOR views and currently are not safe in multi-rank
+// production runs.
+#define LAGHOS_QUPDATE_DERIVATIVE_TIMING
+#if defined(LAGHOS_QUPDATE_DERIVATIVE_TEST) || defined(LAGHOS_QUPDATE_DERIVATIVE_TIMING)
+      // Spot-check and time the dFEM derivative of the force quadrature data
       // stressJinvT with respect to the L2 energy field against central finite
-      // differences. This test is intentionally local to Update() and guarded
-      // by LAGHOS_QUPDATE_DERIVATIVE_TEST because it performs two extra
-      // qdata evaluations and is destructive to Y (the real output is restored
-      // by the final qupdate_dop.Mult below).
+      // differences. Both the current global-QF DifferentiableOperator and an
+      // equivalent local-QF DifferentiableOperator are tested. This block is
+      // intentionally guarded because it performs extra qdata evaluations and
+      // derivative applications; the real output is restored by the final
+      // qupdate_dop.Mult below.
       {
          constexpr real_t eps = 1.0e-7;
-         Vector de(e.Size()), d_stress_ad(stressJiT.Size()), d_dt_ad(dt.Size()),
-                d_stress_fd(stressJiT.Size()), stress_p(stressJiT.Size()),
-                stress_m(stressJiT.Size());
+         ParGridFunction e_diag_gf(&L2);
+         Vector e_diag_t(L2.GetTrueVSize());
+         e.ParallelAssemble(e_diag_t);
+         e_diag_gf.Distribute(&e_diag_t);
+
+         Vector de(e_diag_gf.Size()), d_stress_global_ad(stressJiT.Size()),
+                d_dt_global_ad(dt.Size()), dt_diag_in(dt.Size()),
+                dt_global(dt.Size()),
+                d_stress_local_ad(stressJiT.Size()), d_stress_fd(stressJiT.Size()),
+                stress_p(stressJiT.Size()), stress_m(stressJiT.Size()),
+                stress_global(stressJiT.Size()), stress_local(stressJiT.Size()),
+                stress_local_p(stressJiT.Size()), stress_local_m(stressJiT.Size()),
+                d_stress_local_fd(stressJiT.Size());
          de.UseDevice(true);
-         d_stress_ad.UseDevice(true);
-         d_dt_ad.UseDevice(true);
+         d_stress_global_ad.UseDevice(true);
+         d_dt_global_ad.UseDevice(true);
+         dt_diag_in.UseDevice(true);
+         dt_global.UseDevice(true);
+         dt_diag_in = qdata.dt_est;
+         d_stress_local_ad.UseDevice(true);
          d_stress_fd.UseDevice(true);
          stress_p.UseDevice(true);
          stress_m.UseDevice(true);
+         stress_global.UseDevice(true);
+         stress_local.UseDevice(true);
+         stress_local_p.UseDevice(true);
+         stress_local_m.UseDevice(true);
+         d_stress_local_fd.UseDevice(true);
 
          de.Randomize(0x5eed);
          const real_t de_norm = de.Norml2();
          if (de_norm > 0.0) { de *= 1.0 / de_norm; }
 
-         auto dqupdate_de = qupdate_dop.GetDerivative(Energy, X, false);
-         MultiVector dY{d_stress_ad, d_dt_ad};
-         dqupdate_de->Mult(de, dY);
+         StopWatch sw;
 
-         add(e, eps, de, e);
-         qupdate_dop.Mult(X, Y);
-         stress_p = Y[0];
+         // Use L-vector blocks throughout. The global-QF operator is the same
+         // three-pass production operator (with dtmin/dtest), also configured
+         // in LVECTOR mode; the local-QF diagnostic operator omits dtmin/dtest
+         // to stay within the LocalQF argument-count limit.
+         MultiVector Xglobal{v, x, e_diag_gf, gamma_gf, Jac0inv, rho0DetJ0w, dt_diag_in};
+         MultiVector Yglobal{stress_global, dt_global};
+         MultiVector Xlocal{v, x, e_diag_gf, gamma_gf, Jac0inv, rho0DetJ0w};
+         MultiVector Ylocal{stress_local};
+         LAGHOS_DEVICE_SYNC;
+         sw.Clear(); sw.Start();
+         qupdate_dop.Mult(Xglobal, Yglobal);
+         LAGHOS_DEVICE_SYNC;
+         sw.Stop();
+         const double t_forward_global = sw.RealTime();
 
-         add(e, -2.0 * eps, de, e);
-         qupdate_dop.Mult(X, Y);
-         stress_m = Y[0];
+         LAGHOS_DEVICE_SYNC;
+         sw.Clear(); sw.Start();
+         qupdate_dop_local.Mult(Xlocal, Ylocal);
+         LAGHOS_DEVICE_SYNC;
+         sw.Stop();
+         const double t_forward_local = sw.RealTime();
 
-         add(e, eps, de, e); // restore input energy
+         LAGHOS_DEVICE_SYNC;
+         sw.Clear(); sw.Start();
+         auto dqupdate_de_global = qupdate_dop.GetDerivative(Energy, Xglobal, false);
+         MultiVector dYglobal{d_stress_global_ad, d_dt_global_ad};
+         dqupdate_de_global->Mult(de, dYglobal);
+         LAGHOS_DEVICE_SYNC;
+         sw.Stop();
+         const double t_deriv_global = sw.RealTime();
+
+         LAGHOS_DEVICE_SYNC;
+         sw.Clear(); sw.Start();
+         auto dqupdate_de_local = qupdate_dop_local.GetDerivative(Energy, Xlocal, false);
+         MultiVector dYlocal{d_stress_local_ad};
+         dqupdate_de_local->Mult(de, dYlocal);
+         LAGHOS_DEVICE_SYNC;
+         sw.Stop();
+         const double t_deriv_local = sw.RealTime();
+
+#ifdef LAGHOS_QUPDATE_DERIVATIVE_TEST
+         add(e_diag_gf, eps, de, e_diag_gf);
+         qupdate_dop.Mult(Xglobal, Yglobal);
+         stress_p = Yglobal[0];
+         qupdate_dop_local.Mult(Xlocal, Ylocal);
+         stress_local_p = Ylocal[0];
+
+         add(e_diag_gf, -2.0 * eps, de, e_diag_gf);
+         qupdate_dop.Mult(Xglobal, Yglobal);
+         stress_m = Yglobal[0];
+         qupdate_dop_local.Mult(Xlocal, Ylocal);
+         stress_local_m = Ylocal[0];
+
+         add(e_diag_gf, eps, de, e_diag_gf); // restore input energy
 
          add(stress_p, -1.0, stress_m, d_stress_fd);
          d_stress_fd *= 0.5 / eps;
+         add(stress_local_p, -1.0, stress_local_m, d_stress_local_fd);
+         d_stress_local_fd *= 0.5 / eps;
 
-         d_stress_fd -= d_stress_ad;
-         const real_t err = d_stress_fd.Norml2();
-         const real_t ad_norm = d_stress_ad.Norml2();
-         d_stress_fd += d_stress_ad;
+         Vector diff_global(d_stress_fd), diff_local(d_stress_fd), diff_modes(d_stress_global_ad),
+                diff_forward(stress_global), diff_local_self(d_stress_local_fd);
+         diff_global.UseDevice(true);
+         diff_local.UseDevice(true);
+         diff_modes.UseDevice(true);
+         diff_forward.UseDevice(true);
+         diff_local_self.UseDevice(true);
+
+         diff_forward -= stress_local;
+         const real_t err_forward_modes = diff_forward.Norml2();
+
+         diff_global -= d_stress_global_ad;
+         const real_t err_global = diff_global.Norml2();
+         const real_t global_ad_norm = d_stress_global_ad.Norml2();
+
+         diff_local -= d_stress_local_ad;
+         const real_t err_local = diff_local.Norml2();
+         const real_t local_ad_norm = d_stress_local_ad.Norml2();
+
+         diff_local_self -= d_stress_local_ad;
+         const real_t err_local_self = diff_local_self.Norml2();
+         const real_t local_fd_norm = d_stress_local_fd.Norml2();
+
+         diff_modes -= d_stress_local_ad;
+         const real_t err_modes = diff_modes.Norml2();
+
          const real_t fd_norm = d_stress_fd.Norml2();
          if (Mpi::Root())
          {
-            mfem::out << "QUpdate d(stressJinvT)/d(e) finite-difference check: "
-                      << "abs=" << err << ", rel="
-                      << err / std::max(fd_norm, real_t(1.0e-30))
-                      << ", |ad|=" << ad_norm
-                      << ", |fd|=" << fd_norm << std::endl;
+            mfem::out << "QUpdate d(stressJinvT)/d(e) finite-difference check:\n"
+                      << "  global AD: abs=" << err_global << ", rel="
+                      << err_global / std::max(fd_norm, real_t(1.0e-30))
+                      << ", |ad|=" << global_ad_norm << ", |fd|=" << fd_norm << "\n"
+                      << "  local  AD vs global FD: abs=" << err_local << ", rel="
+                      << err_local / std::max(fd_norm, real_t(1.0e-30))
+                      << ", |ad|=" << local_ad_norm << ", |fd|=" << fd_norm << "\n"
+                      << "  local  AD vs local  FD: abs=" << err_local_self << ", rel="
+                      << err_local_self / std::max(local_fd_norm, real_t(1.0e-30))
+                      << ", |ad|=" << local_ad_norm << ", |fd|=" << local_fd_norm << "\n"
+                      << "  |global fwd - local fwd|=" << err_forward_modes << "\n"
+                      << "  |global AD - local AD|=" << err_modes << std::endl;
          }
+#endif
 
-         qupdate_dop.Mult(X, Y); // restore unperturbed output
+#ifdef LAGHOS_QUPDATE_DERIVATIVE_TIMING
+         if (Mpi::Root())
+         {
+            mfem::out << "QUpdate derivative timings (seconds):\n"
+                      << "  forward global=" << t_forward_global
+                      << ", derivative global=" << t_deriv_global
+                      << ", overhead=" << t_deriv_global / std::max(t_forward_global, 1.0e-30) << "x\n"
+                      << "  forward local =" << t_forward_local
+                      << ", derivative local =" << t_deriv_local
+                      << ", overhead=" << t_deriv_local / std::max(t_forward_local, 1.0e-30) << "x\n"
+                      << "  forward local/global="
+                      << t_forward_local / std::max(t_forward_global, 1.0e-30) << "x\n"
+                      << "  derivative local/global="
+                      << t_deriv_local / std::max(t_deriv_global, 1.0e-30) << "x" << std::endl;
+         }
+#endif
+
       }
 #endif
 

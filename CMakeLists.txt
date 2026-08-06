@@ -3,6 +3,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 project(laghos CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # build flags
 if(NOT CMAKE_BUILD_TYPE)
   message(STATUS "Setting build type to 'Release' as none was specified.")
@@ -14,21 +16,16 @@ if(NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# Load 'user.cmake' settings file if it exists
-set(USER_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/user.cmake" CACHE PATH "Path to user configuration file" FORCE)
-include("${USER_CONFIG}" OPTIONAL RESULT_VARIABLE USER_CONFIG_LOADED)
-if (USER_CONFIG_LOADED)
-  message(STATUS "USER_CONFIG = ${USER_CONFIG} (LOADED)")
+if(LAGHOS_USE_CALIPER)
+  find_package(Adiak REQUIRED HINTS ${ADIAK_DIR})
+  find_package(Caliper REQUIRED HINTS ${CALIPER_DIR})
+  add_compile_definitions(USE_CALIPER)
 endif()
-
-find_package(HYPRE REQUIRED)
+find_package(Enzyme REQUIRED HINTS ${ENZYME_DIR})
+message(STATUS "Enzyme found in ${ENZYME_DIR}.")
+set(ENZYME_INCLUDE_DIRS ${ENZYME_DIR}/include)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
-
-option(LAGHOS_USE_CALIPER "Use Caliper" OFF)
-if (LAGHOS_USE_CALIPER)
-  find_package(caliper REQUIRED)
-endif()
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to use.")
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL
@@ -36,25 +33,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Enable C++ standard extensions.")
 
 if (MFEM_USE_CUDA)
-  if (MFEM_USE_HIP)
-    message(FATAL_ERROR " *** MFEM_USE_HIP cannot be combined with MFEM_USE_CUDA.")
-  endif()
-  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES 70)
-  endif()
-  # Use ${CMAKE_CXX_COMPILER} as the cuda host compiler.
-  if (NOT CMAKE_CUDA_HOST_COMPILER)
-    set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
-  endif()
+#   if (MFEM_USE_HIP)
+#     message(FATAL_ERROR " *** MFEM_USE_HIP cannot be combined with MFEM_USE_CUDA.")
+#   endif()
+#   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+#     set(CMAKE_CUDA_ARCHITECTURES 70)
+#   endif()
+#   # Use ${CMAKE_CXX_COMPILER} as the cuda host compiler.
+#   if (NOT CMAKE_CUDA_HOST_COMPILER)
+#     set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
+#   endif()
   enable_language(CUDA)
-  set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD} CACHE STRING
-    "CUDA standard to use.")
-  set(CMAKE_CUDA_STANDARD_REQUIRED ON CACHE BOOL
-    "Force the use of the chosen CUDA standard.")
-  set(CMAKE_CUDA_EXTENSIONS OFF CACHE BOOL "Enable CUDA standard extensions.")
-  set(CUDA_FLAGS "--expt-extended-lambda")
-  message(STATUS "Using CUDA architecture: ${CMAKE_CUDA_ARCHITECTURES}")
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${CUDA_FLAGS}")
+#   set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD} CACHE STRING
+#     "CUDA standard to use.")
+#   set(CMAKE_CUDA_STANDARD_REQUIRED ON CACHE BOOL
+#     "Force the use of the chosen CUDA standard.")
+#   set(CMAKE_CUDA_EXTENSIONS OFF CACHE BOOL "Enable CUDA standard extensions.")
+#   set(CUDA_FLAGS "--expt-extended-lambda")
+#   message(STATUS "Using CUDA architecture: ${CMAKE_CUDA_ARCHITECTURES}")
+#   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} ${CUDA_FLAGS}")
 endif()
 
 if (MFEM_USE_HIP)
@@ -62,7 +59,6 @@ if (MFEM_USE_HIP)
     set(CMAKE_HIP_ARCHITECTURES gfx942)
   endif()
 endif()
-
 
 list(APPEND SOURCES
   laghos_assembly.cpp laghos.cpp laghos_solver.cpp sedov/sedov_sol.cpp
@@ -74,31 +70,24 @@ endif()
 
 add_executable(laghos ${SOURCES})
 
-target_include_directories(laghos PUBLIC "${MFEM_DIR}/../../../include/mfem")
+if (MFEM_USE_ENZYME)
+  target_compile_definitions(laghos PUBLIC MFEM_USE_ENZYME)
+endif()
+
+message("MPI INCLUDE DIRS: " ${MPI_CXX_INCLUDE_PATH})
+target_include_directories(laghos PUBLIC ${MPI_C_INCLUDE_DIRS} ${MPI_CXX_INCLUDE_DIRS})
 
 target_link_libraries(laghos
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
-  PUBLIC HYPRE::HYPRE
+  PUBLIC ClangEnzymeFlags
 )
+
 if(LAGHOS_USE_CALIPER)
-  target_link_libraries(laghos
-    PUBLIC caliper
-  )
-  target_compile_definitions(laghos
-    PUBLIC LAGHOS_USE_CALIPER)
+  target_include_directories(laghos PUBLIC ${adiak_INCLUDE_DIRS})
+  target_link_libraries(laghos PUBLIC ${adiak_LIBRARIES})
+
+  target_include_directories(laghos PUBLIC ${caliper_INCLUDE_DIR})
+  target_link_libraries(laghos PUBLIC caliper)
 endif()
 
-if (MFEM_USE_CUDA)
-  set_source_files_properties(sedov/sedov_sol.cpp sedov/sedov.cpp PROPERTIES LANGUAGE CUDA)
-endif()
-
-add_executable(sedov sedov/sedov_sol.cpp sedov/sedov.cpp)
-
-target_include_directories(sedov PUBLIC "${MFEM_DIR}/../../../include/mfem")
-
-target_link_libraries(sedov
-  PUBLIC mfem
-  PUBLIC MPI::MPI_CXX
-  PUBLIC HYPRE::HYPRE
-)
