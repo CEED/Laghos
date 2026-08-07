@@ -30,7 +30,7 @@ namespace hydrodynamics
 IntegrationRules IntRulesLo(0, Quadrature1D::GaussLobatto);
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    ParGridFunction &gf, const char *title,
+                    const ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
 {
    gf.HostRead();
@@ -83,7 +83,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 }
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    QuadratureFunction &qf, const char *title,
+                    const QuadratureFunction &qf, const char *title,
                     int x, int y, int w, int h)
 {
    ParMesh *pmesh = dynamic_cast<ParMesh *>(qf.GetSpace()->GetMesh());

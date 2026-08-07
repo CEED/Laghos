@@ -34,12 +34,12 @@ extern IntegrationRules IntRulesLo;
 /// specified host and port. Set the visualization window title, and optionally,
 /// its geometry.
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    ParGridFunction &gf, const char *title,
+                    const ParGridFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    QuadratureFunction &gf, const char *title,
+                    const QuadratureFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400);
 
 struct TimingData

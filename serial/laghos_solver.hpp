@@ -30,7 +30,7 @@ namespace hydrodynamics
 /// specified host and port. Set the visualization window title, and optionally,
 /// its geometry.
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    GridFunction &gf, const char *title,
+                    const GridFunction &gf, const char *title,
                     int x = 0, int y = 0, int w = 400, int h = 400,
                     bool vec = false);
 

@@ -26,7 +26,7 @@ namespace hydrodynamics
 {
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
-                    GridFunction &gf, const char *title,
+                    const GridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
 {
    gf.HostRead();
