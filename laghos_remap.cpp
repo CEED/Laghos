@@ -1214,14 +1214,15 @@ void AdvectorThermoNonconservativeOper::ComputeSparsityBounds(
 AdvectorVelocityOper::AdvectorVelocityOper(
    const Array<int> &v_ess_td, const Array<int> &v_ess_vd, Coefficient &rho_coeff_,
    VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
-   RemapAdvector::RemapVelocity scheme, bool remap_v_s)
-:   v_ess_tdofs(v_ess_td),
+   RemapAdvector::RemapVelocity scheme_, bool remap_v_s)
+:   remap_v(scheme_),
+    remap_v_stable(remap_v_s),
+    v_ess_tdofs(v_ess_td),
     v_ess_vdofs(v_ess_vd),
     rho_coeff(rho_coeff_), u_coeff(u_coeff_),
     rho_u_coeff(rho_coeff, u_coeff),
-    Mr_H1(&pfes_H1), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s), lummpedMr_H1(&pfes_H1_s),
-    Mr_H1_s(&pfes_H1_s),
-    remap_v_stable(remap_v_s)
+    Mr_H1(&pfes_H1), Mr_H1_s(&pfes_H1_s), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s),
+    lummpedMr_H1(&pfes_H1_s)
 {
    // no need for Vector Massmatrix in stablised velocity remap
    // MCL only uses the first component of this, but unstable remap needs vector mass matrix
