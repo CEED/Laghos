@@ -280,7 +280,6 @@ public:
 class AdvectorThermoGeomConsistentOper : public AdvectorThermoOper
 {
 protected:
-   Array<int> offsets;
    const Vector &x0;
    const ParGridFunction &u;
    const IntegrationRule &ir_rho;
@@ -292,6 +291,9 @@ protected:
    ParBilinearForm DD;
    Array<int> ess_tdofs_f;
 
+   std::unique_ptr<SolutionTransfer> trans;
+   mutable ParGridFunction detJ;
+
    class DivRDivRIntegrator : public BilinearFormIntegrator
    {
 #ifndef MFEM_THREAD_SAFE
@@ -302,6 +304,37 @@ protected:
       void AssembleElementMatrix(const FiniteElement &el,
                                       ElementTransformation &Trans,
                                       DenseMatrix &elmat) override;
+   };
+
+   class RefConvectionIntegrator : public BilinearFormIntegrator
+   {
+      const ParGridFunction &f;
+      DenseMatrix dshape;
+      Vector shape, v, vxt, vdshape;
+
+   public:
+      RefConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
+      : BilinearFormIntegrator(ir), f(flux) { }
+
+      void AssembleElementMatrix(const FiniteElement &fe,
+                                 ElementTransformation &Tr,
+                                 DenseMatrix &elmat) override;
+   };
+
+   class RefFaceConvectionIntegrator : public BilinearFormIntegrator
+   {
+      const ParGridFunction &f;
+      Vector shape1, shape2, shape_face, f_f;
+      Array<int> vdofs_face;
+
+   public:
+      RefFaceConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
+      : BilinearFormIntegrator(ir), f(flux) { }
+
+      void AssembleFaceMatrix(const FiniteElement &fe1, 
+                              const FiniteElement &fe2,
+                              FaceElementTransformations &Trans,
+                              DenseMatrix &elmat) override;
    };
 
    void ImplicitSolveFluxRHS(Vector &rhs) const;

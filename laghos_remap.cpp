@@ -1561,6 +1561,147 @@ AssembleElementMatrix(const FiniteElement &el, ElementTransformation &Trans,
    }
 }
 
+void AdvectorThermoGeomConsistentOper::RefConvectionIntegrator::
+AssembleElementMatrix(const FiniteElement &fe, ElementTransformation &Tr,
+   DenseMatrix &elmat)
+{
+   const int ndof = fe.GetDof();
+   const int ndim = fe.GetDim();
+
+   shape.SetSize(ndof);
+   dshape.SetSize(ndof, ndim);
+   vdshape.SetSize(ndof);
+   v.SetSize(ndim);
+   vxt.SetSize(ndim);
+
+   elmat.SetSize(ndof);
+   elmat = 0.;
+
+   const int nqp = IntRule->GetNPoints();
+   for(int q = 0; q < nqp; q++)
+   {
+      const IntegrationPoint &ip = IntRule->IntPoint(q);
+      Tr.SetIntPoint(&ip);
+      f.GetVectorValue(Tr, ip, v);
+
+      fe.CalcShape(ip, shape);
+      fe.CalcDShape(ip, dshape);
+
+      Tr.AdjugateJacobian().Mult(v, vxt);
+      dshape.Mult(vxt, vdshape);
+
+      double w = -ip.weight;
+
+      AddMult_a_VWt(w, vdshape, shape, elmat);
+   }
+}
+
+void AdvectorThermoGeomConsistentOper::RefFaceConvectionIntegrator::
+AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
+   FaceElementTransformations &Trans, DenseMatrix &elmat)
+{
+   const FiniteElementSpace *fes_face = f.FESpace();
+   const FiniteElement &fe_face = *fes_face->GetFaceElement(Trans.Face->ElementNo);
+
+   int ndof1, ndof2, ndof_face;
+   double un, a, b, w;
+
+   ndof1 = el1.GetDof();
+   ndof2 = (Trans.Elem2No >= 0)?(el2.GetDof()):(0);
+   ndof_face = fe_face.GetDof();
+   
+   shape1.SetSize(ndof1);
+   shape2.SetSize(ndof2);
+   shape_face.SetSize(ndof_face);
+   elmat.SetSize(ndof1 + ndof2);
+   elmat = 0.0;
+
+   //fluxes
+   fes_face->GetFaceVDofs(Trans.Face->ElementNo, vdofs_face);
+   f.GetSubVector(vdofs_face, f_f);
+
+   const IntegrationRule *ir = IntRule;
+   if (ir == NULL)
+   {
+      int order;
+      // Assuming order(u)==order(mesh)
+      if (Trans.Elem2No >= 0)
+         order = (min(Trans.Elem1->OrderW(), Trans.Elem2->OrderW()) +
+                2 * max(el1.GetOrder(), el2.GetOrder()));
+      else
+      {
+         order = Trans.Elem1->OrderW() + 2 * el1.GetOrder();
+      }
+      if (el1.Space() == FunctionSpace::Pk)
+      {
+         order++;
+      }
+      ir = &IntRules.Get(Trans.GetGeometryType(), order);
+   }
+
+   for (int p = 0; p < ir->GetNPoints(); p++)
+   {
+      const IntegrationPoint &ip = ir->IntPoint(p);
+
+      // Set the integration point in the face and the neighboring elements
+      Trans.SetAllIntPoints(&ip);
+
+      // Access the neighboring elements' integration points
+      // Note: eip2 will only contain valid data if Elem2 exists
+      const IntegrationPoint &eip1 = Trans.GetElement1IntPoint();
+      const IntegrationPoint &eip2 = Trans.GetElement2IntPoint();
+
+      el1.CalcShape(eip1, shape1);
+      if(ndof2)
+         el2.CalcShape(eip2, shape2);
+
+      fe_face.CalcShape(ip, shape_face);
+      un = f_f * shape_face;
+
+      a = 0.5 * un;
+      b = - 0.5 * fabs(un);
+      // note: if |alpha/2|==|beta| then |a|==|b|, i.e. (a==b) or (a==-b)
+      //       and therefore two blocks in the element matrix contribution
+      //       (from the current quadrature point) are 0
+
+      w = ip.weight * (a + b);
+      if (w != 0.0)
+      {
+         for (int i = 0; i < ndof1; i++)
+            for (int j = 0; j < ndof1; j++)
+            {
+               elmat(i, j) += w * shape1(i) * shape1(j);
+            }
+      }
+
+      if (ndof2)
+      {
+         if (w != 0.0)
+            for (int i = 0; i < ndof2; i++)
+               for (int j = 0; j < ndof1; j++)
+               {
+                  elmat(ndof1 + i, j) -= w * shape2(i) * shape1(j);
+               }
+
+         w = ip.weight * (b - a);
+         if (w != 0.0)
+         {
+            for (int i = 0; i < ndof2; i++)
+               for (int j = 0; j < ndof2; j++)
+               {
+                  elmat(ndof1 + i, ndof1 + j) += w * shape2(i) * shape2(j);
+               }
+
+            for (int i = 0; i < ndof1; i++)
+               for (int j = 0; j < ndof2; j++)
+               {
+                  elmat(i, ndof1 + j) -= w * shape1(i) * shape2(j);
+               }
+         }
+      }
+   }
+}
+
 AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    const Vector &x0_, const ParGridFunction &u_, const IntegrationRule &ir_rho_,
    ParFiniteElementSpace &pfes_L2_)
@@ -1568,8 +1709,9 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    fec_RT(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
    pfes_RT(pfes_L2.GetParMesh(), &fec_RT),
    x_now(*pfes_L2.GetParMesh()->GetNodes()),
-   DD(&pfes_RT)
+   DD(&pfes_RT), detJ(&pfes_L2)
 {
+   // Reference space divdiv form
    DD.AddDomainIntegrator(new DivRDivRIntegrator());
    DD.Assemble();
    DD.Finalize();
@@ -1580,6 +1722,9 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    ess_bdr = -1;
    pfes_RT.GetEssentialTrueDofs(ess_bdr, ess_tdofs_f);
    DD.ParallelEliminateTDofs(ess_tdofs_f);
+
+   // Solution transfer
+   trans = make_unique<SolutionTransfer>(*pfes_L2.GetParMesh(), ir_rho);
 }
 
 void AdvectorThermoGeomConsistentOper::ImplicitSolveFluxRHS(Vector &rhs) const
@@ -1674,6 +1819,89 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
 void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
 {
+   ParMesh &pmesh = *pfes_L2.GetParMesh();
+   const int NE = pmesh.GetNE();
+
+   // Block view
+   const BlockVector bU(const_cast<Vector&>(U), offsets);
+   BlockVector bdU(dU, offsets);
+
+   // Current Jacobians
+   trans->TransferJac_Larg2Remap(detJ);
+
+   RefConvectionIntegrator Ki(flux, &ir_rho);
+   RefFaceConvectionIntegrator Kfi(flux);
+
+   // Propagator - domain
+   DenseMatrix K_z;
+   Vector x_z, dbx_z, detJ_z;
+   Array<int> dofs;
+
+   for(int k = 0; k < NE; k++)
+   {
+      pfes_L2.GetElementDofs(k, dofs);
+      detJ.GetSubVector(dofs, detJ_z);
+
+      Ki.AssembleElementMatrix(*pfes_L2.GetFE(k),
+                               *pfes_L2.GetElementTransformation(k),
+                               K_z);
+
+      for(int v = 0; v < StateVars::NVars; v++)
+      {
+         bU.GetBlock(v).GetSubVector(dofs, x_z);
+
+         // Reduced the quantity to the non-conservative form
+         for(int i = 0; i < x_z.Size(); i++)
+            x_z(i) /= detJ_z(i);
+
+         dbx_z.SetSize(x_z.Size());
+
+         K_z.Mult(x_z, dbx_z);
+
+         bdU.GetBlock(v).SetSubVector(dofs, dbx_z);
+      }
+   }
+
+   // Propagator - faces
+   const int nfaces = pmesh.GetNumFaces();
+   DenseMatrix K_f;
+   Array<int> dofs2;
+
+   for(int f = 0; f < nfaces; f++)
+   {
+      FaceElementTransformations *ftr = pmesh.GetFaceElementTransformations(f);
+      const FiniteElement *fe1, *fe2;
+
+      fe1 = pfes_L2.GetFE(ftr->Elem1No);
+      pfes_L2.GetElementDofs(ftr->Elem1No, dofs);
+      if(ftr->Elem2No >= 0)
+      {
+         fe2 = pfes_L2.GetFE(ftr->Elem2No);
+         pfes_L2.GetElementDofs(ftr->Elem2No, dofs2);
+         dofs.Append(dofs2);
+      }
+      else
+      {
+         fe2 = fe1;
+      }
+      detJ.GetSubVector(dofs, detJ_z);
+
+      Kfi.AssembleFaceMatrix(*fe1, *fe2, *ftr, K_f);
+
+      for(int v = 0; v < StateVars::NVars; v++)
+      {
+         bU.GetBlock(v).GetSubVector(dofs, x_z);
+
+         // Reduced the quantity to the non-conservative form
+         for(int i = 0; i < x_z.Size(); i++)
+            x_z(i) /= detJ_z(i);
+
+         dbx_z.SetSize(x_z.Size());
+         K_f.Mult(x_z, dbx_z);
+
+         bdU.GetBlock(v).AddElementVector(dofs, dbx_z);
+      }
+   }
 }
 
 void AdvectorThermoGeomConsistentOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
