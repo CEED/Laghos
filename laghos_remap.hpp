@@ -165,6 +165,7 @@ public:
    void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
 
    void SetDt(real_t delta_t);
+   void SetTime(real_t t) override;
 
    real_t Momentum(ParGridFunction &v, real_t t);
    //real_t Interface(ParGridFunction &xi, real_t t);

@@ -573,6 +573,13 @@ void AdvectorOper::SetDt(real_t delta_t)
    if (op_th) { op_th->SetDt(delta_t); }
 }
 
+void AdvectorOper::SetTime(real_t t)
+{
+   TimeDependentOperator::SetTime(t);
+   if (op_v) { op_v->SetTime(t); }
+   if (op_th) { op_th->SetTime(t); }
+}
+
 real_t AdvectorOper::Momentum(ParGridFunction &v, real_t t)
 {
    add(x0, t, u, x_now);
