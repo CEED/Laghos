@@ -75,6 +75,7 @@ private:
    H1_FECollection fec_H1, fec_H1Lag;
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
    const Array<int> &v_ess_tdofs;
+   const IntegrationRule *ir_rho{};
 
    RemapVelocity remap_v;
    bool remap_v_stable;
@@ -150,6 +151,7 @@ public:
                 const Array<int> &v_ess_vd,
                 ParGridFunction &mesh_vel,
                 ParGridFunction &rho,
+                const IntegrationRule &ir_rho,
                 ParFiniteElementSpace &pfes_H1,
                 ParFiniteElementSpace &pfes_H1_s,
                 ParFiniteElementSpace &pfes_L2,
@@ -231,6 +233,8 @@ public:
    };
 
 protected:
+   ParFiniteElementSpace &pfes_L2;
+   
    Array<int> offsets;
    real_t dt = 0.0;
 
@@ -277,14 +281,35 @@ class AdvectorThermoGeomConsistentOper : public AdvectorThermoOper
 {
 protected:
    Array<int> offsets;
-   Coefficient &rho_coeff;
-   VectorCoefficient &u_coeff;
-   mutable ScalarVectorProductCoefficient rho_u_coeff;
+   const Vector &x0;
+   const ParGridFunction &u;
+   const IntegrationRule &ir_rho;
+
+   RT_FECollection fec_RT;
+   ParFiniteElementSpace pfes_RT;
+   Vector &x_now;
+
+   ParBilinearForm DD;
+   Array<int> ess_tdofs_f;
+
+   class DivRDivRIntegrator : public BilinearFormIntegrator
+   {
+#ifndef MFEM_THREAD_SAFE
+      Vector divshape;
+#endif
+
+   public:
+      void AssembleElementMatrix(const FiniteElement &el,
+                                      ElementTransformation &Trans,
+                                      DenseMatrix &elmat) override;
+   };
+
+   void ImplicitSolveFluxRHS(Vector &rhs) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.
-   AdvectorThermoGeomConsistentOper(Coefficient &rho_coeff,
-                                    VectorCoefficient &u_coeff,
+   AdvectorThermoGeomConsistentOper(const Vector &x_0, const ParGridFunction &u,
+                                    const IntegrationRule &ir_rho,
                                     ParFiniteElementSpace &pfes_L2);
 
    // Single RK stage solve for all fields contained in U.
