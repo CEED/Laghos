@@ -294,6 +294,9 @@ protected:
    std::unique_ptr<SolutionTransfer> trans;
    mutable ParGridFunction detJ;
 
+   DenseMatrix MJi[Geometry::NUM_GEOMETRIES];
+   Array<int> MJi_piv[Geometry::NUM_GEOMETRIES];
+
    class DivRDivRIntegrator : public BilinearFormIntegrator
    {
 #ifndef MFEM_THREAD_SAFE
@@ -359,12 +362,14 @@ public:
 // Transfer of data between the Lagrange and the remap phases.
 class SolutionTransfer
 {
+protected:
    L2_FECollection fec0;
    ParFiniteElementSpace pfes0;
 
    // Integration points for the density.
    const IntegrationRule &ir_rho;
 
+   friend class AdvectorThermoGeomConsistentOper;
    class RefMassIntegrator : public BilinearFormIntegrator
    {
    public:

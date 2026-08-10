@@ -1725,6 +1725,22 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
 
    // Solution transfer
    trans = make_unique<SolutionTransfer>(*pfes_L2.GetParMesh(), ir_rho);
+
+   // Interpolation matrix inverse
+   SolutionTransfer::RefMassIntegrator mi(&ir_rho);
+   Array<Geometry::Type> geoms;
+   pmesh->GetGeometries(pmesh->Dimension(), geoms);
+   const FiniteElementCollection *fec_L2 = pfes_L2.FEColl();
+   IsoparametricTransformation Tr; // dummy
+   for (Geometry::Type g : geoms)
+   {
+      const FiniteElement *fe = fec_L2->GetFE(g, fec_L2->GetOrder());
+      const int ndof = fe->GetDof();
+      mi.AssembleElementMatrix(*fe, Tr, MJi[g]);
+      MJi_piv[g].SetSize(ndof);
+      LUFactors lu(MJi[g].GetData(), MJi_piv[g].GetData());
+      lu.Factor(ndof);
+   }
 }
 
 void AdvectorThermoGeomConsistentOper::ImplicitSolveFluxRHS(Vector &rhs) const
@@ -1900,6 +1916,28 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
          K_f.Mult(x_z, dbx_z);
 
          bdU.GetBlock(v).AddElementVector(dofs, dbx_z);
+      }
+   }
+
+   // Inverse mass matrix
+   for(int k = 0; k < NE; k++)
+   {
+      pfes_L2.GetElementDofs(k, dofs);
+      const int ndof = dofs.Size();
+      auto g = pfes_L2.GetFE(k)->GetGeomType();
+      MFEM_ASSERT(MJi[g].Width() == ndof
+                  && MJi[g].Height() == ndof
+                  && MJi_piv[g].Size() == ndof,
+                  "Wrong sizes of LU factors!");
+      const LUFactors lu(MJi[g].GetData(), const_cast<int*>(MJi_piv[g].GetData()));
+
+      for(int v = 0; v < StateVars::NVars; v++)
+      {
+         bdU.GetBlock(v).GetSubVector(dofs, dbx_z);
+         
+         lu.Solve(ndof, 1, dbx_z.GetData());
+         
+         bdU.GetBlock(v).SetSubVector(dofs, dbx_z);
       }
    }
 }
