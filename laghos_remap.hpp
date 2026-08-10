@@ -365,6 +365,17 @@ class SolutionTransfer
    // Integration points for the density.
    const IntegrationRule &ir_rho;
 
+   class RefMassIntegrator : public BilinearFormIntegrator
+   {
+   public:
+      RefMassIntegrator(const IntegrationRule *ir)
+      : BilinearFormIntegrator(ir) { }
+
+      void AssembleElementMatrix(const FiniteElement &el,
+                                 ElementTransformation &Trans,
+                                 DenseMatrix &elmat) override;
+   };
+
    void ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs);
    void LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, std::function<real_t(int)> &&w_z, DenseMatrix &F);
    void TransferL2Monotonous(std::function<void(int, DenseMatrix &)> &&M, const Vector &mins, const Vector &maxs,

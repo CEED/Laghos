@@ -1913,6 +1913,23 @@ real_t AdvectorThermoGeomConsistentOper::InternalEnergy(ParGridFunction &e)
    return 0.;
 }
 
+
+void SolutionTransfer::RefMassIntegrator::AssembleElementMatrix(
+   const FiniteElement &fe, ElementTransformation &Trans, DenseMatrix &elmat)
+{
+   const int nqp = IntRule->GetNPoints();
+
+   Vector shape(fe.GetDof());
+   elmat.SetSize(fe.GetDof());
+   elmat = 0.;
+   for (int q = 0; q < nqp; q++)
+   {
+      const IntegrationPoint &ip = IntRule->IntPoint(q);
+      fe.CalcShape(ip, shape);
+      AddMult_a_VVt(ip.weight, shape, elmat);
+   }
+}
+
 SolutionTransfer::SolutionTransfer(const ParMesh &pmesh, const IntegrationRule &ir)
 : fec0(0, pmesh.Dimension()), pfes0(const_cast<ParMesh*>(&pmesh), &fec0), ir_rho(ir)
 {
@@ -2232,18 +2249,11 @@ void SolutionTransfer::TransferJac_Larg2Remap(ParGridFunction &detJ)
    }
 
    // Interpolation matrix
-   auto MJ = [&pfes,this](int k, DenseMatrix &M_z) {
+   RefMassIntegrator mi(&ir_rho);
+   auto MJ = [&pfes,&mi](int k, DenseMatrix &M_z) {
       const FiniteElement &fe = *pfes.GetFE(k);
-      const int nqp = ir_rho.GetNPoints();
-      Vector shape(fe.GetDof());
-      M_z.SetSize(fe.GetDof());
-      M_z = 0.;
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = ir_rho.IntPoint(q);
-         fe.CalcShape(ip, shape);
-         AddMult_a_VVt(ip.weight, shape, M_z);
-      }
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      mi.AssembleElementMatrix(fe, T, M_z);
    };
 
    // Right hand side
@@ -2286,18 +2296,11 @@ void SolutionTransfer::TransferDensityJac_Lagr2Remap(
    }
 
    // Interpolation matrix
-   auto MJ = [&pfes,this](int k, DenseMatrix &M_z) {
+   RefMassIntegrator mi(&ir_rho);
+   auto MJ = [&pfes,&mi](int k, DenseMatrix &M_z) {
       const FiniteElement &fe = *pfes.GetFE(k);
-      const int nqp = ir_rho.GetNPoints();
-      Vector shape(fe.GetDof());
-      M_z.SetSize(fe.GetDof());
-      M_z = 0.;
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = ir_rho.IntPoint(q);
-         fe.CalcShape(ip, shape);
-         AddMult_a_VVt(ip.weight, shape, M_z);
-      }
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      mi.AssembleElementMatrix(fe, T, M_z);
    };
 
    // Righ hand side
@@ -2335,18 +2338,11 @@ void SolutionTransfer::TransferEnergyJac_Lagr2Remap(
    }
 
    // Interpolation matrix
-   auto MJ = [&pfes,this](int k, DenseMatrix &M_z) {
+   RefMassIntegrator mi(&ir_rho);
+   auto MJ = [&pfes,&mi](int k, DenseMatrix &M_z) {
       const FiniteElement &fe = *pfes.GetFE(k);
-      const int nqp = ir_rho.GetNPoints();
-      Vector shape(fe.GetDof());
-      M_z.SetSize(fe.GetDof());
-      M_z = 0.;
-      for (int q = 0; q < nqp; q++)
-      {
-         const IntegrationPoint &ip = ir_rho.IntPoint(q);
-         fe.CalcShape(ip, shape);
-         AddMult_a_VVt(ip.weight, shape, M_z);
-      }
+      ElementTransformation &T = *pfes.GetElementTransformation(k);
+      mi.AssembleElementMatrix(fe, T, M_z);
    };
 
    // Righ hand side
