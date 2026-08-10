@@ -302,17 +302,17 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       oper->SetDt(dt);
       ode_solver->Step(S, t, dt);
 
+      hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho,
+                                    "Remapped Density", Wx, Wy, Ww, Wh);
+      Wx += offx;
       if (remap_v != RemapVelocity::None)
       {
-         hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho,
-                                       "Remapped Density", Wx, Wy, Ww, Wh);
-         Wx += offx;
          hydrodynamics::VisualizeField(vis_v, vishost, visport, v,
                                        "Remapped Velocity", Wx, Wy, Ww, Wh);
          Wx += offx;
-         hydrodynamics::VisualizeField(vis_e, vishost, visport, e,
-                                       "Remapped Energy", Wx, Wy, Ww, Wh);
       }
+      hydrodynamics::VisualizeField(vis_e, vishost, visport, e,
+                                    "Remapped Energy", Wx, Wy, Ww, Wh);
    }
 
    delete oper; delete pfes_H1_s;
