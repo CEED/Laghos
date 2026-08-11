@@ -1706,6 +1706,7 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    const Vector &x0_, const ParGridFunction &u_, const IntegrationRule &ir_rho_,
    ParFiniteElementSpace &pfes_L2_)
    :  AdvectorThermoOper(pfes_L2_), x0(x0_), u(u_), ir_rho(ir_rho_),
+   pfes_vL2(pfes_L2.GetParMesh(), pfes_L2.FEColl(), StateVars::NVars),
    fec_RT(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
    pfes_RT(pfes_L2.GetParMesh(), &fec_RT),
    x_now(*pfes_L2.GetParMesh()->GetNodes()),
@@ -1838,12 +1839,14 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
    ParMesh &pmesh = *pfes_L2.GetParMesh();
    const int NE = pmesh.GetNE();
 
-   // Block view
-   const BlockVector bU(const_cast<Vector&>(U), offsets);
-   BlockVector bdU(dU, offsets);
+   // Grid function view
+   ParGridFunction U_gf(const_cast<ParFiniteElementSpace*>(&pfes_vL2), const_cast<Vector&>(U));
+   ParGridFunction dU_gf(const_cast<ParFiniteElementSpace*>(&pfes_vL2), dU);
+   U_gf.ExchangeFaceNbrData();
 
    // Current Jacobians
    trans->TransferJac_Larg2Remap(detJ);
+   detJ.ExchangeFaceNbrData();
 
    RefConvectionIntegrator Ki(flux, &ir_rho);
    RefFaceConvectionIntegrator Kfi(flux);
@@ -1851,31 +1854,36 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
    // Propagator - domain
    DenseMatrix K_z;
    Vector x_z, dbx_z, detJ_z;
-   Array<int> dofs;
+   Array<int> dofs, vdofs;
 
    for(int k = 0; k < NE; k++)
    {
       pfes_L2.GetElementDofs(k, dofs);
+      const int ndof = dofs.Size();
+      vdofs = dofs;
+      pfes_vL2.DofsToVDofs(vdofs);
       detJ.GetSubVector(dofs, detJ_z);
 
       Ki.AssembleElementMatrix(*pfes_L2.GetFE(k),
                                *pfes_L2.GetElementTransformation(k),
                                K_z);
 
+      U_gf.GetSubVector(vdofs, x_z);
+      dbx_z.SetSize(x_z.Size());
+
       for(int v = 0; v < StateVars::NVars; v++)
       {
-         bU.GetBlock(v).GetSubVector(dofs, x_z);
+         Vector x_zv(x_z, v*ndof, ndof);
 
          // Reduced the quantity to the non-conservative form
-         for(int i = 0; i < x_z.Size(); i++)
-            x_z(i) /= detJ_z(i);
+         for(int i = 0; i < ndof; i++)
+            x_zv(i) /= detJ_z(i);
 
-         dbx_z.SetSize(x_z.Size());
-
-         K_z.Mult(x_z, dbx_z);
-
-         bdU.GetBlock(v).SetSubVector(dofs, dbx_z);
+         Vector dbx_zv(dbx_z, v*ndof, ndof);
+         K_z.Mult(x_zv, dbx_zv);
       }
+
+      dU_gf.SetSubVector(vdofs, dbx_z);
    }
 
    // Propagator - faces
@@ -1900,23 +1908,83 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
       {
          fe2 = fe1;
       }
+      const int ndof = dofs.Size();
+      vdofs = dofs;
+      pfes_vL2.DofsToVDofs(vdofs);
       detJ.GetSubVector(dofs, detJ_z);
 
       Kfi.AssembleFaceMatrix(*fe1, *fe2, *ftr, K_f);
 
+      U_gf.GetSubVector(vdofs, x_z);
+      dbx_z.SetSize(x_z.Size());
+
       for(int v = 0; v < StateVars::NVars; v++)
       {
-         bU.GetBlock(v).GetSubVector(dofs, x_z);
+         Vector x_zv(x_z, v*ndof, ndof);
 
          // Reduced the quantity to the non-conservative form
-         for(int i = 0; i < x_z.Size(); i++)
-            x_z(i) /= detJ_z(i);
+         for(int i = 0; i < ndof; i++)
+            x_zv(i) /= detJ_z(i);
 
-         dbx_z.SetSize(x_z.Size());
-         K_f.Mult(x_z, dbx_z);
-
-         bdU.GetBlock(v).AddElementVector(dofs, dbx_z);
+         Vector dbx_zv(dbx_z, v*ndof, ndof);
+         K_f.Mult(x_zv, dbx_zv);
       }
+
+      dU_gf.AddElementVector(vdofs, dbx_z);
+   }
+
+   // Propagator - shared faces
+   const int nshared = pmesh.GetNSharedFaces();
+   DenseMatrix K_fz, K_fnbr;
+   Vector x_nbr, detJ_nbr;
+   Array<int> dofs_nbr, vdofs_nbr;
+
+   for(int sf = 0; sf < nshared; sf++)
+   {
+      FaceElementTransformations *ftr = pmesh.GetSharedFaceTransformations(sf);
+      const FiniteElement *fe1, *fe2;
+
+      fe1 = pfes_L2.GetFE(ftr->Elem1No);
+      fe2 = pfes_L2.GetFaceNbrFE(ftr->Elem2No - NE);
+      pfes_L2.GetElementDofs(ftr->Elem1No, dofs);
+      pfes_L2.GetFaceNbrElementVDofs(ftr->Elem2No - NE, dofs_nbr);
+      const int ndof = dofs.Size();
+      const int ndof_nbr = dofs_nbr.Size();
+      vdofs = dofs;
+      pfes_vL2.DofsToVDofs(vdofs);
+      pfes_vL2.GetFaceNbrElementVDofs(ftr->Elem2No - NE, vdofs_nbr);
+
+      detJ.GetSubVector(dofs, detJ_z);
+      detJ.FaceNbrData().GetSubVector(dofs_nbr, detJ_nbr);
+
+      Kfi.AssembleFaceMatrix(*fe1, *fe2, *ftr, K_f);
+      K_fz.CopyMN(K_f, ndof, ndof, 0, 0);
+      K_fnbr.CopyMN(K_f, ndof, ndof_nbr, 0, ndof);
+
+      U_gf.GetSubVector(vdofs, x_z);
+      U_gf.FaceNbrData().GetSubVector(vdofs_nbr, x_nbr);
+      dbx_z.SetSize(x_z.Size());
+
+      for(int v = 0; v < StateVars::NVars; v++)
+      {
+         Vector x_zv(x_z, v*ndof, ndof);
+
+         // Reduced the quantity to the non-conservative form
+         for(int i = 0; i < ndof; i++)
+            x_zv(i) /= detJ_z(i);
+
+         Vector x_nbrv(x_nbr, v*ndof_nbr, ndof_nbr);
+
+         // Reduced the quantity to the non-conservative form
+         for(int i = 0; i < ndof_nbr; i++)
+            x_nbrv(i) /= detJ_nbr(i);
+
+         Vector dbx_zv(dbx_z, v*ndof, ndof);
+         K_fz.Mult(x_zv, dbx_zv);
+         K_fnbr.AddMult(x_nbrv, dbx_zv);
+      }
+
+      dU_gf.AddElementVector(vdofs, dbx_z);
    }
 
    // Inverse mass matrix
@@ -1924,6 +1992,9 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
    {
       pfes_L2.GetElementDofs(k, dofs);
       const int ndof = dofs.Size();
+      vdofs = dofs;
+      pfes_vL2.DofsToVDofs(vdofs);
+
       auto g = pfes_L2.GetFE(k)->GetGeomType();
       MFEM_ASSERT(MJi[g].Width() == ndof
                   && MJi[g].Height() == ndof
@@ -1931,14 +2002,11 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
                   "Wrong sizes of LU factors!");
       const LUFactors lu(MJi[g].GetData(), const_cast<int*>(MJi_piv[g].GetData()));
 
-      for(int v = 0; v < StateVars::NVars; v++)
-      {
-         bdU.GetBlock(v).GetSubVector(dofs, dbx_z);
-         
-         lu.Solve(ndof, 1, dbx_z.GetData());
-         
-         bdU.GetBlock(v).SetSubVector(dofs, dbx_z);
-      }
+      dU_gf.GetSubVector(vdofs, dbx_z);
+
+      lu.Solve(ndof, StateVars::NVars, dbx_z.GetData());
+
+      dU_gf.SetSubVector(vdofs, dbx_z);
    }
 }
 

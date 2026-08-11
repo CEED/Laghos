@@ -284,6 +284,7 @@ protected:
    const ParGridFunction &u;
    const IntegrationRule &ir_rho;
 
+   ParFiniteElementSpace pfes_vL2;
    RT_FECollection fec_RT;
    ParFiniteElementSpace pfes_RT;
    Vector &x_now;
