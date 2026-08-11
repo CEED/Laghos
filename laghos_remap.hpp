@@ -310,7 +310,7 @@ protected:
                                       DenseMatrix &elmat) override;
    };
 
-   class RefConvectionIntegrator : public BilinearFormIntegrator
+   class RefConvectionIntegrator : public NonlinearFormIntegrator
    {
       const ParGridFunction &f;
       DenseMatrix dshape;
@@ -318,14 +318,15 @@ protected:
 
    public:
       RefConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
-      : BilinearFormIntegrator(ir), f(flux) { }
+      : NonlinearFormIntegrator(ir), f(flux) { }
 
-      void AssembleElementMatrix(const FiniteElement &fe,
-                                 ElementTransformation &Tr,
-                                 DenseMatrix &elmat) override;
+      void AssembleElementVector(const FiniteElement &el,
+                                 ElementTransformation &Trans,
+                                 const Vector &elfun,
+                                 Vector &elvec) override;
    };
 
-   class RefFaceConvectionIntegrator : public BilinearFormIntegrator
+   class RefFaceConvectionIntegrator : public NonlinearFormIntegrator
    {
       const ParGridFunction &f;
       Vector shape1, shape2, shape_face, f_f;
@@ -333,12 +334,13 @@ protected:
 
    public:
       RefFaceConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
-      : BilinearFormIntegrator(ir), f(flux) { }
+      : NonlinearFormIntegrator(ir), f(flux) { }
 
-      void AssembleFaceMatrix(const FiniteElement &fe1, 
+      void AssembleFaceVector(const FiniteElement &fe1, 
                               const FiniteElement &fe2,
                               FaceElementTransformations &Trans,
-                              DenseMatrix &elmat) override;
+                              const Vector &elfun,
+                              Vector &elvec) override;
    };
 
    void ImplicitSolveFluxRHS(Vector &rhs) const;
