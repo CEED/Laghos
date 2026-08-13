@@ -1712,9 +1712,11 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    :  AdvectorThermoOper(pfes_L2_), x0(x0_), u(u_), ir_rho(ir_rho_),
    pfes_vL2(pfes_L2.GetParMesh(), pfes_L2.FEColl(), NVars),
    fec_RT(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
+   fec_H1(pfes_L2.FEColl()->GetOrder()+1, pfes_L2.GetParMesh()->Dimension()),
    pfes_RT(pfes_L2.GetParMesh(), &fec_RT),
+   pfes_H1(pfes_L2.GetParMesh(), &fec_H1),
    x_now(*pfes_L2.GetParMesh()->GetNodes()),
-   DD(&pfes_RT), detJ(&pfes_L2)
+   DD(&pfes_RT), CC(&pfes_H1), detJ(&pfes_L2)
 {
    // Reference space divdiv form
    DD.AddDomainIntegrator(new DivRDivRIntegrator());
@@ -1723,10 +1725,15 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    DD.ParallelAssembleInternalMatrix();
 
    const ParMesh *pmesh = pfes_RT.GetParMesh();
-   Array<int> ess_bdr(pmesh->bdr_attributes.Size() > 0 ? pmesh->bdr_attributes.Max() : 1);
+   ess_bdr.SetSize(pmesh->bdr_attributes.Size() > 0 ? pmesh->bdr_attributes.Max() : 1);
    ess_bdr = -1;
    pfes_RT.GetEssentialTrueDofs(ess_bdr, ess_tdofs_f);
    DD.ParallelEliminateTDofs(ess_tdofs_f);
+
+   // Solenoidal potential matrix
+   CC.AddDomainIntegrator(new DiffusionIntegrator());
+   CC.Assemble(0);
+   CC.Finalize(0);
 
    // Solution transfer
    trans = make_unique<SolutionTransfer>(*pfes_L2.GetParMesh(), ir_rho);
@@ -1771,13 +1778,68 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFluxRHS(Vector &rhs) const
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          Tr->SetIntPoint(&ip);
-         double w = Tr->Weight() * ip.weight;
+         const real_t w = Tr->Weight() * ip.weight;
          
          fe->CalcDivShape(ip, shape);
          rhs_z.Add(w, shape);
       }
 
       rhs.AddElementVector(vdofs, rhs_z);
+   }
+}
+
+void AdvectorThermoGeomConsistentOper::ImplicitSolveSolenoidalRHS(const Vector &f, Vector &rhs) const
+{
+   const int NE = pfes_H1.GetNE();
+   const int nqp = ir_rho.GetNPoints();
+   const int dim = pfes_H1.GetParMesh()->Dimension();
+   const int sdim = pfes_H1.GetParMesh()->SpaceDimension();
+
+   DenseMatrix dshape, dshapext, vshape;
+   Vector f_z, rhs_z, dshape_d;
+   Array<int> dofs_h1, vdofs_rt;
+
+   for(int k = 0; k < NE; k++)
+   {
+      const FiniteElement *fe_h1 = pfes_H1.GetFE(k);
+      const FiniteElement *fe_rt = pfes_RT.GetFE(k);
+      ElementTransformation *Tr = pfes_H1.GetElementTransformation(k);
+      pfes_H1.GetElementDofs(k, dofs_h1);
+      pfes_RT.GetElementVDofs(k, vdofs_rt);
+      f.GetSubVector(vdofs_rt, f_z);
+      
+      const int ndof_h1 = fe_h1->GetDof();
+      const int ndof_rt = fe_rt->GetDof();
+      rhs_z.SetSize(ndof_h1);
+      dshape.SetSize(ndof_h1, dim);
+      dshapext.SetSize(ndof_h1, sdim);
+      vshape.SetSize(ndof_rt, sdim);
+
+      rhs_z = 0.;
+
+      for(int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         Tr->SetIntPoint(&ip);
+         fe_h1->CalcDShape(ip, dshape);
+         mfem::Mult(dshape, Tr->AdjugateJacobian(), dshapext);
+
+         Vector f_q(sdim);
+         fe_rt->CalcVShape(*Tr, vshape);
+         vshape.MultTranspose(f_z, f_q);
+
+         const real_t w = ip.weight;
+         
+         // +f_x dy
+         dshape.GetColumnReference(1, dshape_d);
+         rhs_z.Add(+w * f_q(0), dshape_d);
+         
+         // -f_y dx
+         dshape.GetColumnReference(0, dshape_d);
+         rhs_z.Add(-w * f_q(1), dshape_d);
+      }
+
+      rhs.AddElementVector(dofs_h1, rhs_z);
    }
 }
 
@@ -1807,6 +1869,7 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
    add(x0, t + 0.5 * dt, u, x_now);
    VectorGridFunctionCoefficient u_coeff(&u);
    flux.ProjectCoefficient(u_coeff);
+   Vector flux_v(flux);
    add(x0, t, u, x_now);
 
    // set up solution and rhs true vectors 
@@ -1821,21 +1884,90 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
    const HypreParMatrix &DD_m = *DD.ParallelAssembleInternalMatrix();
    
-   HypreBoomerAMG prec_amg(DD_m);
-   prec_amg.SetPrintLevel(0);
+   HypreBoomerAMG prec(DD_m);
+   prec.SetPrintLevel(0);
 
    CGSolver solver(pfes_RT.GetComm());
    solver.SetRelTol(1e-6);
    solver.SetAbsTol(0.);
    solver.SetMaxIter(1000);
    solver.SetPrintLevel(3);
+   solver.SetPreconditioner(prec);
    solver.SetOperator(DD_m);
-   solver.SetPreconditioner(prec_amg);
    solver.iterative_mode = true;
 
    solver.Mult(RHS, X);
 
    flux.Distribute(X);
+
+   // solenoidal rhs
+
+   Vector rhs_a(pfes_H1.GetVSize());
+   rhs_a = 0.;
+
+   flux_v -= flux;
+
+   ImplicitSolveSolenoidalRHS(flux_v, rhs_a);
+
+   // assemble the system for Hemholtz decomposition
+
+   ParGridFunction a(&pfes_H1);
+   a = 0.;
+
+   HypreParVector X_a(&pfes_H1), RHS_a(&pfes_H1);
+
+   a.ParallelProject(X_a);
+   pfes_H1.GetProlongationMatrix()->MultTranspose(rhs_a, RHS_a);
+
+   CC.Update();
+   CC.Assemble();
+   CC.Finalize();
+   CC.ParallelAssembleInternalMatrix();
+   CC.ParallelEliminateEssentialBC(ess_bdr, X_a, RHS_a);
+
+   // solve for the solenoidal potential
+
+   const HypreParMatrix &CC_m = *CC.ParallelAssembleInternalMatrix();
+
+   HypreBoomerAMG prec_a(CC_m);
+   prec_a.SetPrintLevel(0);
+
+   HyprePCG solver_a(pfes_H1.GetComm());
+   solver_a.SetTol(1e-6);
+   solver_a.SetAbsTol(0.);
+   solver_a.SetMaxIter(1000);
+   solver_a.SetPrintLevel(3);
+   solver_a.SetPreconditioner(prec_a);
+   solver_a.SetOperator(CC_m);
+
+   solver_a.Mult(RHS_a, X_a);
+
+   a.Distribute(X_a);
+
+   // apply the solenoidal correction
+
+   const int NE = pfes_H1.GetNE();
+   CurlInterpolator ci;
+   DenseMatrix curl;
+   Vector f_k, a_k;
+   Array<int> vdofs;
+
+   for (int k = 0; k < NE; k++)
+   {
+      const FiniteElement &fe_f = *pfes_RT.GetFE(k);
+      const FiniteElement &fe_a = *pfes_H1.GetFE(k);
+      ElementTransformation &Tr = *pfes_RT.GetElementTransformation(k);
+
+      ci.AssembleElementMatrix2(fe_a, fe_f, Tr, curl);
+
+      a.GetElementDofValues(k, a_k);
+      pfes_RT.GetElementVDofs(k, vdofs);
+      f_k.SetSize(vdofs.Size());
+
+      curl.Mult(a_k, f_k);
+      
+      flux.AddElementVector(vdofs, f_k);
+   }
 }
 
 void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const

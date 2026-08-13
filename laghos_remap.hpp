@@ -286,10 +286,12 @@ protected:
 
    ParFiniteElementSpace pfes_vL2;
    RT_FECollection fec_RT;
-   ParFiniteElementSpace pfes_RT;
+   H1_FECollection fec_H1;
+   ParFiniteElementSpace pfes_RT, pfes_H1;
    Vector &x_now;
 
-   ParBilinearForm DD;
+   ParBilinearForm DD, CC;
+   Array<int> ess_bdr;
    Array<int> ess_tdofs_f;
 
    std::unique_ptr<SolutionTransfer> trans;
@@ -344,6 +346,7 @@ protected:
    };
 
    void ImplicitSolveFluxRHS(Vector &rhs) const;
+   void ImplicitSolveSolenoidalRHS(const Vector &f, Vector &rhs) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.
