@@ -297,7 +297,16 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
          last_step = true;
       }
 
-      if (pmesh.GetMyRank() == 0) { cout << ". " << ti << std::endl; }
+      const real_t mass = oper->Mass(rho, t);
+      const real_t energy = oper->InternalEnergy(e, t);
+
+      if (pmesh.GetMyRank() == 0)
+      {
+         cout << ". " << ti
+              << " mass: " << mass
+              << " energy: " << energy
+              << std::endl;
+      }
 
       oper->SetDt(dt);
       ode_solver->Step(S, t, dt);
@@ -589,6 +598,13 @@ real_t AdvectorOper::Momentum(ParGridFunction &v, real_t t)
    add(x0, t, u, x_now);
 
    if (op_v) { return op_v->Momentum(v); }
+   return 0.;
+}
+
+real_t AdvectorOper::Mass(ParGridFunction &rho, real_t t)
+{
+   add(x0, t, u, x_now);
+   if (op_th) { return op_th->Mass(rho); }
    return 0.;
 }
 
@@ -1508,17 +1524,32 @@ void AdvectorThermoNonconservativeOper::Mult(const Vector &U, Vector &dU) const
                                 e_min, e_max, d_e);
 }
 
-real_t AdvectorThermoNonconservativeOper::InternalEnergy(ParGridFunction &e)
+real_t AdvectorThermoNonconservativeOper::Mass(ParGridFunction &rho) const
+{
+   M_L2.BilinearForm::operator=(0.0);
+   M_L2.Assemble();
+
+   Vector one(M_L2.SpMat().Height());
+   one = 1.0;
+   const real_t loc_rho = M_L2.InnerProduct(one, rho);
+
+   real_t glob_rho;
+   MPI_Allreduce(&loc_rho, &glob_rho, 1, MFEM_MPI_REAL_T, MPI_SUM,
+                 Mr_L2.ParFESpace()->GetComm());
+   return glob_rho;
+}
+
+real_t AdvectorThermoNonconservativeOper::InternalEnergy(ParGridFunction &e) const
 {
    Mr_L2.BilinearForm::operator=(0.0);
    Mr_L2.Assemble();
 
    Vector one(Mr_L2.SpMat().Height());
    one = 1.0;
-   double loc_e = Mr_L2.InnerProduct(one, e);
+   const real_t loc_e = Mr_L2.InnerProduct(one, e);
 
-   double glob_e;
-   MPI_Allreduce(&loc_e, &glob_e, 1, MPI_DOUBLE, MPI_SUM,
+   real_t glob_e;
+   MPI_Allreduce(&loc_e, &glob_e, 1, MFEM_MPI_REAL_T, MPI_SUM,
                  Mr_L2.ParFESpace()->GetComm());
    return glob_e;
 }
@@ -1738,7 +1769,7 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    // Solution transfer
    trans = make_unique<SolutionTransfer>(*pfes_L2.GetParMesh(), ir_rho);
 
-   // Interpolation matrix inverse
+   // Interpolation matrix (inverse)
    SolutionTransfer::RefMassIntegrator mi(&ir_rho);
    Array<Geometry::Type> geoms;
    pmesh->GetGeometries(pmesh->Dimension(), geoms);
@@ -1748,7 +1779,9 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    {
       const FiniteElement *fe = fec_L2->GetFE(g, fec_L2->GetOrder());
       const int ndof = fe->GetDof();
-      mi.AssembleElementMatrix(*fe, Tr, MJi[g]);
+      mi.AssembleElementMatrix(*fe, Tr, MJ[g]);
+
+      MJi[g] = MJ[g];
       MJi_piv[g].SetSize(ndof);
       LUFactors lu(MJi[g].GetData(), MJi_piv[g].GetData());
       lu.Factor(ndof);
@@ -2130,9 +2163,39 @@ void AdvectorThermoGeomConsistentOper::LimitUpdate(real_t dt, const Vector &U, V
 {
 }
 
-real_t AdvectorThermoGeomConsistentOper::InternalEnergy(ParGridFunction &e)
+real_t AdvectorThermoGeomConsistentOper::Mass(ParGridFunction &rhoJ) const
 {
-   return 0.;
+   real_t mass = 0.;
+
+   const ParFiniteElementSpace &pfes = *rhoJ.ParFESpace();
+   const ParMesh &pmesh = *pfes.GetParMesh();
+   const int NE = pmesh.GetNE();
+   Vector rhoJ_k, one_k;
+   Array<int> vdofs;
+
+   for (int k = 0; k < NE; k++)
+   {
+      pfes.GetElementVDofs(k, vdofs);
+      rhoJ.GetSubVector(vdofs, rhoJ_k);
+
+      if (one_k.Size() != vdofs.Size())
+      {
+         one_k.SetSize(vdofs.Size());
+         one_k = 1.;
+      }
+
+      auto g = pfes.GetFE(k)->GetGeomType();
+      mass += MJ[g].InnerProduct(rhoJ_k, one_k);
+   }
+
+   MPI_Allreduce(MPI_IN_PLACE, &mass, 1, MFEM_MPI_REAL_T, MPI_SUM, pmesh.GetComm());
+
+   return mass;
+}
+
+real_t AdvectorThermoGeomConsistentOper::InternalEnergy(ParGridFunction &rhoeJ) const
+{
+   return Mass(rhoeJ);
 }
 
 
