@@ -1922,7 +1922,8 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
    CGSolver solver(pfes_RT.GetComm());
    solver.SetRelTol(1e-6);
-   solver.SetAbsTol(0.);
+   const real_t norm_rhs = InnerProduct(pfes_RT.GetComm(), RHS, RHS);
+   solver.SetAbsTol(norm_rhs * 1e-6);
    solver.SetMaxIter(1000);
    solver.SetPrintLevel(3);
    solver.SetPreconditioner(prec);
