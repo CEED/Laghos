@@ -183,9 +183,6 @@ protected:
    bool remap_v_stable = false;
 
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
-   Coefficient &rho_coeff;
-   VectorCoefficient &u_coeff;
-   mutable ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
    mutable Vector lumpedMr_H1_vec;
 
@@ -200,25 +197,48 @@ protected:
                const SparseMatrix &M_glb, const Vector &v,
                Vector &d_v) const;
 
-   void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, const Vector &v, Vector &d_v) const;
    void ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const;
    void ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.
-   AdvectorVelocityOper(const Array<int> &v_ess_td,
-                        const Array<int> &v_ess_vd,
-                        Coefficient &rho_coeff,
-                        VectorCoefficient &u_coeff,
-                        ParFiniteElementSpace &pfes_H1,
-                        ParFiniteElementSpace &pfes_H1_s,
-                        RemapAdvector::RemapVelocity scheme,
-                        bool remap_v_s);
+   AdvectorVelocityOper(
+      const Array<int> &v_ess_td,
+      const Array<int> &v_ess_vd,
+      ParFiniteElementSpace &pfes_H1,
+      ParFiniteElementSpace &pfes_H1_s,
+      RemapAdvector::RemapVelocity scheme,
+      bool remap_v_s);
+
+   virtual real_t Momentum(ParGridFunction &v) const = 0;
+};
+
+// Performs a single velocity remap advection step - nonconservative scheme
+class AdvectorVelocityNonconservativeOper : public AdvectorVelocityOper
+{
+protected:
+   Coefficient &rho_coeff;
+   VectorCoefficient &u_coeff;
+   mutable ScalarVectorProductCoefficient rho_u_coeff;
+
+   void ClipAndScale(const ParFiniteElementSpace &pfesV_H1_s, const Vector &v, Vector &d_v) const;
+
+public:
+   // Here pfes is the ParFESpace of the function that will be transferred.
+   AdvectorVelocityNonconservativeOper(
+      const Array<int> &v_ess_td,
+      const Array<int> &v_ess_vd,
+      Coefficient &rho_coeff,
+      VectorCoefficient &u_coeff,
+      ParFiniteElementSpace &pfes_H1,
+      ParFiniteElementSpace &pfes_H1_s,
+      RemapAdvector::RemapVelocity scheme,
+      bool remap_v_s);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
 
-   real_t Momentum(ParGridFunction &v);
+   real_t Momentum(ParGridFunction &v) const override;
 };
 
 // Performs a single thermodynamic remap advection step.

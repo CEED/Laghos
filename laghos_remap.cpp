@@ -473,7 +473,7 @@ AdvectorOper::AdvectorOper(const Vector &x_start,
 
    // Velocity advector
    if (remap_v != RemapAdvector::RemapVelocity::None)
-      op_v = make_unique<AdvectorVelocityOper>(
+      op_v = make_unique<AdvectorVelocityNonconservativeOper>(
          v_ess_td, v_ess_vd, rho_coeff, u_coeff,
          pfes_H1, pfes_H1_s, remap_v, remap_v_s);
 
@@ -923,7 +923,8 @@ void AdvectorVelocityOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix 
    }
 }
 
-void AdvectorVelocityOper::ClipAndScale(const ParFiniteElementSpace &pfes, const Vector &v, Vector &d_v) const
+void AdvectorVelocityNonconservativeOper::ClipAndScale(
+   const ParFiniteElementSpace &pfes, const Vector &v, Vector &d_v) const
 {
    d_v = 0.0;
    auto conv_int = new ConvectionIntegrator(rho_u_coeff);
@@ -1239,17 +1240,25 @@ void AdvectorThermoNonconservativeOper::ComputeSparsityBounds(
 }
 
 AdvectorVelocityOper::AdvectorVelocityOper(
-   const Array<int> &v_ess_td, const Array<int> &v_ess_vd, Coefficient &rho_coeff_,
-   VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
+   const Array<int> &v_ess_td, const Array<int> &v_ess_vd,
+   ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
    RemapAdvector::RemapVelocity scheme_, bool remap_v_s)
 :   remap_v(scheme_),
     remap_v_stable(remap_v_s),
     v_ess_tdofs(v_ess_td),
     v_ess_vdofs(v_ess_vd),
-    rho_coeff(rho_coeff_), u_coeff(u_coeff_),
-    rho_u_coeff(rho_coeff, u_coeff),
     Mr_H1(&pfes_H1), Mr_H1_s(&pfes_H1_s), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s),
     lummpedMr_H1(&pfes_H1_s)
+{
+}
+
+AdvectorVelocityNonconservativeOper::AdvectorVelocityNonconservativeOper(
+   const Array<int> &v_ess_td, const Array<int> &v_ess_vd, Coefficient &rho_coeff_,
+   VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
+   RemapAdvector::RemapVelocity scheme_, bool remap_v_s)
+:   AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme_, remap_v_s),
+    rho_coeff(rho_coeff_), u_coeff(u_coeff_),
+    rho_u_coeff(rho_coeff, u_coeff)
 {
    // no need for Vector Massmatrix in stablised velocity remap
    // MCL only uses the first component of this, but unstable remap needs vector mass matrix
@@ -1286,7 +1295,7 @@ AdvectorVelocityOper::AdvectorVelocityOper(
    Kr_H1.Finalize(0);
 }
 
-void AdvectorVelocityOper::Mult(const Vector &v, Vector &d_v) const
+void AdvectorVelocityNonconservativeOper::Mult(const Vector &v, Vector &d_v) const
 {
    d_v = 0.0;
 
@@ -1384,7 +1393,7 @@ void AdvectorVelocityOper::Mult(const Vector &v, Vector &d_v) const
    }
 }
 
-real_t AdvectorVelocityOper::Momentum(ParGridFunction &v)
+real_t AdvectorVelocityNonconservativeOper::Momentum(ParGridFunction &v) const
 {
    Mr_H1.BilinearForm::operator=(0.0);
    Mr_H1.Assemble();
