@@ -2052,9 +2052,10 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
 
    for(int f = 0; f < nfaces; f++)
    {
-      FaceElementTransformations *ftr = pmesh.GetFaceElementTransformations(f);
-      const FiniteElement *fe1, *fe2;
+      FaceElementTransformations *ftr = pmesh.GetInteriorFaceTransformations(f);
+      if (!ftr) { continue; }
 
+      const FiniteElement *fe1, *fe2;
       fe1 = pfes_L2.GetFE(ftr->Elem1No);
       pfes_L2.GetElementDofs(ftr->Elem1No, dofs);
       vdofs = dofs;
