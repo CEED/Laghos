@@ -23,15 +23,26 @@ namespace mfem
 {
 namespace ale
 {
+class TimeDependentGeomConsOperator;
 namespace geom_consistent_solvers
 {
+class GeomConsODESolver : public ODESolver
+{
+protected:
+    TimeDependentGeomConsOperator *f;
+    using ODESolver::Init;
 
-class ForwardEulerSolver : public ODESolver
+public:
+
+    virtual void Init(TimeDependentGeomConsOperator &f);
+};
+
+class ForwardEulerSolver : public GeomConsODESolver
 {
     Vector dU;
     ParGridFunction flux;
 public:
-    void Init(TimeDependentOperator &f) override;
+    void Init(TimeDependentGeomConsOperator &f) override;
     void Step(Vector &x, real_t &t, real_t &dt) override;
 };
 

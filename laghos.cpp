@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
    bool mem_usage = false;
    bool fom = false;
    int remap_v = (int)RemapAdvector::RemapVelocity::ClipAndScale;
-   int remap_th = (int)RemapAdvector::RemapThermo::Nonconservative;
+   int remap_scheme = (int)RemapAdvector::RemapScheme::Nonconservative;
    bool remap_v_gslib  = false;
    bool remap_v_stable = false;
    int dev = 0;
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
                   "Enable or disable VisIt visualization.");
    args.AddOption(&remap_v, "-rv", "--remap-vel",
                   "Velocity remap scheme (0 - LO, 1 - HO Target, 2 - MCL, 3 - Clip&Scale)");
-   args.AddOption(&remap_th, "-rth", "--remap-thermo",
+   args.AddOption(&remap_scheme, "-r", "--remap-scheme",
                   "Thermodynamic remap scheme (0 - nonconservative, 1 - geom. consistent)");
 #ifdef MFEM_USE_GSLIB
    args.AddOption(&remap_v_gslib, "-rvg", "--rvg", "-no-rvg", "--no-rvg",
@@ -1045,11 +1045,11 @@ int main(int argc, char *argv[])
    RemapAdvector::RemapVelocity remap_v_adv
       = (!remap_v_gslib) ? ((RemapAdvector::RemapVelocity)remap_v)
       : RemapAdvector::RemapVelocity::None;
-   RemapAdvector::RemapThermo remap_th_adv = (RemapAdvector::RemapThermo)remap_th;
+   RemapAdvector::RemapScheme remap_adv = (RemapAdvector::RemapScheme)remap_scheme;
    const double cfl_remap = 0.1;
 
    RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
-                     remap_v_adv, remap_v_stable, remap_th_adv, ess_tdofs);
+                     remap_adv, remap_v_adv, remap_v_stable, ess_tdofs);
 
    int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)

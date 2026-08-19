@@ -18,6 +18,7 @@
 #define MFEM_LAGHOS_REMAP
 
 #include "mfem.hpp"
+#include "laghos_remap_solvers.hpp"
 #include <functional>
 
 namespace mfem
@@ -62,7 +63,7 @@ public:
       ClipAndScale,
    };
 
-   enum class RemapThermo
+   enum class RemapScheme
    {
       Nonconservative,
       GeomConsistent,
@@ -77,9 +78,9 @@ private:
    const Array<int> &v_ess_tdofs;
    const IntegrationRule *ir_rho{};
 
+   RemapScheme remap_scheme;
    RemapVelocity remap_v;
    bool remap_v_stable;
-   RemapThermo remap_th;
 
    const double cfl_factor;
 
@@ -92,14 +93,14 @@ private:
    double e_max;
 
    std::unique_ptr<ODESolver> ode_solver;
+   std::unique_ptr<geom_consistent_solvers::GeomConsODESolver> ode_solver_gc;
    Vector x0;
 
    socketstream vis_rho, vis_v, vis_e;
 
 public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl,
-                 RemapVelocity remap_v_, bool remap_v_stable_,
-                 RemapThermo remap_th_,
+                 RemapScheme remap_, RemapVelocity remap_v_, bool remap_v_stable_,
                  const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
@@ -118,7 +119,7 @@ public:
                        ParGridFunction &energy);
 };
 
-class TimeDependentGeomConsOperator : public TimeDependentOperator
+class TimeDependentGeomConsOperator : virtual public TimeDependentOperator
 {
 public:
    virtual void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) { }
@@ -130,8 +131,8 @@ public:
 class AdvectorVelocityOper;
 class AdvectorThermoOper;
 
-// Performs a single remap advection step.
-class AdvectorOper : public TimeDependentGeomConsOperator
+// Performs a single remap advection step
+class AdvectorOper : virtual public TimeDependentOperator
 {
 protected:
    std::unique_ptr<AdvectorVelocityOper> op_v;
@@ -141,30 +142,13 @@ protected:
    const Vector &x0;
    Vector &x_now;
    ParGridFunction &u;
-   VectorGridFunctionCoefficient u_coeff;
-   GridFunctionCoefficient rho_coeff;
 
 public:
-   // Here pfes is the ParFESpace of the function that will be moved.
-   // Mult() moves the nodes of the mesh corresponding to pfes.
-   AdvectorOper(const Vector &x_start, const Array<int> &v_ess_td,
-                const Array<int> &v_ess_vd,
-                ParGridFunction &mesh_vel,
-                ParGridFunction &rho,
-                const IntegrationRule &ir_rho,
-                ParFiniteElementSpace &pfes_H1,
-                ParFiniteElementSpace &pfes_H1_s,
-                ParFiniteElementSpace &pfes_L2,
-                RemapAdvector::RemapVelocity scheme_v,
-                bool remap_v_s,
-                RemapAdvector::RemapThermo scheme_th);
-
-   // Single RK stage solve for all fields contained in U.
-   void Mult(const Vector &U, Vector &dU) const override;
-
-   void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) override;
-   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
-   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+   AdvectorOper(
+      const Vector &x_start,
+      ParGridFunction &mesh_vel,
+      ParFiniteElementSpace &pfes_H1,
+      ParFiniteElementSpace &pfes_L2);
 
    void SetDt(real_t delta_t);
    void SetTime(real_t t) override;
@@ -173,6 +157,86 @@ public:
    //real_t Interface(ParGridFunction &xi, real_t t);
    real_t Mass(ParGridFunction &rho, real_t t);
    real_t InternalEnergy(ParGridFunction &e, real_t t);
+};
+
+// Performs a single remap advection step - nonconservative scheme
+class AdvectorNonconservativeOper : public AdvectorOper
+{
+   VectorGridFunctionCoefficient u_coeff;
+   GridFunctionCoefficient rho_coeff;
+
+public:
+   // Here pfes is the ParFESpace of the function that will be moved.
+   // Mult() moves the nodes of the mesh corresponding to pfes.
+   AdvectorNonconservativeOper(
+      const Vector &x_start, const Array<int> &v_ess_td,
+      const Array<int> &v_ess_vd,
+      ParGridFunction &mesh_vel,
+      ParGridFunction &rho,
+      const IntegrationRule &ir_rho,
+      ParFiniteElementSpace &pfes_H1,
+      ParFiniteElementSpace &pfes_H1_s,
+      ParFiniteElementSpace &pfes_L2,
+      RemapAdvector::RemapVelocity scheme_v,
+      bool remap_v_s);
+
+   // Single RK stage solve for all fields contained in U.
+   void Mult(const Vector &U, Vector &dU) const override;
+};
+
+// Performs a single remap advection step - geometrically consistent scheme
+class AdvectorGeomConsOper : public AdvectorOper, public TimeDependentGeomConsOperator
+{
+   VectorGridFunctionCoefficient u_coeff;
+   GridFunctionCoefficient rho_coeff;
+
+   const IntegrationRule &ir_rho;
+
+   RT_FECollection fec_f;
+   H1_FECollection fec_a;
+   ParFiniteElementSpace pfes_f, pfes_a;
+
+   ParBilinearForm DD, CC;
+   Array<int> ess_bdr;
+   Array<int> ess_tdofs_f;
+
+   class DivRDivRIntegrator : public BilinearFormIntegrator
+   {
+#ifndef MFEM_THREAD_SAFE
+      Vector divshape;
+#endif
+
+   public:
+      void AssembleElementMatrix(const FiniteElement &el,
+                                      ElementTransformation &Trans,
+                                      DenseMatrix &elmat) override;
+   };
+
+   void ImplicitSolveFluxRHS(Vector &rhs) const;
+   void ImplicitSolveSolenoidalRHS(const Vector &f, Vector &rhs) const;
+
+public:
+   // Here pfes is the ParFESpace of the function that will be moved.
+   // Mult() moves the nodes of the mesh corresponding to pfes.
+   AdvectorGeomConsOper(
+      const Vector &x_start, const Array<int> &v_ess_td,
+      const Array<int> &v_ess_vd,
+      ParGridFunction &mesh_vel,
+      ParGridFunction &rho,
+      const IntegrationRule &ir_rho,
+      ParFiniteElementSpace &pfes_H1,
+      ParFiniteElementSpace &pfes_H1_s,
+      ParFiniteElementSpace &pfes_L2,
+      RemapAdvector::RemapVelocity scheme_v,
+      bool remap_v_s);
+
+   // Single RK stage solve for all fields contained in U.
+   void Mult(const Vector &U, Vector &dU) const override
+   { MFEM_ABORT("Cannot be integrated with a plain ODESolver!"); }
+
+   void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) override;
+   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
 };
 
 // Performs a single velocity remap advection step.
@@ -242,7 +306,7 @@ public:
 };
 
 // Performs a single thermodynamic remap advection step.
-class AdvectorThermoOper : public TimeDependentGeomConsOperator
+class AdvectorThermoOper : virtual public TimeDependentOperator
 {
 public:
    enum StateVars 
@@ -300,41 +364,18 @@ public:
 };
 
 // Performs a single thermodynamic remap advection step - geometrically consistent scheme
-class AdvectorThermoGeomConsistentOper : public AdvectorThermoOper
+class AdvectorThermoGeomConsOper : public AdvectorThermoOper, public TimeDependentGeomConsOperator
 {
 protected:
-   const Vector &x0;
-   const ParGridFunction &u;
    const IntegrationRule &ir_rho;
 
    ParFiniteElementSpace pfes_vL2;
-   RT_FECollection fec_RT;
-   H1_FECollection fec_H1;
-   ParFiniteElementSpace pfes_RT, pfes_H1;
-   Vector &x_now;
-
-   ParBilinearForm DD, CC;
-   Array<int> ess_bdr;
-   Array<int> ess_tdofs_f;
-
    std::unique_ptr<SolutionTransfer> trans;
    mutable ParGridFunction detJ;
 
    DenseMatrix MJ[Geometry::NUM_GEOMETRIES];
    DenseMatrix MJi[Geometry::NUM_GEOMETRIES];
    Array<int> MJi_piv[Geometry::NUM_GEOMETRIES];
-
-   class DivRDivRIntegrator : public BilinearFormIntegrator
-   {
-#ifndef MFEM_THREAD_SAFE
-      Vector divshape;
-#endif
-
-   public:
-      void AssembleElementMatrix(const FiniteElement &el,
-                                      ElementTransformation &Trans,
-                                      DenseMatrix &elmat) override;
-   };
 
    class RefConvectionIntegrator : public NonlinearFormIntegrator
    {
@@ -369,20 +410,15 @@ protected:
                               Vector &elvec) override;
    };
 
-   void ImplicitSolveFluxRHS(Vector &rhs) const;
-   void ImplicitSolveSolenoidalRHS(const Vector &f, Vector &rhs) const;
-
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.
-   AdvectorThermoGeomConsistentOper(const Vector &x_0, const ParGridFunction &u,
-                                    const IntegrationRule &ir_rho,
-                                    ParFiniteElementSpace &pfes_L2);
+   AdvectorThermoGeomConsOper(const IntegrationRule &ir_rho,
+                              ParFiniteElementSpace &pfes_L2);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override
    { MFEM_ABORT("Geometrically conservative operator cannot be integrated classically!"); }
 
-   void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) override;
    void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
    void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
 
@@ -400,7 +436,7 @@ protected:
    // Integration points for the density.
    const IntegrationRule &ir_rho;
 
-   friend class AdvectorThermoGeomConsistentOper;
+   friend class AdvectorThermoGeomConsOper;
    class RefMassIntegrator : public BilinearFormIntegrator
    {
    public:

@@ -23,27 +23,29 @@ namespace ale
 {
 namespace geom_consistent_solvers
 {
-void ForwardEulerSolver::Init(TimeDependentOperator &f_)
+void GeomConsODESolver::Init(TimeDependentGeomConsOperator &f_)
 {
-    MFEM_VERIFY(dynamic_cast<TimeDependentGeomConsOperator*>(&f_),
-        "Not a geometrically consistent operator");
     ODESolver::Init(f_);
+    f = &f_;
+}
+
+void ForwardEulerSolver::Init(TimeDependentGeomConsOperator &f_)
+{
+    GeomConsODESolver::Init(f_);
     dU.SetSize(f->Width());
 }
 
 void ForwardEulerSolver::Step(Vector &U, real_t &t, real_t &dt)
 {
-    auto *gcf = static_cast<TimeDependentGeomConsOperator*>(f);
-
     // Solve for the flux
-    gcf->SetTime(t);
-    gcf->ImplicitSolveFlux(dt, flux);
+    f->SetTime(t);
+    f->ImplicitSolveFlux(dt, flux);
 
     // Explicit step
-    gcf->MultConserv(flux, U, dU);
+    f->MultConserv(flux, U, dU);
 
     // Limit step
-    gcf->LimitUpdate(dt, U, dU);
+    f->LimitUpdate(dt, U, dU);
 
     // Update state
     U.Add(dt, dU);

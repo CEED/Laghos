@@ -17,7 +17,6 @@
 #include "laghos_remap.hpp"
 #include "laghos_assembly.hpp"
 #include "laghos_solver.hpp"
-#include "laghos_remap_solvers.hpp"
 
 using namespace std;
 namespace mfem
@@ -100,8 +99,8 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 #endif
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
-                             double cfl, RemapVelocity remap_v_, bool remap_v_stable_,
-                             RemapThermo remap_th_, const Array<int> &ess_tdofs)
+                             double cfl, RemapScheme remap_, RemapVelocity remap_v_,
+                             bool remap_v_stable_, const Array<int> &ess_tdofs)
     : pmesh(m, true), dim(pmesh.Dimension()),
     fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
     fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
@@ -110,8 +109,8 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
     pfes_H1Lag(&pmesh, &fec_H1Lag, pmesh.Dimension()),
     v_ess_tdofs(ess_tdofs),
+    remap_scheme(remap_),
     remap_v(remap_v_), remap_v_stable(remap_v_stable_),
-    remap_th(remap_th_),
     cfl_factor(cfl),
     offsets(), S(), v(), rho(), e(), x0()
 {
@@ -137,13 +136,13 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
    rho.MakeRef(&pfes_L2, S, offsets[Density]);
    e.MakeRef(&pfes_L2, S, offsets[Energy]);
 
-   switch (remap_th)
+   switch (remap_scheme)
    {
-   case RemapThermo::Nonconservative:
+   case RemapScheme::Nonconservative:
       ode_solver = make_unique<RK3SSPSolver>();
       break;
-   case RemapThermo::GeomConsistent:
-      ode_solver = make_unique<geom_consistent_solvers::ForwardEulerSolver>();
+   case RemapScheme::GeomConsistent:
+      ode_solver_gc = make_unique<geom_consistent_solvers::ForwardEulerSolver>();
       break;
    }
 }
@@ -199,13 +198,13 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    // Thermodynamic quantities
    SolutionTransfer transfer(pmesh, rho_ir);
 
-   switch (remap_th)
+   switch (remap_scheme)
    {
-   case RemapThermo::Nonconservative:
+   case RemapScheme::Nonconservative:
       transfer.TransferDensity_Lagr2Remap(rhoDetJw, rho);
       e  = lagr_eps;
       break;
-   case RemapThermo::GeomConsistent:
+   case RemapScheme::GeomConsistent:
       detJ.SetSpace(rho.ParFESpace()); detJ = 0.;
       transfer.TransferJac_Larg2Remap(detJ);
       transfer.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ, rho);
@@ -228,7 +227,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    ParGridFunction u(&pfes_H1Lag);
    subtract(new_nodes, x0, u);
 
-   ParFiniteElementSpace *pfes_H1_s;
+   ParFiniteElementSpace *pfes_H1_v, *pfes_H1_s;
    AdvectorOper *oper;
 
    if (remap_v_stable)
@@ -236,19 +235,40 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       // Bernstein scalar space.
       // Scalar space only used when velocity remap with limiter
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1.FEColl(), 1);
-      oper = new AdvectorOper(x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
-                              pfes_H1, *pfes_H1_s, pfes_L2,
-                              remap_v, true, remap_th);
+      pfes_H1_v = &pfes_H1;
    }
    else
    {
       // Define scalar FE spaces for the solution, and the advection operator.
       pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1Lag.FEColl(), 1);
-      oper = new AdvectorOper(x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
-                              pfes_H1Lag, *pfes_H1_s, pfes_L2,
-                              remap_v, false, remap_th);
+      pfes_H1_v = &pfes_H1Lag;
    }
-   ode_solver->Init(*oper);
+
+   ODESolver *ode;
+   switch (remap_scheme)
+   {
+   case RemapScheme::Nonconservative:
+   {
+      oper = new AdvectorNonconservativeOper(
+         x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
+         *pfes_H1_v, *pfes_H1_s, pfes_L2,
+         remap_v, remap_v_stable);
+      ode_solver->Init(*oper);
+      ode = ode_solver.get();
+      break;
+   }
+   case RemapScheme::GeomConsistent:
+   {
+      auto *op = new AdvectorGeomConsOper(
+         x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
+         *pfes_H1_v, *pfes_H1_s, pfes_L2,
+         remap_v, remap_v_stable);
+      ode_solver_gc->Init(*op);
+      oper = op;
+      ode = ode_solver_gc.get();
+      break;
+   }
+   }
 
    // Compute some time step [mesh_size / speed].
    double h_min = std::numeric_limits<double>::infinity();
@@ -309,7 +329,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       }
 
       oper->SetDt(dt);
-      ode_solver->Step(S, t, dt);
+      ode->Step(S, t, dt);
 
       hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho,
                                     "Remapped Density", Wx, Wy, Ww, Wh);
@@ -380,15 +400,15 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    SolutionTransfer transfer(pmesh, ir_rho);
 
    // Density
-   switch (remap_th)
+   switch (remap_scheme)
    {
-   case RemapThermo::Nonconservative:
+   case RemapScheme::Nonconservative:
       // This is used to update the mass matrices.
       rho0_gf = rho;
       // Just copy energy.
       lagr_eps = e;
       break;
-   case RemapThermo::GeomConsistent:
+   case RemapScheme::GeomConsistent:
       transfer.TransferDensityJac_Remap2Lagr(detJ, rho, rho0_gf);
       break;
    }
@@ -431,33 +451,24 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    // }
 
    // Energy
-   switch (remap_th)
+   switch (remap_scheme)
    {
-   case RemapThermo::Nonconservative:
+   case RemapScheme::Nonconservative:
       // Just copy energy.
       lagr_eps = e;
       break;
-   case RemapThermo::GeomConsistent:
+   case RemapScheme::GeomConsistent:
       transfer.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, lagr_eps);
       break;
    }
 }
 
 AdvectorOper::AdvectorOper(const Vector &x_start,
-                           const Array<int> &v_ess_td,
-                           const Array<int> &v_ess_vd,
                            ParGridFunction &mesh_vel,
-                           ParGridFunction &rho,
-                           const IntegrationRule &ir_rho,
                            ParFiniteElementSpace &pfes_H1,
-                           ParFiniteElementSpace &pfes_H1_s,
-                           ParFiniteElementSpace &pfes_L2,
-                           RemapAdvector::RemapVelocity remap_v,
-                           bool remap_v_s,
-                           RemapAdvector::RemapThermo remap_th)
-    : x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
-    u(mesh_vel), u_coeff(&u),
-    rho_coeff(&rho)
+                           ParFiniteElementSpace &pfes_L2)
+: x0(x_start), x_now(*pfes_H1.GetMesh()->GetNodes()),
+  u(mesh_vel)
 {
    // Construct offsets
    const int vdofs_h1 = pfes_H1.GetVSize();
@@ -470,7 +481,58 @@ AdvectorOper::AdvectorOper(const Vector &x_start,
    offsets.PartialSum();
 
    width = height = offsets.Last();
+}
 
+void AdvectorOper::SetDt(real_t delta_t)
+{
+   if (op_th) { op_th->SetDt(delta_t); }
+}
+
+void AdvectorOper::SetTime(real_t t)
+{
+   TimeDependentOperator::SetTime(t);
+   if (op_v) { op_v->SetTime(t); }
+   if (op_th) { op_th->SetTime(t); }
+}
+
+real_t AdvectorOper::Momentum(ParGridFunction &v, real_t t)
+{
+   add(x0, t, u, x_now);
+
+   if (op_v) { return op_v->Momentum(v); }
+   return 0.;
+}
+
+real_t AdvectorOper::Mass(ParGridFunction &rho, real_t t)
+{
+   add(x0, t, u, x_now);
+   if (op_th) { return op_th->Mass(rho); }
+   return 0.;
+}
+
+real_t AdvectorOper::InternalEnergy(ParGridFunction &e, real_t t)
+{
+   add(x0, t, u, x_now);
+   if (op_th) { return op_th->InternalEnergy(e); }
+   return 0.;
+}
+
+AdvectorNonconservativeOper::AdvectorNonconservativeOper(
+   const Vector &x_start,
+   const Array<int> &v_ess_td,
+   const Array<int> &v_ess_vd,
+   ParGridFunction &mesh_vel,
+   ParGridFunction &rho,
+   const IntegrationRule &ir_rho,
+   ParFiniteElementSpace &pfes_H1,
+   ParFiniteElementSpace &pfes_H1_s,
+   ParFiniteElementSpace &pfes_L2,
+   RemapAdvector::RemapVelocity remap_v,
+   bool remap_v_s)
+  : AdvectorOper(x_start, mesh_vel, pfes_H1, pfes_L2),
+    u_coeff(&u),
+    rho_coeff(&rho)
+{
    // Velocity advector
    if (remap_v != RemapAdvector::RemapVelocity::None)
       op_v = make_unique<AdvectorVelocityNonconservativeOper>(
@@ -481,21 +543,11 @@ AdvectorOper::AdvectorOper(const Vector &x_start,
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
    rho.ExchangeFaceNbrData();
 
-   switch (remap_th)
-   {
-   case RemapAdvector::RemapThermo::Nonconservative:
-      op_th = make_unique<AdvectorThermoNonconservativeOper>(
-         rho_coeff, u_coeff, pfes_L2);
-      break;
-   case RemapAdvector::RemapThermo::GeomConsistent:
-      op_th = make_unique<AdvectorThermoGeomConsistentOper>(
-         x0, u, ir_rho, pfes_L2);
-      break;
-   }
-   
+   op_th = make_unique<AdvectorThermoNonconservativeOper>(
+      rho_coeff, u_coeff, pfes_L2);   
 }
 
-void AdvectorOper::Mult(const Vector &U, Vector &dU) const
+void AdvectorNonconservativeOper::Mult(const Vector &U, Vector &dU) const
 {
    // Move the mesh.
    const double t = GetTime();
@@ -531,16 +583,59 @@ void AdvectorOper::Mult(const Vector &U, Vector &dU) const
    }
 }
 
-void AdvectorOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
+AdvectorGeomConsOper::AdvectorGeomConsOper(
+   const Vector &x_start,
+   const Array<int> &v_ess_td,
+   const Array<int> &v_ess_vd,
+   ParGridFunction &mesh_vel,
+   ParGridFunction &rho,
+   const IntegrationRule &ir_rho_,
+   ParFiniteElementSpace &pfes_H1,
+   ParFiniteElementSpace &pfes_H1_s,
+   ParFiniteElementSpace &pfes_L2,
+   RemapAdvector::RemapVelocity remap_v,
+   bool remap_v_s)
+  : AdvectorOper(x_start, mesh_vel, pfes_H1, pfes_L2),
+    u_coeff(&u),
+    rho_coeff(&rho),
+    ir_rho(ir_rho_),
+    fec_f(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
+    fec_a(pfes_L2.FEColl()->GetOrder()+1, pfes_L2.GetParMesh()->Dimension()),
+    pfes_f(pfes_L2.GetParMesh(), &fec_f),
+    pfes_a(pfes_L2.GetParMesh(), &fec_a),
+    DD(&pfes_f), CC(&pfes_a)
 {
-   // Move the mesh.
-   const double t = GetTime();
-   add(x0, t, u, x_now);
+   // Velocity advector
+   if (remap_v != RemapAdvector::RemapVelocity::None)
+      op_v = make_unique<AdvectorVelocityNonconservativeOper>(
+         v_ess_td, v_ess_vd, rho_coeff, u_coeff,
+         pfes_H1, pfes_H1_s, remap_v, remap_v_s);
 
-   if (op_th) { op_th->ImplicitSolveFlux(dt, flux); }
+   // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
+   // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
+   rho.ExchangeFaceNbrData();
+
+   op_th = make_unique<AdvectorThermoGeomConsOper>(ir_rho, pfes_L2);
+
+   // Reference space divdiv form
+   DD.AddDomainIntegrator(new DivRDivRIntegrator());
+   DD.Assemble();
+   DD.Finalize();
+   DD.ParallelAssembleInternalMatrix();
+
+   const ParMesh *pmesh = pfes_f.GetParMesh();
+   ess_bdr.SetSize(pmesh->bdr_attributes.Size() > 0 ? pmesh->bdr_attributes.Max() : 1);
+   ess_bdr = -1;
+   pfes_f.GetEssentialTrueDofs(ess_bdr, ess_tdofs_f);
+   DD.ParallelEliminateTDofs(ess_tdofs_f);
+
+   // Solenoidal potential matrix
+   CC.AddDomainIntegrator(new DiffusionIntegrator());
+   CC.Assemble(0);
+   CC.Finalize(0);
 }
 
-void AdvectorOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
 {
    // Move the mesh.
    const double t = GetTime();
@@ -572,47 +667,14 @@ void AdvectorOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vec
       // Here we assume the thermodynamic state is in one piece
       const Vector th(const_cast<Vector&>(U), offsets[RemapAdvector::Density], op_th->Width());
       Vector dth(dU, offsets[RemapAdvector::Density], op_th->Width());
-      op_th->MultConserv(flux, th, dth);
+      auto *gcop_th = static_cast<AdvectorThermoGeomConsOper*>(op_th.get());
+      gcop_th->MultConserv(flux, th, dth);
    }
 }
 
-void AdvectorOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
 {
-   if (op_th) { op_th->LimitUpdate(dt, U, dU); }
-}
-
-void AdvectorOper::SetDt(real_t delta_t)
-{
-   if (op_th) { op_th->SetDt(delta_t); }
-}
-
-void AdvectorOper::SetTime(real_t t)
-{
-   TimeDependentOperator::SetTime(t);
-   if (op_v) { op_v->SetTime(t); }
-   if (op_th) { op_th->SetTime(t); }
-}
-
-real_t AdvectorOper::Momentum(ParGridFunction &v, real_t t)
-{
-   add(x0, t, u, x_now);
-
-   if (op_v) { return op_v->Momentum(v); }
-   return 0.;
-}
-
-real_t AdvectorOper::Mass(ParGridFunction &rho, real_t t)
-{
-   add(x0, t, u, x_now);
-   if (op_th) { return op_th->Mass(rho); }
-   return 0.;
-}
-
-real_t AdvectorOper::InternalEnergy(ParGridFunction &e, real_t t)
-{
-   add(x0, t, u, x_now);
-   if (op_th) { return op_th->InternalEnergy(e); }
-   return 0.;
+   //if (op_th) { op_th->LimitUpdate(dt, U, dU); }
 }
 
 void AdvectorVelocityOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const Vector &v, Vector &d_v) const
@@ -1564,7 +1626,7 @@ real_t AdvectorThermoNonconservativeOper::InternalEnergy(ParGridFunction &e) con
 }
 
 
-void AdvectorThermoGeomConsistentOper::DivRDivRIntegrator::
+void AdvectorGeomConsOper::DivRDivRIntegrator::
 AssembleElementMatrix(const FiniteElement &el, ElementTransformation &Trans,
    DenseMatrix &elmat)
 {
@@ -1601,7 +1663,7 @@ AssembleElementMatrix(const FiniteElement &el, ElementTransformation &Trans,
    }
 }
 
-void AdvectorThermoGeomConsistentOper::RefConvectionIntegrator::
+void AdvectorThermoGeomConsOper::RefConvectionIntegrator::
 AssembleElementVector(const FiniteElement &fe, ElementTransformation &Tr,
    const Vector &elfun, Vector &elvec)
 {
@@ -1643,7 +1705,7 @@ AssembleElementVector(const FiniteElement &fe, ElementTransformation &Tr,
    }
 }
 
-void AdvectorThermoGeomConsistentOper::RefFaceConvectionIntegrator::
+void AdvectorThermoGeomConsOper::RefFaceConvectionIntegrator::
 AssembleFaceVector(const FiniteElement &el1, const FiniteElement &el2,
    FaceElementTransformations &Trans, const Vector &elfun, Vector &elvec)
 {
@@ -1746,41 +1808,19 @@ AssembleFaceVector(const FiniteElement &el1, const FiniteElement &el2,
    }
 }
 
-AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
-   const Vector &x0_, const ParGridFunction &u_, const IntegrationRule &ir_rho_,
-   ParFiniteElementSpace &pfes_L2_)
-   :  AdvectorThermoOper(pfes_L2_), x0(x0_), u(u_), ir_rho(ir_rho_),
-   pfes_vL2(pfes_L2.GetParMesh(), pfes_L2.FEColl(), NVars),
-   fec_RT(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
-   fec_H1(pfes_L2.FEColl()->GetOrder()+1, pfes_L2.GetParMesh()->Dimension()),
-   pfes_RT(pfes_L2.GetParMesh(), &fec_RT),
-   pfes_H1(pfes_L2.GetParMesh(), &fec_H1),
-   x_now(*pfes_L2.GetParMesh()->GetNodes()),
-   DD(&pfes_RT), CC(&pfes_H1), detJ(&pfes_L2)
+AdvectorThermoGeomConsOper::AdvectorThermoGeomConsOper(
+   const IntegrationRule &ir_rho_, ParFiniteElementSpace &pfes_L2_)
+   : AdvectorThermoOper(pfes_L2_), ir_rho(ir_rho_),
+   pfes_vL2(pfes_L2.GetParMesh(), pfes_L2.FEColl(), NVars), detJ(&pfes_L2)
 {
-   // Reference space divdiv form
-   DD.AddDomainIntegrator(new DivRDivRIntegrator());
-   DD.Assemble();
-   DD.Finalize();
-   DD.ParallelAssembleInternalMatrix();
-
-   const ParMesh *pmesh = pfes_RT.GetParMesh();
-   ess_bdr.SetSize(pmesh->bdr_attributes.Size() > 0 ? pmesh->bdr_attributes.Max() : 1);
-   ess_bdr = -1;
-   pfes_RT.GetEssentialTrueDofs(ess_bdr, ess_tdofs_f);
-   DD.ParallelEliminateTDofs(ess_tdofs_f);
-
-   // Solenoidal potential matrix
-   CC.AddDomainIntegrator(new DiffusionIntegrator());
-   CC.Assemble(0);
-   CC.Finalize(0);
-
+   
    // Solution transfer
    trans = make_unique<SolutionTransfer>(*pfes_L2.GetParMesh(), ir_rho);
 
    // Interpolation matrix (inverse)
    SolutionTransfer::RefMassIntegrator mi(&ir_rho);
    Array<Geometry::Type> geoms;
+   const ParMesh *pmesh = pfes_L2.GetParMesh();
    pmesh->GetGeometries(pmesh->Dimension(), geoms);
    const FiniteElementCollection *fec_L2 = pfes_L2.FEColl();
    IsoparametricTransformation Tr; // dummy
@@ -1797,9 +1837,9 @@ AdvectorThermoGeomConsistentOper::AdvectorThermoGeomConsistentOper(
    }
 }
 
-void AdvectorThermoGeomConsistentOper::ImplicitSolveFluxRHS(Vector &rhs) const
+void AdvectorGeomConsOper::ImplicitSolveFluxRHS(Vector &rhs) const
 {
-   const int NE = pfes_L2.GetNE();
+   const int NE = pfes_f.GetNE();
    const int nqp = ir_rho.GetNPoints();
 
    Vector shape, rhs_z;
@@ -1807,9 +1847,9 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFluxRHS(Vector &rhs) const
 
    for(int k = 0; k < NE; k++)
    {
-      const FiniteElement *fe = pfes_RT.GetFE(k);
-      ElementTransformation *Tr = pfes_RT.GetElementTransformation(k);
-      pfes_RT.GetElementVDofs(k, vdofs);
+      const FiniteElement *fe = pfes_f.GetFE(k);
+      ElementTransformation *Tr = pfes_f.GetElementTransformation(k);
+      pfes_f.GetElementVDofs(k, vdofs);
 
       rhs_z.SetSize(vdofs.Size());
       shape.SetSize(vdofs.Size());
@@ -1830,12 +1870,12 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFluxRHS(Vector &rhs) const
    }
 }
 
-void AdvectorThermoGeomConsistentOper::ImplicitSolveSolenoidalRHS(const Vector &f, Vector &rhs) const
+void AdvectorGeomConsOper::ImplicitSolveSolenoidalRHS(const Vector &f, Vector &rhs) const
 {
-   const int NE = pfes_H1.GetNE();
+   const int NE = pfes_a.GetNE();
    const int nqp = ir_rho.GetNPoints();
-   const int dim = pfes_H1.GetParMesh()->Dimension();
-   const int sdim = pfes_H1.GetParMesh()->SpaceDimension();
+   const int dim = pfes_a.GetParMesh()->Dimension();
+   const int sdim = pfes_a.GetParMesh()->SpaceDimension();
 
    DenseMatrix dshape, dshapext, vshape;
    Vector f_z, rhs_z, dshape_d;
@@ -1843,11 +1883,11 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveSolenoidalRHS(const Vector &
 
    for(int k = 0; k < NE; k++)
    {
-      const FiniteElement *fe_h1 = pfes_H1.GetFE(k);
-      const FiniteElement *fe_rt = pfes_RT.GetFE(k);
-      ElementTransformation *Tr = pfes_H1.GetElementTransformation(k);
-      pfes_H1.GetElementDofs(k, dofs_h1);
-      pfes_RT.GetElementVDofs(k, vdofs_rt);
+      const FiniteElement *fe_h1 = pfes_a.GetFE(k);
+      const FiniteElement *fe_rt = pfes_f.GetFE(k);
+      ElementTransformation *Tr = pfes_a.GetElementTransformation(k);
+      pfes_a.GetElementDofs(k, dofs_h1);
+      pfes_f.GetElementVDofs(k, vdofs_rt);
       f.GetSubVector(vdofs_rt, f_z);
       
       const int ndof_h1 = fe_h1->GetDof();
@@ -1885,13 +1925,16 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveSolenoidalRHS(const Vector &
    }
 }
 
-void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
+void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
 {
+   // move the mesh to the initial position
+   add(x0, t, u, x_now);
+
    // setup the flux
-   if (!flux.FESpace()) { flux.SetSpace(&pfes_RT); }
+   if (!flux.FESpace()) { flux.SetSpace(&pfes_f); }
 
    // mass vector
-   Vector rhs(pfes_RT.GetVSize());
+   Vector rhs(pfes_f.GetVSize());
    rhs = 0.;
    
    ImplicitSolveFluxRHS(rhs);
@@ -1916,10 +1959,10 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
    // set up solution and rhs true vectors 
 
-   Vector X(pfes_RT.GetTrueVSize()), RHS(pfes_RT.GetTrueVSize());
+   Vector X(pfes_f.GetTrueVSize()), RHS(pfes_f.GetTrueVSize());
 
    flux.ParallelProject(X);
-   pfes_RT.GetProlongationMatrix()->MultTranspose(rhs, RHS);
+   pfes_f.GetProlongationMatrix()->MultTranspose(rhs, RHS);
    DD.ParallelEliminateTDofsInRHS(ess_tdofs_f, X, RHS);
 
    // set up solver and solve for the flux
@@ -1929,9 +1972,9 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
    HypreBoomerAMG prec(DD_m);
    prec.SetPrintLevel(0);
 
-   CGSolver solver(pfes_RT.GetComm());
+   CGSolver solver(pfes_f.GetComm());
    solver.SetRelTol(1e-6);
-   const real_t norm_rhs = InnerProduct(pfes_RT.GetComm(), RHS, RHS);
+   const real_t norm_rhs = InnerProduct(pfes_f.GetComm(), RHS, RHS);
    solver.SetAbsTol(norm_rhs * 1e-6);
    solver.SetMaxIter(1000);
    solver.SetPrintLevel(3);
@@ -1945,7 +1988,7 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
    // solenoidal rhs
 
-   Vector rhs_a(pfes_H1.GetVSize());
+   Vector rhs_a(pfes_a.GetVSize());
    rhs_a = 0.;
 
    flux_v -= flux;
@@ -1954,13 +1997,13 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
    // assemble the system for Hemholtz decomposition
 
-   ParGridFunction a(&pfes_H1);
+   ParGridFunction a(&pfes_a);
    a = 0.;
 
-   HypreParVector X_a(&pfes_H1), RHS_a(&pfes_H1);
+   HypreParVector X_a(&pfes_a), RHS_a(&pfes_a);
 
    a.ParallelProject(X_a);
-   pfes_H1.GetProlongationMatrix()->MultTranspose(rhs_a, RHS_a);
+   pfes_a.GetProlongationMatrix()->MultTranspose(rhs_a, RHS_a);
 
    CC.Update();
    CC.Assemble();
@@ -1975,7 +2018,7 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
    HypreBoomerAMG prec_a(CC_m);
    prec_a.SetPrintLevel(0);
 
-   HyprePCG solver_a(pfes_H1.GetComm());
+   HyprePCG solver_a(pfes_a.GetComm());
    solver_a.SetTol(1e-6);
    solver_a.SetAbsTol(0.);
    solver_a.SetMaxIter(1000);
@@ -1989,7 +2032,7 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
    // apply the solenoidal correction
 
-   const int NE = pfes_H1.GetNE();
+   const int NE = pfes_a.GetNE();
    CurlInterpolator ci;
    DenseMatrix curl;
    Vector f_k, a_k;
@@ -1997,14 +2040,14 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
 
    for (int k = 0; k < NE; k++)
    {
-      const FiniteElement &fe_f = *pfes_RT.GetFE(k);
-      const FiniteElement &fe_a = *pfes_H1.GetFE(k);
-      ElementTransformation &Tr = *pfes_RT.GetElementTransformation(k);
+      const FiniteElement &fe_f = *pfes_f.GetFE(k);
+      const FiniteElement &fe_a = *pfes_a.GetFE(k);
+      ElementTransformation &Tr = *pfes_f.GetElementTransformation(k);
 
       ci.AssembleElementMatrix2(fe_a, fe_f, Tr, curl);
 
       a.GetElementDofValues(k, a_k);
-      pfes_RT.GetElementVDofs(k, vdofs);
+      pfes_f.GetElementVDofs(k, vdofs);
       f_k.SetSize(vdofs.Size());
 
       curl.Mult(a_k, f_k);
@@ -2013,7 +2056,7 @@ void AdvectorThermoGeomConsistentOper::ImplicitSolveFlux(real_t dt, ParGridFunct
    }
 }
 
-void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
 {
    ParMesh &pmesh = *pfes_L2.GetParMesh();
    const int NE = pmesh.GetNE();
@@ -2170,11 +2213,11 @@ void AdvectorThermoGeomConsistentOper::MultConserv(const ParGridFunction &flux, 
    }
 }
 
-void AdvectorThermoGeomConsistentOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
 {
 }
 
-real_t AdvectorThermoGeomConsistentOper::Mass(ParGridFunction &rhoJ) const
+real_t AdvectorThermoGeomConsOper::Mass(ParGridFunction &rhoJ) const
 {
    real_t mass = 0.;
 
@@ -2204,7 +2247,7 @@ real_t AdvectorThermoGeomConsistentOper::Mass(ParGridFunction &rhoJ) const
    return mass;
 }
 
-real_t AdvectorThermoGeomConsistentOper::InternalEnergy(ParGridFunction &rhoeJ) const
+real_t AdvectorThermoGeomConsOper::InternalEnergy(ParGridFunction &rhoeJ) const
 {
    return Mass(rhoeJ);
 }
