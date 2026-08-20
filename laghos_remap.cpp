@@ -164,39 +164,13 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    // Velocity
    if (remap_v_stable)
    {
-      // project velocity field into Bernstein FE space via lumped L2 projection
-      ParMixedBilinearForm M_mixed(&pfes_H1Lag, &pfes_H1);
-      M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
-      M_mixed.Assemble(0);
-      M_mixed.Finalize(0);
-
-      OperatorHandle M;
-      M_mixed.FormRectangularSystemMatrix(v_ess_tdofs, v_ess_tdofs, M);
-
-      ParBilinearForm M_lumped(&pfes_H1);
-      M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
-      M_lumped.Assemble(0);
-      M_lumped.Finalize(0);
-
-      Vector lumped_vec(M_lumped.Height());
-      M_lumped.SpMat().GetDiag(lumped_vec);
-      GroupCommunicator &gcomm = pfes_H1.GroupComm();
-      Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
-      gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
-      gcomm.Bcast(lumpedmassmatrix_array);
-
-      const Operator *R_v = pfes_H1.GetRestrictionMatrix();
-      Vector RHS_V(R_v->Height()), X_V(R_v->Height()), VEL(R_v->Height()), M_L(R_v->Height());
-      R_v->Mult(vel, VEL);
-      R_v->Mult(lumped_vec, M_L);
-      M->Mult(VEL, RHS_V);
-      RHS_V /= M_L;
-      v.Distribute(RHS_V);
+      SolutionTransfer_H1 transfer(v_ess_tdofs);
+      transfer.TransferVelocity_Lagr2Remap(vel, v);
    }
    else { v = vel; }
 
    // Thermodynamic quantities
-   SolutionTransfer transfer(pmesh, rho_ir);
+   SolutionTransfer_L2 transfer(pmesh, rho_ir);
 
    switch (remap_scheme)
    {
@@ -358,37 +332,8 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    // Velocity
    if (remap_v_stable)
    {
-      VectorGridFunctionCoefficient v_coeff(&v);
-      vel.ProjectCoefficient(v_coeff);
-
-      // // project velocity field back to Lagrange FE space via lumped L2 projection
-      // ParMixedBilinearForm M_mixed(&pfes_H1, &pfes_H1Lag);
-      // M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
-      // M_mixed.Assemble(0);
-      // M_mixed.Finalize(0);
-
-      // OperatorHandle M;
-      // M_mixed.FormRectangularSystemMatrix(v_ess_tdofs, v_ess_tdofs, M);
-
-      // ParBilinearForm M_lumped(&pfes_H1Lag);
-      // M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
-      // M_lumped.Assemble(0);
-      // M_lumped.Finalize(0);
-
-      // Vector lumped_vec(M_lumped.Height());
-      // M_lumped.SpMat().GetDiag(lumped_vec);
-      // GroupCommunicator &gcomm = pfes_H1Lag.GroupComm();
-      // Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
-      // gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
-      // gcomm.Bcast(lumpedmassmatrix_array);
-
-      // const Operator *R_v = pfes_H1Lag.GetRestrictionMatrix();
-      // Vector RHS_V(R_v->Height()), X_V(R_v->Height()), V(R_v->Height()), M_L(R_v->Height());
-      // R_v->Mult(v, V);
-      // R_v->Mult(lumped_vec, M_L);
-      // M->Mult(V, RHS_V);
-      // RHS_V /= M_L;
-      // vel.Distribute(RHS_V);
+      SolutionTransfer_H1 transfer(v_ess_tdofs);
+      transfer.TransferVelocity_Remap2Lagr(v, vel);
    }
    else
    {
@@ -397,7 +342,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    }
 
    // Thermodynamic quantities
-   SolutionTransfer transfer(pmesh, ir_rho);
+   SolutionTransfer_L2 transfer(pmesh, ir_rho);
 
    // Density
    switch (remap_scheme)
@@ -1815,10 +1760,10 @@ AdvectorThermoGeomConsOper::AdvectorThermoGeomConsOper(
 {
    
    // Solution transfer
-   trans = make_unique<SolutionTransfer>(*pfes_L2.GetParMesh(), ir_rho);
+   trans = make_unique<SolutionTransfer_L2>(*pfes_L2.GetParMesh(), ir_rho);
 
    // Interpolation matrix (inverse)
-   SolutionTransfer::RefMassIntegrator mi(&ir_rho);
+   SolutionTransfer_L2::RefMassIntegrator mi(&ir_rho);
    Array<Geometry::Type> geoms;
    const ParMesh *pmesh = pfes_L2.GetParMesh();
    pmesh->GetGeometries(pmesh->Dimension(), geoms);
@@ -2253,28 +2198,34 @@ real_t AdvectorThermoGeomConsOper::InternalEnergy(ParGridFunction &rhoeJ) const
 }
 
 
-void SolutionTransfer::RefMassIntegrator::AssembleElementMatrix(
+void SolutionTransfer_L2::RefMassIntegrator::AssembleElementMatrix(
    const FiniteElement &fe, ElementTransformation &Trans, DenseMatrix &elmat)
 {
-   const int nqp = IntRule->GetNPoints();
+   const IntegrationRule *ir = IntRule;
+   if (ir == NULL)
+   {
+      const int order = 2 * fe.GetOrder();
+      ir = &IntRules.Get(fe.GetGeomType(), order);
+   }
+   const int nqp = ir->GetNPoints();
 
    Vector shape(fe.GetDof());
    elmat.SetSize(fe.GetDof());
    elmat = 0.;
    for (int q = 0; q < nqp; q++)
    {
-      const IntegrationPoint &ip = IntRule->IntPoint(q);
+      const IntegrationPoint &ip = ir->IntPoint(q);
       fe.CalcShape(ip, shape);
       AddMult_a_VVt(ip.weight, shape, elmat);
    }
 }
 
-SolutionTransfer::SolutionTransfer(const ParMesh &pmesh, const IntegrationRule &ir)
+SolutionTransfer_L2::SolutionTransfer_L2(const ParMesh &pmesh, const IntegrationRule &ir)
 : fec0(0, pmesh.Dimension()), pfes0(const_cast<ParMesh*>(&pmesh), &fec0), ir_rho(ir)
 {
 }
 
-void SolutionTransfer::ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs)
+void SolutionTransfer_L2::ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs)
 {
    ParMesh &pmesh = *pfes0.GetParMesh();
    const int NE = pmesh.GetNE();
@@ -2312,7 +2263,7 @@ void SolutionTransfer::ComputeMinMax(const Vector &lmins, const Vector &lmaxs, V
    }
 }
 
-void SolutionTransfer::LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, std::function<real_t(int)> &&w_z, DenseMatrix &F)
+void SolutionTransfer_L2::LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, std::function<real_t(int)> &&w_z, DenseMatrix &F)
 {
    const int dof_cnt = F.Width();
    Vector gp(dof_cnt), gm(dof_cnt);
@@ -2370,7 +2321,7 @@ void SolutionTransfer::LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, std
    }
 }
 
-void SolutionTransfer::TransferL2Monotonous(
+void SolutionTransfer_L2::TransferL2Monotonous(
     std::function<void(int, DenseMatrix &)> &&M, const Vector &lmins, const Vector &lmaxs,
     std::function<void(int, Vector &)> &&b, ParGridFunction &y)
 {
@@ -2441,7 +2392,7 @@ void SolutionTransfer::TransferL2Monotonous(
    }
 }
 
-void SolutionTransfer::TransferXYL2Monotonous(
+void SolutionTransfer_L2::TransferXYL2Monotonous(
    std::function<void(int, DenseMatrix &)> &&M, const Vector &lmins, const Vector &lmaxs,
    const ParGridFunction &x, std::function<void(int, Vector &)> &&b, ParGridFunction &y)
 {
@@ -2516,7 +2467,7 @@ void SolutionTransfer::TransferXYL2Monotonous(
    }
 }
 
-void SolutionTransfer::TransferDensity_Lagr2Remap(const Vector &rhoDetJw,
+void SolutionTransfer_L2::TransferDensity_Lagr2Remap(const Vector &rhoDetJw,
                                                   ParGridFunction &rho)
 {
    const ParFiniteElementSpace &pfes = *rho.ParFESpace();
@@ -2563,7 +2514,7 @@ void SolutionTransfer::TransferDensity_Lagr2Remap(const Vector &rhoDetJw,
    TransferL2Monotonous(M, rho_min_loc, rho_max_loc, brho, rho);
 }
 
-void SolutionTransfer::TransferJac_Larg2Remap(ParGridFunction &detJ)
+void SolutionTransfer_L2::TransferJac_Larg2Remap(ParGridFunction &detJ)
 {
    const ParFiniteElementSpace &pfes = *detJ.ParFESpace();
    const int NE = pfes.GetNE(), nqp = ir_rho.GetNPoints();
@@ -2608,7 +2559,7 @@ void SolutionTransfer::TransferJac_Larg2Remap(ParGridFunction &detJ)
    TransferL2Monotonous(MJ, detJ_min_loc, detJ_max_loc, bdetJ, detJ);
 }
 
-void SolutionTransfer::TransferDensityJac_Lagr2Remap(
+void SolutionTransfer_L2::TransferDensityJac_Lagr2Remap(
    const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ)
 {
    const ParFiniteElementSpace &pfes = *rhoJ.ParFESpace();
@@ -2659,7 +2610,7 @@ void SolutionTransfer::TransferDensityJac_Lagr2Remap(
       rhoJ(i) *= detJ(i);
 }
 
-void SolutionTransfer::TransferEnergyJac_Lagr2Remap(
+void SolutionTransfer_L2::TransferEnergyJac_Lagr2Remap(
    const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &eps,
    ParGridFunction &rhoeJ)
 {
@@ -2701,7 +2652,7 @@ void SolutionTransfer::TransferEnergyJac_Lagr2Remap(
       rhoeJ(i) *= rhoJ(i);
 }
 
-void SolutionTransfer::TransferDensityJac_Remap2Lagr(
+void SolutionTransfer_L2::TransferDensityJac_Remap2Lagr(
    const ParGridFunction &detJ, const ParGridFunction &rhoJ, ParGridFunction &rho)
 {
    const ParFiniteElementSpace &pfes = *rhoJ.ParFESpace();
@@ -2757,7 +2708,7 @@ void SolutionTransfer::TransferDensityJac_Remap2Lagr(
    TransferL2Monotonous(M, rho_min_loc, rho_max_loc, brho, rho);
 }
 
-void SolutionTransfer::TransferEnergyJac_Remap2Lagr(
+void SolutionTransfer_L2::TransferEnergyJac_Remap2Lagr(
    const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &rhoeJ, ParGridFunction &eps)
 {
    const ParFiniteElementSpace &pfes = *rhoeJ.ParFESpace();
@@ -2818,6 +2769,82 @@ void SolutionTransfer::TransferEnergyJac_Remap2Lagr(
    };
 
    TransferL2Monotonous(Me, eps_min_loc, eps_max_loc, beps, eps);
+}
+
+
+SolutionTransfer_H1::SolutionTransfer_H1(const Array<int> &v_ess_tdofs_)
+: v_ess_tdofs(v_ess_tdofs_)
+{
+}
+
+void SolutionTransfer_H1::TransferVelocity_Lagr2Remap(const ParGridFunction &vel_Lag, ParGridFunction &vel)
+{
+   const ParFiniteElementSpace &pfes_H1Lag = *vel_Lag.ParFESpace();
+   ParFiniteElementSpace &pfes_H1 = *vel.ParFESpace();
+
+   // project velocity field into Bernstein FE space via lumped L2 projection
+   ParMixedBilinearForm M_mixed(const_cast<ParFiniteElementSpace*>(&pfes_H1Lag), &pfes_H1);
+   M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
+   M_mixed.Assemble(0);
+   M_mixed.Finalize(0);
+
+   OperatorHandle M;
+   M_mixed.FormRectangularSystemMatrix(v_ess_tdofs, v_ess_tdofs, M);
+
+   ParBilinearForm M_lumped(&pfes_H1);
+   M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
+   M_lumped.Assemble(0);
+   M_lumped.Finalize(0);
+
+   Vector lumped_vec(M_lumped.Height());
+   M_lumped.SpMat().GetDiag(lumped_vec);
+   GroupCommunicator &gcomm = pfes_H1.GroupComm();
+   Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
+   gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   gcomm.Bcast(lumpedmassmatrix_array);
+
+   const Operator *R_v = pfes_H1.GetRestrictionMatrix();
+   Vector RHS_V(R_v->Height()), X_V(R_v->Height()), VEL(R_v->Height()), M_L(R_v->Height());
+   R_v->Mult(vel_Lag, VEL);
+   R_v->Mult(lumped_vec, M_L);
+   M->Mult(VEL, RHS_V);
+   RHS_V /= M_L;
+   vel.Distribute(RHS_V);
+}
+
+void SolutionTransfer_H1::TransferVelocity_Remap2Lagr(const ParGridFunction &vel, ParGridFunction &vel_Lag)
+{
+   VectorGridFunctionCoefficient v_coeff(&vel);
+   vel_Lag.ProjectCoefficient(v_coeff);
+
+   // // project velocity field back to Lagrange FE space via lumped L2 projection
+   // ParMixedBilinearForm M_mixed(&pfes_H1, &pfes_H1Lag);
+   // M_mixed.AddDomainIntegrator(new VectorMassIntegrator());
+   // M_mixed.Assemble(0);
+   // M_mixed.Finalize(0);
+
+   // OperatorHandle M;
+   // M_mixed.FormRectangularSystemMatrix(v_ess_tdofs, v_ess_tdofs, M);
+
+   // ParBilinearForm M_lumped(&pfes_H1Lag);
+   // M_lumped.AddDomainIntegrator(new LumpedIntegrator(new VectorMassIntegrator()));
+   // M_lumped.Assemble(0);
+   // M_lumped.Finalize(0);
+
+   // Vector lumped_vec(M_lumped.Height());
+   // M_lumped.SpMat().GetDiag(lumped_vec);
+   // GroupCommunicator &gcomm = pfes_H1Lag.GroupComm();
+   // Array<double> lumpedmassmatrix_array(lumped_vec.GetData(), lumped_vec.Size());
+   // gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   // gcomm.Bcast(lumpedmassmatrix_array);
+
+   // const Operator *R_v = pfes_H1Lag.GetRestrictionMatrix();
+   // Vector RHS_V(R_v->Height()), X_V(R_v->Height()), V(R_v->Height()), M_L(R_v->Height());
+   // R_v->Mult(vel, V);
+   // R_v->Mult(lumped_vec, M_L);
+   // M->Mult(V, RHS_V);
+   // RHS_V /= M_L;
+   // vel_Lag.Distribute(RHS_V);
 }
 
 void LocalInverseHOSolver::CalcHOSolution(const Vector &u, Vector &du) const

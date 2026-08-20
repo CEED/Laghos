@@ -27,7 +27,8 @@ namespace mfem
 namespace ale
 {
 
-class SolutionTransfer;
+class SolutionTransfer_L2;
+class SolutionTransfer_H1;
 struct MaterialData;
 
 #ifdef MFEM_USE_GSLIB
@@ -370,7 +371,7 @@ protected:
    const IntegrationRule &ir_rho;
 
    ParFiniteElementSpace pfes_vL2;
-   std::unique_ptr<SolutionTransfer> trans;
+   std::unique_ptr<SolutionTransfer_L2> trans;
    mutable ParGridFunction detJ;
 
    DenseMatrix MJ[Geometry::NUM_GEOMETRIES];
@@ -427,7 +428,7 @@ public:
 };
 
 // Transfer of data between the Lagrange and the remap phases.
-class SolutionTransfer
+class SolutionTransfer_L2
 {
 protected:
    L2_FECollection fec0;
@@ -437,10 +438,11 @@ protected:
    const IntegrationRule &ir_rho;
 
    friend class AdvectorThermoGeomConsOper;
+   friend class SolutionTransfer_H1;
    class RefMassIntegrator : public BilinearFormIntegrator
    {
    public:
-      RefMassIntegrator(const IntegrationRule *ir)
+      RefMassIntegrator(const IntegrationRule *ir = NULL)
       : BilinearFormIntegrator(ir) { }
 
       void AssembleElementMatrix(const FiniteElement &el,
@@ -456,7 +458,7 @@ protected:
                                const ParGridFunction &x, std::function<void(int, Vector&)> &&b, ParGridFunction &y);
 
 public:
-   SolutionTransfer(const ParMesh &pmesh, const IntegrationRule &ir);
+   SolutionTransfer_L2(const ParMesh &pmesh, const IntegrationRule &ir);
 
    // Nonconservative
 
@@ -473,6 +475,20 @@ public:
    
    void TransferDensityJac_Remap2Lagr(const ParGridFunction &detJ, const ParGridFunction &rhoJ, ParGridFunction &rho);
    void TransferEnergyJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &rhoeJ, ParGridFunction &eps);
+};
+
+// Transfer of data between the Lagrange and the remap phases.
+class SolutionTransfer_H1
+{
+protected:
+   const Array<int> &v_ess_tdofs;
+
+public:
+   SolutionTransfer_H1(const Array<int> &v_ess_tdofs);
+
+   // Nonconservative
+   void TransferVelocity_Lagr2Remap(const ParGridFunction &vel_Lag, ParGridFunction &vel);
+   void TransferVelocity_Remap2Lagr(const ParGridFunction &vel, ParGridFunction &vel_Lag);
 };
 
 class LocalInverseHOSolver
