@@ -170,7 +170,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    else { v = vel; }
 
    // Thermodynamic quantities
-   SolutionTransfer_L2 transfer(pmesh, rho_ir);
+   SolutionTransfer_L2 transfer(pfes_L2, rho_ir);
 
    switch (remap_scheme)
    {
@@ -342,7 +342,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    }
 
    // Thermodynamic quantities
-   SolutionTransfer_L2 transfer(pmesh, ir_rho);
+   SolutionTransfer_L2 transfer(pfes_L2, ir_rho);
 
    // Density
    switch (remap_scheme)
@@ -1760,26 +1760,7 @@ AdvectorThermoGeomConsOper::AdvectorThermoGeomConsOper(
 {
    
    // Solution transfer
-   trans = make_unique<SolutionTransfer_L2>(*pfes_L2.GetParMesh(), ir_rho);
-
-   // Interpolation matrix (inverse)
-   SolutionTransfer_L2::RefMassIntegrator mi(&ir_rho);
-   Array<Geometry::Type> geoms;
-   const ParMesh *pmesh = pfes_L2.GetParMesh();
-   pmesh->GetGeometries(pmesh->Dimension(), geoms);
-   const FiniteElementCollection *fec_L2 = pfes_L2.FEColl();
-   IsoparametricTransformation Tr; // dummy
-   for (Geometry::Type g : geoms)
-   {
-      const FiniteElement *fe = fec_L2->GetFE(g, fec_L2->GetOrder());
-      const int ndof = fe->GetDof();
-      mi.AssembleElementMatrix(*fe, Tr, MJ[g]);
-
-      MJi[g] = MJ[g];
-      MJi_piv[g].SetSize(ndof);
-      LUFactors lu(MJi[g].GetData(), MJi_piv[g].GetData());
-      lu.Factor(ndof);
-   }
+   trans = make_unique<SolutionTransfer_L2>(pfes_L2, ir_rho);
 }
 
 void AdvectorGeomConsOper::ImplicitSolveFluxRHS(Vector &rhs) const
@@ -2144,11 +2125,7 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
       pfes_vL2.DofsToVDofs(vdofs);
 
       auto g = pfes_L2.GetFE(k)->GetGeomType();
-      MFEM_ASSERT(MJi[g].Width() == ndof
-                  && MJi[g].Height() == ndof
-                  && MJi_piv[g].Size() == ndof,
-                  "Wrong sizes of LU factors!");
-      const LUFactors lu(MJi[g].GetData(), const_cast<int*>(MJi_piv[g].GetData()));
+      const LUFactors lu(trans->GetRefMassInverse(g));
 
       dU_gf.GetSubVector(vdofs, dbx_z);
 
@@ -2184,7 +2161,7 @@ real_t AdvectorThermoGeomConsOper::Mass(ParGridFunction &rhoJ) const
       }
 
       auto g = pfes.GetFE(k)->GetGeomType();
-      mass += MJ[g].InnerProduct(rhoJ_k, one_k);
+      mass += trans->GetRefMassMatrix(g).InnerProduct(rhoJ_k, one_k);
    }
 
    MPI_Allreduce(MPI_IN_PLACE, &mass, 1, MFEM_MPI_REAL_T, MPI_SUM, pmesh.GetComm());
@@ -2220,9 +2197,26 @@ void SolutionTransfer_L2::RefMassIntegrator::AssembleElementMatrix(
    }
 }
 
-SolutionTransfer_L2::SolutionTransfer_L2(const ParMesh &pmesh, const IntegrationRule &ir)
-: fec0(0, pmesh.Dimension()), pfes0(const_cast<ParMesh*>(&pmesh), &fec0), ir_rho(ir)
+SolutionTransfer_L2::SolutionTransfer_L2(const ParFiniteElementSpace &pfes_L2, const IntegrationRule &ir)
+: pmesh(*pfes_L2.GetParMesh()), fec0(0, pmesh.Dimension()), pfes0(const_cast<ParMesh*>(&pmesh), &fec0), ir_rho(ir)
 {
+   // Interpolation matrix (inverse)
+   RefMassIntegrator mi(&ir_rho);
+   Array<Geometry::Type> geoms;
+   pmesh.GetGeometries(pmesh.Dimension(), geoms);
+   const FiniteElementCollection *fec_L2 = pfes_L2.FEColl();
+   IsoparametricTransformation Tr; // dummy
+   for (Geometry::Type g : geoms)
+   {
+      const FiniteElement *fe = fec_L2->GetFE(g, fec_L2->GetOrder());
+      const int ndof = fe->GetDof();
+      mi.AssembleElementMatrix(*fe, Tr, MJ[g]);
+
+      MJi[g] = MJ[g];
+      MJi_piv[g].SetSize(ndof);
+      LUFactors lu(MJi[g].GetData(), MJi_piv[g].GetData());
+      lu.Factor(ndof);
+   }
 }
 
 void SolutionTransfer_L2::ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs)
@@ -2322,7 +2316,7 @@ void SolutionTransfer_L2::LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, 
 }
 
 void SolutionTransfer_L2::TransferL2Monotonous(
-    std::function<void(int, DenseMatrix &)> &&M, const Vector &lmins, const Vector &lmaxs,
+    std::function<void(int, DenseMatrix &, LUFactors &)> &&M, const Vector &lmins, const Vector &lmaxs,
     std::function<void(int, Vector &)> &&b, ParGridFunction &y)
 {
    ParMesh &pmesh = *y.ParFESpace()->GetParMesh();
@@ -2335,6 +2329,7 @@ void SolutionTransfer_L2::TransferL2Monotonous(
    const int dof_cnt = y.Size() / NE;
    DenseMatrix M_z(dof_cnt), F(dof_cnt);
    DenseMatrixInverse M_zi(&M_z);
+   LUFactors M_zlu(nullptr, nullptr);
    Vector rhs(dof_cnt), y_HO(dof_cnt), y_z(dof_cnt), m_z(dof_cnt),
           beta(dof_cnt), z(dof_cnt);
    Array<int> dofs(dof_cnt);
@@ -2345,14 +2340,22 @@ void SolutionTransfer_L2::TransferL2Monotonous(
       b(k, rhs);
 
       // Get local mass matrix
-      M(k, M_z);
+      M(k, M_z, M_zlu);
 
       // Construct contracted mass matrix
       M_z.GetRowSums(m_z);
 
       // Calculate high-order solution
-      M_zi.Factor();
-      M_zi.Mult(rhs, y_HO);
+      if (M_zlu.data)
+      {
+         y_HO = rhs;
+         M_zlu.Solve(dof_cnt, 1, y_HO.GetData());
+      }
+      else
+      {
+         M_zi.Factor();
+         M_zi.Mult(rhs, y_HO);
+      }
 
       // Calculate the average
       const real_t y_avg = rhs.Sum() / m_z.Sum();
@@ -2393,7 +2396,7 @@ void SolutionTransfer_L2::TransferL2Monotonous(
 }
 
 void SolutionTransfer_L2::TransferXYL2Monotonous(
-   std::function<void(int, DenseMatrix &)> &&M, const Vector &lmins, const Vector &lmaxs,
+   std::function<void(int, DenseMatrix &, LUFactors &)> &&M, const Vector &lmins, const Vector &lmaxs,
    const ParGridFunction &x, std::function<void(int, Vector &)> &&b, ParGridFunction &y)
 {
       ParMesh &pmesh = *y.ParFESpace()->GetParMesh();
@@ -2406,6 +2409,7 @@ void SolutionTransfer_L2::TransferXYL2Monotonous(
    const int dof_cnt = y.Size() / NE;
    DenseMatrix M_z(dof_cnt), F(dof_cnt);
    DenseMatrixInverse M_zi(&M_z);
+   LUFactors M_zlu(nullptr, nullptr);
    Vector x_z(dof_cnt), rhs(dof_cnt), xy_HO(dof_cnt), y_z(dof_cnt), m_z(dof_cnt),
           beta(dof_cnt), z(dof_cnt);
    Array<int> dofs(dof_cnt);
@@ -2420,14 +2424,22 @@ void SolutionTransfer_L2::TransferXYL2Monotonous(
       b(k, rhs);
 
       // Get local mass matrix
-      M(k, M_z);
+      M(k, M_z, M_zlu);
 
       // Construct contracted mass matrix
       M_z.GetRowSums(m_z);
 
       // Calculate high-order solution
-      M_zi.Factor();
-      M_zi.Mult(rhs, xy_HO);
+      if (M_zlu.data)
+      {
+         xy_HO = rhs;
+         M_zlu.Solve(dof_cnt, 1, xy_HO.GetData());
+      }
+      else
+      {
+         M_zi.Factor();
+         M_zi.Mult(rhs, xy_HO);
+      }
 
       // Calculate the average
       const real_t mx_sum = m_z * x_z;
@@ -2495,7 +2507,7 @@ void SolutionTransfer_L2::TransferDensity_Lagr2Remap(const Vector &rhoDetJw,
 
    // Mass matrix
    MassIntegrator mi(&ir_rho);
-   auto M = [&pfes,&mi](int k, DenseMatrix &M_z) {
+   auto M = [&pfes,&mi](int k, DenseMatrix &M_z, LUFactors &) {
       const FiniteElement &fe = *pfes.GetFE(k);
       ElementTransformation &T = *pfes.GetElementTransformation(k);
       mi.AssembleElementMatrix(fe, T, M_z);
@@ -2539,11 +2551,13 @@ void SolutionTransfer_L2::TransferJac_Larg2Remap(ParGridFunction &detJ)
    }
 
    // Interpolation matrix
-   RefMassIntegrator mi(&ir_rho);
-   auto MJ = [&pfes,&mi](int k, DenseMatrix &M_z) {
+   auto M = [&pfes, this]
+   (int k, DenseMatrix &M_z, LUFactors &M_zlu) {
       const FiniteElement &fe = *pfes.GetFE(k);
-      ElementTransformation &T = *pfes.GetElementTransformation(k);
-      mi.AssembleElementMatrix(fe, T, M_z);
+      const Geometry::Type g = fe.GetGeomType();
+      M_z = MJ[g];
+      M_zlu.data = MJi[g].GetData();
+      M_zlu.ipiv = MJi_piv[g].GetData();
    };
 
    // Right hand side
@@ -2556,7 +2570,7 @@ void SolutionTransfer_L2::TransferJac_Larg2Remap(ParGridFunction &detJ)
       dlfi.AssembleRHSElementVect(fe, T, rhs);
    };
 
-   TransferL2Monotonous(MJ, detJ_min_loc, detJ_max_loc, bdetJ, detJ);
+   TransferL2Monotonous(M, detJ_min_loc, detJ_max_loc, bdetJ, detJ);
 }
 
 void SolutionTransfer_L2::TransferDensityJac_Lagr2Remap(
@@ -2586,11 +2600,12 @@ void SolutionTransfer_L2::TransferDensityJac_Lagr2Remap(
    }
 
    // Interpolation matrix
-   RefMassIntegrator mi(&ir_rho);
-   auto MJ = [&pfes,&mi](int k, DenseMatrix &M_z) {
+   auto M = [&pfes, this](int k, DenseMatrix &M_z, LUFactors &M_zlu) {
       const FiniteElement &fe = *pfes.GetFE(k);
-      ElementTransformation &T = *pfes.GetElementTransformation(k);
-      mi.AssembleElementMatrix(fe, T, M_z);
+      const Geometry::Type g = fe.GetGeomType();
+      M_z = MJ[g];
+      M_zlu.data = MJi[g].GetData();
+      M_zlu.ipiv = MJi_piv[g].GetData();
    };
 
    // Righ hand side
@@ -2603,7 +2618,7 @@ void SolutionTransfer_L2::TransferDensityJac_Lagr2Remap(
       di.AssembleRHSElementVect(fe, T, rhs);
    };
 
-   TransferXYL2Monotonous(MJ, rho_min_loc, rho_max_loc, detJ, brho, rhoJ);
+   TransferXYL2Monotonous(M, rho_min_loc, rho_max_loc, detJ, brho, rhoJ);
 
    // Jacobian product
    for (int i = 0; i < rhoJ.Size(); i++)
@@ -2628,11 +2643,12 @@ void SolutionTransfer_L2::TransferEnergyJac_Lagr2Remap(
    }
 
    // Interpolation matrix
-   RefMassIntegrator mi(&ir_rho);
-   auto MJ = [&pfes,&mi](int k, DenseMatrix &M_z) {
+   auto M = [&pfes, this](int k, DenseMatrix &M_z, LUFactors &M_zlu) {
       const FiniteElement &fe = *pfes.GetFE(k);
-      ElementTransformation &T = *pfes.GetElementTransformation(k);
-      mi.AssembleElementMatrix(fe, T, M_z);
+      const Geometry::Type g = fe.GetGeomType();
+      M_z = MJ[g];
+      M_zlu.data = MJi[g].GetData();
+      M_zlu.ipiv = MJi_piv[g].GetData();
    };
 
    // Righ hand side
@@ -2645,7 +2661,7 @@ void SolutionTransfer_L2::TransferEnergyJac_Lagr2Remap(
       iei.AssembleRHSElementVect(fe, T, rhs);
    };
 
-   TransferXYL2Monotonous(MJ, eps_min_loc, eps_max_loc, rhoJ, beps, rhoeJ);
+   TransferXYL2Monotonous(M, eps_min_loc, eps_max_loc, rhoJ, beps, rhoeJ);
 
    // density and Jacobian product
    for (int i = 0; i < rhoJ.Size(); i++)
@@ -2680,7 +2696,7 @@ void SolutionTransfer_L2::TransferDensityJac_Remap2Lagr(
 
    // Mass matrix
    MassIntegrator mi(&ir_rho);
-   auto M = [&pfes,&mi](int k, DenseMatrix &M_z) {
+   auto M = [&pfes,&mi](int k, DenseMatrix &M_z, LUFactors &) {
       const FiniteElement &fe = *pfes.GetFE(k);
       ElementTransformation &T = *pfes.GetElementTransformation(k);
       mi.AssembleElementMatrix(fe, T, M_z);
@@ -2735,7 +2751,7 @@ void SolutionTransfer_L2::TransferEnergyJac_Remap2Lagr(
    }
 
    // Energy mass matrix
-   auto Me = [&pfes,&rhoDetJw,this](int k, DenseMatrix &M_z) {
+   auto Me = [&pfes,&rhoDetJw,this](int k, DenseMatrix &M_z, LUFactors &) {
       const FiniteElement &fe = *pfes.GetFE(k);
       const int nqp = ir_rho.GetNPoints();
       Vector shape(fe.GetDof());

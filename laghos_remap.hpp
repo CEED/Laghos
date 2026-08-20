@@ -374,10 +374,6 @@ protected:
    std::unique_ptr<SolutionTransfer_L2> trans;
    mutable ParGridFunction detJ;
 
-   DenseMatrix MJ[Geometry::NUM_GEOMETRIES];
-   DenseMatrix MJi[Geometry::NUM_GEOMETRIES];
-   Array<int> MJi_piv[Geometry::NUM_GEOMETRIES];
-
    class RefConvectionIntegrator : public NonlinearFormIntegrator
    {
       const ParGridFunction &f;
@@ -431,11 +427,16 @@ public:
 class SolutionTransfer_L2
 {
 protected:
+   const ParMesh &pmesh;
    L2_FECollection fec0;
    ParFiniteElementSpace pfes0;
 
    // Integration points for the density.
    const IntegrationRule &ir_rho;
+
+   DenseMatrix MJ[Geometry::NUM_GEOMETRIES];
+   DenseMatrix MJi[Geometry::NUM_GEOMETRIES];
+   Array<int> MJi_piv[Geometry::NUM_GEOMETRIES];
 
    friend class AdvectorThermoGeomConsOper;
    friend class SolutionTransfer_H1;
@@ -452,13 +453,13 @@ protected:
 
    void ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs);
    void LimitFluxes(real_t y_avg, real_t y_min, real_t y_max, std::function<real_t(int)> &&w_z, DenseMatrix &F);
-   void TransferL2Monotonous(std::function<void(int, DenseMatrix &)> &&M, const Vector &mins, const Vector &maxs,
+   void TransferL2Monotonous(std::function<void(int, DenseMatrix &, LUFactors &)> &&M, const Vector &mins, const Vector &maxs,
                              std::function<void(int, Vector&)> &&b, ParGridFunction &y);
-   void TransferXYL2Monotonous(std::function<void(int, DenseMatrix &)> &&M, const Vector &mins, const Vector &maxs,
+   void TransferXYL2Monotonous(std::function<void(int, DenseMatrix &, LUFactors &)> &&M, const Vector &mins, const Vector &maxs,
                                const ParGridFunction &x, std::function<void(int, Vector&)> &&b, ParGridFunction &y);
 
 public:
-   SolutionTransfer_L2(const ParMesh &pmesh, const IntegrationRule &ir);
+   SolutionTransfer_L2(const ParFiniteElementSpace &pfes_L2, const IntegrationRule &ir);
 
    // Nonconservative
 
@@ -468,6 +469,10 @@ public:
    void TransferDensity_Lagr2Remap(const Vector &rhoDetJw, ParGridFunction &rho);
 
    // Geometrically consistent
+
+   inline const DenseMatrix& GetRefMassMatrix(Geometry::Type g) const { return MJ[g]; }
+   inline const LUFactors GetRefMassInverse(Geometry::Type g) const
+   { return LUFactors(MJi[g].GetData(), const_cast<int*>(MJi_piv[g].GetData())); }
 
    void TransferJac_Larg2Remap(ParGridFunction &detJ);
    void TransferDensityJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ);
