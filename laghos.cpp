@@ -1099,6 +1099,12 @@ int main(int argc, char *argv[])
                       hydro.GetIntRule(), hydro.GetIntRule_b(),
                       remesh_dist, x_gf_opt, vis_remesh);
 
+         const real_t mom_pre = hydro.Momentum(v_gf);
+         if (Mpi::Root()) { cout << "pre: momentum:" << mom_pre << endl; }
+         
+         const real_t en_pre = hydro.InternalEnergy(e_gf);
+         if (Mpi::Root()) { cout << "pre: energy:" << en_pre << endl; }
+
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
 
@@ -1126,6 +1132,24 @@ int main(int argc, char *argv[])
          // Update mass matrices.
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.
          hydro.UpdateMassMatrices(rho0_gf_coeff);
+
+         const real_t mom_post = hydro.Momentum(v_gf);
+         if (Mpi::Root())
+         {
+            cout << "post: momentum: " << mom_post
+               << " diff: " << (mom_post - mom_pre)
+               << " (" << (0.5 * (mom_post - mom_pre) / (mom_post + mom_pre)) << ")"
+               << endl;
+         }
+
+         const real_t en_post = hydro.InternalEnergy(e_gf);
+         if (Mpi::Root())
+         {
+            cout << "post: energy: " << en_post
+               << " diff: " << (en_post - en_pre)
+               << " (" << (0.5 * (en_post - en_pre) / (en_post + en_pre)) << ")"
+               << endl;
+         }
 
          // Compute the Hausdorff distance between the current mesh boundary
          // and the analytical boundary.
