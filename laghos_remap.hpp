@@ -75,7 +75,7 @@ private:
    int dim;
    L2_FECollection fec_L2;
    H1_FECollection fec_H1, fec_H1Lag;
-   ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1Lag;
+   ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1_s, pfes_H1Lag;
    const Array<int> &v_ess_tdofs;
    const IntegrationRule *ir_rho{};
 
@@ -241,13 +241,14 @@ public:
 };
 
 // Performs a single velocity remap advection step.
-class AdvectorVelocityOper : public TimeDependentOperator
+class AdvectorVelocityOper : virtual public TimeDependentOperator
 {
 protected:
    RemapAdvector::RemapVelocity remap_v = RemapAdvector::RemapVelocity::ClipAndScale;
    bool remap_v_stable = false;
 
    const Array<int> &v_ess_tdofs, &v_ess_vdofs;
+   ParFiniteElementSpace &pfes_H1, &pfes_H1_s;
    mutable ParBilinearForm Mr_H1, Mr_H1_s, Kr_H1, KrT_H1, lummpedMr_H1;
    mutable Vector lumpedMr_H1_vec;
 
@@ -302,6 +303,52 @@ public:
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
+
+   real_t Momentum(ParGridFunction &v) const override;
+};
+
+// Performs a single velocity remap advection step - geometrically consistent scheme
+class AdvectorVelocityGeomConsOper : public AdvectorVelocityOper, public TimeDependentGeomConsOperator
+{
+protected:
+   const IntegrationRule &ir_rho;
+   mutable ParBilinearForm MJ;
+   std::unique_ptr<SolutionTransfer_H1> trans;
+   mutable ParGridFunction detJ;
+
+   class RefConvectionIntegrator : public NonlinearFormIntegrator
+   {
+      const ParGridFunction &f;
+      DenseMatrix dshape;
+      Vector shape, v, vxt, vdshape;
+
+   public:
+      RefConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
+      : NonlinearFormIntegrator(ir), f(flux) { }
+
+      void AssembleElementVector(const FiniteElement &el,
+                                 ElementTransformation &Trans,
+                                 const Vector &elfun,
+                                 Vector &elvec) override;
+   };
+
+public:
+   // Here pfes is the ParFESpace of the function that will be transferred.
+   AdvectorVelocityGeomConsOper(
+      const IntegrationRule &ir_rho,
+      const Array<int> &v_ess_td,
+      const Array<int> &v_ess_vd,
+      ParFiniteElementSpace &pfes_H1,
+      ParFiniteElementSpace &pfes_H1_s,
+      RemapAdvector::RemapVelocity scheme,
+      bool remap_v_s);
+
+   // Single RK stage solve for all fields contained in U.
+   void Mult(const Vector &U, Vector &dU) const override
+   { MFEM_ABORT("Geometrically conservative operator cannot be integrated classically!"); }
+
+   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
 
    real_t Momentum(ParGridFunction &v) const override;
 };
@@ -487,13 +534,28 @@ class SolutionTransfer_H1
 {
 protected:
    const Array<int> &v_ess_tdofs;
+   // Integration points for the density.
+   const IntegrationRule &ir_rho;
+
+   DenseMatrix MJ[Geometry::NUM_GEOMETRIES];
+   Vector mJ;
+
+   friend class AdvectorVelocityGeomConsOper;
+   using RefMassIntegrator = SolutionTransfer_L2::RefMassIntegrator;
 
 public:
-   SolutionTransfer_H1(const Array<int> &v_ess_tdofs);
+   SolutionTransfer_H1(const Array<int> &v_ess_tdofs, const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir);
 
    // Nonconservative
+
    void TransferVelocity_Lagr2Remap(const ParGridFunction &vel_Lag, ParGridFunction &vel);
    void TransferVelocity_Remap2Lagr(const ParGridFunction &vel, ParGridFunction &vel_Lag);
+
+   // Geometrically consistent
+
+   void TransferJac_Larg2Remap(ParGridFunction &detJ);
+   void TransferMomentumJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &vel, ParGridFunction &rhouJ);
+   void TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhouJ, ParGridFunction &vel);
 };
 
 class LocalInverseHOSolver

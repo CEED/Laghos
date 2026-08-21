@@ -107,6 +107,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     fec_H1Lag(order_v, pmesh.Dimension()),
     pfes_L2(&pmesh, &fec_L2, 1),
     pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
+    pfes_H1_s(&pmesh, (remap_v_stable_)?(&fec_H1):(&fec_H1Lag)),
     pfes_H1Lag(&pmesh, &fec_H1Lag, pmesh.Dimension()),
     v_ess_tdofs(ess_tdofs),
     remap_scheme(remap_),
@@ -162,27 +163,36 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    *x = x0;
 
    // Velocity
-   if (remap_v_stable)
+   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1_s, rho_ir);
+   switch (remap_scheme)
    {
-      SolutionTransfer_H1 transfer(v_ess_tdofs);
-      transfer.TransferVelocity_Lagr2Remap(vel, v);
+   case RemapScheme::Nonconservative:
+      if (remap_v_stable)
+      {
+         transfer_h1.TransferVelocity_Lagr2Remap(vel, v);
+      }
+      else { v = vel; }
+      break;
+   case RemapScheme::GeomConsistent:
+      transfer_h1.TransferMomentumJac_Lagr2Remap(rhoDetJw, vel, v);
+      break;
    }
-   else { v = vel; }
+   
 
    // Thermodynamic quantities
-   SolutionTransfer_L2 transfer(pfes_L2, rho_ir);
+   SolutionTransfer_L2 transfer_l2(pfes_L2, rho_ir);
 
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
-      transfer.TransferDensity_Lagr2Remap(rhoDetJw, rho);
+      transfer_l2.TransferDensity_Lagr2Remap(rhoDetJw, rho);
       e  = lagr_eps;
       break;
    case RemapScheme::GeomConsistent:
       detJ.SetSpace(rho.ParFESpace()); detJ = 0.;
-      transfer.TransferJac_Larg2Remap(detJ);
-      transfer.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ, rho);
-      transfer.TransferEnergyJac_Lagr2Remap(rhoDetJw, rho, lagr_eps, e);
+      transfer_l2.TransferJac_Larg2Remap(detJ);
+      transfer_l2.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ, rho);
+      transfer_l2.TransferEnergyJac_Lagr2Remap(rhoDetJw, rho, lagr_eps, e);
       break;
    }
 }
@@ -201,20 +211,18 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    ParGridFunction u(&pfes_H1Lag);
    subtract(new_nodes, x0, u);
 
-   ParFiniteElementSpace *pfes_H1_v, *pfes_H1_s;
+   ParFiniteElementSpace *pfes_H1_v;
    AdvectorOper *oper;
 
    if (remap_v_stable)
    {
       // Bernstein scalar space.
       // Scalar space only used when velocity remap with limiter
-      pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1.FEColl(), 1);
       pfes_H1_v = &pfes_H1;
    }
    else
    {
       // Define scalar FE spaces for the solution, and the advection operator.
-      pfes_H1_s = new ParFiniteElementSpace(&pmesh, pfes_H1Lag.FEColl(), 1);
       pfes_H1_v = &pfes_H1Lag;
    }
 
@@ -225,7 +233,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    {
       oper = new AdvectorNonconservativeOper(
          x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
-         *pfes_H1_v, *pfes_H1_s, pfes_L2,
+         *pfes_H1_v, pfes_H1_s, pfes_L2,
          remap_v, remap_v_stable);
       ode_solver->Init(*oper);
       ode = ode_solver.get();
@@ -235,7 +243,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    {
       auto *op = new AdvectorGeomConsOper(
          x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
-         *pfes_H1_v, *pfes_H1_s, pfes_L2,
+         *pfes_H1_v, pfes_H1_s, pfes_L2,
          remap_v, remap_v_stable);
       ode_solver_gc->Init(*op);
       oper = op;
@@ -292,12 +300,14 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
       }
 
       const real_t mass = oper->Mass(rho, t);
+      const real_t momentum = oper->Momentum(v, t);
       const real_t energy = oper->InternalEnergy(e, t);
 
       if (pmesh.GetMyRank() == 0)
       {
          cout << ". " << ti
               << " mass: " << mass
+              << " momentum: " << momentum
               << " energy: " << energy
               << std::endl;
       }
@@ -318,7 +328,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
                                     "Remapped Energy", Wx, Wy, Ww, Wh);
    }
 
-   delete oper; delete pfes_H1_s;
+   delete oper;
 }
 
 void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
@@ -329,20 +339,8 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
                                    Vector &rhoDetJ_be,
                                    ParGridFunction &lagr_eps)
 {
-   // Velocity
-   if (remap_v_stable)
-   {
-      SolutionTransfer_H1 transfer(v_ess_tdofs);
-      transfer.TransferVelocity_Remap2Lagr(v, vel);
-   }
-   else
-   {
-      // just copy velocity otherwise
-      vel = v;
-   }
-
    // Thermodynamic quantities
-   SolutionTransfer_L2 transfer(pfes_L2, ir_rho);
+   SolutionTransfer_L2 transfer_l2(pfes_L2, ir_rho);
 
    // Density
    switch (remap_scheme)
@@ -354,7 +352,8 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       lagr_eps = e;
       break;
    case RemapScheme::GeomConsistent:
-      transfer.TransferDensityJac_Remap2Lagr(detJ, rho, rho0_gf);
+      transfer_l2.TransferJac_Larg2Remap(detJ);
+      transfer_l2.TransferDensityJac_Remap2Lagr(detJ, rho, rho0_gf);
       break;
    }
 
@@ -395,6 +394,26 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    //    }
    // }
 
+   // Velocity
+   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1_s, ir_rho);
+   switch (remap_scheme)
+   {
+   case RemapScheme::Nonconservative:
+      if (remap_v_stable)
+      {
+         transfer_h1.TransferVelocity_Remap2Lagr(v, vel);
+      }
+      else
+      {
+         // just copy velocity otherwise
+         vel = v;
+      }
+      break;
+   case RemapScheme::GeomConsistent:
+      transfer_h1.TransferMomentumJac_Remap2Lagr(rhoDetJw, v, vel);
+      break;
+   }
+
    // Energy
    switch (remap_scheme)
    {
@@ -403,7 +422,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       lagr_eps = e;
       break;
    case RemapScheme::GeomConsistent:
-      transfer.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, lagr_eps);
+      transfer_l2.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, lagr_eps);
       break;
    }
 }
@@ -552,9 +571,8 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
 {
    // Velocity advector
    if (remap_v != RemapAdvector::RemapVelocity::None)
-      op_v = make_unique<AdvectorVelocityNonconservativeOper>(
-         v_ess_td, v_ess_vd, rho_coeff, u_coeff,
-         pfes_H1, pfes_H1_s, remap_v, remap_v_s);
+      op_v = make_unique<AdvectorVelocityGeomConsOper>(
+         ir_rho, v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, remap_v, remap_v_s);
 
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
@@ -597,7 +615,8 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
    {
       const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
       Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
-      op_v->Mult(v, d_v);
+      auto *gcop_v = static_cast<AdvectorVelocityGeomConsOper*>(op_v.get());
+      gcop_v->MultConserv(flux, v, d_v);
    }
 
    // In parallel, rho_coeff must be evaluated in MPI-neighbor zones.
@@ -1248,12 +1267,13 @@ void AdvectorThermoNonconservativeOper::ComputeSparsityBounds(
 
 AdvectorVelocityOper::AdvectorVelocityOper(
    const Array<int> &v_ess_td, const Array<int> &v_ess_vd,
-   ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
+   ParFiniteElementSpace &pfes_H1_, ParFiniteElementSpace &pfes_H1_s_,
    RemapAdvector::RemapVelocity scheme_, bool remap_v_s)
 :   remap_v(scheme_),
     remap_v_stable(remap_v_s),
     v_ess_tdofs(v_ess_td),
     v_ess_vdofs(v_ess_vd),
+    pfes_H1(pfes_H1_), pfes_H1_s(pfes_H1_s_),
     Mr_H1(&pfes_H1), Mr_H1_s(&pfes_H1_s), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s),
     lummpedMr_H1(&pfes_H1_s)
 {
@@ -1308,8 +1328,6 @@ void AdvectorVelocityNonconservativeOper::Mult(const Vector &v, Vector &d_v) con
 
    if (remap_v == RemapAdvector::RemapVelocity::None) { return; }
 
-   ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace(),
-                         &pfes_H1 = *Mr_H1.ParFESpace(); // only needed for unstable velocity remap
    const int dim     = pfes_H1_s.GetMesh()->Dimension();
    const int dofs_h1 = pfes_H1_s.GetVSize();
 
@@ -1413,6 +1431,164 @@ real_t AdvectorVelocityNonconservativeOper::Momentum(ParGridFunction &v) const
    MPI_Allreduce(&loc_m, &glob_m, 1, MPI_DOUBLE, MPI_SUM,
                  Mr_H1.ParFESpace()->GetComm());
    return glob_m;
+}
+
+void AdvectorVelocityGeomConsOper::RefConvectionIntegrator::
+AssembleElementVector(const FiniteElement &fe, ElementTransformation &Tr,
+   const Vector &elfun, Vector &elvec)
+{
+   const int ndof = fe.GetDof();
+   const int ndim = fe.GetDim();
+
+   shape.SetSize(ndof);
+   dshape.SetSize(ndof, ndim);
+   vdshape.SetSize(ndof);
+   v.SetSize(ndim);
+   vxt.SetSize(ndim);
+
+   elvec.SetSize(ndof * ndim);
+   elvec = 0.;
+
+   Vector elvec_v, elfun_v;
+
+   const IntegrationRule *ir = IntRule;
+   if (ir == NULL)
+   {
+      const int order = fe.GetOrder() + Tr.OrderGrad(&fe) + Tr.Order();
+      ir = &IntRules.Get(fe.GetGeomType(), order);
+   }
+   const int nqp = ir->GetNPoints();
+
+   for(int q = 0; q < nqp; q++)
+   {
+      const IntegrationPoint &ip = ir->IntPoint(q);
+      Tr.SetIntPoint(&ip);
+      f.GetVectorValue(Tr, ip, v);
+
+      fe.CalcShape(ip, shape);
+      fe.CalcDShape(ip, dshape);
+
+      Tr.AdjugateJacobian().Mult(v, vxt);
+      dshape.Mult(vxt, vdshape);
+
+      const real_t w = -ip.weight;
+
+      for (int v = 0; v < ndim; v++)
+      {
+         elvec_v.MakeRef(elvec, v*ndof, ndof);
+         elfun_v.MakeRef(const_cast<Vector&>(elfun), v*ndof, ndof);
+         elvec_v.Add(w * (elfun_v * shape), vdshape);
+      }
+   }
+}
+
+AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
+   const IntegrationRule &ir_rho_, const Array<int> &v_ess_td, const Array<int> &v_ess_vd,
+   ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
+   RemapAdvector::RemapVelocity scheme, bool remap_v_s)
+: AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme, remap_v_s),
+  ir_rho(ir_rho_), MJ(&pfes_H1_s), detJ(&pfes_H1_s)
+{
+   // Solution transfer
+   trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, pfes_H1_s, ir_rho);
+
+   // Interpolation matrix
+   MJ.AddDomainIntegrator(new SolutionTransfer_H1::RefMassIntegrator(&ir_rho));
+   MJ.Assemble();
+   MJ.Finalize();
+   MJ.ParallelAssembleInternalMatrix();
+   MJ.ParallelEliminateTDofs(v_ess_tdofs);
+}
+
+void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+{
+   ParMesh &pmesh = *pfes_H1.GetParMesh();
+   const int NE = pmesh.GetNE();
+   const int vdim = pfes_H1.GetVDim();
+
+   // Current Jacobians
+   trans->TransferJac_Larg2Remap(detJ);
+
+   // RHS
+   Vector bdU(pfes_H1.GetVSize());
+   bdU = 0.;
+
+   RefConvectionIntegrator Ki(flux);
+   Vector x_z, dbx_z, detJ_z;
+   Array<int> dofs, vdofs;
+
+   for(int k = 0; k < NE; k++)
+   {
+      pfes_H1_s.GetElementVDofs(k, dofs);
+      const int ndof = dofs.Size();
+      vdofs = dofs;
+      pfes_H1.DofsToVDofs(vdofs);
+
+      detJ.GetSubVector(dofs, detJ_z);
+      U.GetSubVector(vdofs, x_z);
+
+      // Reduced the quantity to the non-conservative form
+      for(int v = 0; v < vdim; v++)
+         for(int i = 0; i < ndof; i++)
+            x_z(i + v*ndof) /= detJ_z(i);
+
+      Ki.AssembleElementVector(*pfes_H1.GetFE(k),
+                               *pfes_H1.GetElementTransformation(k),
+                               x_z, dbx_z);
+
+      bdU.AddElementVector(vdofs, dbx_z);
+   }
+
+   // Invert by mass matrix
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+
+   CGSolver lin_solver(pfes_H1.GetComm());
+   lin_solver.SetRelTol(1e-8);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetOperator(*MJ.ParallelAssembleInternalMatrix());
+
+   const int ntdof = pfes_H1_s.GetTrueVSize();
+   const int nvdof = pfes_H1_s.GetVSize();
+
+   Vector X(ntdof), RHS(ntdof * vdim);
+   pfes_H1.GetProlongationMatrix()->MultTranspose(bdU, RHS);
+
+   for (int v = 0; v < vdim; v++)
+   {
+      Vector RHS_v(RHS, v*ntdof, ntdof);
+      X = 0.;
+      MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS_v);
+      
+      lin_solver.Mult(RHS_v, X);
+      
+      Vector dU_v(dU, v*nvdof, nvdof);
+      pfes_H1_s.GetProlongationMatrix()->Mult(X, dU_v);
+   }
+}
+
+void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+{
+}
+
+real_t AdvectorVelocityGeomConsOper::Momentum(ParGridFunction &rhouJ) const
+{
+   HypreParMatrix &MJ_m = *MJ.ParallelAssembleInternalMatrix();
+   Vector b(MJ_m.Height());
+   const int vdim = pfes_H1.GetVDim();
+   rhouJ.SetTrueVector();
+   real_t mom = 0.;
+   for (int v = 0; v < vdim; v++)
+   {
+      const Vector rhouJ_v(rhouJ.GetTrueVector(), v*MJ_m.Height(), MJ_m.Height());
+      MJ_m.Mult(rhouJ_v, b);
+      mom += b.Sum();
+   }
+   MPI_Allreduce(MPI_IN_PLACE, &mom, 1, MFEM_MPI_REAL_T, MPI_SUM, pfes_H1.GetComm());
+   return mom;
 }
 
 AdvectorThermoOper::AdvectorThermoOper(ParFiniteElementSpace &pfes_L2_)
@@ -2788,9 +2964,38 @@ void SolutionTransfer_L2::TransferEnergyJac_Remap2Lagr(
 }
 
 
-SolutionTransfer_H1::SolutionTransfer_H1(const Array<int> &v_ess_tdofs_)
-: v_ess_tdofs(v_ess_tdofs_)
+SolutionTransfer_H1::SolutionTransfer_H1(const Array<int> &v_ess_tdofs_, const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir)
+: v_ess_tdofs(v_ess_tdofs_), ir_rho(ir)
 {
+   const ParMesh &pmesh = *pfes_H1_s.GetParMesh();
+
+   // Interpolation matrix and lumped diagonal
+   RefMassIntegrator mi(&ir_rho);
+   Vector mJ_g[Geometry::NUM_GEOMETRIES];
+   Array<Geometry::Type> geoms;
+   pmesh.GetGeometries(pmesh.Dimension(), geoms);
+   const FiniteElementCollection *fec_H1 = pfes_H1_s.FEColl();
+   IsoparametricTransformation Tr; // dummy
+   for (Geometry::Type g : geoms)
+   {
+      const FiniteElement *fe = fec_H1->GetFE(g, fec_H1->GetOrder());
+      mi.AssembleElementMatrix(*fe, Tr, MJ[g]);
+      MJ[g].GetRowSums(mJ_g[g]);
+   }
+
+   // Assemble the lumped mass matrix
+   Vector mJ_loc(pfes_H1_s.GetVSize());
+   Array<int> dofs;
+   mJ_loc = 0.;
+   const int NE = pmesh.GetNE();
+   for (int k = 0; k < NE; k++)
+   {
+      pfes_H1_s.GetElementDofs(k, dofs);
+      Geometry::Type g = pfes_H1_s.GetFE(k)->GetGeomType();
+      mJ_loc.AddElementVector(dofs, mJ_g[g]);
+   }
+   mJ.SetSize(pfes_H1_s.GetTrueVSize());
+   pfes_H1_s.GetProlongationMatrix()->MultTranspose(mJ_loc, mJ);
 }
 
 void SolutionTransfer_H1::TransferVelocity_Lagr2Remap(const ParGridFunction &vel_Lag, ParGridFunction &vel)
@@ -2861,6 +3066,133 @@ void SolutionTransfer_H1::TransferVelocity_Remap2Lagr(const ParGridFunction &vel
    // M->Mult(V, RHS_V);
    // RHS_V /= M_L;
    // vel_Lag.Distribute(RHS_V);
+}
+
+void SolutionTransfer_H1::TransferJac_Larg2Remap(ParGridFunction &detJ)
+{
+   ParFiniteElementSpace &pfes_H1_s = *detJ.ParFESpace();
+
+   ConstantCoefficient one;
+   ParLinearForm b(&pfes_H1_s);
+   b.AddDomainIntegrator(new DomainLFIntegrator(one, &ir_rho));
+   b.Assemble();
+
+   Vector B(pfes_H1_s.GetTrueVSize());
+   b.ParallelAssemble(B);
+   Vector detJ_tv(pfes_H1_s.GetTrueVSize());
+   for (int i = 0; i < detJ_tv.Size(); i++)
+      detJ_tv(i) = B(i) / mJ(i);
+   detJ.Distribute(detJ_tv);
+}
+
+void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(
+   const Vector &rhoDetJw, const ParGridFunction &vel, ParGridFunction &rhouJ)
+{
+   ParFiniteElementSpace &pfes_H1_Lag = *vel.ParFESpace();
+   ParFiniteElementSpace &pfes_H1 = *rhouJ.ParFESpace();
+   const int vdim = pfes_H1.GetVDim();
+   Vector b(pfes_H1.GetVSize()); b = 0.;
+   DenseMatrix vel_k, b_k;
+   Vector shape_Lag, shape, vel_q(vdim);
+   Array<int> vdofs_Lag, vdofs;
+   const int NE = pfes_H1.GetNE();
+   const int nqp = ir_rho.GetNPoints();
+   for(int k = 0; k < NE; k++)
+   {
+      const FiniteElement &fe_Lag = *pfes_H1_Lag.GetFE(k);
+      const FiniteElement &fe = *pfes_H1.GetFE(k);
+      const int ndofs_Lag = fe_Lag.GetDof();
+      const int ndofs = fe.GetDof();
+      shape_Lag.SetSize(ndofs_Lag);
+      shape.SetSize(ndofs);
+      pfes_H1_Lag.GetElementVDofs(k, vdofs_Lag);
+      pfes_H1.GetElementVDofs(k, vdofs);
+      vel_k.SetSize(ndofs_Lag, vdim);
+      vel.GetSubVector(vdofs_Lag, vel_k.GetData());
+      b_k.SetSize(ndofs, vdim);
+      b_k = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe_Lag.CalcShape(ip, shape_Lag);
+         fe.CalcShape(ip, shape);
+         vel_k.MultTranspose(shape_Lag, vel_q);
+         const real_t w = rhoDetJw(k * nqp + q);
+         for (int v = 0; v < vdim; v++)
+         {
+            Vector b_kv;
+            b_k.GetColumnReference(v, b_kv);
+            b_kv.Add(w * vel_q(v), shape);
+         }
+      }
+      b.AddElementVector(vdofs, b_k.GetData());
+   }
+
+   Vector B(pfes_H1.GetTrueVSize());
+   pfes_H1.GetProlongationMatrix()->MultTranspose(b, B);
+   Vector rhouJ_tv(pfes_H1.GetTrueVSize());
+   for (int i = 0; i < mJ.Size(); i++)
+      for (int v = 0; v < vdim; v++)
+         rhouJ_tv(i + v*mJ.Size()) = B(i + v*mJ.Size()) / mJ(i);
+   rhouJ.Distribute(rhouJ_tv);
+}
+
+void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhouJ, ParGridFunction &vel)
+{
+   ParFiniteElementSpace &pfes_H1_Lag = *vel.ParFESpace();
+   ParFiniteElementSpace &pfes_H1 = *rhouJ.ParFESpace();
+   const int vdim = pfes_H1.GetVDim();
+   Vector m(pfes_H1_Lag.GetVSize()); m = 0.;
+   Vector b(pfes_H1_Lag.GetVSize()); b = 0.;
+   DenseMatrix rhouJ_k, m_k, b_k;
+   Vector shape_Lag, shape, rhouJ_q(vdim);
+   Array<int> vdofs_Lag, vdofs;
+   const int NE = pfes_H1.GetNE();
+   const int nqp = ir_rho.GetNPoints();
+   for(int k = 0; k < NE; k++)
+   {
+      const FiniteElement &fe_Lag = *pfes_H1_Lag.GetFE(k);
+      const FiniteElement &fe = *pfes_H1.GetFE(k);
+      const int ndofs_Lag = fe_Lag.GetDof();
+      const int ndofs = fe.GetDof();
+      shape_Lag.SetSize(ndofs_Lag);
+      shape.SetSize(ndofs);
+      pfes_H1_Lag.GetElementVDofs(k, vdofs_Lag);
+      pfes_H1.GetElementVDofs(k, vdofs);
+      rhouJ_k.SetSize(ndofs, vdim);
+      rhouJ.GetSubVector(vdofs, rhouJ_k.GetData());
+      m_k.SetSize(ndofs_Lag, vdim);
+      m_k = 0.;
+      b_k.SetSize(ndofs_Lag, vdim);
+      b_k = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe_Lag.CalcShape(ip, shape_Lag);
+         fe.CalcShape(ip, shape);
+         rhouJ_k.MultTranspose(shape, rhouJ_q);
+         const real_t w = rhoDetJw(k * nqp + q);
+         for (int v = 0; v < vdim; v++)
+         {
+            Vector m_kv, b_kv;
+            m_k.GetColumnReference(v, m_kv);
+            b_k.GetColumnReference(v, b_kv);
+            m_kv.Add(w, shape_Lag);
+            b_kv.Add(ip.weight * rhouJ_q(v), shape_Lag);
+         }
+      }
+      m.AddElementVector(vdofs_Lag, m_k.GetData());
+      b.AddElementVector(vdofs_Lag, b_k.GetData());
+   }
+
+   Vector M(pfes_H1_Lag.GetTrueVSize());
+   pfes_H1_Lag.GetProlongationMatrix()->MultTranspose(m, M);
+   Vector B(pfes_H1_Lag.GetTrueVSize());
+   pfes_H1_Lag.GetProlongationMatrix()->MultTranspose(b, B);
+   Vector vel_tv(pfes_H1_Lag.GetTrueVSize());
+   for (int i = 0; i < M.Size(); i++)
+      vel_tv(i) = B(i) / M(i);
+   vel.Distribute(vel_tv);
 }
 
 void LocalInverseHOSolver::CalcHOSolution(const Vector &u, Vector &du) const
