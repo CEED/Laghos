@@ -3142,6 +3142,9 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw,
    ParFiniteElementSpace &pfes_H1_Lag = *vel.ParFESpace();
    ParFiniteElementSpace &pfes_H1 = *rhouJ.ParFESpace();
    const int vdim = pfes_H1.GetVDim();
+
+#if 1
+   // H1 lumped projection
    Vector m(pfes_H1_Lag.GetVSize()); m = 0.;
    Vector b(pfes_H1_Lag.GetVSize()); b = 0.;
    DenseMatrix rhouJ_k, m_k, b_k;
@@ -3193,6 +3196,84 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw,
    for (int i = 0; i < M.Size(); i++)
       vel_tv(i) = B(i) / M(i);
    vel.Distribute(vel_tv);
+#else
+   // H1 projection
+   ParFiniteElementSpace pfes_H1_Lag_s(pfes_H1_Lag.GetParMesh(), pfes_H1_Lag.FEColl());
+   ParBilinearForm Mv(&pfes_H1_Lag_s);
+   Vector b(pfes_H1_Lag.GetVSize()); b = 0.;
+   DenseMatrix rhouJ_k, m_k, b_k;
+   Vector shape_Lag, shape, rhouJ_q(vdim);
+   Array<int> vdofs_Lag, vdofs;
+   const int NE = pfes_H1.GetNE();
+   const int nqp = ir_rho.GetNPoints();
+   for(int k = 0; k < NE; k++)
+   {
+      const FiniteElement &fe_Lag = *pfes_H1_Lag.GetFE(k);
+      const FiniteElement &fe = *pfes_H1.GetFE(k);
+      const int ndofs_Lag = fe_Lag.GetDof();
+      const int ndofs = fe.GetDof();
+      shape_Lag.SetSize(ndofs_Lag);
+      shape.SetSize(ndofs);
+      pfes_H1_Lag.GetElementVDofs(k, vdofs_Lag);
+      pfes_H1.GetElementVDofs(k, vdofs);
+      rhouJ_k.SetSize(ndofs, vdim);
+      rhouJ.GetSubVector(vdofs, rhouJ_k.GetData());
+      m_k.SetSize(ndofs_Lag);
+      m_k = 0.;
+      b_k.SetSize(ndofs_Lag, vdim);
+      b_k = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe_Lag.CalcShape(ip, shape_Lag);
+         fe.CalcShape(ip, shape);
+         rhouJ_k.MultTranspose(shape, rhouJ_q);
+
+         // right hand side
+         for (int v = 0; v < vdim; v++)
+         {
+            Vector b_kv;
+            b_k.GetColumnReference(v, b_kv);
+            b_kv.Add(ip.weight * rhouJ_q(v), shape_Lag);
+         }
+         const real_t w = rhoDetJw(k * nqp + q);
+         AddMult_a_VVt(w, shape_Lag, m_k);
+      }
+
+      // mass matrix
+      Mv.AssembleElementMatrix(k, m_k);
+      b.AddElementVector(vdofs_Lag, b_k.GetData());
+   }
+
+   Mv.Assemble();
+   Mv.Finalize();
+   HypreParMatrix &Mv_m = *Mv.ParallelAssembleInternalMatrix();
+
+   const int ntdofs = pfes_H1_Lag_s.GetTrueVSize();
+   Vector B(ntdofs * vdim);
+   pfes_H1_Lag.GetProlongationMatrix()->MultTranspose(b, B);
+   Vector X(ntdofs * vdim);
+   
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+   GMRESSolver lin_solver(pfes_H1_Lag_s.GetComm());
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetRelTol(1e-10);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(3);
+   lin_solver.SetOperator(Mv_m);
+
+   Vector X_v, B_v;
+
+   for (int v = 0; v < vdim; v++)
+   {
+      B_v.MakeRef(B, v*ntdofs, ntdofs);
+      X_v.MakeRef(X, v*ntdofs, ntdofs);
+      lin_solver.Mult(B_v, X_v);
+   }
+   vel.Distribute(X);
+#endif
 }
 
 void LocalInverseHOSolver::CalcHOSolution(const Vector &u, Vector &du) const
