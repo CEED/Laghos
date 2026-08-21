@@ -1497,7 +1497,7 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    MJ.Assemble();
    MJ.Finalize();
    MJ.ParallelAssembleInternalMatrix();
-   MJ.ParallelEliminateTDofs(v_ess_tdofs);
+   //MJ.ParallelEliminateTDofs(v_ess_tdofs);
 }
 
 void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
@@ -1561,7 +1561,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    {
       Vector RHS_v(RHS, v*ntdof, ntdof);
       X = 0.;
-      MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS_v);
+      //MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS_v);
       
       lin_solver.Mult(RHS_v, X);
       
