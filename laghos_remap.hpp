@@ -421,7 +421,7 @@ protected:
    std::unique_ptr<SolutionTransfer_L2> trans;
    mutable ParGridFunction detJ;
 
-   class RefConvectionIntegrator : public NonlinearFormIntegrator
+   class RefConvectionIntegrator : public BilinearFormIntegrator
    {
       const ParGridFunction &f;
       DenseMatrix dshape;
@@ -429,15 +429,14 @@ protected:
 
    public:
       RefConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
-      : NonlinearFormIntegrator(ir), f(flux) { }
+      : BilinearFormIntegrator(ir), f(flux) { }
 
-      void AssembleElementVector(const FiniteElement &el,
-                                 ElementTransformation &Trans,
-                                 const Vector &elfun,
-                                 Vector &elvec) override;
+      void AssembleElementMatrix(const FiniteElement &fe,
+                                 ElementTransformation &Tr,
+                                 DenseMatrix &elmat) override;
    };
 
-   class RefFaceConvectionIntegrator : public NonlinearFormIntegrator
+   class RefFaceConvectionIntegrator : public BilinearFormIntegrator
    {
       const ParGridFunction &f;
       Vector shape1, shape2, shape_face, f_f;
@@ -445,13 +444,12 @@ protected:
 
    public:
       RefFaceConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
-      : NonlinearFormIntegrator(ir), f(flux) { }
+      : BilinearFormIntegrator(ir), f(flux) { }
 
-      void AssembleFaceVector(const FiniteElement &fe1, 
+      void AssembleFaceMatrix(const FiniteElement &fe1, 
                               const FiniteElement &fe2,
                               FaceElementTransformations &Trans,
-                              const Vector &elfun,
-                              Vector &elvec) override;
+                              DenseMatrix &elmat) override;
    };
 
 public:
