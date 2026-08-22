@@ -18,6 +18,8 @@
 #include "laghos_assembly.hpp"
 #include "laghos_solver.hpp"
 
+#define EMPTY_ZONE_TOL 1e-12
+
 using namespace std;
 namespace mfem
 {
@@ -359,15 +361,14 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
 
    // Update the quadrature of the Lagrangian invariant
 
-   ParMesh &pmesh_lagr = *vel.ParFESpace()->GetParMesh();
-   const int NE  = pmesh_lagr.GetNE();
+   const int NE  = pmesh.GetNE();
    const int nqp = ir_rho.GetNPoints();
 
    Vector rho_vals(nqp);
    for (int k = 0; k < NE; k++)
    {
       // Must use the space of the results.
-      ElementTransformation &T = *pmesh_lagr.GetElementTransformation(k);
+      ElementTransformation &T = *pmesh.GetElementTransformation(k);
       rho0_gf.GetValues(T, ir_rho, rho_vals);
       for (int q = 0; q < nqp; q++)
       {
@@ -638,7 +639,15 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
 
 void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
 {
-   //if (op_th) { op_th->LimitUpdate(dt, U, dU); }
+   // Thermodynamic limiting.
+   if (op_th)
+   {
+      // Here we assume the thermodynamic state is in one piece
+      const Vector th(const_cast<Vector&>(U), offsets[RemapAdvector::Density], op_th->Width());
+      Vector dth(dU, offsets[RemapAdvector::Density], op_th->Width());
+      auto *gcop_th = static_cast<AdvectorThermoGeomConsOper*>(op_th.get());
+      gcop_th->LimitUpdate(dt, th, dth);
+   }
 }
 
 void AdvectorVelocityOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const Vector &v, Vector &d_v) const
@@ -1200,25 +1209,34 @@ void AdvectorVelocityOper::ComputeVelocityMinMax(const Vector &v, Array<double> 
 
 }
 
-void AdvectorThermoNonconservativeOper::ComputeElementsMinMax(
-   const ParGridFunction &gf, Vector &el_min, Vector &el_max) const
+void AdvectorThermoOper::ComputeElementsMinMax(
+   const Vector &u, Vector &u_min, Vector &u_max,
+   const Array<bool> *active_el, const Array<bool> *active_dof) const
 {
-   ParFiniteElementSpace &pfes = *gf.ParFESpace();
-   const int NE = pfes.GetNE(), ndof = pfes.GetFE(0)->GetDof();
+   const int NE = pfes_L2.GetNE(), ndof = pfes_L2.GetFE(0)->GetDof();
+   int dof_id;
+   u.HostRead(); u_min.HostReadWrite(); u_max.HostReadWrite();
    for (int k = 0; k < NE; k++)
    {
-      el_min(k) = numeric_limits<double>::infinity();
-      el_max(k) = -numeric_limits<double>::infinity();
+      u_min(k) = numeric_limits<double>::infinity();
+      u_max(k) = -numeric_limits<double>::infinity();
+
+      // Inactive elements don't affect the bounds.
+      if (active_el && (*active_el)[k] == false) { continue; }
 
       for (int i = 0; i < ndof; i++)
       {
-         el_min(k) = min(el_min(k), gf(k*ndof + i));
-         el_max(k) = max(el_max(k), gf(k*ndof + i));
+         dof_id = k*ndof + i;
+         // Inactive dofs don't affect the bounds.
+         if (active_dof && (*active_dof)[dof_id] == false) { continue; }
+
+         u_min(k) = min(u_min(k), u(dof_id));
+         u_max(k) = max(u_max(k), u(dof_id));
       }
    }
 }
 
-void AdvectorThermoNonconservativeOper::ComputeSparsityBounds(
+void AdvectorThermoOper::ComputeSparsityBounds(
    const ParFiniteElementSpace &pfes, const Vector &el_min, const Vector &el_max,
    Vector &dof_min, Vector &dof_max) const
 {
@@ -1928,11 +1946,67 @@ AssembleFaceMatrix(const FiniteElement &el1, const FiniteElement &el2,
 AdvectorThermoGeomConsOper::AdvectorThermoGeomConsOper(
    const IntegrationRule &ir_rho_, ParFiniteElementSpace &pfes_L2_)
    : AdvectorThermoOper(pfes_L2_), ir_rho(ir_rho_),
-   pfes_vL2(pfes_L2.GetParMesh(), pfes_L2.FEColl(), NVars), detJ(&pfes_L2)
+   pfes_vL2(pfes_L2.GetParMesh(), pfes_L2.FEColl(), NVars), detJ(&pfes_L2),
+   MJ(pfes_L2.GetVSize()), KJ(pfes_L2.GetVSize(), pfes_L2.GetVSize() + pfes_L2.GetFaceNbrVSize())
 {
-   
    // Solution transfer
    trans = make_unique<SolutionTransfer_L2>(pfes_L2, ir_rho);
+
+   // Lumped mass matrix
+   MJ_lumped.SetSize(pfes_L2.GetVSize());
+   const int NE = pfes_L2.GetNE();
+   Vector mJ_k;
+   Array<int> dofs;
+   for (int k = 0; k < NE; k++)
+   {
+      const FiniteElement &fe = *pfes_L2.GetFE(k);
+      Geometry::Type g = fe.GetGeomType();
+      const DenseMatrix &MJ_k = trans->GetRefMassMatrix(g);
+      MJ_k.GetRowSums(mJ_k);
+
+      pfes_L2.GetElementDofs(k, dofs);
+      MJ.AddSubMatrix(dofs, dofs, MJ_k);
+      MJ_lumped.SetSubVector(dofs, mJ_k);
+   }
+   MJ.Finalize();
+
+   // Propagator matrix - interior faces
+   const ParMesh &pmesh = *pfes_L2.GetParMesh();
+   const int nfaces = pmesh.GetNumFaces();
+   DenseMatrix K_f;
+   Array<int> dofs2;
+   for (int f = 0; f < nfaces; f++)
+   {
+      int el1, el2;
+      pmesh.GetFaceElements(f, &el1, &el2);
+      if (el2 < 0) { continue; }
+      pfes_L2.GetElementDofs(el1, dofs);
+      pfes_L2.GetElementDofs(el2, dofs2);
+      dofs.Append(dofs2);
+      K_f.SetSize(dofs.Size());
+      K_f = 0.; // dummy
+      KJ.AddSubMatrix(dofs, dofs, K_f, 0);
+   }
+
+   // Propagator matrix - shared faces
+   const int nshared = pmesh.GetNSharedFaces();
+   for (int sf = 0; sf < nshared; sf++)
+   {
+      int el1, el2;
+      const int f = pmesh.GetSharedFace(sf);
+      pmesh.GetFaceElements(f, &el1, &el2);
+      pfes_L2.GetElementDofs(el1, dofs);
+      pfes_L2.GetFaceNbrElementVDofs(-1-el2, dofs2);
+      for (int i = 0; i < dofs2.Size(); i++)
+      {
+         dofs2[i] += KJ.Height();
+      }
+      dofs2.Append(dofs);
+      K_f.SetSize(dofs.Size(), dofs2.Size());
+      K_f = 0.; // dummy
+      KJ.AddSubMatrix(dofs, dofs2, K_f, 0);
+   }
+   KJ.Finalize(0);
 }
 
 void AdvectorGeomConsOper::ImplicitSolveFluxRHS(Vector &rhs) const
@@ -2168,6 +2242,9 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
    trans->TransferJac_Larg2Remap(detJ);
    detJ.ExchangeFaceNbrData();
 
+   // Propagator
+
+   KJ = 0.;
    RefConvectionIntegrator Ki(flux, &ir_rho);
    RefFaceConvectionIntegrator Kfi(flux);
 
@@ -2188,17 +2265,17 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
                                *pfes_L2.GetElementTransformation(k),
                                K_z);
 
+      // Reduced the quantity to the non-conservative form
+      K_z.InvRightScaling(detJ_z);
+
+      KJ.AddSubMatrix(dofs, dofs, K_z);
+
       U_gf.GetSubVector(vdofs, x_z);
       dbx_z.SetSize(x_z.Size());
 
       for(int v = 0; v < NVars; v++)
       {
          Vector x_zv(x_z, v*ndof, ndof);
-
-         // Reduced the quantity to the non-conservative form
-         for(int i = 0; i < ndof; i++)
-            x_zv(i) /= detJ_z(i);
-
          Vector dbx_zv(dbx_z, v*ndof, ndof);
          K_z.Mult(x_zv, dbx_zv);
       }
@@ -2236,17 +2313,17 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
 
       Kfi.AssembleFaceMatrix(*fe1, *fe2, *ftr, K_f);
 
+      // Reduced the quantity to the non-conservative form
+      K_f.InvRightScaling(detJ_z);
+
+      KJ.AddSubMatrix(dofs, dofs, K_f);
+
       U_gf.GetSubVector(vdofs, x_z);
       dbx_z.SetSize(x_z.Size());
 
       for(int v = 0; v < NVars; v++)
       {
          Vector x_zv(x_z, v*ndof, ndof);
-
-         // Reduced the quantity to the non-conservative form
-         for(int i = 0; i < ndof; i++)
-            x_zv(i) /= detJ_z(i);
-
          Vector dbx_zv(dbx_z, v*ndof, ndof);
          K_f.Mult(x_zv, dbx_zv);
       }
@@ -2282,6 +2359,13 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
       K_fz.CopyMN(K_f, ndof, ndof, 0, 0);
       K_fnbr.CopyMN(K_f, ndof, ndof_nbr, 0, ndof);
 
+      // Reduced the quantity to the non-conservative form
+      K_fz.InvRightScaling(detJ_z);
+      K_fnbr.InvRightScaling(detJ_nbr);
+
+      KJ.AddSubMatrix(dofs, dofs, K_fz);
+      KJ.AddSubMatrix(dofs, dofs_nbr, K_fnbr);
+
       U_gf.GetSubVector(vdofs, x_z);
       U_gf.FaceNbrData().GetSubVector(vdofs_nbr, x_nbr);
       dbx_z.SetSize(x_z.Size());
@@ -2289,17 +2373,7 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
       for(int v = 0; v < NVars; v++)
       {
          Vector x_zv(x_z, v*ndof, ndof);
-
-         // Reduced the quantity to the non-conservative form
-         for(int i = 0; i < ndof; i++)
-            x_zv(i) /= detJ_z(i);
-
          Vector x_nbrv(x_nbr, v*ndof_nbr, ndof_nbr);
-
-         // Reduced the quantity to the non-conservative form
-         for(int i = 0; i < ndof_nbr; i++)
-            x_nbrv(i) /= detJ_nbr(i);
-
          Vector dbx_zv(dbx_z, v*ndof, ndof);
          K_fz.Mult(x_zv, dbx_zv);
          K_fnbr.AddMult(x_nbrv, dbx_zv);
@@ -2329,6 +2403,66 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
 
 void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
 {
+   // Block view
+   const BlockVector bU(const_cast<Vector&>(U), offsets);
+   BlockVector bdU(dU, offsets);
+
+   // LO solution
+   DiscreteUpwindLOSolver solver_lo(pfes_L2, KJ, MJ_lumped);
+   FluxBasedFCT fct(pfes_L2, dt, KJ, solver_lo.GetKmap(), MJ);
+
+   const int NE = pfes_L2.GetNE();
+   const int ndofs = pfes_L2.GetVSize();
+   Vector el_min(NE), el_max(NE);
+   Vector dof_min(ndofs), dof_max(ndofs);
+   Vector dU_v_LO(ndofs), u_v(ndofs), U_vm1_new(ndofs);
+   Array<bool> u_bool_el, u_bool_dofs, u_bool_el_new, u_bool_dofs_new;
+
+   for (int v = 0; v < NVars; v++)
+   {
+      const Vector &U_vm1 = (v > 0)?(bU.GetBlock(v-1)):(detJ);
+      const Vector &U_v = bU.GetBlock(v);
+
+      // low-order solution
+
+      solver_lo.CalcLOSolution(U_v, dU_v_LO);
+
+      // compute ratio
+
+      ComputeRatio(NE, U_v, U_vm1, u_v, u_bool_el, u_bool_dofs);
+
+      // element min/max
+
+      ComputeElementsMinMax(u_v, dof_min, dof_max, &u_bool_el, &u_bool_dofs);
+
+      // dof min/max
+
+      ComputeSparsityBounds(pfes_L2, el_min, el_max, dof_min, dof_max);
+
+      // evole u and get the new active dofs
+      if (v > 0)
+      {
+         const Vector &dU_vm1 = bdU.GetBlock(v-1);
+         add(1.0, U_vm1, dt, dU_vm1, U_vm1_new);
+         ComputeBoolIndicators(NE, U_vm1_new, u_bool_el_new, u_bool_dofs_new);
+      }
+      else
+      {
+         u_bool_el_new.SetSize(NE);
+         u_bool_el_new = true;
+         u_bool_dofs_new.SetSize(ndofs);
+         u_bool_dofs_new = true;
+      }
+
+      // FCT
+
+      const ParGridFunction U_v_gf(&pfes_L2, const_cast<Vector&>(U_v));
+      const_cast<ParGridFunction&>(U_v_gf).ExchangeFaceNbrData();
+      Vector &dU_v = bdU.GetBlock(v);
+
+      fct.CalcFCTProduct(U_v_gf, MJ_lumped, dU_v, dU_v_LO,
+         dof_min, dof_max, U_vm1, u_bool_el_new, u_bool_dofs_new, dU_v);
+   }
 }
 
 real_t AdvectorThermoGeomConsOper::Mass(ParGridFunction &rhoJ) const
@@ -3403,6 +3537,160 @@ void DiscreteUpwindLOSolver::ApplyDiscreteUpwindMatrix(ParGridFunction &u,
    }
 }
 
+void FCTSolver::CalcCompatibleLOProduct(const ParGridFunction &us,
+                                        const Vector &m, const Vector &d_us_HO,
+                                        Vector &s_min, Vector &s_max,
+                                        const Vector &u_new,
+                                        const Array<bool> &active_el,
+                                        const Array<bool> &active_dofs,
+                                        Vector &d_us_LO_new)
+{
+   const double eps = 1e-12;
+   int dof_id;
+
+   // Compute a compatible low-order solution.
+   const int NE = us.ParFESpace()->GetNE();
+   const int ndofs = us.Size() / NE;
+
+   Vector s_min_loc, s_max_loc;
+
+   d_us_LO_new = 0.0;
+
+   for (int k = 0; k < NE; k++)
+   {
+      if (active_el[k] == false) { continue; }
+
+      double mass_us = 0.0, mass_u = 0.0;
+      for (int j = 0; j < ndofs; j++)
+      {
+         const double us_new_HO = us(k*ndofs + j) + dt * d_us_HO(k*ndofs + j);
+         mass_us += us_new_HO * m(k*ndofs + j);
+         mass_u  += u_new(k*ndofs + j) * m(k*ndofs + j);
+      }
+      double s_avg = mass_us / mass_u;
+
+      // Min and max of s using the full stencil of active dofs.
+      s_min_loc.SetDataAndSize(s_min.GetData() + k*ndofs, ndofs);
+      s_max_loc.SetDataAndSize(s_max.GetData() + k*ndofs, ndofs);
+      double smin = numeric_limits<double>::infinity(),
+             smax = -numeric_limits<double>::infinity();
+      for (int j = 0; j < ndofs; j++)
+      {
+         if (active_dofs[k*ndofs + j] == false) { continue; }
+         smin = min(smin, s_min_loc(j));
+         smax = max(smax, s_max_loc(j));
+      }
+
+      // Fix inconsistencies due to round-off and the usage of local bounds.
+      for (int j = 0; j < ndofs; j++)
+      {
+         if (active_dofs[k*ndofs + j] == false) { continue; }
+
+         // Check if there's a violation, s_avg < s_min, due to round-offs that
+         // are inflated by the division of a small number (the 2nd check means
+         // s_avg = mass_us / mass_u > s_min up to round-off in mass_us).
+         if (s_avg < smin &&
+             mass_us + eps > smin * mass_u) { s_avg = smin; }
+         // As above for the s_max.
+         if (s_avg > smax &&
+             mass_us - eps < smax * mass_u) { s_avg = smax; }
+
+#ifdef REMHOS_FCT_PRODUCT_DEBUG
+         // Check if s_avg = mass_us / mass_u is within the bounds of the full
+         // stencil of active dofs.
+         if (mass_us + eps < smin * mass_u ||
+             mass_us - eps > smax * mass_u ||
+             s_avg + eps < smin ||
+             s_avg - eps > smax)
+         {
+            std::cout << "---\ns_avg element bounds: "
+                      << smin << " " << s_avg << " " << smax << std::endl;
+            std::cout << "Element " << k << std::endl;
+            std::cout << "Masses " << mass_us << " " << mass_u << std::endl;
+            PrintCellValues(k, NE, u_new, "u_loc: ");
+
+            MFEM_ABORT("s_avg is not in the full stencil bounds!");
+         }
+#endif
+
+         // When s_avg is not in the local bounds for some dof (it should be
+         // within the full stencil of active dofs), reset the bounds to s_avg.
+         if (s_avg + eps < s_min_loc(j)) { s_min_loc(j) = s_avg; }
+         if (s_avg - eps > s_max_loc(j)) { s_max_loc(j) = s_avg; }
+      }
+
+      // Take into account the compatible low-order solution.
+      for (int j = 0; j < ndofs; j++)
+      {
+         // In inactive dofs we get u_new*s_avg ~ 0, which should be fine.
+
+         // Compatible LO solution.
+         dof_id = k*ndofs + j;
+         d_us_LO_new(dof_id) = (u_new(dof_id) * s_avg - us(dof_id)) / dt;
+      }
+
+#ifdef REMHOS_FCT_PRODUCT_DEBUG
+      // Check the LO product solution.
+      double us_min, us_max;
+      for (int j = 0; j < ndofs; j++)
+      {
+         dof_id = k*ndofs + j;
+         if (active_dofs[dof_id] == false) { continue; }
+
+         us_min = s_min_loc(j) * u_new(dof_id);
+         us_max = s_max_loc(j) * u_new(dof_id);
+
+         if (s_avg * u_new(dof_id) + eps < us_min ||
+             s_avg * u_new(dof_id) - eps > us_max)
+         {
+            std::cout << "---\ns_avg * u: " << k << " "
+                      << us_min << " "
+                      << s_avg * u_new(dof_id) << " "
+                      << us_max << endl
+                      << u_new(dof_id) << " " << s_avg << endl
+                      << s_min_loc(j) << " " << s_max_loc(j) << "\n---\n";
+
+            MFEM_ABORT("s_avg * u not in bounds");
+         }
+      }
+#endif
+   }
+}
+
+void FCTSolver::ScaleProductBounds(const Vector &s_min, const Vector &s_max,
+                                   const Vector &u_new,
+                                   const Array<bool> &active_el,
+                                   const Array<bool> &active_dofs,
+                                   Vector &us_min, Vector &us_max)
+{
+   const int NE = pfes.GetNE();
+   const int ndofs = u_new.Size() / NE;
+   int dof_id;
+   us_min = 0.0;
+   us_max = 0.0;
+   for (int k = 0; k < NE; k++)
+   {
+      if (active_el[k] == false) { continue; }
+
+      // Rescale the bounds (s_min, s_max) -> (u*s_min, u*s_max).
+      for (int j = 0; j < ndofs; j++)
+      {
+         dof_id = k*ndofs + j;
+
+         // For inactive dofs, s_min and s_max are undefined (inf values).
+         if (active_dofs[dof_id] == false)
+         {
+            us_min(dof_id) = 0.0;
+            us_max(dof_id) = 0.0;
+            continue;
+         }
+
+         us_min(dof_id) = s_min(dof_id) * u_new(dof_id);
+         us_max(dof_id) = s_max(dof_id) * u_new(dof_id);
+      }
+   }
+}
+
 void FluxBasedFCT::CalcFCTSolution(const ParGridFunction &u, const Vector &m,
                                    const Vector &du_ho, const Vector &du_lo,
                                    const Vector &u_min, const Vector &u_max,
@@ -3426,6 +3714,88 @@ void FluxBasedFCT::CalcFCTSolution(const ParGridFunction &u, const Vector &m,
       UpdateSolutionAndFlux(du_lo_fct, m, gp, gm, flux_ij, du);
 
       du_lo_fct = du;
+   }
+}
+
+void FluxBasedFCT::CalcFCTProduct(const ParGridFunction &us, const Vector &m,
+                                  const Vector &d_us_HO, const Vector &d_us_LO,
+                                  Vector &s_min, Vector &s_max,
+                                  const Vector &u_new,
+                                  const Array<bool> &active_el,
+                                  const Array<bool> &active_dofs, Vector &d_us)
+{
+   // Construct the flux matrix (it gets recomputed every time).
+   ComputeFluxMatrix(us, d_us_HO, flux_ij);
+
+   us.HostRead();
+   d_us_LO.HostRead();
+   s_min.HostReadWrite();
+   s_max.HostReadWrite();
+   u_new.HostRead();
+   active_el.HostRead();
+   active_dofs.HostRead();
+
+   // Compute a compatible low-order solution.
+   Vector dus_lo_fct(us.Size()), us_min(us.Size()), us_max(us.Size());
+   CalcCompatibleLOProduct(us, m, d_us_HO, s_min, s_max, u_new,
+                           active_el, active_dofs, dus_lo_fct);
+   ScaleProductBounds(s_min, s_max, u_new, active_el, active_dofs,
+                      us_min, us_max);
+
+   // Update the flux matrix to a product-compatible version.
+   // Compute a compatible low-order solution.
+   const int NE = us.ParFESpace()->GetNE();
+   const int ndofs = us.Size() / NE;
+   Vector flux_el(ndofs), beta(ndofs);
+   DenseMatrix fij_el(ndofs);
+   fij_el = 0.0;
+   Array<int> dofs;
+   int dof_id;
+   for (int k = 0; k < NE; k++)
+   {
+      if (active_el[k] == false) { continue; }
+
+      // Take into account the compatible low-order solution.
+      for (int j = 0; j < ndofs; j++)
+      {
+         // In inactive dofs we get u_new*s_avg ~ 0, which should be fine.
+
+         dof_id = k*ndofs + j;
+         flux_el(j) = m(dof_id) * dt * (d_us_LO(dof_id) - dus_lo_fct(dof_id));
+         beta(j) = m(dof_id) * u_new(dof_id);
+      }
+
+      // Make the betas sum to 1, add the new compatible fluxes.
+      beta /= beta.Sum();
+      for (int j = 1; j < ndofs; j++)
+      {
+         for (int i = 0; i < j; i++)
+         {
+            fij_el(i, j) = beta(j) * flux_el(i) - beta(i) * flux_el(j);
+         }
+      }
+      pfes.GetElementDofs(k, dofs);
+      flux_ij.AddSubMatrix(dofs, dofs, fij_el);
+   }
+
+   // Iterated FCT correction.
+   // To get the LO compatible product solution (with s_avg), just do
+   // d_us = dus_lo_fct instead of the loop below.
+   for (int fct_iter = 0; fct_iter < 1; fct_iter++)
+   {
+      // Compute sums of incoming fluxes at each DOF.
+      AddFluxesAtDofs(flux_ij, gp, gm);
+
+      // Compute the flux coefficients (aka alphas) into gp and gm.
+      ComputeFluxCoefficients(us, dus_lo_fct, m, us_min, us_max, gp, gm);
+
+      // Apply the alpha coefficients to get the final solution.
+      // Update the fluxes for iterative FCT (when iter_cnt > 1).
+      UpdateSolutionAndFlux(dus_lo_fct, m, gp, gm, flux_ij, d_us);
+
+      ZeroOutEmptyDofs(active_el, active_dofs, d_us);
+
+      dus_lo_fct = d_us;
    }
 }
 
@@ -3578,6 +3948,97 @@ UpdateSolutionAndFlux(const Vector &du_lo, const Vector &m,
          if (j < s) { du(j) -= fij / m(j) / dt; }
 
          flux_data[k] -= fij;
+      }
+   }
+}
+
+void ComputeBoolIndicators(int NE, const Vector &u,
+                           Array<bool> &ind_elem, Array<bool> &ind_dofs)
+{
+   ind_elem.SetSize(NE);
+   ind_dofs.SetSize(u.Size());
+
+   ind_elem.HostWrite();
+   ind_dofs.HostWrite();
+   u.HostRead();
+
+   const int ndof = u.Size() / NE;
+   int dof_id;
+   for (int i = 0; i < NE; i++)
+   {
+      ind_elem[i] = false;
+      for (int j = 0; j < ndof; j++)
+      {
+         dof_id = i*ndof + j;
+         ind_dofs[dof_id] = (u(dof_id) > EMPTY_ZONE_TOL) ? true : false;
+
+         if (u(dof_id) > EMPTY_ZONE_TOL) { ind_elem[i] = true; }
+      }
+   }
+}
+
+void ComputeRatio(int NE, const Vector &us, const Vector &u,
+                  Vector &s, Array<bool> &bool_el, Array<bool> &bool_dof)
+{
+   ComputeBoolIndicators(NE, u, bool_el, bool_dof);
+
+   us.HostRead();
+   u.HostRead();
+   s.HostWrite();
+   bool_el.HostRead();
+   bool_dof.HostRead();
+
+   const int ndof = u.Size() / NE;
+   for (int i = 0; i < NE; i++)
+   {
+      if (bool_el[i] == false)
+      {
+         for (int j = 0; j < ndof; j++) { s(i*ndof + j) = 0.0; }
+         continue;
+      }
+
+      const double *u_el = &u(i*ndof), *us_el = &us(i*ndof);
+      double *s_el = &s(i*ndof);
+
+      // Average of the existing ratios. This does not target any kind of
+      // conservation. The only goal is to have s_avg between the max and min
+      // of us/u, over the active dofs.
+      int n = 0;
+      double sum = 0.0;
+      for (int j = 0; j < ndof; j++)
+      {
+         if (bool_dof[i*ndof + j])
+         {
+            sum += us_el[j] / u_el[j];
+            n++;
+         }
+      }
+      MFEM_VERIFY(n > 0, "Major error that makes no sense");
+      const double s_avg = sum / n;
+
+      for (int j = 0; j < ndof; j++)
+      {
+         s_el[j] = (bool_dof[i*ndof + j]) ? us_el[j] / u_el[j] : s_avg;
+      }
+   }
+}
+
+void ZeroOutEmptyDofs(const Array<bool> &ind_elem,
+                      const Array<bool> &ind_dofs, Vector &u)
+{
+   ind_elem.HostRead();
+   ind_dofs.HostRead();
+   u.HostReadWrite();
+
+   const int NE = ind_elem.Size();
+   const int ndofs = u.Size() / NE;
+   for (int k = 0; k < NE; k++)
+   {
+      if (ind_elem[k] == true) { continue; }
+
+      for (int i = 0; i < ndofs; i++)
+      {
+         if (ind_dofs[k*ndofs + i] == false) { u(k*ndofs + i) = 0.0; }
       }
    }
 }

@@ -371,6 +371,15 @@ protected:
    Array<int> offsets;
    real_t dt = 0.0;
 
+   // Piecewise min and max of gf over all elements.
+   void ComputeElementsMinMax(const Vector &u, Vector &el_min, Vector &el_max,
+                              const Array<bool> *active_el = nullptr,
+                              const Array<bool> *active_dof = nullptr) const;
+   // Bounds at dofs taking the current element and its face-neighbors.
+   void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
+                              const Vector &el_min, const Vector &el_max,
+                              Vector &dof_min, Vector &dof_max) const;
+
 public:
    AdvectorThermoOper(ParFiniteElementSpace &pfes_L2);
 
@@ -389,14 +398,6 @@ protected:
    mutable ScalarVectorProductCoefficient rho_u_coeff;
    mutable ParBilinearForm M_L2, M_L2_Lump, K_L2;
    mutable ParBilinearForm Mr_L2, Mr_L2_Lump, Kr_L2;
-
-   // Piecewise min and max of gf over all elements.
-   void ComputeElementsMinMax(const ParGridFunction &gf,
-                              Vector &el_min, Vector &el_max) const;
-   // Bounds at dofs taking the current element and its face-neighbors.
-   void ComputeSparsityBounds(const ParFiniteElementSpace &pfes,
-                              const Vector &el_min, const Vector &el_max,
-                              Vector &dof_min, Vector &dof_max) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.
@@ -420,6 +421,8 @@ protected:
    ParFiniteElementSpace pfes_vL2;
    std::unique_ptr<SolutionTransfer_L2> trans;
    mutable ParGridFunction detJ;
+   Vector MJ_lumped;
+   mutable SparseMatrix MJ, KJ;
 
    class RefConvectionIntegrator : public BilinearFormIntegrator
    {
@@ -589,12 +592,63 @@ public:
    Array<int> &GetKmap() { return K_smap; }
 };
 
-class FluxBasedFCT
+// Monotone, High-order, Conservative Solver.
+class FCTSolver
 {
 protected:
    ParFiniteElementSpace &pfes;
-   double dt;
+   real_t dt;
 
+   // Computes a compatible slope (piecewise constan = mass_us / mass_u).
+   // It could also update s_min and s_max, if required.
+   void CalcCompatibleLOProduct(const ParGridFunction &us,
+                                const Vector &m, const Vector &d_us_HO,
+                                Vector &s_min, Vector &s_max,
+                                const Vector &u_new,
+                                const Array<bool> &active_el,
+                                const Array<bool> &active_dofs,
+                                Vector &d_us_LO_new);
+   void ScaleProductBounds(const Vector &s_min, const Vector &s_max,
+                           const Vector &u_new, const Array<bool> &active_el,
+                           const Array<bool> &active_dofs,
+                           Vector &us_min, Vector &us_max);
+
+public:
+   FCTSolver(ParFiniteElementSpace &space,
+             real_t dt_)
+      : pfes(space), dt(dt_) { }
+
+   virtual ~FCTSolver() { }
+
+   virtual void UpdateTimeStep(real_t dt_new) { dt = dt_new; }
+
+   // Calculate du that satisfies the following:
+   // bounds preservation: u_min_i <= u_i + dt du_i <= u_max_i,
+   // conservation:        sum m_i (u_i + dt du_ho_i) = sum m_i (u_i + dt du_i).
+   // Some methods utilize du_lo as a backup choice, as it satisfies the above.
+   virtual void CalcFCTSolution(const ParGridFunction &u, const Vector &m,
+                                const Vector &du_ho, const Vector &du_lo,
+                                const Vector &u_min, const Vector &u_max,
+                                Vector &du) const = 0;
+
+   // Used in the case of product remap.
+   // Given the input, calculates d_us, so that:
+   // bounds preservation: s_min_i <= (us_i + dt d_us_i) / u_new_i <= s_max_i,
+   // conservation: sum m_i (us_i + dt d_us_HO_i) = sum m_i (us_i + dt d_us_i).
+   virtual void CalcFCTProduct(const ParGridFunction &us, const Vector &m,
+                               const Vector &d_us_HO, const Vector &d_us_LO,
+                               Vector &s_min, Vector &s_max,
+                               const Vector &u_new,
+                               const Array<bool> &active_el,
+                               const Array<bool> &active_dofs, Vector &d_us)
+   {
+      MFEM_ABORT("Product remap is not implemented for the chosen solver");
+   }
+};
+
+class FluxBasedFCT : public FCTSolver
+{
+protected:
    const SparseMatrix &K, &M;
    const Array<int> &K_smap;
 
@@ -617,7 +671,7 @@ public:
    FluxBasedFCT(ParFiniteElementSpace &space, double delta_t,
                 const SparseMatrix &adv_mat, const Array<int> &adv_smap,
                 const SparseMatrix &mass_mat)
-      : pfes(space), dt(delta_t),
+      : FCTSolver(space, delta_t),
         K(adv_mat), M(mass_mat), K_smap(adv_smap), flux_ij(adv_mat),
         gp(&pfes), gm(&pfes) { }
 
@@ -625,7 +679,23 @@ public:
                                 const Vector &du_ho, const Vector &du_lo,
                                 const Vector &u_min, const Vector &u_max,
                                 Vector &du) const;
+
+   virtual void CalcFCTProduct(const ParGridFunction &us, const Vector &m,
+                               const Vector &d_us_HO, const Vector &d_us_LO,
+                               Vector &s_min, Vector &s_max,
+                               const Vector &u_new,
+                               const Array<bool> &active_el,
+                               const Array<bool> &active_dofs, Vector &d_us);
 };
+
+void ComputeBoolIndicators(int NE, const Vector &u,
+                           Array<bool> &ind_elem, Array<bool> &ind_dofs);
+
+void ComputeRatio(int NE, const Vector &u_s, const Vector &u,
+                  Vector &s, Array<bool> &bool_el, Array<bool> &bool_dof);
+
+void ZeroOutEmptyDofs(const Array<bool> &ind_elem,
+                      const Array<bool> &ind_dofs, Vector &u);
 
 } // namespace ale
 
