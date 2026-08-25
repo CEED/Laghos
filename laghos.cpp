@@ -783,7 +783,7 @@ int main(int argc, char *argv[])
       }
    }
 
-   const bool BC_strong = false;
+   const bool BC_strong = true;
    if (BC_strong)
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
