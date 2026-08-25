@@ -639,6 +639,10 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
 
 void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
 {
+   // Move the mesh.
+   const double t = GetTime();
+   add(x0, t+dt, u, x_now);
+
    // Thermodynamic limiting.
    if (op_th)
    {
@@ -2448,6 +2452,9 @@ void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector 
       }
       else
       {
+         ParGridFunction U_vm1_new_gf(&pfes_L2, U_vm1_new);
+         trans->TransferJac_Larg2Remap(U_vm1_new_gf);
+
          u_bool_el_new.SetSize(NE);
          u_bool_el_new = true;
          u_bool_dofs_new.SetSize(ndofs);
@@ -2461,7 +2468,7 @@ void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector 
       Vector &dU_v = bdU.GetBlock(v);
 
       fct.CalcFCTProduct(U_v_gf, MJ_lumped, dU_v, dU_v_LO,
-         dof_min, dof_max, U_vm1, u_bool_el_new, u_bool_dofs_new, dU_v);
+         dof_min, dof_max, U_vm1_new, u_bool_el_new, u_bool_dofs_new, dU_v);
    }
 }
 
