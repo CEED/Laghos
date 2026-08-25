@@ -1099,11 +1099,29 @@ int main(int argc, char *argv[])
                       hydro.GetIntRule(), hydro.GetIntRule_b(),
                       remesh_dist, x_gf_opt, vis_remesh);
 
+         // Density
+         hydro.ComputeDensity(rho_gf);
+         real_t rho_min = rho_gf.Min();
+         MPI_Allreduce(MPI_IN_PLACE, &rho_min, 1, MFEM_MPI_REAL_T, MPI_MIN, pmesh->GetComm());
+         real_t rho_max = rho_gf.Max();
+         MPI_Allreduce(MPI_IN_PLACE, &rho_max, 1, MFEM_MPI_REAL_T, MPI_MAX, pmesh->GetComm());
+         if (Mpi::Root()) { cout << "pre: density: " << rho_min << " - " << rho_max << endl; }
+
+         // Momentum
+         real_t vel_min = v_gf.Min();
+         MPI_Allreduce(MPI_IN_PLACE, &vel_min, 1, MFEM_MPI_REAL_T, MPI_MIN, pmesh->GetComm());
+         real_t vel_max = v_gf.Max();
+         MPI_Allreduce(MPI_IN_PLACE, &vel_max, 1, MFEM_MPI_REAL_T, MPI_MAX, pmesh->GetComm());
          const real_t mom_pre = hydro.Momentum(v_gf);
-         if (Mpi::Root()) { cout << "pre: momentum:" << mom_pre << endl; }
+         if (Mpi::Root()) { cout << "pre: velocity: " << vel_min << " - " << vel_max << " momentum: " << mom_pre << endl; }
          
+         // Internal energy
+         real_t eps_min = e_gf.Min();
+         MPI_Allreduce(MPI_IN_PLACE, &eps_min, 1, MFEM_MPI_REAL_T, MPI_MIN, pmesh->GetComm());
+         real_t eps_max = e_gf.Max();
+         MPI_Allreduce(MPI_IN_PLACE, &eps_max, 1, MFEM_MPI_REAL_T, MPI_MAX, pmesh->GetComm());
          const real_t en_pre = hydro.InternalEnergy(e_gf);
-         if (Mpi::Root()) { cout << "pre: energy:" << en_pre << endl; }
+         if (Mpi::Root()) { cout << "pre: specific energy: " << eps_min << " - " << eps_max << " energy: " << en_pre << endl; }
 
          adv.InitFromLagr(x_gf, v_gf, hydro.GetIntRule(),
                           hydro.GetRhoDetJw(), e_gf);
@@ -1133,19 +1151,38 @@ int main(int argc, char *argv[])
          // Above we changed rho0_gf to reflect the mass matrices Coefficient.
          hydro.UpdateMassMatrices(rho0_gf_coeff);
 
+         // Density
+         rho_min = rho0_gf.Min();
+         MPI_Allreduce(MPI_IN_PLACE, &rho_min, 1, MFEM_MPI_REAL_T, MPI_MIN, pmesh->GetComm());
+         rho_max = rho0_gf.Max();
+         MPI_Allreduce(MPI_IN_PLACE, &rho_max, 1, MFEM_MPI_REAL_T, MPI_MAX, pmesh->GetComm());
+         if (Mpi::Root()) { cout << "post: density: " << rho_min << " - " << rho_max << endl; }
+
+         // Momentum
+         vel_min = v_gf.Min();
+         MPI_Allreduce(MPI_IN_PLACE, &vel_min, 1, MFEM_MPI_REAL_T, MPI_MIN, pmesh->GetComm());
+         vel_max = v_gf.Max();
+         MPI_Allreduce(MPI_IN_PLACE, &vel_max, 1, MFEM_MPI_REAL_T, MPI_MAX, pmesh->GetComm());
          const real_t mom_post = hydro.Momentum(v_gf);
          if (Mpi::Root())
          {
-            cout << "post: momentum: " << mom_post
+            cout << "post: velocity: " << vel_min << " - " << vel_max
+               << " momentum: " << mom_post
                << " diff: " << (mom_post - mom_pre)
                << " (" << (0.5 * (mom_post - mom_pre) / (mom_post + mom_pre)) << ")"
                << endl;
          }
 
+         // Internal energy
+         eps_min = e_gf.Min();
+         MPI_Allreduce(MPI_IN_PLACE, &eps_min, 1, MFEM_MPI_REAL_T, MPI_MIN, pmesh->GetComm());
+         eps_max = e_gf.Max();
+         MPI_Allreduce(MPI_IN_PLACE, &eps_max, 1, MFEM_MPI_REAL_T, MPI_MAX, pmesh->GetComm());
          const real_t en_post = hydro.InternalEnergy(e_gf);
          if (Mpi::Root())
          {
-            cout << "post: energy: " << en_post
+            cout << "post: specific energy: " << eps_min << " - " << eps_max
+               << " energy: " << en_post
                << " diff: " << (en_post - en_pre)
                << " (" << (0.5 * (en_post - en_pre) / (en_post + en_pre)) << ")"
                << endl;
