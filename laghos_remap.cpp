@@ -2437,7 +2437,7 @@ void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector 
 
       // element min/max
 
-      ComputeElementsMinMax(u_v, dof_min, dof_max, &u_bool_el, &u_bool_dofs);
+      ComputeElementsMinMax(u_v, el_min, el_max, &u_bool_el, &u_bool_dofs);
 
       // dof min/max
 
