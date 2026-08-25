@@ -1509,17 +1509,19 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
    RemapAdvector::RemapVelocity scheme, bool remap_v_s)
 : AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme, remap_v_s),
-  ir_rho(ir_rho_), MJ(&pfes_H1_s), detJ(&pfes_H1_s)
+  ir_rho(ir_rho_), MJ(&pfes_H1), detJ(&pfes_H1_s)
 {
    // Solution transfer
    trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, pfes_H1_s, ir_rho);
 
    // Interpolation matrix
-   MJ.AddDomainIntegrator(new SolutionTransfer_H1::RefMassIntegrator(&ir_rho));
+   auto *mi = new SolutionTransfer_H1::RefMassIntegrator(&ir_rho);
+   mi->SetVDim(pfes_H1.GetVDim());
+   MJ.AddDomainIntegrator(mi);
    MJ.Assemble();
    MJ.Finalize();
    MJ.ParallelAssembleInternalMatrix();
-   //MJ.ParallelEliminateTDofs(v_ess_tdofs);
+   MJ.ParallelEliminateTDofs(v_ess_tdofs);
 }
 
 void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
@@ -1574,22 +1576,16 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    lin_solver.SetOperator(*MJ.ParallelAssembleInternalMatrix());
 
    const int ntdof = pfes_H1_s.GetTrueVSize();
-   const int nvdof = pfes_H1_s.GetVSize();
 
-   Vector X(ntdof), RHS(ntdof * vdim);
+   Vector X(ntdof * vdim), RHS(ntdof * vdim);
    pfes_H1.GetProlongationMatrix()->MultTranspose(bdU, RHS);
 
-   for (int v = 0; v < vdim; v++)
-   {
-      Vector RHS_v(RHS, v*ntdof, ntdof);
-      X = 0.;
-      //MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS_v);
+   X = 0.;
+   MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS);
       
-      lin_solver.Mult(RHS_v, X);
+   lin_solver.Mult(RHS, X);
       
-      Vector dU_v(dU, v*nvdof, nvdof);
-      pfes_H1_s.GetProlongationMatrix()->Mult(X, dU_v);
-   }
+   pfes_H1.GetProlongationMatrix()->Mult(X, dU);
 }
 
 void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
@@ -1600,15 +1596,9 @@ real_t AdvectorVelocityGeomConsOper::Momentum(ParGridFunction &rhouJ) const
 {
    HypreParMatrix &MJ_m = *MJ.ParallelAssembleInternalMatrix();
    Vector b(MJ_m.Height());
-   const int vdim = pfes_H1.GetVDim();
    rhouJ.SetTrueVector();
-   real_t mom = 0.;
-   for (int v = 0; v < vdim; v++)
-   {
-      const Vector rhouJ_v(rhouJ.GetTrueVector(), v*MJ_m.Height(), MJ_m.Height());
-      MJ_m.Mult(rhouJ_v, b);
-      mom += b.Sum();
-   }
+   MJ_m.Mult(rhouJ.GetTrueVector(), b);
+   real_t mom = b.Sum();
    MPI_Allreduce(MPI_IN_PLACE, &mom, 1, MFEM_MPI_REAL_T, MPI_SUM, pfes_H1.GetComm());
    return mom;
 }
@@ -2519,14 +2509,33 @@ void SolutionTransfer_L2::RefMassIntegrator::AssembleElementMatrix(
    }
    const int nqp = ir->GetNPoints();
 
-   Vector shape(fe.GetDof());
-   elmat.SetSize(fe.GetDof());
+   const int ndof = fe.GetDof();
+   Vector shape(ndof);
+   elmat.SetSize(ndof * vdim);
    elmat = 0.;
+
+   DenseMatrix elmat_d;
+   if (vdim > 1)
+   {
+      elmat_d.SetSize(ndof);
+      elmat_d = 0.;
+   }
+   else
+   {
+      elmat_d.MakeRef(elmat.GetMemory(), 0, ndof, ndof);
+   }
+
    for (int q = 0; q < nqp; q++)
    {
       const IntegrationPoint &ip = ir->IntPoint(q);
       fe.CalcShape(ip, shape);
-      AddMult_a_VVt(ip.weight, shape, elmat);
+      AddMult_a_VVt(ip.weight, shape, elmat_d);
+   }
+
+   if (vdim > 1)
+   {
+      for (int v = 0; v < vdim; v++)
+         elmat.SetSubMatrix(v*ndof, v*ndof, elmat_d);
    }
 }
 

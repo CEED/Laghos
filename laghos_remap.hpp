@@ -490,9 +490,12 @@ protected:
    friend class SolutionTransfer_H1;
    class RefMassIntegrator : public BilinearFormIntegrator
    {
+      int vdim = 1;
    public:
       RefMassIntegrator(const IntegrationRule *ir = NULL)
       : BilinearFormIntegrator(ir) { }
+
+      void SetVDim(int vdim_) { vdim = vdim_; }
 
       void AssembleElementMatrix(const FiniteElement &el,
                                  ElementTransformation &Trans,
