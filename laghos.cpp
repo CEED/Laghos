@@ -291,8 +291,8 @@ int main(int argc, char *argv[])
    }
    if (strcmp(mesh_file, "data/square01_quad.mesh") == 0)
    {
-      blast_position[0] = 0.5;
-      blast_position[1] = 0.5;
+      blast_position[0] = 0.;
+      blast_position[1] = 0.;
    }
    if (strcmp(mesh_file, "data/circles3.mesh") == 0 ||
        strcmp(mesh_file, "data/circles4.mesh") == 0)
@@ -787,7 +787,7 @@ int main(int argc, char *argv[])
    if (BC_strong)
    {
       Array<int> ess_bdr(pmesh->bdr_attributes.Max()), dofs_marker, dofs_list;
-
+#if 0
       // Fix all.
       ess_bdr = 1;
       H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list);
@@ -795,18 +795,19 @@ int main(int argc, char *argv[])
       H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker);
       FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
       ess_vdofs.Append(dofs_list);
-
-      // for (int d = 0; d < pmesh->Dimension(); d++)
-      // {
-      //    // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
-      //    // i.e., we must enforce v_x/y/z = 0 for the velocity components.
-      //    ess_bdr = 0; ess_bdr[d] = 1;
-      //    H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
-      //    ess_tdofs.Append(dofs_list);
-      //    H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
-      //    FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
-      //    ess_vdofs.Append(dofs_list);
-      // }
+#else
+      for (int d = 0; d < pmesh->Dimension(); d++)
+      {
+         // Attributes 1/2/3 correspond to fixed-x/y/z boundaries,
+         // i.e., we must enforce v_x/y/z = 0 for the velocity components.
+         ess_bdr = 0; ess_bdr[d] = 1;
+         H1FESpace.GetEssentialTrueDofs(ess_bdr, dofs_list, d);
+         ess_tdofs.Append(dofs_list);
+         H1FESpace.GetEssentialVDofs(ess_bdr, dofs_marker, d);
+         FiniteElementSpace::MarkerToList(dofs_marker, dofs_list);
+         ess_vdofs.Append(dofs_list);
+      }
+#endif
    }
 
    // Define the explicit ODE solver used for time integration.
