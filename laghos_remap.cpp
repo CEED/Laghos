@@ -2121,6 +2121,8 @@ void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
    add(x0, t + 0.5 * dt, u, x_now);
    VectorGridFunctionCoefficient u_coeff(&u);
    flux.ProjectCoefficient(u_coeff);
+   ConstantCoefficient zero_coeff(0.);
+   flux.ProjectBdrCoefficientNormal(zero_coeff, ess_bdr);
    Vector flux_v(flux);
    add(x0, t, u, x_now);
 
