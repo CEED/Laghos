@@ -1528,7 +1528,13 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    Vector bdU(pfes_H1.GetVSize());
    bdU = 0.;
 
-   RefConvectionIntegrator Ki(flux);
+   // Projection of the flux to H1 to exactly eliminate the boundary fluxes
+   ParGridFunction flux_H1(&pfes_H1);
+   VectorGridFunctionCoefficient flux_coeff(&flux);
+   flux_H1.ProjectCoefficient(flux_coeff);
+   flux_H1.SetSubVector(v_ess_tdofs, 0.);
+
+   RefConvectionIntegrator Ki(flux_H1);
    Vector x_k, dbx_k, detJ_k;
    Array<int> dofs, vdofs;
 
