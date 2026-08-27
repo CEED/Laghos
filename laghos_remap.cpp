@@ -165,7 +165,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    *x = x0;
 
    // Velocity
-   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1_s, rho_ir);
+   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1, pfes_H1_s, rho_ir);
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
@@ -396,7 +396,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    // }
 
    // Velocity
-   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1_s, ir_rho);
+   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1, pfes_H1_s, ir_rho);
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
@@ -1509,19 +1509,10 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
    RemapAdvector::RemapVelocity scheme, bool remap_v_s)
 : AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme, remap_v_s),
-  ir_rho(ir_rho_), MJ(&pfes_H1), detJ(&pfes_H1_s)
+  ir_rho(ir_rho_), detJ(&pfes_H1_s)
 {
    // Solution transfer
-   trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, pfes_H1_s, ir_rho);
-
-   // Interpolation matrix
-   auto *mi = new SolutionTransfer_H1::RefMassIntegrator(&ir_rho);
-   mi->SetVDim(pfes_H1.GetVDim());
-   MJ.AddDomainIntegrator(mi);
-   MJ.Assemble();
-   MJ.Finalize();
-   MJ.ParallelAssembleInternalMatrix();
-   MJ.ParallelEliminateTDofs(v_ess_tdofs);
+   trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, pfes_H1, pfes_H1_s, ir_rho);
 }
 
 void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
@@ -1573,7 +1564,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    lin_solver.SetMaxIter(100);
    lin_solver.SetPrintLevel(0);
    lin_solver.SetPreconditioner(prec);
-   lin_solver.SetOperator(*MJ.ParallelAssembleInternalMatrix());
+   lin_solver.SetOperator(trans->GetInterpolationMatrix());
 
    const int ntdof = pfes_H1_s.GetTrueVSize();
 
@@ -1581,7 +1572,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    pfes_H1.GetProlongationMatrix()->MultTranspose(bdU, RHS);
 
    X = 0.;
-   MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS);
+   //MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS);
       
    lin_solver.Mult(RHS, X);
       
@@ -1594,7 +1585,7 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vecto
 
 real_t AdvectorVelocityGeomConsOper::Momentum(ParGridFunction &rhouJ) const
 {
-   HypreParMatrix &MJ_m = *MJ.ParallelAssembleInternalMatrix();
+   HypreParMatrix &MJ_m = trans->GetInterpolationMatrix();
    Vector b(MJ_m.Height());
    rhouJ.SetTrueVector();
    MJ_m.Mult(rhouJ.GetTrueVector(), b);
@@ -3148,13 +3139,17 @@ void SolutionTransfer_L2::TransferEnergyJac_Remap2Lagr(
 }
 
 
-SolutionTransfer_H1::SolutionTransfer_H1(const Array<int> &v_ess_tdofs_, const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir)
-: v_ess_tdofs(v_ess_tdofs_), ir_rho(ir)
+SolutionTransfer_H1::SolutionTransfer_H1(
+   const Array<int> &v_ess_tdofs_, const ParFiniteElementSpace &pfes_H1,
+   const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir)
+: v_ess_tdofs(v_ess_tdofs_), ir_rho(ir), MJ(const_cast<ParFiniteElementSpace*>(&pfes_H1))
 {
    const ParMesh &pmesh = *pfes_H1_s.GetParMesh();
+   const int vdim = pfes_H1.GetVDim();
 
    // Interpolation matrix and lumped diagonal
    RefMassIntegrator mi(&ir_rho);
+   DenseMatrix MJ_g[Geometry::NUM_GEOMETRIES];
    Vector mJ_g[Geometry::NUM_GEOMETRIES];
    Array<Geometry::Type> geoms;
    pmesh.GetGeometries(pmesh.Dimension(), geoms);
@@ -3163,13 +3158,14 @@ SolutionTransfer_H1::SolutionTransfer_H1(const Array<int> &v_ess_tdofs_, const P
    for (Geometry::Type g : geoms)
    {
       const FiniteElement *fe = fec_H1->GetFE(g, fec_H1->GetOrder());
-      mi.AssembleElementMatrix(*fe, Tr, MJ[g]);
-      MJ[g].GetRowSums(mJ_g[g]);
+      mi.AssembleElementMatrix(*fe, Tr, MJ_g[g]);
+      MJ_g[g].GetRowSums(mJ_g[g]);
    }
 
-   // Assemble the lumped mass matrix
+   // Assemble the interpolation (lumped) mass matrix
    Vector mJ_loc(pfes_H1_s.GetVSize());
-   Array<int> dofs;
+   Array<int> dofs, vdofs;
+   MJ.AllocateMatrix();
    mJ_loc = 0.;
    const int NE = pmesh.GetNE();
    for (int k = 0; k < NE; k++)
@@ -3177,9 +3173,20 @@ SolutionTransfer_H1::SolutionTransfer_H1(const Array<int> &v_ess_tdofs_, const P
       pfes_H1_s.GetElementDofs(k, dofs);
       Geometry::Type g = pfes_H1_s.GetFE(k)->GetGeomType();
       mJ_loc.AddElementVector(dofs, mJ_g[g]);
+
+      for (int v = 0; v < vdim; v++)
+      {
+         vdofs = dofs;
+         pfes_H1.DofsToVDofs(v, vdofs);
+         MJ.SpMat().AddSubMatrix(vdofs, vdofs, MJ_g[g]);
+      }
    }
    mJ.SetSize(pfes_H1_s.GetTrueVSize());
    pfes_H1_s.GetProlongationMatrix()->MultTranspose(mJ_loc, mJ);
+
+   MJ.Finalize();
+   MJ.ParallelAssembleInternalMatrix();
+   MJ.ParallelEliminateTDofs(v_ess_tdofs);
 }
 
 void SolutionTransfer_H1::TransferVelocity_Lagr2Remap(const ParGridFunction &vel_Lag, ParGridFunction &vel)
@@ -3314,11 +3321,33 @@ void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(
 
    Vector B(pfes_H1.GetTrueVSize());
    pfes_H1.GetProlongationMatrix()->MultTranspose(b, B);
+
+#if 0
+   // H1 lumped projection
    Vector rhouJ_tv(pfes_H1.GetTrueVSize());
    for (int i = 0; i < mJ.Size(); i++)
       for (int v = 0; v < vdim; v++)
          rhouJ_tv(i + v*mJ.Size()) = B(i + v*mJ.Size()) / mJ(i);
    rhouJ.Distribute(rhouJ_tv);
+#else
+   // H1 projection
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+
+   CGSolver lin_solver(pfes_H1.GetComm());
+   lin_solver.SetRelTol(1e-10);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetOperator(*MJ.ParallelAssembleInternalMatrix());
+
+   Vector X(pfes_H1.GetTrueVSize());
+   X = 0.;
+   lin_solver.Mult(B, X);
+
+   rhouJ.Distribute(X);
+#endif
 }
 
 void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhouJ, ParGridFunction &vel)

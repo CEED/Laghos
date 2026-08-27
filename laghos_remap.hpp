@@ -312,7 +312,6 @@ class AdvectorVelocityGeomConsOper : public AdvectorVelocityOper, public TimeDep
 {
 protected:
    const IntegrationRule &ir_rho;
-   mutable ParBilinearForm MJ;
    std::unique_ptr<SolutionTransfer_H1> trans;
    mutable ParGridFunction detJ;
 
@@ -541,14 +540,15 @@ protected:
    // Integration points for the density.
    const IntegrationRule &ir_rho;
 
-   DenseMatrix MJ[Geometry::NUM_GEOMETRIES];
+   mutable ParBilinearForm MJ;
    Vector mJ;
 
    friend class AdvectorVelocityGeomConsOper;
    using RefMassIntegrator = SolutionTransfer_L2::RefMassIntegrator;
 
 public:
-   SolutionTransfer_H1(const Array<int> &v_ess_tdofs, const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir);
+   SolutionTransfer_H1(const Array<int> &v_ess_tdofs, const ParFiniteElementSpace &pfes_H1,
+      const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir);
 
    // Nonconservative
 
@@ -560,6 +560,9 @@ public:
    void TransferJac_Larg2Remap(ParGridFunction &detJ);
    void TransferMomentumJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &vel, ParGridFunction &rhouJ);
    void TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhouJ, ParGridFunction &vel);
+
+   ParBilinearForm &GetInterpolationForm() const { return MJ; }
+   HypreParMatrix &GetInterpolationMatrix() const { return *MJ.ParallelAssembleInternalMatrix(); }
 };
 
 class LocalInverseHOSolver
