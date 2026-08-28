@@ -3148,7 +3148,8 @@ void SolutionTransfer_L2::TransferEnergyJac_Remap2Lagr(
 SolutionTransfer_H1::SolutionTransfer_H1(
    const Array<int> &v_ess_tdofs_, const ParFiniteElementSpace &pfes_H1,
    const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir)
-: v_ess_tdofs(v_ess_tdofs_), ir_rho(ir), MJ(const_cast<ParFiniteElementSpace*>(&pfes_H1))
+: v_ess_tdofs(v_ess_tdofs_), ir_rho(ir), MJ(const_cast<ParFiniteElementSpace*>(&pfes_H1)),
+  MJ_s(const_cast<ParFiniteElementSpace*>(&pfes_H1_s))
 {
    const ParMesh &pmesh = *pfes_H1_s.GetParMesh();
    const int vdim = pfes_H1.GetVDim();
@@ -3172,6 +3173,7 @@ SolutionTransfer_H1::SolutionTransfer_H1(
    Vector mJ_loc(pfes_H1_s.GetVSize());
    Array<int> dofs, vdofs;
    MJ.AllocateMatrix();
+   MJ_s.AllocateMatrix();
    mJ_loc = 0.;
    const int NE = pmesh.GetNE();
    for (int k = 0; k < NE; k++)
@@ -3179,6 +3181,8 @@ SolutionTransfer_H1::SolutionTransfer_H1(
       pfes_H1_s.GetElementDofs(k, dofs);
       Geometry::Type g = pfes_H1_s.GetFE(k)->GetGeomType();
       mJ_loc.AddElementVector(dofs, mJ_g[g]);
+
+      MJ_s.SpMat().AddSubMatrix(dofs, dofs, MJ_g[g]);
 
       for (int v = 0; v < vdim; v++)
       {
@@ -3193,6 +3197,9 @@ SolutionTransfer_H1::SolutionTransfer_H1(
    MJ.Finalize();
    MJ.ParallelAssembleInternalMatrix();
    MJ.ParallelEliminateTDofs(v_ess_tdofs);
+   
+   MJ_s.Finalize();
+   MJ_s.ParallelAssembleInternalMatrix();
 }
 
 void SolutionTransfer_H1::TransferVelocity_Lagr2Remap(const ParGridFunction &vel_Lag, ParGridFunction &vel)
@@ -3276,10 +3283,32 @@ void SolutionTransfer_H1::TransferJac_Larg2Remap(ParGridFunction &detJ)
 
    Vector B(pfes_H1_s.GetTrueVSize());
    b.ParallelAssemble(B);
+
+#if 0
+   // H1 lumped projection
    Vector detJ_tv(pfes_H1_s.GetTrueVSize());
    for (int i = 0; i < detJ_tv.Size(); i++)
       detJ_tv(i) = B(i) / mJ(i);
    detJ.Distribute(detJ_tv);
+#else
+   // H1 projection
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+
+   CGSolver lin_solver(pfes_H1_s.GetComm());
+   lin_solver.SetRelTol(1e-10);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetOperator(*MJ_s.ParallelAssembleInternalMatrix());
+
+   Vector X(pfes_H1_s.GetTrueVSize());
+   X = 0.;
+   lin_solver.Mult(B, X);
+
+   detJ.Distribute(X);
+#endif
 }
 
 void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(

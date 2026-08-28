@@ -540,7 +540,7 @@ protected:
    // Integration points for the density.
    const IntegrationRule &ir_rho;
 
-   mutable ParBilinearForm MJ;
+   mutable ParBilinearForm MJ, MJ_s;
    Vector mJ;
 
    friend class AdvectorVelocityGeomConsOper;
