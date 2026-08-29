@@ -2554,6 +2554,50 @@ void SolutionTransfer_L2::RefMassIntegrator::AssembleElementMatrix(
    }
 }
 
+void SolutionTransfer_L2::RefMassIntegrator::AssembleElementMatrix2(
+   const FiniteElement &trial_fe, const FiniteElement &test_fe,
+   ElementTransformation &Trans, DenseMatrix &elmat)
+{
+   const IntegrationRule *ir = IntRule;
+   if (ir == NULL)
+   {
+      const int order = trial_fe.GetOrder() + test_fe.GetOrder();
+      ir = &IntRules.Get(trial_fe.GetGeomType(), order);
+   }
+   const int nqp = ir->GetNPoints();
+
+   const int tr_ndof = trial_fe.GetDof();
+   const int te_ndof = test_fe.GetDof();
+   Vector tr_shape(tr_ndof), te_shape(te_ndof);
+   elmat.SetSize(te_ndof * vdim, tr_ndof * vdim);
+   elmat = 0.;
+
+   DenseMatrix elmat_d;
+   if (vdim > 1)
+   {
+      elmat_d.SetSize(te_ndof, tr_ndof);
+      elmat_d = 0.;
+   }
+   else
+   {
+      elmat_d.MakeRef(elmat.GetMemory(), 0, te_ndof, tr_ndof);
+   }
+
+   for (int q = 0; q < nqp; q++)
+   {
+      const IntegrationPoint &ip = ir->IntPoint(q);
+      trial_fe.CalcShape(ip, tr_shape);
+      test_fe.CalcShape(ip, te_shape);
+      AddMult_a_VWt(ip.weight, te_shape, tr_shape, elmat_d);
+   }
+
+   if (vdim > 1)
+   {
+      for (int v = 0; v < vdim; v++)
+         elmat.SetSubMatrix(v*te_ndof, v*tr_ndof, elmat_d);
+   }
+}
+
 SolutionTransfer_L2::SolutionTransfer_L2(const ParFiniteElementSpace &pfes_L2, const IntegrationRule &ir)
 : pmesh(*pfes_L2.GetParMesh()), fec0(0, pmesh.Dimension()), pfes0(const_cast<ParMesh*>(&pmesh), &fec0), ir_rho(ir)
 {
@@ -3391,7 +3435,7 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw,
    ParFiniteElementSpace &pfes_H1 = *rhouJ.ParFESpace();
    const int vdim = pfes_H1.GetVDim();
 
-#if 1
+#if 0
    // H1 lumped projection
    Vector m(pfes_H1_Lag.GetVSize()); m = 0.;
    Vector b(pfes_H1_Lag.GetVSize()); b = 0.;
@@ -3448,59 +3492,48 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw,
    // H1 projection
    ParFiniteElementSpace pfes_H1_Lag_s(pfes_H1_Lag.GetParMesh(), pfes_H1_Lag.FEColl());
    ParBilinearForm Mv(&pfes_H1_Lag_s);
-   Vector b(pfes_H1_Lag.GetVSize()); b = 0.;
-   DenseMatrix rhouJ_k, m_k, b_k;
-   Vector shape_Lag, shape, rhouJ_q(vdim);
-   Array<int> vdofs_Lag, vdofs;
-   const int NE = pfes_H1.GetNE();
+   DenseMatrix rhouJ_k, Mv_k;
+   Vector shape_Lag;
+   Array<int> vdofs_Lag;
+   const int NE = pfes_H1_Lag.GetNE();
    const int nqp = ir_rho.GetNPoints();
    for(int k = 0; k < NE; k++)
    {
       const FiniteElement &fe_Lag = *pfes_H1_Lag.GetFE(k);
-      const FiniteElement &fe = *pfes_H1.GetFE(k);
       const int ndofs_Lag = fe_Lag.GetDof();
-      const int ndofs = fe.GetDof();
       shape_Lag.SetSize(ndofs_Lag);
-      shape.SetSize(ndofs);
       pfes_H1_Lag.GetElementVDofs(k, vdofs_Lag);
-      pfes_H1.GetElementVDofs(k, vdofs);
-      rhouJ_k.SetSize(ndofs, vdim);
-      rhouJ.GetSubVector(vdofs, rhouJ_k.GetData());
-      m_k.SetSize(ndofs_Lag);
-      m_k = 0.;
-      b_k.SetSize(ndofs_Lag, vdim);
-      b_k = 0.;
+      Mv_k.SetSize(ndofs_Lag);
+      Mv_k = 0.;
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
          fe_Lag.CalcShape(ip, shape_Lag);
-         fe.CalcShape(ip, shape);
-         rhouJ_k.MultTranspose(shape, rhouJ_q);
-
-         // right hand side
-         for (int v = 0; v < vdim; v++)
-         {
-            Vector b_kv;
-            b_k.GetColumnReference(v, b_kv);
-            b_kv.Add(ip.weight * rhouJ_q(v), shape_Lag);
-         }
          const real_t w = rhoDetJw(k * nqp + q);
-         AddMult_a_VVt(w, shape_Lag, m_k);
+         AddMult_a_VVt(w, shape_Lag, Mv_k);
       }
 
-      // mass matrix
-      Mv.AssembleElementMatrix(k, m_k);
-      b.AddElementVector(vdofs_Lag, b_k.GetData());
+      Mv.AssembleElementMatrix(k, Mv_k);
    }
 
    Mv.Assemble();
    Mv.Finalize();
    HypreParMatrix &Mv_m = *Mv.ParallelAssembleInternalMatrix();
 
+   ParMixedBilinearForm Mb(&pfes_H1, &pfes_H1_Lag);
+   auto *mi = new RefMassIntegrator(&ir_rho);
+   mi->SetVDim(vdim);
+   Mb.AddDomainIntegrator(mi);
+   Mb.Assemble();
+   Mb.Finalize();
+   HypreParMatrix &Mb_m = *Mb.ParallelAssembleInternalMatrix();
+   Mb_m.EliminateBC(v_ess_tdofs, Operator::DiagonalPolicy::DIAG_ONE);
+
    const int ntdofs = pfes_H1_Lag_s.GetTrueVSize();
-   Vector B(ntdofs * vdim);
-   pfes_H1_Lag.GetProlongationMatrix()->MultTranspose(b, B);
-   Vector X(ntdofs * vdim);
+   const int ntdofs_Lag = pfes_H1_Lag_s.GetTrueVSize();
+   Vector B(ntdofs_Lag * vdim), rhouJ_tv(ntdofs * vdim);
+   pfes_H1.GetRestrictionOperator()->Mult(rhouJ, rhouJ_tv);
+   Mb_m.Mult(rhouJ_tv, B);
    
    HypreSmoother prec;
    prec.SetType(HypreSmoother::Jacobi, 1);
@@ -3511,13 +3544,14 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw,
    lin_solver.SetMaxIter(100);
    lin_solver.SetPrintLevel(3);
    lin_solver.SetOperator(Mv_m);
-
+   
+   Vector X(ntdofs_Lag * vdim); X = 0.;
    Vector X_v, B_v;
 
    for (int v = 0; v < vdim; v++)
    {
-      B_v.MakeRef(B, v*ntdofs, ntdofs);
-      X_v.MakeRef(X, v*ntdofs, ntdofs);
+      B_v.MakeRef(B, v*ntdofs_Lag, ntdofs_Lag);
+      X_v.MakeRef(X, v*ntdofs_Lag, ntdofs_Lag);
       lin_solver.Mult(B_v, X_v);
    }
    vel.Distribute(X);

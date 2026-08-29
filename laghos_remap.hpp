@@ -499,6 +499,11 @@ protected:
       void AssembleElementMatrix(const FiniteElement &el,
                                  ElementTransformation &Trans,
                                  DenseMatrix &elmat) override;
+
+      void AssembleElementMatrix2(const FiniteElement &trial_fe,
+                                  const FiniteElement &test_fe,
+                                  ElementTransformation &Trans,
+                                  DenseMatrix &elmat) override;
    };
 
    void ComputeMinMax(const Vector &lmins, const Vector &lmaxs, Vector &mins, Vector &maxs);
