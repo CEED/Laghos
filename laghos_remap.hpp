@@ -58,6 +58,7 @@ public:
    enum class RemapVelocity
    {
       None = -1,
+      HighOrder,
       LowOrder,
       HighOrderTarget,
       MCL,
@@ -81,7 +82,6 @@ private:
 
    RemapScheme remap_scheme;
    RemapVelocity remap_v;
-   bool remap_v_stable;
 
    const double cfl_factor;
 
@@ -101,7 +101,7 @@ private:
 
 public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl,
-                 RemapScheme remap_, RemapVelocity remap_v_, bool remap_v_stable_,
+                 RemapScheme remap_, RemapVelocity remap_v_,
                  const Array<int> &ess_tdofs);
 
    void InitFromLagr(const Vector &nodes0,
@@ -178,8 +178,7 @@ public:
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
       ParFiniteElementSpace &pfes_L2,
-      RemapAdvector::RemapVelocity scheme_v,
-      bool remap_v_s);
+      RemapAdvector::RemapVelocity scheme_v);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
@@ -228,8 +227,7 @@ public:
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
       ParFiniteElementSpace &pfes_L2,
-      RemapAdvector::RemapVelocity scheme_v,
-      bool remap_v_s);
+      RemapAdvector::RemapVelocity scheme_v);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override
@@ -273,8 +271,7 @@ public:
       const Array<int> &v_ess_vd,
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
-      RemapAdvector::RemapVelocity scheme,
-      bool remap_v_s);
+      RemapAdvector::RemapVelocity scheme);
 
    virtual real_t Momentum(ParGridFunction &v) const = 0;
 };
@@ -298,8 +295,7 @@ public:
       VectorCoefficient &u_coeff,
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
-      RemapAdvector::RemapVelocity scheme,
-      bool remap_v_s);
+      RemapAdvector::RemapVelocity scheme);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
@@ -339,8 +335,7 @@ public:
       const Array<int> &v_ess_vd,
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
-      RemapAdvector::RemapVelocity scheme,
-      bool remap_v_s);
+      RemapAdvector::RemapVelocity scheme);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override

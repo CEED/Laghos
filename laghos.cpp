@@ -166,10 +166,9 @@ int main(int argc, char *argv[])
    bool check = false;
    bool mem_usage = false;
    bool fom = false;
-   int remap_v = (int)RemapAdvector::RemapVelocity::ClipAndScale;
+   int remap_v = (int)RemapAdvector::RemapVelocity::HighOrder;
    int remap_scheme = (int)RemapAdvector::RemapScheme::Nonconservative;
    bool remap_v_gslib  = false;
-   bool remap_v_stable = false;
    int dev = 0;
    double blast_energy = 0.25;
 
@@ -232,15 +231,13 @@ int main(int argc, char *argv[])
    args.AddOption(&visit, "-visit", "--visit", "-no-visit", "--no-visit",
                   "Enable or disable VisIt visualization.");
    args.AddOption(&remap_v, "-rv", "--remap-vel",
-                  "Velocity remap scheme (0 - LO, 1 - HO Target, 2 - MCL, 3 - Clip&Scale)");
+                  "Velocity remap scheme (0 - HO, 1 - LO, 2 - HO Target, 3 - MCL, 4 - Clip&Scale)");
    args.AddOption(&remap_scheme, "-r", "--remap-scheme",
                   "Thermodynamic remap scheme (0 - nonconservative, 1 - geom. consistent)");
 #ifdef MFEM_USE_GSLIB
    args.AddOption(&remap_v_gslib, "-rvg", "--rvg", "-no-rvg", "--no-rvg",
                   "Remap v with GSLIB.");
 #endif
-   args.AddOption(&remap_v_stable, "-rvs", "--rvs", "-no-rvs", "--no-rvs",
-                  "Use limiter for the advection based remap of the velocity field.");
    args.AddOption(&gfprint, "-print", "--print", "-no-print", "--no-print",
                   "Enable or disable result output (files in mfem format).");
    args.AddOption(&basename, "-k", "--outputfilename",
@@ -1050,7 +1047,7 @@ int main(int argc, char *argv[])
    const double cfl_remap = 0.1;
 
    RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
-                     remap_adv, remap_v_adv, remap_v_stable, ess_tdofs);
+                     remap_adv, remap_v_adv, ess_tdofs);
 
    int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)

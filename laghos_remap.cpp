@@ -102,18 +102,18 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
                              double cfl, RemapScheme remap_, RemapVelocity remap_v_,
-                             bool remap_v_stable_, const Array<int> &ess_tdofs)
+                             const Array<int> &ess_tdofs)
     : pmesh(m, true), dim(pmesh.Dimension()),
     fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
     fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
     fec_H1Lag(order_v, pmesh.Dimension()),
     pfes_L2(&pmesh, &fec_L2, 1),
     pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
-    pfes_H1_s(&pmesh, (remap_v_stable_)?(&fec_H1):(&fec_H1Lag)),
+    pfes_H1_s(&pmesh, (remap_v_ != RemapVelocity::HighOrder)?(&fec_H1):(&fec_H1Lag)),
     pfes_H1Lag(&pmesh, &fec_H1Lag, pmesh.Dimension()),
     v_ess_tdofs(ess_tdofs),
     remap_scheme(remap_),
-    remap_v(remap_v_), remap_v_stable(remap_v_stable_),
+    remap_v(remap_v_),
     cfl_factor(cfl),
     offsets(), S(), v(), rho(), e(), x0()
 {
@@ -128,7 +128,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
    offsets.PartialSum();
    S.Update(offsets);
 
-   if (remap_v_stable)
+   if (remap_v != RemapVelocity::HighOrder)
    {
       v.MakeRef(&pfes_H1, S, offsets[Velocity]);
    }
@@ -169,7 +169,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
-      if (remap_v_stable)
+      if (remap_v != RemapVelocity::HighOrder)
       {
          transfer_h1.TransferVelocity_Lagr2Remap(vel, v);
       }
@@ -216,7 +216,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    ParFiniteElementSpace *pfes_H1_v;
    AdvectorOper *oper;
 
-   if (remap_v_stable)
+   if (remap_v != RemapVelocity::HighOrder)
    {
       // Bernstein scalar space.
       // Scalar space only used when velocity remap with limiter
@@ -235,8 +235,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    {
       oper = new AdvectorNonconservativeOper(
          x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
-         *pfes_H1_v, pfes_H1_s, pfes_L2,
-         remap_v, remap_v_stable);
+         *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
       ode_solver->Init(*oper);
       ode = ode_solver.get();
       break;
@@ -245,8 +244,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    {
       auto *op = new AdvectorGeomConsOper(
          x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
-         *pfes_H1_v, pfes_H1_s, pfes_L2,
-         remap_v, remap_v_stable);
+         *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
       ode_solver_gc->Init(*op);
       oper = op;
       ode = ode_solver_gc.get();
@@ -350,8 +348,6 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    case RemapScheme::Nonconservative:
       // This is used to update the mass matrices.
       rho0_gf = rho;
-      // Just copy energy.
-      lagr_eps = e;
       break;
    case RemapScheme::GeomConsistent:
       transfer_l2.TransferJac_Larg2Remap(detJ);
@@ -400,7 +396,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
-      if (remap_v_stable)
+      if (remap_v != RemapVelocity::HighOrder)
       {
          transfer_h1.TransferVelocity_Remap2Lagr(v, vel);
       }
@@ -492,8 +488,7 @@ AdvectorNonconservativeOper::AdvectorNonconservativeOper(
    ParFiniteElementSpace &pfes_H1,
    ParFiniteElementSpace &pfes_H1_s,
    ParFiniteElementSpace &pfes_L2,
-   RemapAdvector::RemapVelocity remap_v,
-   bool remap_v_s)
+   RemapAdvector::RemapVelocity remap_v)
   : AdvectorOper(x_start, mesh_vel, pfes_H1, pfes_L2),
     u_coeff(&u),
     rho_coeff(&rho)
@@ -502,7 +497,7 @@ AdvectorNonconservativeOper::AdvectorNonconservativeOper(
    if (remap_v != RemapAdvector::RemapVelocity::None)
       op_v = make_unique<AdvectorVelocityNonconservativeOper>(
          v_ess_td, v_ess_vd, rho_coeff, u_coeff,
-         pfes_H1, pfes_H1_s, remap_v, remap_v_s);
+         pfes_H1, pfes_H1_s, remap_v);
 
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
@@ -558,8 +553,7 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
    ParFiniteElementSpace &pfes_H1,
    ParFiniteElementSpace &pfes_H1_s,
    ParFiniteElementSpace &pfes_L2,
-   RemapAdvector::RemapVelocity remap_v,
-   bool remap_v_s)
+   RemapAdvector::RemapVelocity remap_v)
   : AdvectorOper(x_start, mesh_vel, pfes_H1, pfes_L2),
     u_coeff(&u),
     rho_coeff(&rho),
@@ -573,7 +567,7 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
    // Velocity advector
    if (remap_v != RemapAdvector::RemapVelocity::None)
       op_v = make_unique<AdvectorVelocityGeomConsOper>(
-         ir_rho, v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, remap_v, remap_v_s);
+         ir_rho, v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, remap_v);
 
    // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
    // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
@@ -1290,9 +1284,8 @@ void AdvectorThermoOper::ComputeSparsityBounds(
 AdvectorVelocityOper::AdvectorVelocityOper(
    const Array<int> &v_ess_td, const Array<int> &v_ess_vd,
    ParFiniteElementSpace &pfes_H1_, ParFiniteElementSpace &pfes_H1_s_,
-   RemapAdvector::RemapVelocity scheme_, bool remap_v_s)
+   RemapAdvector::RemapVelocity scheme_)
 :   remap_v(scheme_),
-    remap_v_stable(remap_v_s),
     v_ess_tdofs(v_ess_td),
     v_ess_vdofs(v_ess_vd),
     pfes_H1(pfes_H1_), pfes_H1_s(pfes_H1_s_),
@@ -1304,8 +1297,8 @@ AdvectorVelocityOper::AdvectorVelocityOper(
 AdvectorVelocityNonconservativeOper::AdvectorVelocityNonconservativeOper(
    const Array<int> &v_ess_td, const Array<int> &v_ess_vd, Coefficient &rho_coeff_,
    VectorCoefficient &u_coeff_, ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
-   RemapAdvector::RemapVelocity scheme_, bool remap_v_s)
-:   AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme_, remap_v_s),
+   RemapAdvector::RemapVelocity scheme_)
+:   AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme_),
     rho_coeff(rho_coeff_), u_coeff(u_coeff_),
     rho_u_coeff(rho_coeff, u_coeff)
 {
@@ -1507,8 +1500,8 @@ AssembleElementVector(const FiniteElement &fe, ElementTransformation &Tr,
 AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    const IntegrationRule &ir_rho_, const Array<int> &v_ess_td, const Array<int> &v_ess_vd,
    ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
-   RemapAdvector::RemapVelocity scheme, bool remap_v_s)
-: AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme, remap_v_s),
+   RemapAdvector::RemapVelocity scheme)
+: AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme),
   ir_rho(ir_rho_), detJ(&pfes_H1_s)
 {
    // Solution transfer
