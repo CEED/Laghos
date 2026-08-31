@@ -312,15 +312,22 @@ protected:
    std::unique_ptr<SolutionTransfer_H1> trans;
    mutable ParGridFunction detJ;
 
-   class RefConvectionIntegrator : public NonlinearFormIntegrator
+   class RefConvectionIntegrator : public BilinearFormIntegrator
    {
       const ParGridFunction &f;
-      DenseMatrix dshape;
+      int vdim = 1;
+      DenseMatrix dshape, elmat_d;
       Vector shape, v, vxt, vdshape;
 
    public:
       RefConvectionIntegrator(const ParGridFunction &flux, const IntegrationRule *ir = NULL)
-      : NonlinearFormIntegrator(ir), f(flux) { }
+      : BilinearFormIntegrator(ir), f(flux) { }
+
+      void SetVDim(int vdim_) { vdim = vdim_; }
+
+      void AssembleElementMatrix(const FiniteElement &el,
+                                 ElementTransformation &Trans,
+                                 DenseMatrix &elvec) override;
 
       void AssembleElementVector(const FiniteElement &el,
                                  ElementTransformation &Trans,
@@ -564,6 +571,8 @@ public:
 
    ParBilinearForm &GetInterpolationForm() const { return MJ; }
    HypreParMatrix &GetInterpolationMatrix() const { return *MJ.ParallelAssembleInternalMatrix(); }
+   const Vector &GetLumpedInterpolationMatrix() const { return mJ; }
+   HypreParMatrix &GetInterpolationMatrix_s() const { return *MJ_s.ParallelAssembleInternalMatrix(); }
 };
 
 class LocalInverseHOSolver

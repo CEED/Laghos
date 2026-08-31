@@ -1453,6 +1453,64 @@ real_t AdvectorVelocityNonconservativeOper::Momentum(ParGridFunction &v) const
 }
 
 void AdvectorVelocityGeomConsOper::RefConvectionIntegrator::
+AssembleElementMatrix(const FiniteElement &fe, ElementTransformation &Tr,
+   DenseMatrix &elmat)
+{
+   const int ndof = fe.GetDof();
+   const int ndim = fe.GetDim();
+
+   shape.SetSize(ndof);
+   dshape.SetSize(ndof, ndim);
+   vdshape.SetSize(ndof);
+   v.SetSize(ndim);
+   vxt.SetSize(ndim);
+
+   elmat.SetSize(ndof * vdim);
+   elmat = 0.;
+   
+   if (vdim > 1)
+   {
+      elmat_d.SetSize(ndof);
+      elmat_d = 0.;
+   }
+   else
+   {
+      elmat_d.Reset(elmat.GetData(), ndof, ndof);
+   }
+
+   const IntegrationRule *ir = IntRule;
+   if (ir == NULL)
+   {
+      const int order = fe.GetOrder() + Tr.OrderGrad(&fe) + Tr.Order();
+      ir = &IntRules.Get(fe.GetGeomType(), order);
+   }
+   const int nqp = ir->GetNPoints();
+
+   for(int q = 0; q < nqp; q++)
+   {
+      const IntegrationPoint &ip = ir->IntPoint(q);
+      Tr.SetIntPoint(&ip);
+      f.GetVectorValue(Tr, ip, v);
+
+      fe.CalcShape(ip, shape);
+      fe.CalcDShape(ip, dshape);
+
+      Tr.AdjugateJacobian().Mult(v, vxt);
+      dshape.Mult(vxt, vdshape);
+
+      const real_t w = -ip.weight;
+
+      AddMult_a_VWt(w, vdshape, shape, elmat_d);
+   }
+
+   if (vdim > 1)
+   {
+      for (int v = 0; v < vdim; v++)
+         elmat.SetSubMatrix(v*ndof, v*ndof, elmat_d);
+   }
+}
+
+void AdvectorVelocityGeomConsOper::RefConvectionIntegrator::
 AssembleElementVector(const FiniteElement &fe, ElementTransformation &Tr,
    const Vector &elfun, Vector &elvec)
 {
@@ -1465,7 +1523,7 @@ AssembleElementVector(const FiniteElement &fe, ElementTransformation &Tr,
    v.SetSize(ndim);
    vxt.SetSize(ndim);
 
-   elvec.SetSize(ndof * ndim);
+   elvec.SetSize(ndof * vdim);
    elvec = 0.;
 
    Vector elvec_v, elfun_v;
@@ -1492,7 +1550,7 @@ AssembleElementVector(const FiniteElement &fe, ElementTransformation &Tr,
 
       const real_t w = -ip.weight;
 
-      for (int v = 0; v < ndim; v++)
+      for (int v = 0; v < vdim; v++)
       {
          elvec_v.MakeRef(elvec, v*ndof, ndof);
          elfun_v.MakeRef(const_cast<Vector&>(elfun), v*ndof, ndof);
@@ -1510,6 +1568,13 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
 {
    // Solution transfer
    trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, pfes_H1, pfes_H1_s, ir_rho);
+
+   if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
+   {
+      lumpedMr_H1_vec.SetSize(pfes_H1_s.GetVSize());
+      const Vector &lumpedMr_H1_tvec = trans->GetLumpedInterpolationMatrix();
+      pfes_H1_s.GetProlongationMatrix()->Mult(lumpedMr_H1_tvec, lumpedMr_H1_vec);
+   }
 }
 
 void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
@@ -1532,29 +1597,59 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    flux_H1.SetSubVector(v_ess_tdofs, 0.);
 
    RefConvectionIntegrator Ki(flux_H1);
+   DenseMatrix K_k;
    Vector x_k, dbx_k, detJ_k;
    Array<int> dofs, vdofs;
 
+   ParBilinearForm K(&pfes_H1_s);
+   K.AllocateMatrix();
+
    for(int k = 0; k < NE; k++)
    {
-      pfes_H1_s.GetElementVDofs(k, dofs);
+      pfes_H1.GetElementDofs(k, dofs);
       const int ndof = dofs.Size();
       vdofs = dofs;
       pfes_H1.DofsToVDofs(vdofs);
 
       detJ.GetSubVector(dofs, detJ_k);
       U.GetSubVector(vdofs, x_k);
+      
+      Ki.AssembleElementMatrix(*pfes_H1_s.GetFE(k),
+                               *pfes_H1_s.GetElementTransformation(k),
+                               K_k);
 
       // Reduced the quantity to the non-conservative form
-      for(int v = 0; v < vdim; v++)
-         for(int i = 0; i < ndof; i++)
-            x_k(i + v*ndof) /= detJ_k(i);
+      K_k.InvRightScaling(detJ_k);
 
-      Ki.AssembleElementVector(*pfes_H1.GetFE(k),
-                               *pfes_H1.GetElementTransformation(k),
-                               x_k, dbx_k);
+      K.AssembleElementMatrix(k, K_k);
+
+      dbx_k.SetSize(ndof*vdim);
+      for (int v = 0; v < vdim; v++)
+      {
+         Vector x_kv(x_k, v*ndof, ndof);
+         Vector dbx_kv(dbx_k, v*ndof, ndof);
+         K_k.Mult(x_kv, dbx_kv);
+      }
 
       bdU.AddElementVector(vdofs, dbx_k);
+   }
+
+   if (remap_v == RemapAdvector::RemapVelocity::MCL)
+   {
+      K.Finalize();
+      auto *K_m = K.ParallelAssemble();
+      auto *KT_m = K_m->Transpose();
+      SparseMatrix K_sm, KT_sm;
+      K_m->MergeDiagAndOffd(K_sm);   
+      KT_m->MergeDiagAndOffd(KT_sm);
+      delete K_m;
+      delete KT_m;
+
+      SparseMatrix M_sm;
+      trans->GetInterpolationMatrix_s().MergeDiagAndOffd(M_sm);
+
+      MCLVel(K_sm, KT_sm, M_sm, U, dU);
+      return;
    }
 
    // Invert by mass matrix
