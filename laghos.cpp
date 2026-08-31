@@ -1047,7 +1047,8 @@ int main(int argc, char *argv[])
    const double cfl_remap = 0.1;
 
    RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
-                     remap_adv, remap_v_adv, ess_tdofs);
+                     remap_adv, remap_v_adv, ess_tdofs,
+                     visualization);
 
    int ale_cnt = 0;
    for (int ti = 1; !last_step; ti++)
