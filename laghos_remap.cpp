@@ -116,7 +116,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     remap_v(remap_v_),
     cfl_factor(cfl),
     visualize(vis),
-    offsets(), S(), v(), rho(), e(), x0()
+    offsets(), S(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
 
@@ -131,14 +131,14 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
 
    if (remap_v != RemapVelocity::HighOrder)
    {
-      v.MakeRef(&pfes_H1, S, offsets[Velocity]);
+      Sgf[Velocity].MakeRef(&pfes_H1, S, offsets[Velocity]);
    }
    else
    {
-      v.MakeRef(&pfes_H1Lag, S, offsets[Velocity]);
+      Sgf[Velocity].MakeRef(&pfes_H1Lag, S, offsets[Velocity]);
    }
-   rho.MakeRef(&pfes_L2, S, offsets[Density]);
-   e.MakeRef(&pfes_L2, S, offsets[Energy]);
+   Sgf[Density].MakeRef(&pfes_L2, S, offsets[Density]);
+   Sgf[Energy].MakeRef(&pfes_L2, S, offsets[Energy]);
 
    switch (remap_scheme)
    {
@@ -155,7 +155,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
                                  const ParGridFunction &vel,
                                  const IntegrationRule &rho_ir,
                                  const Vector &rhoDetJw,
-                                 const ParGridFunction &lagr_eps)
+                                 const ParGridFunction &eps)
 {
    // Save the integration rule
    ir_rho = &rho_ir;
@@ -172,16 +172,16 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    case RemapScheme::Nonconservative:
       if (remap_v != RemapVelocity::HighOrder)
       {
-         transfer_h1.TransferVelocity_Lagr2Remap(vel, v);
+         transfer_h1.TransferVelocity_Lagr2Remap(vel, Sgf[Velocity]);
       }
-      else { v = vel; }
+      else { Sgf[Velocity] = vel; }
       break;
    case RemapScheme::GeomConsistent:
       detJ_H1.SetSpace(&pfes_H1_s); detJ_H1 = 0.;
       transfer_h1.TransferJac_Larg2Remap(detJ_H1);
       rhoJ_H1.SetSpace(&pfes_H1_s); rhoJ_H1 = 0.;
       transfer_h1.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ_H1, rhoJ_H1);
-      transfer_h1.TransferMomentumJac_Lagr2Remap(rhoDetJw, rhoJ_H1, vel, v);
+      transfer_h1.TransferMomentumJac_Lagr2Remap(rhoDetJw, rhoJ_H1, vel, Sgf[Velocity]);
       break;
    }
    
@@ -192,14 +192,14 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
-      transfer_l2.TransferDensity_Lagr2Remap(rhoDetJw, rho);
-      e  = lagr_eps;
+      transfer_l2.TransferDensity_Lagr2Remap(rhoDetJw, Sgf[Density]);
+      Sgf[Energy]  = eps;
       break;
    case RemapScheme::GeomConsistent:
       detJ_L2.SetSpace(&pfes_L2); detJ_L2 = 0.;
       transfer_l2.TransferJac_Larg2Remap(detJ_L2);
-      transfer_l2.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ_L2, rho);
-      transfer_l2.TransferEnergyJac_Lagr2Remap(rhoDetJw, rho, lagr_eps, e);
+      transfer_l2.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ_L2, Sgf[Density]);
+      transfer_l2.TransferEnergyJac_Lagr2Remap(rhoDetJw, Sgf[Density], eps, Sgf[Energy]);
       break;
    }
 }
@@ -239,7 +239,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    case RemapScheme::Nonconservative:
    {
       oper = new AdvectorNonconservativeOper(
-         x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
+         x0, ess_tdofs, ess_vdofs, u, Sgf[Density], *ir_rho,
          *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
       ode_solver->Init(*oper);
       ode = ode_solver.get();
@@ -248,7 +248,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    case RemapScheme::GeomConsistent:
    {
       auto *op = new AdvectorGeomConsOper(
-         x0, ess_tdofs, ess_vdofs, u, rho, *ir_rho,
+         x0, ess_tdofs, ess_vdofs, u, Sgf[Density], *ir_rho,
          *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
       ode_solver_gc->Init(*op);
       oper = op;
@@ -304,9 +304,9 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
          last_step = true;
       }
 
-      const real_t mass = oper->Mass(rho, t);
-      const real_t momentum = oper->Momentum(v, t);
-      const real_t energy = oper->InternalEnergy(e, t);
+      const real_t mass = oper->Mass(Sgf[Density], t);
+      const real_t momentum = oper->Momentum(Sgf[Velocity], t);
+      const real_t energy = oper->InternalEnergy(Sgf[Energy], t);
 
       if (pmesh.GetMyRank() == 0)
       {
@@ -322,16 +322,16 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
 
       if (visualize)
       {
-         hydrodynamics::VisualizeField(vis_rho, vishost, visport, rho,
+         hydrodynamics::VisualizeField(vis_rho, vishost, visport, Sgf[Density],
                                        "Remapped Density", Wx, Wy, Ww, Wh);
          Wx += offx;
          if (remap_v != RemapVelocity::None)
          {
-            hydrodynamics::VisualizeField(vis_v, vishost, visport, v,
+            hydrodynamics::VisualizeField(vis_v, vishost, visport, Sgf[Velocity],
                                           "Remapped Velocity", Wx, Wy, Ww, Wh);
             Wx += offx;
          }
-         hydrodynamics::VisualizeField(vis_e, vishost, visport, e,
+         hydrodynamics::VisualizeField(vis_e, vishost, visport, Sgf[Energy],
                                        "Remapped Energy", Wx, Wy, Ww, Wh);
       }
    }
@@ -345,7 +345,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
                                    Vector &rhoDetJw,
                                    const IntegrationRule &ir_rho_b,
                                    Vector &rhoDetJ_be,
-                                   ParGridFunction &lagr_eps)
+                                   ParGridFunction &eps)
 {
    // Thermodynamic quantities
    SolutionTransfer_L2 transfer_l2(pfes_L2, ir_rho);
@@ -355,11 +355,11 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    {
    case RemapScheme::Nonconservative:
       // This is used to update the mass matrices.
-      rho0_gf = rho;
+      rho0_gf = Sgf[Density];
       break;
    case RemapScheme::GeomConsistent:
       transfer_l2.TransferJac_Larg2Remap(detJ_L2);
-      transfer_l2.TransferDensityJac_Remap2Lagr(detJ_L2, rho, rho0_gf);
+      transfer_l2.TransferDensityJac_Remap2Lagr(detJ_L2, Sgf[Density], rho0_gf);
       break;
    }
 
@@ -406,16 +406,16 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    case RemapScheme::Nonconservative:
       if (remap_v != RemapVelocity::HighOrder)
       {
-         transfer_h1.TransferVelocity_Remap2Lagr(v, vel);
+         transfer_h1.TransferVelocity_Remap2Lagr(Sgf[Velocity], vel);
       }
       else
       {
          // just copy velocity otherwise
-         vel = v;
+         vel = Sgf[Velocity];
       }
       break;
    case RemapScheme::GeomConsistent:
-      transfer_h1.TransferMomentumJac_Remap2Lagr(rhoDetJw, v, vel);
+      transfer_h1.TransferMomentumJac_Remap2Lagr(rhoDetJw, Sgf[Velocity], vel);
       break;
    }
 
@@ -424,10 +424,10 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    {
    case RemapScheme::Nonconservative:
       // Just copy energy.
-      lagr_eps = e;
+      eps = Sgf[Energy];
       break;
    case RemapScheme::GeomConsistent:
-      transfer_l2.TransferEnergyJac_Remap2Lagr(rhoDetJw, rho, e, lagr_eps);
+      transfer_l2.TransferEnergyJac_Remap2Lagr(rhoDetJw, Sgf[Density], Sgf[Energy], eps);
       break;
    }
 }

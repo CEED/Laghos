@@ -89,7 +89,7 @@ private:
    // Remap state variables.
    Array<int> offsets;
    BlockVector S;
-   ParGridFunction v, rho, e;
+   ParGridFunction Sgf[NVars];
    ParGridFunction detJ_H1, detJ_L2, rhoJ_H1;
 
    double e_max;
