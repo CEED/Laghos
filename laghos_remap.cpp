@@ -177,7 +177,11 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
       else { v = vel; }
       break;
    case RemapScheme::GeomConsistent:
-      transfer_h1.TransferMomentumJac_Lagr2Remap(rhoDetJw, vel, v);
+      detJ_H1.SetSpace(&pfes_H1_s); detJ_H1 = 0.;
+      transfer_h1.TransferJac_Larg2Remap(detJ_H1);
+      rhoJ_H1.SetSpace(&pfes_H1_s); rhoJ_H1 = 0.;
+      transfer_h1.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ_H1, rhoJ_H1);
+      transfer_h1.TransferMomentumJac_Lagr2Remap(rhoDetJw, rhoJ_H1, vel, v);
       break;
    }
    
@@ -192,9 +196,9 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
       e  = lagr_eps;
       break;
    case RemapScheme::GeomConsistent:
-      detJ.SetSpace(rho.ParFESpace()); detJ = 0.;
-      transfer_l2.TransferJac_Larg2Remap(detJ);
-      transfer_l2.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ, rho);
+      detJ_L2.SetSpace(&pfes_L2); detJ_L2 = 0.;
+      transfer_l2.TransferJac_Larg2Remap(detJ_L2);
+      transfer_l2.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ_L2, rho);
       transfer_l2.TransferEnergyJac_Lagr2Remap(rhoDetJw, rho, lagr_eps, e);
       break;
    }
@@ -354,8 +358,8 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       rho0_gf = rho;
       break;
    case RemapScheme::GeomConsistent:
-      transfer_l2.TransferJac_Larg2Remap(detJ);
-      transfer_l2.TransferDensityJac_Remap2Lagr(detJ, rho, rho0_gf);
+      transfer_l2.TransferJac_Larg2Remap(detJ_L2);
+      transfer_l2.TransferDensityJac_Remap2Lagr(detJ_L2, rho, rho0_gf);
       break;
    }
 
@@ -3424,6 +3428,171 @@ void SolutionTransfer_H1::TransferH1Monotonous(
    }
 }
 
+// Product version: Transfer x*y with bounds on y, given RHS b = integral(x*y)
+void SolutionTransfer_H1::TransferXYH1Monotonous(
+   const Vector &b, const Vector &dof_min_y, const Vector &dof_max_y,
+   const ParGridFunction &x, ParGridFunction &y) const
+{
+   ParFiniteElementSpace &pfes_H1_s = *y.ParFESpace();
+   const int dofs_h1 = pfes_H1_s.GetVSize();
+   GroupCommunicator &gcomm = pfes_H1_s.GroupComm();
+
+   // Build lumped mass matrix
+   Vector mJ_loc(dofs_h1);
+   pfes_H1_s.GetProlongationMatrix()->Mult(mJ, mJ_loc);
+
+   // Step 1: Compute high-order solution M (x*y)_HO = b
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+
+   CGSolver lin_solver(pfes_H1_s.GetComm());
+   lin_solver.SetRelTol(1e-10);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetOperator(*MJ_s.ParallelAssembleInternalMatrix());
+
+   Vector B(pfes_H1_s.GetTrueVSize());
+   pfes_H1_s.GetProlongationMatrix()->MultTranspose(b, B);
+
+   Vector XY_HO(pfes_H1_s.GetTrueVSize());
+   XY_HO = 0.;
+   lin_solver.Mult(B, XY_HO);
+
+   Vector xy_HO(dofs_h1);
+   pfes_H1_s.GetProlongationMatrix()->Mult(XY_HO, xy_HO);
+
+   // Step 2: Compute low-order solution per DOF: y_LO = b_LO / (mJ_loc * x)
+   Vector y_LO(dofs_h1), b_LO(dofs_h1);
+   pfes_H1_s.GetProlongationMatrix()->Mult(B, b_LO);
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      real_t mx_i = mJ_loc(i) * x(i);
+      if (fabs(mx_i) != 0.)
+      {
+         y_LO(i) = b_LO(i) / mx_i;
+      }
+      else
+      {
+         // If x is zero, y is undefined; use midpoint of bounds
+         y_LO(i) = 0.5 * (dof_min_y(i) + dof_max_y(i));
+      }
+   }
+
+   // Step 3: FCT-style flux limiting with product formulation
+   const int *I = MJ_smloc.GetI();
+   const int *J_local = MJ_smloc.GetJ();
+   const real_t *M_data = MJ_smloc.GetData();
+
+   // Compute sum of incoming and outgoing antidiffusive fluxes
+   // weighted by the product formulation
+   Vector P_plus(dofs_h1), P_minus(dofs_h1);
+   P_plus = 0.0;
+   P_minus = 0.0;
+
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      for (int k = I[i]; k < I[i+1]; k++)
+      {
+         int j = J_local[k];
+         if (i == j) continue;
+
+         // Antidiffusive flux: f_ij = M_ij * (xy_HO_i - xy_HO_j)
+         const real_t f_ij = M_data[k] * (xy_HO(i) - xy_HO(j));
+
+         if (f_ij > 0.0)
+         {
+            P_plus(i) += f_ij;
+         }
+         else
+         {
+            P_minus(i) += f_ij;
+         }
+      }
+   }
+
+   // Share flux sums across processors
+   Array<real_t> P_plus_array(P_plus.GetData(), P_plus.Size());
+   Array<real_t> P_minus_array(P_minus.GetData(), P_minus.Size());
+   gcomm.Reduce<real_t>(P_plus_array, GroupCommunicator::Sum);
+   gcomm.Bcast(P_plus_array);
+   gcomm.Reduce<real_t>(P_minus_array, GroupCommunicator::Sum);
+   gcomm.Bcast(P_minus_array);
+
+   // Compute allowable flux bounds from min/max constraints on y
+   // Q is based on the product mass: m_i * x_i
+   Vector Q_plus(dofs_h1), Q_minus(dofs_h1);
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      const real_t mx_i = mJ_loc(i) * x(i);
+      Q_plus(i) = mx_i * (dof_max_y(i) - y_LO(i));
+      Q_minus(i) = mx_i * (dof_min_y(i) - y_LO(i));
+   }
+
+   // Compute flux limiters
+   Vector alpha_plus(dofs_h1), alpha_minus(dofs_h1);
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      alpha_plus(i) = (P_plus(i) != 0.) ?
+         std::min(1.0, Q_plus(i) / P_plus(i)) : 1.0;
+
+      alpha_minus(i) = (P_minus(i) != 0.) ?
+         std::min(1.0, Q_minus(i) / P_minus(i)) : 1.0;
+   }
+
+   // Share alpha values across processors for shared DOFs
+   // Use Min reduction to ensure consistency
+   Array<real_t> alpha_plus_array(alpha_plus.GetData(), alpha_plus.Size());
+   Array<real_t> alpha_minus_array(alpha_minus.GetData(), alpha_minus.Size());
+   gcomm.Reduce<real_t>(alpha_plus_array, GroupCommunicator::Min);
+   gcomm.Bcast(alpha_plus_array);
+   gcomm.Reduce<real_t>(alpha_minus_array, GroupCommunicator::Min);
+   gcomm.Bcast(alpha_minus_array);
+
+   // Step 4: Apply limited fluxes
+   Vector flux_limited(dofs_h1);
+   flux_limited = 0.0;
+
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      for (int k = I[i]; k < I[i+1]; k++)
+      {
+         int j = J_local[k];
+         if (i == j) continue;
+
+         // Antidiffusive flux
+         const real_t f_ij = M_data[k] * (xy_HO(i) - xy_HO(j));
+
+         // Apply limiter: min of sender and receiver alphas
+         real_t alpha_ij;
+         if (f_ij > 0.0)
+         {
+            alpha_ij = std::min(alpha_plus(i), alpha_minus(j));
+         }
+         else
+         {
+            alpha_ij = std::min(alpha_minus(i), alpha_plus(j));
+         }
+
+         flux_limited(i) += alpha_ij * f_ij;
+      }
+   }
+
+   // Share limited fluxes across processors
+   Array<real_t> flux_array(flux_limited.GetData(), flux_limited.Size());
+   gcomm.Reduce<real_t>(flux_array, GroupCommunicator::Sum);
+   gcomm.Bcast(flux_array);
+
+   // Final solution: y = y_LO + flux_limited / (m_lumped * x)
+   y = y_LO;
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      const real_t mx_i = mJ_loc(i) * x(i);
+      y(i) += (mx_i != 0.)?(flux_limited(i) / mx_i):(0.);
+   }
+}
+
 // Helper function: Compute DOF bounds from element bounds
 // For H1 elements, DOFs are at vertices, so we expand to vertex neighbors
 void SolutionTransfer_H1::ComputeH1SparsityBounds(
@@ -3661,18 +3830,101 @@ void SolutionTransfer_H1::TransferJac_Larg2Remap(ParGridFunction &detJ)
 #endif
 }
 
+void SolutionTransfer_H1::TransferDensityJac_Lagr2Remap(
+   const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ)
+{
+   ParFiniteElementSpace &pfes_H1_s = *rhoJ.ParFESpace();
+   const int ndof_h1 = pfes_H1_s.GetNDofs();
+   const int NE = pfes_H1_s.GetNE();
+   const int nqp = ir_rho.GetNPoints();
+   Vector rho_min_el(NE), rho_max_el(NE);
+   rho_min_el = +infinity();
+   rho_max_el = -infinity();
+   Vector b(ndof_h1); b = 0.;
+   Vector b_k;
+   Vector shape;
+   Array<int> vdofs_Lag, vdofs;
+   for(int k = 0; k < NE; k++)
+   {
+      const FiniteElement &fe = *pfes_H1_s.GetFE(k);
+      ElementTransformation &Tr = *pfes_H1_s.GetElementTransformation(k);
+      const int ndofs = fe.GetDof();
+      shape.SetSize(ndofs);
+      pfes_H1_s.GetElementVDofs(k, vdofs);
+      b_k.SetSize(ndofs);
+      b_k = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         fe.CalcShape(ip, shape);
+         const real_t w = rhoDetJw(k * nqp + q);
+         b_k.Add(w, shape);
+         const real_t rho = w / ip.weight / Tr.Weight();
+         rho_min_el(k) = std::min(rho_min_el(k), rho);
+         rho_max_el(k) = std::max(rho_max_el(k), rho);
+      }
+      b.AddElementVector(vdofs, b_k.GetData());
+   }
+
+#if 0
+   Vector B(pfes_H1.GetTrueVSize());
+   pfes_H1.GetProlongationMatrix()->MultTranspose(b, B);
+#if 0
+   // H1 lumped projection
+   Vector rhouJ_tv(pfes_H1.GetTrueVSize());
+   for (int i = 0; i < mJ.Size(); i++)
+      for (int v = 0; v < vdim; v++)
+         rhouJ_tv(i + v*mJ.Size()) = B(i + v*mJ.Size()) / mJ(i);
+   rhouJ.Distribute(rhouJ_tv);
+#else
+   // H1 projection
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+
+   CGSolver lin_solver(pfes_H1.GetComm());
+   lin_solver.SetRelTol(1e-10);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetOperator(*MJ.ParallelAssembleInternalMatrix());
+
+   Vector X(pfes_H1.GetTrueVSize());
+   X = 0.;
+   lin_solver.Mult(B, X);
+
+   rhouJ.Distribute(X);
+#endif
+#else
+   Vector rho_min(ndof_h1), rho_max(ndof_h1);
+   ComputeH1SparsityBounds(rho_min_el, rho_max_el, rho_min, rho_max);
+   TransferXYH1Monotonous(b, rho_min, rho_max, detJ, rhoJ);
+
+   // Jacobian product
+   for (int i = 0; i < ndof_h1; i++)
+   {
+      rhoJ(i) *= detJ(i);
+   }
+#endif
+}
+
 void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(
-   const Vector &rhoDetJw, const ParGridFunction &vel, ParGridFunction &rhouJ)
+   const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &vel, ParGridFunction &rhouJ)
 {
    ParFiniteElementSpace &pfes_H1_Lag = *vel.ParFESpace();
    ParFiniteElementSpace &pfes_H1 = *rhouJ.ParFESpace();
    const int vdim = pfes_H1.GetVDim();
-   Vector b(pfes_H1.GetVSize()); b = 0.;
+   const int ndof_h1 = pfes_H1.GetNDofs();
+   const int NE = pfes_H1.GetNE();
+   const int nqp = ir_rho.GetNPoints();
+   DenseMatrix v_min_el(NE, vdim), v_max_el(NE, vdim);
+   v_min_el = +infinity();
+   v_max_el = -infinity();
+   Vector b(ndof_h1*vdim); b = 0.;
    DenseMatrix vel_k, b_k;
    Vector shape_Lag, shape, vel_q(vdim);
    Array<int> vdofs_Lag, vdofs;
-   const int NE = pfes_H1.GetNE();
-   const int nqp = ir_rho.GetNPoints();
    for(int k = 0; k < NE; k++)
    {
       const FiniteElement &fe_Lag = *pfes_H1_Lag.GetFE(k);
@@ -3699,14 +3951,16 @@ void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(
             Vector b_kv;
             b_k.GetColumnReference(v, b_kv);
             b_kv.Add(w * vel_q(v), shape);
+            v_min_el(k,v) = std::min(v_min_el(k,v), vel_q(v));
+            v_max_el(k,v) = std::max(v_max_el(k,v), vel_q(v));
          }
       }
       b.AddElementVector(vdofs, b_k.GetData());
    }
 
+#if 0
    Vector B(pfes_H1.GetTrueVSize());
    pfes_H1.GetProlongationMatrix()->MultTranspose(b, B);
-
 #if 0
    // H1 lumped projection
    Vector rhouJ_tv(pfes_H1.GetTrueVSize());
@@ -3732,6 +3986,25 @@ void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(
    lin_solver.Mult(B, X);
 
    rhouJ.Distribute(X);
+#endif
+#else
+   Vector v_min(ndof_h1), v_max(ndof_h1);
+   for (int v = 0; v < vdim; v++)
+   {
+      const Vector b_v(const_cast<Vector&>(b), v*ndof_h1, ndof_h1);
+      ParGridFunction rhouJ_v(rhoJ.ParFESpace(), rhouJ, v*ndof_h1);
+      Vector v_min_el_v, v_max_el_v;
+      v_min_el.GetColumnReference(v, v_min_el_v);
+      v_max_el.GetColumnReference(v, v_max_el_v);
+      ComputeH1SparsityBounds(v_min_el_v, v_max_el_v, v_min, v_max);
+      TransferXYH1Monotonous(b_v, v_min, v_max, rhoJ, rhouJ_v);
+
+      // Jacobian product
+      for (int i = 0; i < ndof_h1; i++)
+      {
+         rhouJ_v(i) *= rhoJ(i);
+      }
+   }
 #endif
 }
 

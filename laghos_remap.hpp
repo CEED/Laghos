@@ -90,7 +90,7 @@ private:
    Array<int> offsets;
    BlockVector S;
    ParGridFunction v, rho, e;
-   ParGridFunction detJ;
+   ParGridFunction detJ_H1, detJ_L2, rhoJ_H1;
 
    double e_max;
 
@@ -558,6 +558,10 @@ protected:
    void TransferH1Monotonous(const Vector &b, const Vector &dof_min,
                              const Vector &dof_max, ParGridFunction &y) const;
 
+   void TransferXYH1Monotonous(const Vector &b, const Vector &dof_min_y,
+                                const Vector &dof_max_y, const ParGridFunction &x,
+                                ParGridFunction &y) const;
+
    void ComputeH1SparsityBounds(const Vector &el_min, const Vector &el_max,
                                 Vector &dof_min, Vector &dof_max) const;
 
@@ -573,7 +577,8 @@ public:
    // Geometrically consistent
 
    void TransferJac_Larg2Remap(ParGridFunction &detJ);
-   void TransferMomentumJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &vel, ParGridFunction &rhouJ);
+   void TransferDensityJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ);
+   void TransferMomentumJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &vel, ParGridFunction &rhouJ);
    void TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhouJ, ParGridFunction &vel);
 
    ParBilinearForm &GetInterpolationForm() const { return MJ; }
