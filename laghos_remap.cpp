@@ -3280,6 +3280,192 @@ void SolutionTransfer_L2::TransferEnergyJac_Remap2Lagr(
    TransferL2Monotonous(Me, eps_min_loc, eps_max_loc, beps, eps);
 }
 
+// Bounds-preserving H1 projection inspired by FCT and MCL
+void SolutionTransfer_H1::TransferH1Monotonous(
+   const  Vector &b, const Vector &dof_min, const Vector &dof_max,
+   ParGridFunction &y) const
+{
+   ParFiniteElementSpace &pfes_H1_s = *y.ParFESpace();
+   const int dofs_h1 = pfes_H1_s.GetVSize();
+
+   // Build lumped mass matrix
+   Vector mJ_loc(dofs_h1);
+   pfes_H1_s.GetProlongationMatrix()->Mult(mJ, mJ_loc);
+
+   // Step 1: Compute high-order solution M y_HO = b
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+
+   CGSolver lin_solver(pfes_H1_s.GetComm());
+   lin_solver.SetRelTol(1e-10);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetOperator(*MJ_s.ParallelAssembleInternalMatrix());
+
+   Vector B(pfes_H1_s.GetTrueVSize());
+   pfes_H1_s.GetProlongationMatrix()->MultTranspose(b, B);
+
+   Vector Y_HO(pfes_H1_s.GetTrueVSize());
+   Y_HO = 0.;
+   lin_solver.Mult(B, Y_HO);
+
+   Vector y_HO(dofs_h1);
+   pfes_H1_s.GetProlongationMatrix()->Mult(Y_HO, y_HO);
+
+   // Step 2: Compute low-order solution y_LO = b_LO / mJ_loc
+   Vector y_LO(dofs_h1), b_LO(dofs_h1);
+   pfes_H1_s.GetProlongationMatrix()->Mult(B, b_LO);
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      y_LO(i) = b_LO(i) / mJ_loc(i);
+   }
+
+   // Step 3: FCT-style flux limiting
+   // Get diagonal block of the mass matrix (local connectivity)
+   GroupCommunicator &gcomm = pfes_H1_s.GroupComm();
+
+   // Compute sum of incoming and outgoing antidiffusive fluxes
+   Vector P_plus(dofs_h1), P_minus(dofs_h1);
+   P_plus = 0.0;
+   P_minus = 0.0;
+
+   const int *I = MJ_smloc.GetI();
+   const int *J_local = MJ_smloc.GetJ();
+   const real_t *M_data = MJ_smloc.GetData();
+
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      for (int k = I[i]; k < I[i+1]; k++)
+      {
+         int j = J_local[k];
+         if (i == j) continue;
+
+         // Antidiffusive flux: f_ij = M_ij * (y_HO_i - y_HO_j)
+         real_t f_ij = M_data[k] * (y_HO(i) - y_HO(j));
+
+         if (f_ij > 0.0)
+         {
+            P_plus(i) += f_ij;
+         }
+         else
+         {
+            P_minus(i) += f_ij;
+         }
+      }
+   }
+
+   // Share flux sums across processors
+   Array<real_t> P_plus_array(P_plus.GetData(), P_plus.Size());
+   Array<real_t> P_minus_array(P_minus.GetData(), P_minus.Size());
+   gcomm.Reduce<real_t>(P_plus_array, GroupCommunicator::Sum);
+   gcomm.Bcast(P_plus_array);
+   gcomm.Reduce<real_t>(P_minus_array, GroupCommunicator::Sum);
+   gcomm.Bcast(P_minus_array);
+
+   // Compute allowable flux bounds from min/max constraints
+   Vector Q_plus(dofs_h1), Q_minus(dofs_h1);
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      Q_plus(i) = mJ_loc(i) * (dof_max(i) - y_LO(i));
+      Q_minus(i) = mJ_loc(i) * (dof_min(i) - y_LO(i));
+   }
+
+   // Compute flux limiters
+   Vector alpha_plus(dofs_h1), alpha_minus(dofs_h1);
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      alpha_plus(i) = (P_plus(i) > 1e-14) ?
+         std::min(1.0, Q_plus(i) / P_plus(i)) : 1.0;
+
+      alpha_minus(i) = (P_minus(i) < -1e-14) ?
+         std::min(1.0, Q_minus(i) / P_minus(i)) : 1.0;
+   }
+
+   // Step 4: Apply limited fluxes
+   Vector flux_limited(dofs_h1);
+   flux_limited = 0.0;
+
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      for (int k = I[i]; k < I[i+1]; k++)
+      {
+         int j = J_local[k];
+         if (i == j) continue;
+
+         // Antidiffusive flux
+         real_t f_ij = M_data[k] * (y_HO(i) - y_HO(j));
+
+         // Apply limiter: min of sender and receiver alphas
+         real_t alpha_ij;
+         if (f_ij > 0.0)
+         {
+            alpha_ij = std::min(alpha_plus(i), alpha_minus(j));
+         }
+         else
+         {
+            alpha_ij = std::min(alpha_minus(i), alpha_plus(j));
+         }
+
+         flux_limited(i) += alpha_ij * f_ij;
+      }
+   }
+
+   // Share limited fluxes across processors
+   Array<real_t> flux_array(flux_limited.GetData(), flux_limited.Size());
+   gcomm.Reduce<real_t>(flux_array, GroupCommunicator::Sum);
+   gcomm.Bcast(flux_array);
+
+   // Final solution: y = y_LO + flux_limited / m_lumped
+   for (int i = 0; i < dofs_h1; i++)
+   {
+      y(i) = y_LO(i) + flux_limited(i) / mJ_loc(i);
+   }
+}
+
+// Helper function: Compute DOF bounds from element bounds
+// For H1 elements, DOFs are at vertices, so we expand to vertex neighbors
+void SolutionTransfer_H1::ComputeH1SparsityBounds(
+   const Vector &el_min,
+   const Vector &el_max,
+   Vector &dof_min,
+   Vector &dof_max) const
+{
+   ParFiniteElementSpace &pfes = *MJ_s.ParFESpace();
+   const ParMesh *pmesh = pfes.GetParMesh();
+   const int NE = pmesh->GetNE();
+   const int ndofs = pfes.GetVSize();
+
+   dof_min.SetSize(ndofs);
+   dof_max.SetSize(ndofs);
+
+   // Initialize with extreme values
+   dof_min = +infinity();
+   dof_max = -infinity();
+
+   // Collect bounds from all elements touching each vertex/DOF
+   Array<int> dofs;
+   for (int k = 0; k < NE; k++)
+   {
+      pfes.GetElementDofs(k, dofs);
+      for (int i = 0; i < dofs.Size(); i++)
+      {
+         int dof = dofs[i];
+         dof_min(dof) = std::min(dof_min(dof), el_min(k));
+         dof_max(dof) = std::max(dof_max(dof), el_max(k));
+      }
+   }
+
+   // Share across processors
+   GroupCommunicator &gcomm = pfes.GroupComm();
+   Array<real_t> min_array(dof_min.GetData(), dof_min.Size());
+   Array<real_t> max_array(dof_max.GetData(), dof_max.Size());
+   gcomm.Reduce<real_t>(min_array, GroupCommunicator::Min);
+   gcomm.Bcast(min_array);
+   gcomm.Reduce<real_t>(max_array, GroupCommunicator::Max);
+   gcomm.Bcast(max_array);
+}
 
 SolutionTransfer_H1::SolutionTransfer_H1(
    const Array<int> &v_ess_tdofs_, const ParFiniteElementSpace &pfes_H1,
@@ -3335,6 +3521,7 @@ SolutionTransfer_H1::SolutionTransfer_H1(
    MJ.ParallelEliminateTDofs(v_ess_tdofs);
    
    MJ_s.Finalize();
+   MJ_smloc = MJ_s.SpMat();
    MJ_s.ParallelAssembleInternalMatrix();
 }
 
@@ -3416,7 +3603,7 @@ void SolutionTransfer_H1::TransferJac_Larg2Remap(ParGridFunction &detJ)
    ParLinearForm b(&pfes_H1_s);
    b.AddDomainIntegrator(new DomainLFIntegrator(one, &ir_rho));
    b.Assemble();
-
+#if 0
    Vector B(pfes_H1_s.GetTrueVSize());
    b.ParallelAssemble(B);
 
@@ -3444,6 +3631,33 @@ void SolutionTransfer_H1::TransferJac_Larg2Remap(ParGridFunction &detJ)
    lin_solver.Mult(B, X);
 
    detJ.Distribute(X);
+#endif
+#else
+   const int NE = pfes_H1_s.GetNE(), nqp = ir_rho.GetNPoints();
+   Vector detJ_min_loc(NE), detJ_max_loc(NE);
+
+   // Local max / min.
+   for (int k = 0; k < NE; k++)
+   {
+      ElementTransformation &T = *pfes_H1_s.GetElementTransformation(k);
+      detJ_min_loc(k) = +infinity();
+      detJ_max_loc(k) = 0.;
+
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         T.SetIntPoint(&ip);
+         const real_t detJ = T.Jacobian().Det();
+         MFEM_ASSERT(detJ > 0., "Non-positive Jacobian!");
+         detJ_min_loc(k) = std::min(detJ_min_loc(k), detJ);
+         detJ_max_loc(k) = std::max(detJ_max_loc(k), detJ);
+      }
+   }
+
+   const int ndof_h1 = pfes_H1_s.GetVSize();
+   Vector detJ_min_dof(ndof_h1), detJ_max_dof(ndof_h1);
+   ComputeH1SparsityBounds(detJ_min_loc, detJ_max_loc, detJ_min_dof, detJ_max_dof);
+   TransferH1Monotonous(b, detJ_min_dof, detJ_max_dof, detJ);
 #endif
 }
 

@@ -549,10 +549,17 @@ protected:
    const IntegrationRule &ir_rho;
 
    mutable ParBilinearForm MJ, MJ_s;
+   SparseMatrix MJ_smloc;
    Vector mJ;
 
    friend class AdvectorVelocityGeomConsOper;
    using RefMassIntegrator = SolutionTransfer_L2::RefMassIntegrator;
+
+   void TransferH1Monotonous(const Vector &b, const Vector &dof_min,
+                             const Vector &dof_max, ParGridFunction &y) const;
+
+   void ComputeH1SparsityBounds(const Vector &el_min, const Vector &el_max,
+                                Vector &dof_min, Vector &dof_max) const;
 
 public:
    SolutionTransfer_H1(const Array<int> &v_ess_tdofs, const ParFiniteElementSpace &pfes_H1,
