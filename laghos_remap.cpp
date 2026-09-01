@@ -248,7 +248,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    case RemapScheme::GeomConsistent:
    {
       auto *op = new AdvectorGeomConsOper(
-         x0, ess_tdofs, ess_vdofs, u, Sgf[Density], *ir_rho,
+         x0, ess_tdofs, ess_vdofs, u, *ir_rho,
          *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
       ode_solver_gc->Init(*op);
       oper = op;
@@ -556,7 +556,6 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
    const Array<int> &v_ess_td,
    const Array<int> &v_ess_vd,
    ParGridFunction &mesh_vel,
-   ParGridFunction &rho,
    const IntegrationRule &ir_rho_,
    ParFiniteElementSpace &pfes_H1,
    ParFiniteElementSpace &pfes_H1_s,
@@ -564,7 +563,6 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
    RemapAdvector::RemapVelocity remap_v)
   : AdvectorOper(x_start, mesh_vel, pfes_H1, pfes_L2),
     u_coeff(&u),
-    rho_coeff(&rho),
     ir_rho(ir_rho_),
     fec_f(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
     fec_a(pfes_L2.FEColl()->GetOrder()+1, pfes_L2.GetParMesh()->Dimension()),
@@ -577,10 +575,7 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
       op_v = make_unique<AdvectorVelocityGeomConsOper>(
          ir_rho, v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, remap_v);
 
-   // In parallel, the assembly of Kr_L2 needs to see values from MPI-neighbors.
-   // That is, the rho_coeff must be evaluated in MPI-neighbor zones.
-   rho.ExchangeFaceNbrData();
-
+   pfes_L2.ExchangeFaceNbrData();
    op_th = make_unique<AdvectorThermoGeomConsOper>(ir_rho, pfes_L2);
 
    // Reference space divdiv form
@@ -621,12 +616,6 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
       auto *gcop_v = static_cast<AdvectorVelocityGeomConsOper*>(op_v.get());
       gcop_v->MultConserv(flux, v, d_v);
    }
-
-   // In parallel, rho_coeff must be evaluated in MPI-neighbor zones.
-   auto rho_gf_const = dynamic_cast<const ParGridFunction *>
-                       (rho_coeff.GetGridFunction());
-   auto rho_pgf = const_cast<ParGridFunction *>(rho_gf_const);
-   rho_pgf->ExchangeFaceNbrData();
 
    // Thermodynamic remap.
    if (op_th)

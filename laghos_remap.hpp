@@ -223,7 +223,6 @@ public:
       const Vector &x_start, const Array<int> &v_ess_td,
       const Array<int> &v_ess_vd,
       ParGridFunction &mesh_vel,
-      ParGridFunction &rho,
       const IntegrationRule &ir_rho,
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
