@@ -554,8 +554,13 @@ protected:
    friend class AdvectorVelocityGeomConsOper;
    using RefMassIntegrator = SolutionTransfer_L2::RefMassIntegrator;
 
+   void TransferH1Monotonous(const HypreParMatrix &M, const SparseMatrix &M_loc, const Vector &m,
+                             const Vector &b, const Vector &dof_min, const Vector &dof_max,
+                             ParGridFunction &y) const;
+
    void TransferH1Monotonous(const Vector &b, const Vector &dof_min,
-                             const Vector &dof_max, ParGridFunction &y) const;
+                             const Vector &dof_max, ParGridFunction &y) const
+   { TransferH1Monotonous(*MJ_s.ParallelAssembleInternalMatrix(), MJ_smloc, mJ, b, dof_min, dof_max, y); }
 
    void TransferXYH1Monotonous(const Vector &b, const Vector &dof_min_y,
                                 const Vector &dof_max_y, const ParGridFunction &x,
@@ -578,7 +583,7 @@ public:
    void TransferJac_Larg2Remap(ParGridFunction &detJ);
    void TransferDensityJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ);
    void TransferMomentumJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &vel, ParGridFunction &rhouJ);
-   void TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhouJ, ParGridFunction &vel);
+   void TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &rhouJ, ParGridFunction &vel);
 
    ParBilinearForm &GetInterpolationForm() const { return MJ; }
    HypreParMatrix &GetInterpolationMatrix() const { return *MJ.ParallelAssembleInternalMatrix(); }
