@@ -1047,7 +1047,7 @@ int main(int argc, char *argv[])
    const double cfl_remap = 0.1;
 
    RemapAdvector adv(*pmesh, order_v, order_e, cfl_remap,
-                     remap_adv, remap_v_adv, ess_tdofs,
+                     remap_adv, remap_v_adv, ess_tdofs, ess_vdofs,
                      visualization);
 
    int ale_cnt = 0;
@@ -1126,7 +1126,7 @@ int main(int argc, char *argv[])
                           hydro.GetRhoDetJw(), e_gf);
 
          // Remap to x_gf_opt.
-         adv.ComputeAtNewPosition(x_gf_opt, ess_tdofs, ess_vdofs);
+         adv.ComputeAtNewPosition(x_gf_opt);
 
          ParGridFunction v_new(&H1FESpace);
          if (remap_v_gslib)

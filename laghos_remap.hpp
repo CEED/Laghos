@@ -77,7 +77,7 @@ private:
    L2_FECollection fec_L2;
    H1_FECollection fec_H1, fec_H1Lag;
    ParFiniteElementSpace pfes_L2, pfes_H1, pfes_H1_s, pfes_H1Lag;
-   const Array<int> &v_ess_tdofs;
+   const Array<int> &v_ess_tdofs, v_ess_vdofs;
    const IntegrationRule *ir_rho{};
 
    RemapScheme remap_scheme;
@@ -103,7 +103,8 @@ private:
 public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl,
                  RemapScheme remap, RemapVelocity remap_v,
-                 const Array<int> &ess_tdofs, bool visualize);
+                 const Array<int> &ess_tdofs, const Array<int> &ess_vdofs,
+                 bool visualize);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
@@ -111,9 +112,7 @@ public:
                      const Vector &rhoDetJw,
                      const ParGridFunction &energy);
 
-   virtual void ComputeAtNewPosition(const Vector &new_nodes,
-                                     const Array<int> &ess_tdofs,
-                                     const Array<int> &ess_vdofs);
+   virtual void ComputeAtNewPosition(const Vector &new_nodes);
 
    void TransferToLagr(ParGridFunction &rho0_gf, ParGridFunction &vel,
                        const IntegrationRule &ir_rho, Vector &rhoDetJw,
@@ -543,35 +542,46 @@ public:
 class SolutionTransfer_H1
 {
 protected:
-   const Array<int> &v_ess_tdofs;
+   const Array<int> &v_ess_tdofs, v_ess_vdofs;
    // Integration points for the density.
    const IntegrationRule &ir_rho;
+   const ParFiniteElementSpace pfes, pfes_s;
 
-   mutable ParBilinearForm MJ, MJ_s;
+   Array<int> v_ess_vdofs_marker;
+   std::vector<Array<int>> v_ess_vdofs_v, v_ess_tdofs_v;
+   std::vector<OperatorHandle> MJ;
+   OperatorHandle MJ_s;
+   std::vector<SparseMatrix> MJ_mloc;
    SparseMatrix MJ_smloc;
-   Vector mJ;
+   std::vector<Vector> mJ;
+   Vector mJ_s;
 
    friend class AdvectorVelocityGeomConsOper;
    using RefMassIntegrator = SolutionTransfer_L2::RefMassIntegrator;
 
-   void TransferH1Monotonous(const HypreParMatrix &M, const SparseMatrix &M_loc, const Vector &m,
+   void TransferH1Monotonous(const Array<int> &ess_vdofs, const HypreParMatrix &M, const SparseMatrix &M_loc, const Vector &m,
                              const Vector &b, const Vector &dof_min, const Vector &dof_max,
                              ParGridFunction &y) const;
 
-   void TransferH1Monotonous(const Vector &b, const Vector &dof_min,
+   void TransferH1Monotonous(const Array<int> &ess_vdofs, const Vector &b, const Vector &dof_min,
                              const Vector &dof_max, ParGridFunction &y) const
-   { TransferH1Monotonous(*MJ_s.ParallelAssembleInternalMatrix(), MJ_smloc, mJ, b, dof_min, dof_max, y); }
+   { TransferH1Monotonous(ess_vdofs, *MJ_s.As<HypreParMatrix>(), MJ_smloc, mJ_s, b, dof_min, dof_max, y); }
 
-   void TransferXYH1Monotonous(const Vector &b, const Vector &dof_min_y,
-                                const Vector &dof_max_y, const ParGridFunction &x,
-                                ParGridFunction &y) const;
+   void TransferXYH1Monotonous(const Array<int> &ess_vdofs, const HypreParMatrix &M, const SparseMatrix &M_loc, const Vector &m,
+                               const Vector &b, const Vector &dof_min_y, const Vector &dof_max_y,
+                               const ParGridFunction &x, ParGridFunction &y) const;
+
+   void TransferXYH1Monotonous(const Array<int> &ess_vdofs, const Vector &b, const Vector &dof_min_y,
+                                const Vector &dof_max_y, const ParGridFunction &x, ParGridFunction &y) const
+   { TransferXYH1Monotonous(ess_vdofs, *MJ_s.As<HypreParMatrix>(), MJ_smloc, mJ_s, b, dof_min_y, dof_max_y, x, y); }
 
    void ComputeH1SparsityBounds(const Vector &el_min, const Vector &el_max,
                                 Vector &dof_min, Vector &dof_max) const;
 
 public:
-   SolutionTransfer_H1(const Array<int> &v_ess_tdofs, const ParFiniteElementSpace &pfes_H1,
-      const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir);
+   SolutionTransfer_H1(const Array<int> &v_ess_tdofs, const Array<int> &v_ess_vdofs,
+      const ParFiniteElementSpace &pfes_H1, const ParFiniteElementSpace &pfes_H1_s,
+      const IntegrationRule &ir);
 
    // Nonconservative
 
@@ -585,10 +595,10 @@ public:
    void TransferMomentumJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &vel, ParGridFunction &rhouJ);
    void TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &rhouJ, ParGridFunction &vel);
 
-   ParBilinearForm &GetInterpolationForm() const { return MJ; }
-   HypreParMatrix &GetInterpolationMatrix() const { return *MJ.ParallelAssembleInternalMatrix(); }
-   const Vector &GetLumpedInterpolationMatrix() const { return mJ; }
-   HypreParMatrix &GetInterpolationMatrix_s() const { return *MJ_s.ParallelAssembleInternalMatrix(); }
+   HypreParMatrix &GetInterpolationMatrix(int v) const { return *MJ[v].As<HypreParMatrix>(); }
+   const Vector &GetLumpedInterpolationMatrix(int v) const { return mJ[v]; }
+   HypreParMatrix &GetInterpolationMatrix_s() const { return *MJ_s.As<HypreParMatrix>(); }
+   const Vector &GetLumpedInterpolationMatrix_s() const { return mJ_s; }
 };
 
 class LocalInverseHOSolver

@@ -102,7 +102,7 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
                              double cfl, RemapScheme remap_, RemapVelocity remap_v_,
-                             const Array<int> &ess_tdofs, bool vis)
+                             const Array<int> &ess_tdofs, const Array<int> &ess_vdofs, bool vis)
     : pmesh(m, true), dim(pmesh.Dimension()),
     fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
     fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
@@ -111,7 +111,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     pfes_H1(&pmesh, &fec_H1, pmesh.Dimension()),
     pfes_H1_s(&pmesh, (remap_v_ != RemapVelocity::HighOrder)?(&fec_H1):(&fec_H1Lag)),
     pfes_H1Lag(&pmesh, &fec_H1Lag, pmesh.Dimension()),
-    v_ess_tdofs(ess_tdofs),
+    v_ess_tdofs(ess_tdofs), v_ess_vdofs(ess_vdofs),
     remap_scheme(remap_),
     remap_v(remap_v_),
     cfl_factor(cfl),
@@ -166,7 +166,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    *x = x0;
 
    // Velocity
-   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1, pfes_H1_s, rho_ir);
+   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, v_ess_vdofs, pfes_H1, pfes_H1_s, rho_ir);
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
@@ -204,9 +204,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    }
 }
 
-void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
-                                         const Array<int> &ess_tdofs,
-                                         const Array<int> &ess_vdofs)
+void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
 {
    const int vsize_H1 = pfes_H1.GetVSize();
 
@@ -239,7 +237,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    case RemapScheme::Nonconservative:
    {
       oper = new AdvectorNonconservativeOper(
-         x0, ess_tdofs, ess_vdofs, u, Sgf[Density], *ir_rho,
+         x0, v_ess_tdofs, v_ess_vdofs, u, Sgf[Density], *ir_rho,
          *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
       ode_solver->Init(*oper);
       ode = ode_solver.get();
@@ -248,7 +246,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    case RemapScheme::GeomConsistent:
    {
       auto *op = new AdvectorGeomConsOper(
-         x0, ess_tdofs, ess_vdofs, u, *ir_rho,
+         x0, v_ess_tdofs, v_ess_vdofs, u, *ir_rho,
          *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
       ode_solver_gc->Init(*op);
       oper = op;
@@ -280,7 +278,22 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes,
    MPI_Allreduce(&v_loc, &u_max, 1, MPI_DOUBLE, MPI_MAX, pfes_H1Lag.GetComm());
    MPI_Allreduce(&h_loc, &h_min, 1, MPI_DOUBLE, MPI_MIN, pfes_H1Lag.GetComm());
 
-   if (u_max == 0.0) { return; } // No need to change the fields.
+   if (u_max == 0.0)
+   {
+      const real_t mass = oper->Mass(Sgf[Density], 0.);
+      const real_t momentum = oper->Momentum(Sgf[Velocity], 0.);
+      const real_t energy = oper->InternalEnergy(Sgf[Energy], 0.);
+
+      if (pmesh.GetMyRank() == 0)
+      {
+         cout << "remap: "
+              << " mass: " << mass
+              << " momentum: " << momentum
+              << " energy: " << energy
+              << std::endl;
+      }
+      return; // No need to change the fields.
+   }
 
    u_max = std::sqrt(u_max);
    double dt = cfl_factor * h_min / u_max;
@@ -400,7 +413,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    // }
 
    // Velocity
-   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, pfes_H1, pfes_H1_s, ir_rho);
+   SolutionTransfer_H1 transfer_h1(v_ess_tdofs, v_ess_vdofs, pfes_H1, pfes_H1_s, ir_rho);
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
@@ -820,12 +833,12 @@ void AdvectorVelocityOper::HighOrderTargetSchemeVel(const SparseMatrix &K_glb, c
 
 void AdvectorVelocityOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v, Vector &d_v) const
 {
-   GroupCommunicator &gcomm = lummpedMr_H1.ParFESpace()->GroupComm();
+   GroupCommunicator &gcomm = pfes_H1_s.GroupComm();
    //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
    //gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
    //gcomm.Bcast(lumpedmassmatrix_array);
 
-   ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
+   //ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
    const int dim     = pfes_H1_s.GetMesh()->Dimension();
    const int dofs_h1 = pfes_H1_s.GetVSize();
 
@@ -1562,12 +1575,12 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
   ir_rho(ir_rho_), detJ(&pfes_H1_s)
 {
    // Solution transfer
-   trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, pfes_H1, pfes_H1_s, ir_rho);
+   trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, v_ess_vdofs, pfes_H1, pfes_H1_s, ir_rho);
 
    if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
    {
       lumpedMr_H1_vec.SetSize(pfes_H1_s.GetVSize());
-      const Vector &lumpedMr_H1_tvec = trans->GetLumpedInterpolationMatrix();
+      const Vector &lumpedMr_H1_tvec = trans->GetLumpedInterpolationMatrix_s();
       pfes_H1_s.GetProlongationMatrix()->Mult(lumpedMr_H1_tvec, lumpedMr_H1_vec);
    }
 }
@@ -1651,25 +1664,29 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    HypreSmoother prec;
    prec.SetType(HypreSmoother::Jacobi, 1);
 
-   CGSolver lin_solver(pfes_H1.GetComm());
+   CGSolver lin_solver(pfes_H1_s.GetComm());
    lin_solver.SetRelTol(1e-8);
    lin_solver.SetAbsTol(0.0);
    lin_solver.SetMaxIter(100);
    lin_solver.SetPrintLevel(0);
    lin_solver.SetPreconditioner(prec);
-   lin_solver.SetOperator(trans->GetInterpolationMatrix());
 
    const int ntdof = pfes_H1_s.GetTrueVSize();
+   const int ndof = pfes_H1_s.GetNDofs();
 
-   Vector X(ntdof * vdim), RHS(ntdof * vdim);
-   pfes_H1.GetProlongationMatrix()->MultTranspose(bdU, RHS);
+   Vector X(ntdof), RHS(ntdof);
 
-   X = 0.;
-   //MJ.ParallelEliminateTDofsInRHS(v_ess_tdofs, X, RHS);
-      
-   lin_solver.Mult(RHS, X);
-      
-   pfes_H1.GetProlongationMatrix()->Mult(X, dU);
+   for (int v = 0; v < vdim; v++)
+   {
+      const Vector bdU_v(bdU, v*ndof, ndof);
+      Vector dU_v(dU, v*ndof, ndof);
+      pfes_H1.GetProlongationMatrix()->MultTranspose(bdU_v, RHS);
+
+      X = 0.;
+      lin_solver.SetOperator(trans->GetInterpolationMatrix(v));
+      lin_solver.Mult(RHS, X);
+      pfes_H1.GetProlongationMatrix()->Mult(X, dU_v);
+   }
 }
 
 void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
@@ -1678,11 +1695,20 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vecto
 
 real_t AdvectorVelocityGeomConsOper::Momentum(const ParGridFunction &rhouJ) const
 {
-   HypreParMatrix &MJ_m = trans->GetInterpolationMatrix();
-   Vector b(MJ_m.Height());
-   rhouJ.SetTrueVector();
-   MJ_m.Mult(rhouJ.GetTrueVector(), b);
-   real_t mom = b.Sum();
+   
+   const int ndof = pfes_H1_s.GetNDofs();
+   const int ntdof = pfes_H1_s.GetTrueVSize();
+   const int vdim = pfes_H1.GetVDim();
+   Vector rhouJ_tv(ntdof), b(ntdof);
+   real_t mom = 0.;
+   for (int v = 0; v < vdim; v++)
+   {
+      const Vector rhouJ_v(const_cast<ParGridFunction&>(rhouJ), v*ndof, ndof);
+      pfes_H1_s.GetRestrictionOperator()->Mult(rhouJ_v, rhouJ_tv);
+      HypreParMatrix &MJ_m = trans->GetInterpolationMatrix(v);
+      MJ_m.Mult(rhouJ_tv, b);
+      mom += b.Sum();
+   }
    MPI_Allreduce(MPI_IN_PLACE, &mom, 1, MFEM_MPI_REAL_T, MPI_SUM, pfes_H1.GetComm());
    return mom;
 }
@@ -3277,7 +3303,7 @@ void SolutionTransfer_L2::TransferEnergyJac_Remap2Lagr(
 
 // Bounds-preserving H1 projection inspired by FCT and MCL
 void SolutionTransfer_H1::TransferH1Monotonous(
-   const HypreParMatrix &M, const SparseMatrix &M_loc, const Vector &m,
+   const Array<int> &ess_vdofs, const HypreParMatrix &M, const SparseMatrix &M_loc, const Vector &m,
    const  Vector &b, const Vector &dof_min, const Vector &dof_max,
    ParGridFunction &y) const
 {
@@ -3315,6 +3341,11 @@ void SolutionTransfer_H1::TransferH1Monotonous(
    pfes_H1_s.GetProlongationMatrix()->Mult(B, b_LO);
    for (int i = 0; i < dofs_h1; i++)
    {
+      if (ess_vdofs.Size() && ess_vdofs[i])
+      {
+         y_LO(i) = y_HO(i) = 0.;
+         continue;
+      }
       y_LO(i) = (m_loc(i) != 0.)?(b_LO(i) / m_loc(i)):(0.5 * (dof_max(i) + dof_min(i)));
    }
 
@@ -3333,6 +3364,7 @@ void SolutionTransfer_H1::TransferH1Monotonous(
 
    for (int i = 0; i < dofs_h1; i++)
    {
+      if (ess_vdofs.Size() && ess_vdofs[i]) { continue; }
       for (int k = I[i]; k < I[i+1]; k++)
       {
          int j = J_local[k];
@@ -3417,12 +3449,14 @@ void SolutionTransfer_H1::TransferH1Monotonous(
    y = y_LO;
    for (int i = 0; i < dofs_h1; i++)
    {
+      if (ess_vdofs.Size() && ess_vdofs[i]) { continue; }
       y(i) += (m_loc(i) != 0.)?(flux_limited(i) / m_loc(i)):(0.);
    }
 }
 
 // Product version: Transfer x*y with bounds on y, given RHS b = integral(x*y)
 void SolutionTransfer_H1::TransferXYH1Monotonous(
+   const Array<int> &ess_vdofs, const HypreParMatrix &M, const SparseMatrix &M_loc, const Vector &m,
    const Vector &b, const Vector &dof_min_y, const Vector &dof_max_y,
    const ParGridFunction &x, ParGridFunction &y) const
 {
@@ -3431,8 +3465,8 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
    GroupCommunicator &gcomm = pfes_H1_s.GroupComm();
 
    // Build lumped mass matrix
-   Vector mJ_loc(dofs_h1);
-   pfes_H1_s.GetProlongationMatrix()->Mult(mJ, mJ_loc);
+   Vector m_loc(dofs_h1);
+   pfes_H1_s.GetProlongationMatrix()->Mult(m, m_loc);
 
    // Step 1: Compute high-order solution M (x*y)_HO = b
    HypreSmoother prec;
@@ -3444,7 +3478,7 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
    lin_solver.SetMaxIter(100);
    lin_solver.SetPrintLevel(0);
    lin_solver.SetPreconditioner(prec);
-   lin_solver.SetOperator(*MJ_s.ParallelAssembleInternalMatrix());
+   lin_solver.SetOperator(M);
 
    Vector B(pfes_H1_s.GetTrueVSize());
    pfes_H1_s.GetProlongationMatrix()->MultTranspose(b, B);
@@ -3456,12 +3490,17 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
    Vector xy_HO(dofs_h1);
    pfes_H1_s.GetProlongationMatrix()->Mult(XY_HO, xy_HO);
 
-   // Step 2: Compute low-order solution per DOF: y_LO = b_LO / (mJ_loc * x)
+   // Step 2: Compute low-order solution per DOF: y_LO = b_LO / (m_loc * x)
    Vector y_LO(dofs_h1), b_LO(dofs_h1);
    pfes_H1_s.GetProlongationMatrix()->Mult(B, b_LO);
    for (int i = 0; i < dofs_h1; i++)
    {
-      real_t mx_i = mJ_loc(i) * x(i);
+      if (ess_vdofs.Size() && ess_vdofs[i])
+      {
+         y_LO(i) = 0.;
+         continue;
+      }
+      real_t mx_i = m_loc(i) * x(i);
       if (mx_i != 0.)
       {
          y_LO(i) = b_LO(i) / mx_i;
@@ -3474,9 +3513,9 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
    }
 
    // Step 3: FCT-style flux limiting with product formulation
-   const int *I = MJ_smloc.GetI();
-   const int *J_local = MJ_smloc.GetJ();
-   const real_t *M_data = MJ_smloc.GetData();
+   const int *I = M_loc.GetI();
+   const int *J_local = M_loc.GetJ();
+   const real_t *M_data = M_loc.GetData();
 
    // Compute sum of incoming and outgoing antidiffusive fluxes
    // weighted by the product formulation
@@ -3486,6 +3525,7 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
 
    for (int i = 0; i < dofs_h1; i++)
    {
+      if (ess_vdofs.Size() && ess_vdofs[i]) { continue; }
       for (int k = I[i]; k < I[i+1]; k++)
       {
          int j = J_local[k];
@@ -3518,7 +3558,7 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
    Vector Q_plus(dofs_h1), Q_minus(dofs_h1);
    for (int i = 0; i < dofs_h1; i++)
    {
-      const real_t mx_i = mJ_loc(i) * x(i);
+      const real_t mx_i = m_loc(i) * x(i);
       Q_plus(i) = mx_i * (dof_max_y(i) - y_LO(i));
       Q_minus(i) = mx_i * (dof_min_y(i) - y_LO(i));
    }
@@ -3581,7 +3621,8 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
    y = y_LO;
    for (int i = 0; i < dofs_h1; i++)
    {
-      const real_t mx_i = mJ_loc(i) * x(i);
+      if (ess_vdofs.Size() && ess_vdofs[i]) { continue; }
+      const real_t mx_i = m_loc(i) * x(i);
       y(i) += (mx_i != 0.)?(flux_limited(i) / mx_i):(0.);
    }
 }
@@ -3594,10 +3635,9 @@ void SolutionTransfer_H1::ComputeH1SparsityBounds(
    Vector &dof_min,
    Vector &dof_max) const
 {
-   ParFiniteElementSpace &pfes = *MJ_s.ParFESpace();
-   const ParMesh *pmesh = pfes.GetParMesh();
+   const ParMesh *pmesh = pfes_s.GetParMesh();
    const int NE = pmesh->GetNE();
-   const int ndofs = pfes.GetVSize();
+   const int ndofs = pfes_s.GetVSize();
 
    dof_min.SetSize(ndofs);
    dof_max.SetSize(ndofs);
@@ -3610,7 +3650,7 @@ void SolutionTransfer_H1::ComputeH1SparsityBounds(
    Array<int> dofs;
    for (int k = 0; k < NE; k++)
    {
-      pfes.GetElementDofs(k, dofs);
+      pfes_s.GetElementDofs(k, dofs);
       for (int i = 0; i < dofs.Size(); i++)
       {
          int dof = dofs[i];
@@ -3620,7 +3660,7 @@ void SolutionTransfer_H1::ComputeH1SparsityBounds(
    }
 
    // Share across processors
-   GroupCommunicator &gcomm = pfes.GroupComm();
+   const GroupCommunicator &gcomm = pfes_s.GroupComm();
    Array<real_t> min_array(dof_min.GetData(), dof_min.Size());
    Array<real_t> max_array(dof_max.GetData(), dof_max.Size());
    gcomm.Reduce<real_t>(min_array, GroupCommunicator::Min);
@@ -3630,13 +3670,16 @@ void SolutionTransfer_H1::ComputeH1SparsityBounds(
 }
 
 SolutionTransfer_H1::SolutionTransfer_H1(
-   const Array<int> &v_ess_tdofs_, const ParFiniteElementSpace &pfes_H1,
-   const ParFiniteElementSpace &pfes_H1_s, const IntegrationRule &ir)
-: v_ess_tdofs(v_ess_tdofs_), ir_rho(ir), MJ(const_cast<ParFiniteElementSpace*>(&pfes_H1)),
-  MJ_s(const_cast<ParFiniteElementSpace*>(&pfes_H1_s))
+   const Array<int> &v_ess_tdofs_, const Array<int> &v_ess_vdofs_,
+   const ParFiniteElementSpace &pfes_H1, const ParFiniteElementSpace &pfes_H1_s,
+   const IntegrationRule &ir)
+: v_ess_tdofs(v_ess_tdofs_), v_ess_vdofs(v_ess_vdofs_), ir_rho(ir),
+  pfes(pfes_H1), pfes_s(pfes_H1_s)
 {
    const ParMesh &pmesh = *pfes_H1_s.GetParMesh();
    const int vdim = pfes_H1.GetVDim();
+
+   FiniteElementSpace::ListToMarker(v_ess_vdofs, pfes_H1.GetVSize(), v_ess_vdofs_marker);
 
    // Interpolation matrix and lumped diagonal
    RefMassIntegrator mi(&ir_rho);
@@ -3654,37 +3697,67 @@ SolutionTransfer_H1::SolutionTransfer_H1(
    }
 
    // Assemble the interpolation (lumped) mass matrix
-   Vector mJ_loc(pfes_H1_s.GetVSize());
+   ParBilinearForm MJ_sbf(const_cast<ParFiniteElementSpace*>(&pfes_H1_s));
+   Vector mJ_sloc(pfes_H1_s.GetVSize());
    Array<int> dofs, vdofs;
-   MJ.AllocateMatrix();
-   MJ_s.AllocateMatrix();
-   mJ_loc = 0.;
+   MJ_sbf.AllocateMatrix();
+   mJ_sloc = 0.;
    const int NE = pmesh.GetNE();
    for (int k = 0; k < NE; k++)
    {
       pfes_H1_s.GetElementDofs(k, dofs);
       Geometry::Type g = pfes_H1_s.GetFE(k)->GetGeomType();
-      mJ_loc.AddElementVector(dofs, mJ_g[g]);
+      mJ_sloc.AddElementVector(dofs, mJ_g[g]);
 
-      MJ_s.SpMat().AddSubMatrix(dofs, dofs, MJ_g[g]);
-
-      for (int v = 0; v < vdim; v++)
-      {
-         vdofs = dofs;
-         pfes_H1.DofsToVDofs(v, vdofs);
-         MJ.SpMat().AddSubMatrix(vdofs, vdofs, MJ_g[g]);
-      }
+      MJ_sbf.SpMat().AddSubMatrix(dofs, dofs, MJ_g[g]);
    }
-   mJ.SetSize(pfes_H1_s.GetTrueVSize());
-   pfes_H1_s.GetProlongationMatrix()->MultTranspose(mJ_loc, mJ);
-
-   MJ.Finalize();
-   MJ.ParallelAssembleInternalMatrix();
-   MJ.ParallelEliminateTDofs(v_ess_tdofs);
+   mJ_s.SetSize(pfes_H1_s.GetTrueVSize());
+   pfes_H1_s.GetProlongationMatrix()->MultTranspose(mJ_sloc, mJ_s);
    
-   MJ_s.Finalize();
-   MJ_smloc = MJ_s.SpMat();
-   MJ_s.ParallelAssembleInternalMatrix();
+   MJ_sbf.Finalize();
+   MJ_smloc = MJ_sbf.SpMat();
+   MJ_s.SetType(Operator::Hypre_ParCSR);
+   MJ_sbf.ParallelAssemble(MJ_s);
+
+   v_ess_tdofs_v.resize(vdim);
+   const int ntdofs = pfes_H1_s.GetTrueVSize();
+   for (int i = 0; i < v_ess_tdofs.Size(); i++)
+   {
+      const int v = v_ess_tdofs[i] / ntdofs;
+      const int tdof = v_ess_tdofs[i] % ntdofs;
+      v_ess_tdofs_v[v].Append(tdof);
+   }
+
+   v_ess_vdofs_v.resize(vdim);
+   const int nvdofs = pfes_H1_s.GetVSize();
+   for (int i = 0; i < v_ess_vdofs.Size(); i++)
+   {
+      const int v = v_ess_vdofs[i] / nvdofs;
+      const int vdof = v_ess_vdofs[i] % nvdofs;
+      v_ess_vdofs_v[v].Append(vdof);
+   }
+
+   MJ.resize(vdim);
+   MJ_mloc.resize(vdim);
+   mJ.resize(vdim);
+   Vector mJ_loc(pfes_H1_s.GetVSize());
+   for (int v = 0; v < vdim; v++)
+   {
+      ParBilinearForm MJ_bf(const_cast<ParFiniteElementSpace*>(&pfes_H1_s));
+      MJ_bf.AllocateMatrix();
+      MJ_bf.SpMat() = MJ_smloc;
+      MJ_bf.Finalize();
+      MJ[v].SetType(Operator::Hypre_ParCSR);
+      MJ_bf.ParallelAssemble(MJ[v]);
+      MJ[v].As<HypreParMatrix>()->EliminateBC(v_ess_tdofs_v[v], Operator::DiagonalPolicy::DIAG_ONE);
+
+      MJ_mloc[v] = MJ_smloc;
+      MJ_mloc[v].EliminateBC(v_ess_vdofs_v[v], Operator::DiagonalPolicy::DIAG_ONE);
+      MJ_mloc[v].GetRowSums(mJ_loc);
+      mJ[v].SetSize(ntdofs);
+      pfes_s.GetProlongationMatrix()->MultTranspose(mJ_loc, mJ[v]);
+      mJ[v].SetSubVector(v_ess_tdofs_v[v], 0.);
+   }
 }
 
 void SolutionTransfer_H1::TransferVelocity_Lagr2Remap(const ParGridFunction &vel_Lag, ParGridFunction &vel)
@@ -3819,7 +3892,8 @@ void SolutionTransfer_H1::TransferJac_Larg2Remap(ParGridFunction &detJ)
    const int ndof_h1 = pfes_H1_s.GetVSize();
    Vector detJ_min_dof(ndof_h1), detJ_max_dof(ndof_h1);
    ComputeH1SparsityBounds(detJ_min_loc, detJ_max_loc, detJ_min_dof, detJ_max_dof);
-   TransferH1Monotonous(b, detJ_min_dof, detJ_max_dof, detJ);
+   const Array<int> ess_vdofs;
+   TransferH1Monotonous(ess_vdofs, b, detJ_min_dof, detJ_max_dof, detJ);
 #endif
 }
 
@@ -3861,8 +3935,8 @@ void SolutionTransfer_H1::TransferDensityJac_Lagr2Remap(
    }
 
 #if 0
-   Vector B(pfes_H1.GetTrueVSize());
-   pfes_H1.GetProlongationMatrix()->MultTranspose(b, B);
+   Vector B(pfes_H1_s.GetTrueVSize());
+   pfes_H1_s.GetProlongationMatrix()->MultTranspose(b, B);
 #if 0
    // H1 lumped projection
    Vector rhouJ_tv(pfes_H1.GetTrueVSize());
@@ -3874,25 +3948,25 @@ void SolutionTransfer_H1::TransferDensityJac_Lagr2Remap(
    // H1 projection
    HypreSmoother prec;
    prec.SetType(HypreSmoother::Jacobi, 1);
-
-   CGSolver lin_solver(pfes_H1.GetComm());
+   CGSolver lin_solver(pfes_H1_s.GetComm());
    lin_solver.SetRelTol(1e-10);
    lin_solver.SetAbsTol(0.0);
    lin_solver.SetMaxIter(100);
    lin_solver.SetPrintLevel(0);
    lin_solver.SetPreconditioner(prec);
-   lin_solver.SetOperator(*MJ.ParallelAssembleInternalMatrix());
+   lin_solver.SetOperator(*MJ_s.ParallelAssembleInternalMatrix());
 
-   Vector X(pfes_H1.GetTrueVSize());
+   Vector X(pfes_H1_s.GetTrueVSize());
    X = 0.;
    lin_solver.Mult(B, X);
 
-   rhouJ.Distribute(X);
+   rhoJ.Distribute(X);
 #endif
 #else
    Vector rho_min(ndof_h1), rho_max(ndof_h1);
    ComputeH1SparsityBounds(rho_min_el, rho_max_el, rho_min, rho_max);
-   TransferXYH1Monotonous(b, rho_min, rho_max, detJ, rhoJ);
+   const Array<int> ess_vdofs_v;
+   TransferXYH1Monotonous(ess_vdofs_v, b, rho_min, rho_max, detJ, rhoJ);
 
    // Jacobian product
    for (int i = 0; i < ndof_h1; i++)
@@ -3990,9 +4064,12 @@ void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(
       v_min_el.GetColumnReference(v, v_min_el_v);
       v_max_el.GetColumnReference(v, v_max_el_v);
       ComputeH1SparsityBounds(v_min_el_v, v_max_el_v, v_min, v_max);
-      TransferXYH1Monotonous(b_v, v_min, v_max, rhoJ, rhouJ_v);
+      const Array<int> ess_vdofs_v(v_ess_vdofs_marker.GetData() + ndof_h1*v, ndof_h1);
+      TransferXYH1Monotonous(
+         ess_vdofs_v, *MJ[v].As<HypreParMatrix>(), MJ_mloc[v], mJ[v],
+         b_v, v_min, v_max, rhoJ, rhouJ_v);
 
-      // Jacobian product
+      // density * Jacobian product
       for (int i = 0; i < ndof_h1; i++)
       {
          rhouJ_v(i) *= rhoJ(i);
@@ -4065,55 +4142,82 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(
 #else
    // H1 projection
    ParFiniteElementSpace pfes_H1_Lag_s(pfes_H1_Lag.GetParMesh(), pfes_H1_Lag.FEColl());
-   ParBilinearForm Mv(&pfes_H1_Lag_s);
    const int ndofs_Lag = pfes_H1_Lag_s.GetVSize();
-   Vector mv(ndofs_Lag); mv = 0.;
-   DenseMatrix rhouJ_k, Mv_k;
-   Vector shape_Lag, m_k;
-   Array<int> dofs_Lag;
+   const int ntdofs_Lag = pfes_H1_Lag_s.GetTrueVSize();
+   SparseMatrix Mv_s(ndofs_Lag);
+   Vector b(ndofs_Lag * vdim); b = 0.;
+   DenseMatrix rhouJ_k, b_k, Mv_k;
+   Vector shape, shape_Lag, rhouJ_q(vdim);
+   Array<int> dofs_Lag, vdofs, vdofs_Lag;
    const int NE = pfes_H1_Lag.GetNE();
    const int nqp = ir_rho.GetNPoints();
    for(int k = 0; k < NE; k++)
    {
+      const FiniteElement &fe = *pfes_H1_s.GetFE(k);
       const FiniteElement &fe_Lag = *pfes_H1_Lag_s.GetFE(k);
-      const int ndofs_Lag = fe_Lag.GetDof();
-      shape_Lag.SetSize(ndofs_Lag);
+      const int nd = fe.GetDof();
+      const int nd_Lag = fe_Lag.GetDof();
+      
+      shape.SetSize(nd);
+      shape_Lag.SetSize(nd_Lag);
+      
       pfes_H1_Lag_s.GetElementDofs(k, dofs_Lag);
-      Mv_k.SetSize(ndofs_Lag);
+      vdofs_Lag = dofs_Lag;
+      pfes_H1_Lag.DofsToVDofs(vdofs_Lag);
+      
+      pfes_H1.GetElementVDofs(k, vdofs);
+      rhouJ_k.SetSize(nd, vdim);
+      rhouJ.GetSubVector(vdofs, rhouJ_k.GetData());
+
+      b_k.SetSize(nd_Lag, vdim);
+      b_k = 0.;
+      Mv_k.SetSize(nd_Lag);
       Mv_k = 0.;
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         fe.CalcShape(ip, shape);
          fe_Lag.CalcShape(ip, shape_Lag);
+         rhouJ_k.MultTranspose(shape, rhouJ_q);
+
+         for (int v = 0; v < vdim; v++)
+         {
+            Vector b_kv;
+            b_k.GetColumnReference(v, b_kv);
+            b_kv.Add(ip.weight * rhouJ_q(v), shape_Lag);
+         }
+
          const real_t w = rhoDetJw(k * nqp + q);
          AddMult_a_VVt(w, shape_Lag, Mv_k);
       }
 
-      Mv.AssembleElementMatrix(k, Mv_k);
-
-      Mv_k.GetRowSums(m_k);
-      mv.AddElementVector(dofs_Lag, m_k);
+      b.AddElementVector(vdofs_Lag, b_k.GetData());
+      Mv_s.AddSubMatrix(dofs_Lag, dofs_Lag, Mv_k);
    }
+   Mv_s.Finalize();
+   b.SetSubVector(v_ess_vdofs, 0.);
+   
+   vector<OperatorHandle> Mv(vdim);
+   vector<SparseMatrix> Mv_loc(vdim);
+   vector<Vector> mv(vdim);
+   Vector mv_loc(ndofs_Lag);
+   for (int v = 0; v < vdim; v++)
+   {
+      ParBilinearForm Mv_bf(&pfes_H1_Lag_s);
+      Mv_bf.AllocateMatrix();
+      Mv_bf.SpMat() = Mv_s;
+      Mv[v].SetType(Operator::Hypre_ParCSR);
+      Mv_bf.ParallelAssemble(Mv[v]);
+      Mv[v].As<HypreParMatrix>()->EliminateBC(v_ess_tdofs_v[v], Operator::DiagonalPolicy::DIAG_ONE);
 
-   Mv.Assemble();
-   Mv.Finalize();
-   SparseMatrix Mv_loc = Mv.SpMat();
-   HypreParMatrix &Mv_m = *Mv.ParallelAssembleInternalMatrix();
-
-   ParMixedBilinearForm Mb(&pfes_H1, &pfes_H1_Lag);
-   auto *mi = new RefMassIntegrator(&ir_rho);
-   mi->SetVDim(vdim);
-   Mb.AddDomainIntegrator(mi);
-   Mb.Assemble();
-   Mb.Finalize();
-   HypreParMatrix &Mb_m = *Mb.ParallelAssembleInternalMatrix();
-   Mb_m.EliminateBC(v_ess_tdofs, Operator::DiagonalPolicy::DIAG_ONE);
-
-   const int ntdofs = pfes_H1_s.GetTrueVSize();
-   const int ntdofs_Lag = pfes_H1_Lag_s.GetTrueVSize();
-   Vector B(ntdofs_Lag * vdim), rhouJ_tv(ntdofs * vdim);
-   pfes_H1.GetRestrictionOperator()->Mult(rhouJ, rhouJ_tv);
-   Mb_m.Mult(rhouJ_tv, B);
+      Mv_loc[v] = Mv_s;
+      Mv_loc[v].EliminateBC(v_ess_vdofs_v[v], Operator::DiagonalPolicy::DIAG_ONE);
+      
+      Mv_loc[v].GetRowSums(mv_loc);
+      mv[v].SetSize(ntdofs_Lag);
+      pfes_H1_Lag_s.GetProlongationMatrix()->MultTranspose(mv_loc, mv[v]);
+      mv[v].SetSubVector(v_ess_tdofs_v[v], 0.);
+   }
 
 #if 0
    HypreSmoother prec;
@@ -4142,7 +4246,7 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(
    v_min_el = +infinity();
    v_max_el = -infinity();
    Vector rhoJ_k;
-   Array<int> dofs, vdofs;
+   Array<int> dofs;
 
    for(int k = 0; k < NE; k++)
    {
@@ -4161,10 +4265,6 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(
          }
    }
 
-   Vector b(pfes_H1_Lag.GetVSize());
-   pfes_H1_Lag.GetRestrictionOperator()->MultTranspose(B, b);
-   Vector mv_tv(ntdofs_Lag);
-   pfes_H1_Lag_s.GetProlongationMatrix()->MultTranspose(mv, mv_tv);
    Vector v_min(ndofs_Lag), v_max(ndofs_Lag);
    for (int v = 0; v < vdim; v++)
    {
@@ -4173,9 +4273,11 @@ void SolutionTransfer_H1::TransferMomentumJac_Remap2Lagr(
       Vector v_min_el_v, v_max_el_v;
       v_min_el.GetColumnReference(v, v_min_el_v);
       v_max_el.GetColumnReference(v, v_max_el_v);
-
+      
       ComputeH1SparsityBounds(v_min_el_v, v_max_el_v, v_min, v_max);
-      TransferH1Monotonous(Mv_m, Mv_loc, mv_tv, b_v, v_min, v_max, vel_v);
+      const Array<int> v_ess_vdofs_marker_v(v_ess_vdofs_marker.GetData() + ndofs_Lag*v, ndofs_Lag);
+      TransferH1Monotonous(v_ess_vdofs_marker_v, *Mv[v].As<HypreParMatrix>(), Mv_loc[v], mv[v],
+                           b_v, v_min, v_max, vel_v);
    }
 #endif
 #endif
