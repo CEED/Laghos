@@ -155,10 +155,10 @@ public:
    void SetDt(real_t delta_t);
    void SetTime(real_t t) override;
 
-   real_t Momentum(ParGridFunction &v, real_t t);
+   real_t Momentum(const ParGridFunction &v, real_t t);
    //real_t Interface(ParGridFunction &xi, real_t t);
-   real_t Mass(ParGridFunction &rho, real_t t);
-   real_t InternalEnergy(ParGridFunction &e, real_t t);
+   real_t Mass(const ParGridFunction &rho, real_t t);
+   real_t InternalEnergy(const ParGridFunction &e, real_t t);
 };
 
 // Performs a single remap advection step - nonconservative scheme
@@ -273,7 +273,7 @@ public:
       ParFiniteElementSpace &pfes_H1_s,
       RemapAdvector::RemapVelocity scheme);
 
-   virtual real_t Momentum(ParGridFunction &v) const = 0;
+   virtual real_t Momentum(const ParGridFunction &v) const = 0;
 };
 
 // Performs a single velocity remap advection step - nonconservative scheme
@@ -300,7 +300,7 @@ public:
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
 
-   real_t Momentum(ParGridFunction &v) const override;
+   real_t Momentum(const ParGridFunction &v) const override;
 };
 
 // Performs a single velocity remap advection step - geometrically consistent scheme
@@ -351,7 +351,7 @@ public:
    void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
    void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
 
-   real_t Momentum(ParGridFunction &v) const override;
+   real_t Momentum(const ParGridFunction &v) const override;
 };
 
 // Performs a single thermodynamic remap advection step.
@@ -386,8 +386,8 @@ public:
 
    void SetDt(double delta_t) { dt = delta_t; }
 
-   virtual real_t Mass(ParGridFunction &rho) const = 0;
-   virtual real_t InternalEnergy(ParGridFunction &e) const = 0;
+   virtual real_t Mass(const ParGridFunction &rho) const = 0;
+   virtual real_t InternalEnergy(const ParGridFunction &e) const = 0;
 };
 
 // Performs a single thermodynamic remap advection step - nonsconservative scheme
@@ -409,8 +409,8 @@ public:
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override;
 
-   real_t Mass(ParGridFunction &rho) const override;
-   real_t InternalEnergy(ParGridFunction &e) const override;
+   real_t Mass(const ParGridFunction &rho) const override;
+   real_t InternalEnergy(const ParGridFunction &e) const override;
 };
 
 // Performs a single thermodynamic remap advection step - geometrically consistent scheme
@@ -468,8 +468,8 @@ public:
    void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
    void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
 
-   real_t Mass(ParGridFunction &rhoJ) const override;
-   real_t InternalEnergy(ParGridFunction &rhoeJ) const override;
+   real_t Mass(const ParGridFunction &rhoJ) const override;
+   real_t InternalEnergy(const ParGridFunction &rhoeJ) const override;
 };
 
 // Transfer of data between the Lagrange and the remap phases.

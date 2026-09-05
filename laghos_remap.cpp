@@ -466,7 +466,7 @@ void AdvectorOper::SetTime(real_t t)
    if (op_th) { op_th->SetTime(t); }
 }
 
-real_t AdvectorOper::Momentum(ParGridFunction &v, real_t t)
+real_t AdvectorOper::Momentum(const ParGridFunction &v, real_t t)
 {
    add(x0, t, u, x_now);
 
@@ -474,14 +474,14 @@ real_t AdvectorOper::Momentum(ParGridFunction &v, real_t t)
    return 0.;
 }
 
-real_t AdvectorOper::Mass(ParGridFunction &rho, real_t t)
+real_t AdvectorOper::Mass(const ParGridFunction &rho, real_t t)
 {
    add(x0, t, u, x_now);
    if (op_th) { return op_th->Mass(rho); }
    return 0.;
 }
 
-real_t AdvectorOper::InternalEnergy(ParGridFunction &e, real_t t)
+real_t AdvectorOper::InternalEnergy(const ParGridFunction &e, real_t t)
 {
    add(x0, t, u, x_now);
    if (op_th) { return op_th->InternalEnergy(e); }
@@ -1432,7 +1432,7 @@ void AdvectorVelocityNonconservativeOper::Mult(const Vector &v, Vector &d_v) con
    }
 }
 
-real_t AdvectorVelocityNonconservativeOper::Momentum(ParGridFunction &v) const
+real_t AdvectorVelocityNonconservativeOper::Momentum(const ParGridFunction &v) const
 {
    Mr_H1.BilinearForm::operator=(0.0);
    Mr_H1.Assemble();
@@ -1676,7 +1676,7 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vecto
 {
 }
 
-real_t AdvectorVelocityGeomConsOper::Momentum(ParGridFunction &rhouJ) const
+real_t AdvectorVelocityGeomConsOper::Momentum(const ParGridFunction &rhouJ) const
 {
    HypreParMatrix &MJ_m = trans->GetInterpolationMatrix();
    Vector b(MJ_m.Height());
@@ -1812,7 +1812,7 @@ void AdvectorThermoNonconservativeOper::Mult(const Vector &U, Vector &dU) const
                                 e_min, e_max, d_e);
 }
 
-real_t AdvectorThermoNonconservativeOper::Mass(ParGridFunction &rho) const
+real_t AdvectorThermoNonconservativeOper::Mass(const ParGridFunction &rho) const
 {
    M_L2.BilinearForm::operator=(0.0);
    M_L2.Assemble();
@@ -1827,7 +1827,7 @@ real_t AdvectorThermoNonconservativeOper::Mass(ParGridFunction &rho) const
    return glob_rho;
 }
 
-real_t AdvectorThermoNonconservativeOper::InternalEnergy(ParGridFunction &e) const
+real_t AdvectorThermoNonconservativeOper::InternalEnergy(const ParGridFunction &e) const
 {
    Mr_L2.BilinearForm::operator=(0.0);
    Mr_L2.Assemble();
@@ -2564,7 +2564,7 @@ void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector 
    }
 }
 
-real_t AdvectorThermoGeomConsOper::Mass(ParGridFunction &rhoJ) const
+real_t AdvectorThermoGeomConsOper::Mass(const ParGridFunction &rhoJ) const
 {
    real_t mass = 0.;
 
@@ -2594,7 +2594,7 @@ real_t AdvectorThermoGeomConsOper::Mass(ParGridFunction &rhoJ) const
    return mass;
 }
 
-real_t AdvectorThermoGeomConsOper::InternalEnergy(ParGridFunction &rhoeJ) const
+real_t AdvectorThermoGeomConsOper::InternalEnergy(const ParGridFunction &rhoeJ) const
 {
    return Mass(rhoeJ);
 }
