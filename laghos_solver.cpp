@@ -200,8 +200,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    CG_VMass(H1.GetParMesh()->GetComm()),
    CG_EMass(L2.GetParMesh()->GetComm()),
    timer(p_assembly ? L2TVSize : 1),
-   X(H1c.GetTrueVSize()),
-   B(H1c.GetTrueVSize()),
+   X(H1TVSize),
+   B(H1TVSize),
    one(L2Vsize),
    rhs(H1Vsize),
    e_rhs(L2Vsize),
@@ -276,7 +276,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
       Mv.AddBdrFaceIntegrator(nvmi);
    }
    Mv.Assemble();
+   Mv.Finalize();
    Mv_spmat_copy = Mv.SpMat();
+   Mv.ParallelAssembleInternalMatrix();
+   Mv.ParallelEliminateTDofs(ess_tdofs);
 
    // Values of rho0DetJ0 and Jac0inv at all quadrature points.
    // Initial local mesh size (assumes all mesh elements are the same).
@@ -408,14 +411,15 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
       rhs += rhs_accel;
    }
 
-   HypreParMatrix A;
-   Mv.FormLinearSystem(ess_tdofs, dv, rhs, A, X, B);
+   X = 0.;
+   H1.GetProlongationMatrix()->MultTranspose(rhs, B);
+   Mv.ParallelEliminateTDofsInRHS(ess_tdofs, X, B);
 
    CGSolver cg(H1.GetParMesh()->GetComm());
    HypreSmoother prec;
    prec.SetType(HypreSmoother::Jacobi, 1);
    cg.SetPreconditioner(prec);
-   cg.SetOperator(A);
+   cg.SetOperator(*Mv.ParallelAssembleInternalMatrix());
    cg.SetRelTol(cg_rel_tol);
    cg.SetAbsTol(0.0);
    cg.SetMaxIter(cg_max_iter);
@@ -423,7 +427,7 @@ void LagrangianHydroOperator::SolveVelocity(const Vector &S,
    print_level.Summary();
    cg.SetPrintLevel(-1);
    cg.Mult(B, X);
-   Mv.RecoverFEMSolution(X, rhs, dv);
+   dv.Distribute(X);
 }
 
 void LagrangianHydroOperator::SolveEnergy(const Vector &S, const Vector &v,
@@ -504,7 +508,10 @@ void LagrangianHydroOperator::UpdateMassMatrices(Coefficient &rho_coeff)
    Mv.Update();
    Mv.BilinearForm::operator=(0.0);
    Mv.Assemble();
+   Mv.Finalize();
    Mv_spmat_copy = Mv.SpMat();
+   Mv.ParallelAssembleInternalMatrix();
+   Mv.ParallelEliminateTDofs(ess_tdofs);
 
    Vector ones(Mv.Size()), out(Mv.Size());
    ones = 1.0;
