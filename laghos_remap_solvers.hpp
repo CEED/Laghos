@@ -39,7 +39,7 @@ public:
 
 class ForwardEulerSolver : public GeomConsODESolver
 {
-    Vector dU;
+    Vector dU, dU_LO;
     ParGridFunction flux;
 public:
     void Init(TimeDependentGeomConsOperator &f) override;

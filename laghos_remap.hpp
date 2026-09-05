@@ -126,7 +126,8 @@ public:
    virtual void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) { }
    virtual void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
    { this->Mult(U, dU); }
-   virtual void LimitUpdate(real_t dt, const Vector &U, Vector &dU) { }
+   virtual void MultConservLowOrder(const ParGridFunction &flux, const Vector &U, Vector &dU) const { }
+   virtual void LimitUpdate(real_t dt, const Vector &U, const Vector &dU_LO, Vector &dU) { }
 };
 
 class AdvectorVelocityOper;
@@ -234,7 +235,8 @@ public:
 
    void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) override;
    void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
-   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+   void MultConservLowOrder(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, const Vector &dU_LO, Vector &dU) override;
 };
 
 // Performs a single velocity remap advection step.
@@ -348,7 +350,8 @@ public:
    { MFEM_ABORT("Geometrically conservative operator cannot be integrated classically!"); }
 
    void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
-   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+   void MultConservLowOrder(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, const Vector &dU_LO, Vector &dU) override;
 
    real_t Momentum(const ParGridFunction &v) const override;
 };
@@ -423,6 +426,7 @@ protected:
    mutable ParGridFunction detJ;
    Vector MJ_lumped;
    mutable SparseMatrix MJ, KJ;
+   mutable Array<int> kmap;
 
    class RefConvectionIntegrator : public BilinearFormIntegrator
    {
@@ -437,6 +441,11 @@ protected:
       void AssembleElementMatrix(const FiniteElement &fe,
                                  ElementTransformation &Tr,
                                  DenseMatrix &elmat) override;
+
+      void AssembleElementVector(const FiniteElement &el,
+                                 ElementTransformation &Trans,
+                                 const Vector &elfun,
+                                 Vector &elvec) override;
    };
 
    class RefFaceConvectionIntegrator : public BilinearFormIntegrator
@@ -453,6 +462,12 @@ protected:
                               const FiniteElement &fe2,
                               FaceElementTransformations &Trans,
                               DenseMatrix &elmat) override;
+
+      void AssembleFaceVector(const FiniteElement &fe1, 
+                              const FiniteElement &fe2,
+                              FaceElementTransformations &Trans,
+                              const Vector &elfun,
+                              Vector &elvec) override;
    };
 
 public:
@@ -465,7 +480,8 @@ public:
    { MFEM_ABORT("Geometrically conservative operator cannot be integrated classically!"); }
 
    void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
-   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+   void MultConservLowOrder(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, const Vector &dU_LO, Vector &dU) override;
 
    real_t Mass(const ParGridFunction &rhoJ) const override;
    real_t InternalEnergy(const ParGridFunction &rhoeJ) const override;
