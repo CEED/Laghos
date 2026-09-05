@@ -3910,14 +3910,14 @@ void SolutionTransfer_H1::TransferDensityJac_Lagr2Remap(
    Vector b(ndof_h1); b = 0.;
    Vector b_k;
    Vector shape;
-   Array<int> vdofs_Lag, vdofs;
+   Array<int> dofs;
    for(int k = 0; k < NE; k++)
    {
       const FiniteElement &fe = *pfes_H1_s.GetFE(k);
       ElementTransformation &Tr = *pfes_H1_s.GetElementTransformation(k);
       const int ndofs = fe.GetDof();
       shape.SetSize(ndofs);
-      pfes_H1_s.GetElementVDofs(k, vdofs);
+      pfes_H1_s.GetElementDofs(k, dofs);
       b_k.SetSize(ndofs);
       b_k = 0.;
       for (int q = 0; q < nqp; q++)
@@ -3931,7 +3931,7 @@ void SolutionTransfer_H1::TransferDensityJac_Lagr2Remap(
          rho_min_el(k) = std::min(rho_min_el(k), rho);
          rho_max_el(k) = std::max(rho_max_el(k), rho);
       }
-      b.AddElementVector(vdofs, b_k.GetData());
+      b.AddElementVector(dofs, b_k.GetData());
    }
 
 #if 0
@@ -4074,6 +4074,93 @@ void SolutionTransfer_H1::TransferMomentumJac_Lagr2Remap(
       {
          rhouJ_v(i) *= rhoJ(i);
       }
+   }
+#endif
+}
+
+void SolutionTransfer_H1::TransferDensityJac_L22H1(
+   const ParGridFunction &detJ_L2, const ParGridFunction &rhoJ_L2, const ParGridFunction &detJ, ParGridFunction &rhoJ)
+{
+   ParFiniteElementSpace &pfes_L2_s = *rhoJ_L2.ParFESpace();
+   ParFiniteElementSpace &pfes_H1_s = *rhoJ.ParFESpace();
+   const int ndof_h1 = pfes_H1_s.GetNDofs();
+   const int NE = pfes_H1_s.GetNE();
+   const int nqp = ir_rho.GetNPoints();
+   Vector rho_min_el(NE), rho_max_el(NE);
+   rho_min_el = +infinity();
+   rho_max_el = -infinity();
+   Vector b(ndof_h1); b = 0.;
+   Vector b_k, rhoJ_L2_k, detJ_L2_k;
+   Vector shape, shape_L2;
+   Array<int> dofs, dofs_L2;
+   for(int k = 0; k < NE; k++)
+   {
+      const FiniteElement &fe = *pfes_H1_s.GetFE(k);
+      const FiniteElement &fe_L2 = *pfes_L2_s.GetFE(k);
+      ElementTransformation &Tr = *pfes_H1_s.GetElementTransformation(k);
+      const int ndofs = fe.GetDof();
+      const int ndofs_L2 = fe_L2.GetDof();
+      shape.SetSize(ndofs);
+      pfes_H1_s.GetElementDofs(k, dofs);
+      shape_L2.SetSize(ndofs_L2);
+      pfes_L2_s.GetElementDofs(k, dofs_L2);
+      rhoJ_L2.GetSubVector(dofs_L2, rhoJ_L2_k);
+      detJ_L2.GetSubVector(dofs_L2, detJ_L2_k);
+      b_k.SetSize(ndofs);
+      b_k = 0.;
+      for (int q = 0; q < nqp; q++)
+      {
+         const IntegrationPoint &ip = ir_rho.IntPoint(q);
+         Tr.SetIntPoint(&ip);
+         fe.CalcShape(ip, shape);
+         fe_L2.CalcShape(ip, shape_L2);
+         const real_t rhoJ = rhoJ_L2_k * shape_L2;
+         b_k.Add(rhoJ * ip.weight, shape);
+         const real_t rho = rhoJ / (detJ_L2_k * shape_L2);
+         rho_min_el(k) = std::min(rho_min_el(k), rho);
+         rho_max_el(k) = std::max(rho_max_el(k), rho);
+      }
+      b.AddElementVector(dofs, b_k.GetData());
+   }
+
+#if 0
+   Vector B(pfes_H1_s.GetTrueVSize());
+   pfes_H1_s.GetProlongationMatrix()->MultTranspose(b, B);
+#if 0
+   // H1 lumped projection
+   Vector rhouJ_tv(pfes_H1.GetTrueVSize());
+   for (int i = 0; i < mJ.Size(); i++)
+      for (int v = 0; v < vdim; v++)
+         rhouJ_tv(i + v*mJ.Size()) = B(i + v*mJ.Size()) / mJ(i);
+   rhouJ.Distribute(rhouJ_tv);
+#else
+   // H1 projection
+   HypreSmoother prec;
+   prec.SetType(HypreSmoother::Jacobi, 1);
+   CGSolver lin_solver(pfes_H1_s.GetComm());
+   lin_solver.SetRelTol(1e-10);
+   lin_solver.SetAbsTol(0.0);
+   lin_solver.SetMaxIter(100);
+   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPreconditioner(prec);
+   lin_solver.SetOperator(*MJ_s.ParallelAssembleInternalMatrix());
+
+   Vector X(pfes_H1_s.GetTrueVSize());
+   X = 0.;
+   lin_solver.Mult(B, X);
+
+   rhoJ.Distribute(X);
+#endif
+#else
+   Vector rho_min(ndof_h1), rho_max(ndof_h1);
+   ComputeH1SparsityBounds(rho_min_el, rho_max_el, rho_min, rho_max);
+   const Array<int> ess_vdofs_v;
+   TransferXYH1Monotonous(ess_vdofs_v, b, rho_min, rho_max, detJ, rhoJ);
+
+   // Jacobian product
+   for (int i = 0; i < ndof_h1; i++)
+   {
+      rhoJ(i) *= detJ(i);
    }
 #endif
 }

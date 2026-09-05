@@ -593,6 +593,7 @@ public:
    void TransferJac_Larg2Remap(ParGridFunction &detJ);
    void TransferDensityJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &detJ, ParGridFunction &rhoJ);
    void TransferMomentumJac_Lagr2Remap(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &vel, ParGridFunction &rhouJ);
+   void TransferDensityJac_L22H1(const ParGridFunction &detJ_L2, const ParGridFunction &rhoJ_L2, const ParGridFunction &detJ, ParGridFunction &rhoJ);
    void TransferMomentumJac_Remap2Lagr(const Vector &rhoDetJw, const ParGridFunction &rhoJ, const ParGridFunction &rhouJ, ParGridFunction &vel);
 
    HypreParMatrix &GetInterpolationMatrix(int v) const { return *MJ[v].As<HypreParMatrix>(); }
