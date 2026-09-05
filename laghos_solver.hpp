@@ -81,6 +81,7 @@ protected:
    // Reference to the current mesh configuration.
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
+   const Array<int> &ess_vdofs;
    bool BC_strong;
 
    const int dim, NE, NBE, l2dofs_cnt, h1dofs_cnt, source_type;
@@ -151,7 +152,9 @@ public:
    LagrangianHydroOperator(const int size,
                            ParFiniteElementSpace &h1_fes,
                            ParFiniteElementSpace &l2_fes,
-                           const Array<int> &ess_tdofs, bool bcs,
+                           const Array<int> &ess_tdofs,
+                           const Array<int> &ess_vdofs,
+                           bool bcs,
                            Coefficient &rho0_coeff,
                            ParGridFunction &rho0_gf,
                            ParGridFunction &gamma_gf,

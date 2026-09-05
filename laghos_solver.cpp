@@ -137,6 +137,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
                                                  ParFiniteElementSpace &h1,
                                                  ParFiniteElementSpace &l2,
                                                  const Array<int> &ess_tdofs,
+                                                 const Array<int> &ess_vdofs,
                                                  bool bcs,
                                                  Coefficient &rho0_coeff,
                                                  ParGridFunction &rho0_gf,
@@ -166,6 +167,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(const int size,
    block_offsets(4),
    x_gf(&H1),
    ess_tdofs(ess_tdofs),
+   ess_vdofs(ess_vdofs),
    BC_strong(bcs),
    dim(pmesh->Dimension()),
    NE(pmesh->GetNE()), NBE(pmesh->GetNBE()),
@@ -860,6 +862,7 @@ double LagrangianHydroOperator::Momentum(const ParGridFunction &v) const
 {
    Vector one(Mv_spmat_copy.Height());
    one = 1.0;
+   one.SetSubVector(ess_vdofs, 0.);
    double momentum = Mv_spmat_copy.InnerProduct(one, v);
 
    MPI_Allreduce(MPI_IN_PLACE, &momentum, 1, MPI_DOUBLE, MPI_SUM, H1.GetComm());

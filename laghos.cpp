@@ -939,7 +939,7 @@ int main(int argc, char *argv[])
    const double perimeter = 12.0; // TODO fix this.
    hydrodynamics::LagrangianHydroOperator hydro(S.Size(),
                                                 H1FESpace, L2FESpace,
-                                                ess_tdofs, BC_strong,
+                                                ess_tdofs, ess_vdofs, BC_strong,
                                                 rho0_gf_coeff, rho0_gf,
                                                 mat_gf, source, cfl,
                                                 visc, vorticity, p_assembly,
