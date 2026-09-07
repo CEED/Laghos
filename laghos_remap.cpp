@@ -20,6 +20,8 @@
 #include "laghos_remap_fct.hpp"
 #include "laghos_remap_sync.hpp"
 
+//#define LAGHOS_REMAP_SOLENOIDAL_CORRECTION
+
 using namespace std;
 namespace mfem
 {
@@ -2445,7 +2447,7 @@ void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
    solver.Mult(RHS, X);
 
    flux.Distribute(X);
-
+#ifdef LAGHOS_REMAP_SOLENOIDAL_CORRECTION
    // solenoidal rhs
 
    Vector rhs_a(pfes_a.GetVSize());
@@ -2514,6 +2516,7 @@ void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
       
       flux.AddElementVector(vdofs, f_k);
    }
+#endif // LAGHOS_REMAP_SOLENOIDAL_CORRECTION
 }
 
 void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
