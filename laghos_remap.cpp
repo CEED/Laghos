@@ -688,9 +688,10 @@ void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector 
    {
       // Here we assume the thermodynamic state is in one piece
       const Vector th(const_cast<Vector&>(U), offsets[RemapAdvector::Density], op_th->Width());
+      const Vector dth_LO(const_cast<Vector&>(dU_LO), offsets[RemapAdvector::Density], op_th->Width());
       Vector dth(dU, offsets[RemapAdvector::Density], op_th->Width());
       auto *gcop_th = static_cast<AdvectorThermoGeomConsOper*>(op_th.get());
-      gcop_th->LimitUpdate(dt, th, dth);
+      gcop_th->LimitUpdate(dt, th, dth_LO, dth);
    }
 }
 
