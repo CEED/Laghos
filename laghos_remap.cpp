@@ -2536,7 +2536,6 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
 
    // Propagator
 
-   KJ = 0.;
    RefConvectionIntegrator Ki(flux, &ir_rho);
    RefFaceConvectionIntegrator Kfi(flux);
 
@@ -2568,7 +2567,7 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
 
    // Propagator - faces
    const int nfaces = pmesh.GetNumFaces();
-   Array<int> dofs2;
+   Array<int> dofs2, vdofs2;
 
    for(int f = 0; f < nfaces; f++)
    {
@@ -2578,18 +2577,22 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
       const FiniteElement *fe1, *fe2;
       fe1 = pfes_L2.GetFE(ftr->Elem1No);
       pfes_L2.GetElementDofs(ftr->Elem1No, dofs);
+      vdofs = dofs;
+      pfes_vL2.DofsToVDofs(vdofs);
       if(ftr->Elem2No >= 0)
       {
          fe2 = pfes_L2.GetFE(ftr->Elem2No);
          pfes_L2.GetElementDofs(ftr->Elem2No, dofs2);
          dofs.Append(dofs2);
+         vdofs2 = dofs2;
+         pfes_vL2.DofsToVDofs(vdofs2);
+         vdofs.Append(vdofs2);
       }
       else
       {
          fe2 = fe1;
+         dofs2.SetSize(0);
       }
-      vdofs = dofs;
-      pfes_vL2.DofsToVDofs(vdofs);
       
       detJ.GetSubVector(dofs, detJ_k);
       U_gf.GetSubVector(vdofs, x_k);
@@ -2668,7 +2671,7 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
 
       dU_gf.GetSubVector(vdofs, dbx_k);
 
-      lu.Solve(ndof, StateVars::NVars, dbx_k.GetData());
+      lu.Solve(ndof, NVars, dbx_k.GetData());
 
       dU_gf.SetSubVector(vdofs, dbx_k);
    }
@@ -2682,11 +2685,6 @@ void AdvectorThermoGeomConsOper::MultConservLowOrder(const ParGridFunction &flux
 
    ParMesh &pmesh = *pfes_L2.GetParMesh();
    const int NE = pmesh.GetNE();
-
-   // Grid function view
-   ParGridFunction U_gf(const_cast<ParFiniteElementSpace*>(&pfes_vL2), const_cast<Vector&>(U));
-   ParGridFunction dU_gf(const_cast<ParFiniteElementSpace*>(&pfes_vL2), dU);
-   U_gf.ExchangeFaceNbrData();
 
    // Current Jacobians
    trans->TransferJac_Larg2Remap(detJ);
@@ -2795,6 +2793,8 @@ void AdvectorThermoGeomConsOper::MultConservLowOrder(const ParGridFunction &flux
    // LO solution
    DiscreteUpwindLOSolver solver_lo(pfes_L2, KJ, MJ_lumped);
    kmap = solver_lo.GetKmap();
+
+   dU = 0.;
    
    for (int v = 0; v < NVars; v++)
    {
@@ -2821,7 +2821,7 @@ void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const V
    const int ndofs = pfes_L2.GetVSize();
    Vector el_min(NE), el_max(NE);
    Vector dof_min(ndofs), dof_max(ndofs);
-   Vector dU_v_LO(ndofs), u_v(ndofs), U_vm1_new(ndofs);
+   Vector u_v(ndofs), U_vm1_new(ndofs);
    Array<bool> u_bool_el, u_bool_dofs, u_bool_el_new, u_bool_dofs_new;
 
    for (int v = 0; v < NVars; v++)
