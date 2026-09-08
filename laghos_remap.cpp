@@ -579,7 +579,6 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
    ParFiniteElementSpace &pfes_L2,
    RemapAdvector::RemapVelocity remap_v)
   : AdvectorOper(x_start, mesh_vel, pfes_H1, pfes_L2),
-    u_coeff(&u),
     ir_rho(ir_rho_),
     fec_f(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
     fec_a(pfes_L2.FEColl()->GetOrder()+1, pfes_L2.GetParMesh()->Dimension()),

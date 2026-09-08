@@ -195,9 +195,6 @@ public:
 // Performs a single remap advection step - geometrically consistent scheme
 class AdvectorGeomConsOper : public AdvectorOper, public TimeDependentGeomConsOperator
 {
-   VectorGridFunctionCoefficient u_coeff;
-   GridFunctionCoefficient rho_coeff;
-
    const IntegrationRule &ir_rho;
 
    RT_FECollection fec_f;
