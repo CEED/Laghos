@@ -33,7 +33,6 @@ void ForwardEulerSolver::Init(TimeDependentGeomConsOperator &f_)
 {
     GeomConsODESolver::Init(f_);
     dU.SetSize(f->Width());
-    dU_LO.SetSize(f->Width());
 }
 
 void ForwardEulerSolver::Step(Vector &U, real_t &t, real_t &dt)
@@ -44,10 +43,9 @@ void ForwardEulerSolver::Step(Vector &U, real_t &t, real_t &dt)
 
     // Explicit step
     f->MultConserv(flux, U, dU);
-    f->MultConservLowOrder(flux, U, dU_LO);
 
     // Limit step
-    f->LimitUpdate(dt, U, dU_LO, dU);
+    f->LimitUpdate(dt, U, dU);
 
     // Update state
     U.Add(dt, dU);
