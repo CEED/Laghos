@@ -123,9 +123,9 @@ class TimeDependentGeomConsOperator : virtual public TimeDependentOperator
 {
 public:
    virtual void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) { }
-   virtual void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+   virtual void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K, Vector &dU) const
    { this->Mult(U, dU); }
-   virtual void LimitUpdate(real_t dt, const Vector &U, Vector &dU) { }
+   virtual void LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU) { }
 };
 
 class AdvectorVelocityOper;
@@ -135,10 +135,19 @@ class AdvectorThermoOper;
 class AdvectorOper : virtual public TimeDependentOperator
 {
 protected:
+   enum Components
+   {
+      Velocity,
+      Thermo,
+      //------
+      NComps
+   };
+
    std::unique_ptr<AdvectorVelocityOper> op_v;
    std::unique_ptr<AdvectorThermoOper> op_th;
 
    Array<int> offsets;
+   mutable Array<int> offsets_K;
    const Vector &x0;
    Vector &x_now;
    ParGridFunction &u;
@@ -232,8 +241,8 @@ public:
    { MFEM_ABORT("Cannot be integrated with a plain ODESolver!"); }
 
    void ImplicitSolveFlux(real_t dt, ParGridFunction &flux) override;
-   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
-   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU) override;
 };
 
 // Performs a single velocity remap advection step.
@@ -346,8 +355,8 @@ public:
    void Mult(const Vector &U, Vector &dU) const override
    { MFEM_ABORT("Geometrically conservative operator cannot be integrated classically!"); }
 
-   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
-   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU) override;
 
    real_t Momentum(const ParGridFunction &v) const override;
 };
@@ -463,8 +472,8 @@ public:
    void Mult(const Vector &U, Vector &dU) const override
    { MFEM_ABORT("Geometrically conservative operator cannot be integrated classically!"); }
 
-   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const override;
-   void LimitUpdate(real_t dt, const Vector &U, Vector &dU) override;
+   void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K, Vector &dU) const override;
+   void LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU) override;
 
    real_t Mass(const ParGridFunction &rhoJ) const override;
    real_t InternalEnergy(const ParGridFunction &rhoeJ) const override;

@@ -613,7 +613,7 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
    CC.Finalize(0);
 }
 
-void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K_v, Vector &dU) const
 {
    // Move the mesh.
    const double t = GetTime();
@@ -624,6 +624,14 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
    // Block view
    const BlockVector bU(const_cast<Vector&>(U), offsets);
    BlockVector bdU(dU, offsets);
+   BlockVector bK_v;
+   Vector K_vvel, K_vth;
+   if (K_v.Size() > 0 && offsets_K.Size() > 0)
+   {
+      bK_v.Update(K_v, offsets_K);
+      K_vvel.MakeRef(bK_v.GetBlock(Velocity), 0, offsets_K[Velocity+1] - offsets_K[Velocity]);
+      K_vth.MakeRef(bK_v.GetBlock(Thermo), 0, offsets_K[Thermo+1] - offsets_K[Thermo]);
+   }
 
    // Velocity remap.
    if (op_v)
@@ -631,7 +639,7 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
       const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
       Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
       auto *gcop_v = static_cast<AdvectorVelocityGeomConsOper*>(op_v.get());
-      gcop_v->MultConserv(flux, v, d_v);
+      gcop_v->MultConserv(flux, v, K_vvel, d_v);
    }
 
    // Thermodynamic remap.
@@ -641,15 +649,34 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
       const Vector th(const_cast<Vector&>(U), offsets[RemapAdvector::Density], op_th->Width());
       Vector dth(dU, offsets[RemapAdvector::Density], op_th->Width());
       auto *gcop_th = static_cast<AdvectorThermoGeomConsOper*>(op_th.get());
-      gcop_th->MultConserv(flux, th, dth);
+      gcop_th->MultConserv(flux, th, K_vth, dth);
+   }
+
+   // Construct offsets and resize the K vector
+   if (K_v.Size() <= 0 || offsets_K.Size() <= 0)
+   {
+      offsets_K.SetSize(NComps+1);
+      offsets_K[0] = 0;
+      offsets_K[Velocity+1] = K_vvel.Size();
+      offsets_K[Thermo+1] = K_vth.Size();
+      offsets_K.PartialSum();
+
+      K_v.SetSize(offsets_K.Last());
+      bK_v.Update(K_v, offsets_K);
+      bK_v.GetBlock(Velocity) = K_vvel;
+      bK_v.GetBlock(Thermo) = K_vth;
    }
 }
 
-void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector &K_v, Vector &dU)
 {
    // Move the mesh.
    const double t = GetTime();
    add(x0, t+dt, u, x_now);
+
+   // Block view
+   MFEM_ASSERT(K_v.Size() > 0 && offsets_K.Size() > 0, "Uninitialized K vector");
+   const BlockVector bK(const_cast<Vector&>(K_v), offsets_K);
 
    // Thermodynamic limiting.
    if (op_th)
@@ -658,7 +685,7 @@ void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
       const Vector th(const_cast<Vector&>(U), offsets[RemapAdvector::Density], op_th->Width());
       Vector dth(dU, offsets[RemapAdvector::Density], op_th->Width());
       auto *gcop_th = static_cast<AdvectorThermoGeomConsOper*>(op_th.get());
-      gcop_th->LimitUpdate(dt, th, dth);
+      gcop_th->LimitUpdate(dt, th, bK.GetBlock(Thermo), dth);
    }
 }
 
@@ -1587,7 +1614,7 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    }
 }
 
-void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K_v, Vector &dU) const
 {
    ParMesh &pmesh = *pfes_H1.GetParMesh();
    const int NE = pmesh.GetNE();
@@ -1647,6 +1674,11 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    if (remap_v == RemapAdvector::RemapVelocity::MCL)
    {
       K.Finalize();
+      
+      // Store the propagator matrix
+      K_v.SetSize(K.SpMat().NumNonZeroElems());
+      K_v.GetMemory().CopyFrom(K.SpMat().GetMemoryData(), K_v.Size());
+
       auto *K_m = K.ParallelAssemble();
       auto *KT_m = K_m->Transpose();
       SparseMatrix K_sm, KT_sm;
@@ -1691,7 +1723,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    }
 }
 
-void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU)
 {
 }
 
@@ -2338,7 +2370,7 @@ void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
 #endif // LAGHOS_REMAP_SOLENOIDAL_CORRECTION
 }
 
-void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &dU) const
+void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K_v, Vector &dU) const
 {
    ParMesh &pmesh = *pfes_L2.GetParMesh();
    const int NE = pmesh.GetNE();
@@ -2351,6 +2383,11 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
    // Current Jacobians
    trans->TransferJac_Larg2Remap(detJ);
    detJ.ExchangeFaceNbrData();
+   
+   // Alias the propagator matrix data
+   K_v.SetSize(KJ.NumNonZeroElems());
+   KJ.GetMemoryData().Delete();
+   KJ.GetMemoryData().MakeAlias(K_v.GetMemory(), 0, K_v.Size());
 
    // Propagator
 
@@ -2526,11 +2563,16 @@ void AdvectorThermoGeomConsOper::MultConserv(const ParGridFunction &flux, const 
    }
 }
 
-void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, Vector &dU)
+void AdvectorThermoGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector &K_v, Vector &dU)
 {
    // Block view
    const BlockVector bU(const_cast<Vector&>(U), offsets);
    BlockVector bdU(dU, offsets);
+
+   // Alias the propagator matrix data
+   MFEM_ASSERT(K_v.Size() == KJ.NumNonZeroElems(), "Wrong matrix data size");
+   KJ.GetMemoryData().Delete();
+   KJ.GetMemoryData().MakeAlias(K_v.GetMemory(), 0, K_v.Size());
 
    // LO solution
    DiscreteUpwindLOSolver solver_lo(pfes_L2, KJ, MJ_lumped);

@@ -37,15 +37,17 @@ void ForwardEulerSolver::Init(TimeDependentGeomConsOperator &f_)
 
 void ForwardEulerSolver::Step(Vector &U, real_t &t, real_t &dt)
 {
+    Vector K;
+
     // Solve for the flux
     f->SetTime(t);
     f->ImplicitSolveFlux(dt, flux);
 
     // Explicit step
-    f->MultConserv(flux, U, dU);
+    f->MultConserv(flux, U, K, dU);
 
     // Limit step
-    f->LimitUpdate(dt, U, dU);
+    f->LimitUpdate(dt, U, K, dU);
 
     // Update state
     U.Add(dt, dU);
