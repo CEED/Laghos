@@ -313,7 +313,7 @@ class AdvectorVelocityGeomConsOper : public AdvectorVelocityOper, public TimeDep
 protected:
    const IntegrationRule &ir_rho;
    std::unique_ptr<SolutionTransfer_H1> trans;
-   mutable ParGridFunction detJ;
+   mutable SparseMatrix KJ;
 
    class RefConvectionIntegrator : public BilinearFormIntegrator
    {

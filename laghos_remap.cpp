@@ -686,6 +686,18 @@ void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector 
       auto *gcop_th = static_cast<AdvectorThermoGeomConsOper*>(op_th.get());
       gcop_th->LimitUpdate(dt, th, bK.GetBlock(Thermo), dth);
    }
+
+   // we need the new rhoJ in L2 for transfer to H1
+
+   // Velocity limiting.
+   if (op_v)
+   {
+      // Here we assume the thermodynamic state is in one piece
+      const Vector v(const_cast<Vector&>(U), offsets[RemapAdvector::Velocity], op_v->Width());
+      Vector dv(dU, offsets[RemapAdvector::Velocity], op_v->Width());
+      auto *gcop_v = static_cast<AdvectorVelocityGeomConsOper*>(op_v.get());
+      gcop_v->LimitUpdate(dt, v, bK.GetBlock(Velocity), dv);
+   }
 }
 
 void AdvectorVelocityOper::LowOrderVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const Vector &v, Vector &d_v) const
@@ -1332,6 +1344,7 @@ AdvectorVelocityOper::AdvectorVelocityOper(
     Mr_H1(&pfes_H1), Mr_H1_s(&pfes_H1_s), Kr_H1(&pfes_H1_s), KrT_H1(&pfes_H1_s),
     lummpedMr_H1(&pfes_H1_s)
 {
+   height = width = pfes_H1.GetVSize();
 }
 
 AdvectorVelocityNonconservativeOper::AdvectorVelocityNonconservativeOper(
@@ -1600,7 +1613,7 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    ParFiniteElementSpace &pfes_H1, ParFiniteElementSpace &pfes_H1_s,
    RemapAdvector::RemapVelocity scheme)
 : AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme),
-  ir_rho(ir_rho_), detJ(&pfes_H1_s)
+  ir_rho(ir_rho_), detJ(&pfes_H1_s), KJ(pfes_H1_s.GetVSize())
 {
    // Solution transfer
    trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, v_ess_vdofs, pfes_H1, pfes_H1_s, ir_rho);
@@ -1610,6 +1623,24 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
       lumpedMr_H1_vec.SetSize(pfes_H1_s.GetVSize());
       const Vector &lumpedMr_H1_tvec = trans->GetLumpedInterpolationMatrix_s();
       pfes_H1_s.GetProlongationMatrix()->Mult(lumpedMr_H1_tvec, lumpedMr_H1_vec);
+   }
+
+   // Preallocate K matrix sparsity pattern (CSR format)
+   if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
+   {
+      const int NE = pfes_H1_s.GetNE();
+      DenseMatrix K_k;
+      Array<int> dofs;
+
+      // Add element contributions to establish sparsity
+      for (int k = 0; k < NE; k++)
+      {
+         pfes_H1_s.GetElementDofs(k, dofs);
+         K_k.SetSize(dofs.Size());
+         K_k = 0.; // dummy matrix, just for sparsity
+         KJ.AddSubMatrix(dofs, dofs, K_k, 0);
+      }
+      KJ.Finalize(0);
    }
 }
 
@@ -1626,6 +1657,15 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    Vector bdU(pfes_H1.GetVSize());
    bdU = 0.;
 
+   // Alias the propagator matrix data
+   if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
+   {
+      K_v.SetSize(KJ.NumNonZeroElems());
+      KJ.GetMemoryData().Delete();
+      KJ.GetMemoryData().MakeAlias(K_v.GetMemory(), 0, K_v.Size());
+      KJ = 0.;
+   }
+
    // Projection of the flux to H1 to exactly eliminate the boundary fluxes
    ParGridFunction flux_H1(&pfes_H1);
    VectorGridFunctionCoefficient flux_coeff(&flux);
@@ -1637,9 +1677,6 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    Vector x_k, dbx_k, detJ_k;
    Array<int> dofs, vdofs;
 
-   ParBilinearForm K(&pfes_H1_s);
-   K.AllocateMatrix();
-
    for(int k = 0; k < NE; k++)
    {
       pfes_H1.GetElementDofs(k, dofs);
@@ -1649,7 +1686,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
 
       detJ.GetSubVector(dofs, detJ_k);
       U.GetSubVector(vdofs, x_k);
-      
+
       Ki.AssembleElementMatrix(*pfes_H1_s.GetFE(k),
                                *pfes_H1_s.GetElementTransformation(k),
                                K_k);
@@ -1657,7 +1694,8 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
       // Reduced the quantity to the non-conservative form
       K_k.InvRightScaling(detJ_k);
 
-      K.AssembleElementMatrix(k, K_k);
+      if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
+         KJ.AddSubMatrix(dofs, dofs, K_k);
 
       dbx_k.SetSize(ndof*vdim);
       for (int v = 0; v < vdim; v++)
@@ -1670,28 +1708,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
       bdU.AddElementVector(vdofs, dbx_k);
    }
 
-   if (remap_v == RemapAdvector::RemapVelocity::MCL)
-   {
-      K.Finalize();
-      
-      // Store the propagator matrix
-      K_v.SetSize(K.SpMat().NumNonZeroElems());
-      K_v.GetMemory().CopyFrom(K.SpMat().GetMemoryData(), K_v.Size());
-
-      auto *K_m = K.ParallelAssemble();
-      auto *KT_m = K_m->Transpose();
-      SparseMatrix K_sm, KT_sm;
-      K_m->MergeDiagAndOffd(K_sm);   
-      KT_m->MergeDiagAndOffd(KT_sm);
-      delete K_m;
-      delete KT_m;
-
-      SparseMatrix M_sm;
-      trans->GetInterpolationMatrix_s().MergeDiagAndOffd(M_sm);
-
-      MCLVel(K_sm, KT_sm, M_sm, U, dU);
-      return;
-   }
+   if (remap_v != RemapAdvector::RemapVelocity::HighOrder) { dU = 0.; return; }
 
    // Invert by mass matrix
    HypreSmoother prec;
@@ -1722,8 +1739,33 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    }
 }
 
-void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU)
+void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector &K_v, Vector &dU)
 {
+   if (remap_v == RemapAdvector::RemapVelocity::HighOrder) { return; }
+
+   MFEM_ASSERT(K_v.Size() == KJ.NumNonZeroElems(), "Wrong matrix data size");
+   KJ.GetMemoryData().Delete();
+   KJ.GetMemoryData().MakeAlias(K_v.GetMemory(), 0, K_v.Size());
+
+   // Create a temporary ParBilinearForm for parallel assembly
+   ParBilinearForm K_form(&pfes_H1_s);
+   auto *K_m = K_form.ParallelAssemble(&KJ);
+   auto *KT_m = K_m->Transpose();
+   SparseMatrix K_sm, KT_sm;
+   K_m->MergeDiagAndOffd(K_sm);
+   KT_m->MergeDiagAndOffd(KT_sm);
+   delete K_m;
+   delete KT_m;
+
+   SparseMatrix M_sm;
+   trans->GetInterpolationMatrix_s().MergeDiagAndOffd(M_sm);
+
+   switch (remap_v)
+   {
+   case RemapAdvector::RemapVelocity::MCL:
+      MCLVel(K_sm, KT_sm, M_sm, U, dU);
+      break;
+   }
 }
 
 real_t AdvectorVelocityGeomConsOper::Momentum(const ParGridFunction &rhouJ) const
