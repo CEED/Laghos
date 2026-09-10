@@ -1008,6 +1008,134 @@ void AdvectorVelocityOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix 
    }
 }
 
+void AdvectorVelocityOper::MCLVelComp(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb, const Vector &v_d, Vector &d_v) const
+{
+   GroupCommunicator &gcomm = pfes_H1_s.GroupComm();
+   //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
+   //gcomm.Reduce<double>(lumpedmassmatrix_array, GroupCommunicator::Sum);
+   //gcomm.Bcast(lumpedmassmatrix_array);
+
+   //ParFiniteElementSpace &pfes_H1_s = *Kr_H1.ParFESpace();
+   const int dofs_h1 = pfes_H1_s.GetVSize();
+
+   d_v = 0.0;
+   Array<double> rhs_array(dofs_h1), udot_array(dofs_h1);
+   HypreParVector v_d_hpr(&pfes_H1_s), vdot(&pfes_H1_s), v_min(&pfes_H1_s), v_max(&pfes_H1_s);
+   double fij, fij_bound, fij_star, wij, wji;
+
+   const auto I = K_glb.ReadI();
+   const auto J = K_glb.ReadJ();
+   const auto K = K_glb.ReadData();
+   const auto KT = KT_glb.ReadData();
+   const auto M = M_glb.ReadData();
+
+   for(int i = 0; i < dofs_h1; i++)
+   {
+      int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+      if(i_td != -1)
+      {
+         v_d_hpr(i_td) = v_d(i);
+      }
+   }
+   Vector *v_d_glb = v_d_hpr.GlobalVector();
+   MFEM_VERIFY(v_d_hpr.Size() == K_glb.Height(), "true dof local vector size weird");
+   MFEM_VERIFY( v_d_glb->Size() == pfes_H1_s.GlobalTrueVSize(), "glb vector size weird");
+
+   //compute low order time derivatives and local min and max
+   for(int i = 0; i < dofs_h1; i++)
+   {
+      int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+      if(i_td == -1) {continue;}
+      vdot(i_td) = 0.0;
+      if (lumpedMr_H1_vec(i) == 0.) { continue; }
+      int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+
+      v_min(i_td) = v_d_glb->Elem(i_gl);
+      v_max(i_td) = v_d_glb->Elem(i_gl);
+      for(int k = I[i_td]; k < I[i_td+1]; k++)
+      {
+         int j_gl = J[k];
+         if( i_gl == j_gl) {continue;}// || is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()] )
+         v_min(i_td) = min(v_min(i_td), v_d_glb->Elem(j_gl));
+         v_max(i_td) = max(v_max(i_td), v_d_glb->Elem(j_gl));
+         double kij = -K[k];
+         double kji = -KT[k];// * (!is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()]);
+         double dij = max(max(0.0, kij), kji);
+         //double dij = max( abs(kij), abs(kji));
+         vdot(i_td) += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
+      }
+      vdot(i_td) /= lumpedMr_H1_vec(i);
+   }
+
+   Vector *vdot_glb = vdot.GlobalVector();
+   Vector *vmin_glb = v_min.GlobalVector();
+   Vector *vmax_glb = v_max.GlobalVector();
+
+
+   for(int i = 0; i < dofs_h1; i++)
+   {
+      rhs_array[i] = 0.0;
+
+      int i_td = pfes_H1_s.GetLocalTDofNumber(i);
+      if(i_td == -1) {continue;}
+
+      // check for essential true dof
+      if (lumpedMr_H1_vec(i) == 0.) { continue; }
+
+      for(int k = I[i_td]; k < I[i_td+1]; k++)
+      {
+         int j_gl = J[k];
+         int i_gl = pfes_H1_s.GetGlobalTDofNumber(i);
+         if( i_gl == j_gl)// || is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()])
+         {continue;}
+
+         double kij = -K[k];
+         double kji = - KT[k];// * (!is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()]);
+
+         double dij = max(max(0.0,kji),kij);
+         //dij = max( abs(K[k]), abs(KT[k]));
+         //double dij = max( abs(kij), abs(kji));
+         fij = M[k] * (vdot_glb->Elem(i_gl) - vdot_glb->Elem(j_gl)) + dij * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl));
+
+         //limit target flux to enforce local bounds for the bar states (note, that dij = dji)
+         wij = dij * (v_d_glb->Elem(i_gl) + v_d_glb->Elem(j_gl))  + K[k] * (v_d_glb->Elem(j_gl) - v_d_glb->Elem(i_gl));
+         wji = dij * (v_d_glb->Elem(i_gl) + v_d_glb->Elem(j_gl))  + KT[k]  * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl));
+
+         //KT_glb(i_td, j_gl)
+         if(fij > 0)
+         {
+            fij_bound = min(2.0 * dij * vmax_glb->Elem(i_gl) - wij, wji - 2.0 * dij * vmin_glb->Elem(j_gl));
+            fij_star = min(fij, fij_bound);
+
+            // to get rid of rounding errors wich influence the sign
+            //fij_star = max(0.0, fij_star);
+         }
+         else
+         {
+            fij_bound = max(2.0 * dij * vmin_glb->Elem(i_gl) - wij, wji - 2.0 * dij * vmax_glb->Elem(j_gl));
+            fij_star = max(fij, fij_bound);
+
+            // to get rid of rounding errors wich influence the sign
+            //fij_star = min(0.0, fij_star);
+         }
+
+         rhs_array[i] += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl)) + fij_star;
+      }
+   }
+
+   gcomm.Reduce<double>(rhs_array, GroupCommunicator::Sum);
+   gcomm.Bcast(rhs_array);
+
+   for(int i = 0; i < dofs_h1; i++)
+   {
+      d_v(i) = (lumpedMr_H1_vec(i) != 0.)?(rhs_array[i] / lumpedMr_H1_vec(i)):(0.);
+   }
+
+   delete v_d_glb;
+   delete vdot_glb;
+   delete vmin_glb;
+   delete vmax_glb;
+}
 void AdvectorVelocityNonconservativeOper::ClipAndScale(
    const ParFiniteElementSpace &pfes, const Vector &v, Vector &d_v) const
 {
@@ -1618,13 +1746,6 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    // Solution transfer
    trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, v_ess_vdofs, pfes_H1, pfes_H1_s, ir_rho);
 
-   if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
-   {
-      lumpedMr_H1_vec.SetSize(pfes_H1_s.GetVSize());
-      const Vector &lumpedMr_H1_tvec = trans->GetLumpedInterpolationMatrix_s();
-      pfes_H1_s.GetProlongationMatrix()->Mult(lumpedMr_H1_tvec, lumpedMr_H1_vec);
-   }
-
    // Preallocate K matrix sparsity pattern (CSR format)
    if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
    {
@@ -1756,15 +1877,30 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const
    KT_m->MergeDiagAndOffd(KT_sm);
    delete K_m;
    delete KT_m;
-
-   SparseMatrix M_sm;
-   trans->GetInterpolationMatrix_s().MergeDiagAndOffd(M_sm);
-
-   switch (remap_v)
+   
+   const int vdim = pfes_H1.GetVDim();
+   const int ndof = pfes_H1.GetNDofs();
+   for (int v = 0; v < vdim; v++)
    {
-   case RemapAdvector::RemapVelocity::MCL:
-      MCLVel(K_sm, KT_sm, M_sm, U, dU);
-      break;
+      SparseMatrix M_sm;
+      trans->GetInterpolationMatrix(v).MergeDiagAndOffd(M_sm);
+
+      lumpedMr_H1_vec.SetSize(ndof);
+      const Vector &lumpedMr_H1_tvec = trans->GetLumpedInterpolationMatrix(v);
+      pfes_H1_s.GetProlongationMatrix()->Mult(lumpedMr_H1_tvec, lumpedMr_H1_vec);
+
+      const Vector U_v(const_cast<Vector&>(U), v*ndof, ndof);
+      Vector dU_v(dU, v*ndof, ndof);
+
+      switch (remap_v)
+      {
+      case RemapAdvector::RemapVelocity::MCL:
+         MCLVelComp(K_sm, KT_sm, M_sm, U_v, dU_v);
+         break;
+      default:
+         MFEM_ABORT("Unsupported remap");
+         break;
+      }
    }
 }
 
