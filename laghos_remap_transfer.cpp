@@ -1105,12 +1105,12 @@ SolutionTransfer_H1::SolutionTransfer_H1(
       Geometry::Type g = pfes_H1_s.GetFE(k)->GetGeomType();
       mJ_sloc.AddElementVector(dofs, mJ_g[g]);
 
-      MJ_sbf.SpMat().AddSubMatrix(dofs, dofs, MJ_g[g]);
+      MJ_sbf.SpMat().AddSubMatrix(dofs, dofs, MJ_g[g], 0);
    }
    mJ_s.SetSize(pfes_H1_s.GetTrueVSize());
    pfes_H1_s.GetProlongationMatrix()->MultTranspose(mJ_sloc, mJ_s);
    
-   MJ_sbf.Finalize();
+   MJ_sbf.Finalize(0);
    MJ_smloc = MJ_sbf.SpMat();
    MJ_s.SetType(Operator::Hypre_ParCSR);
    MJ_sbf.ParallelAssemble(MJ_s);
@@ -1142,7 +1142,6 @@ SolutionTransfer_H1::SolutionTransfer_H1(
       ParBilinearForm MJ_bf(const_cast<ParFiniteElementSpace*>(&pfes_H1_s));
       MJ_bf.AllocateMatrix();
       MJ_bf.SpMat() = MJ_smloc;
-      MJ_bf.Finalize();
       MJ[v].SetType(Operator::Hypre_ParCSR);
       MJ_bf.ParallelAssemble(MJ[v]);
       MJ[v].As<HypreParMatrix>()->EliminateBC(v_ess_tdofs_v[v], Operator::DiagonalPolicy::DIAG_ONE);
