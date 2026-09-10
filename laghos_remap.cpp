@@ -926,8 +926,8 @@ void AdvectorVelocityOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix 
             v_max(i_td) = max(v_max(i_td), v_d_glb->Elem(j_gl));
             double kij = -K[k];
             double kji = -KT[k];// * (!is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()]);
-            //double dij = max(max(0.0, kij), kji);
-            double dij = max( abs(kij), abs(kji));
+            double dij = max(max(0.0, kij), kji);
+            //double dij = max( abs(kij), abs(kji));
             vdot(i_td) += (dij + K[k]) * ( v_d_glb->Elem(j_gl) -  v_d_glb->Elem(i_gl) );
          }
          vdot(i_td) /= lumpedMr_H1_vec(i);
@@ -960,9 +960,9 @@ void AdvectorVelocityOper::MCLVel(const SparseMatrix &K_glb, const SparseMatrix 
             double kij = -K[k];
             double kji = - KT[k];// * (!is_global_ess_dof[j_gl + d * pfes_H1_s.GlobalTrueVSize()]);
 
-            //double dij = max(max(0.0,kji),kij);
+            double dij = max(max(0.0,kji),kij);
             //dij = max( abs(K[k]), abs(KT[k]));
-            double dij = max( abs(kij), abs(kji));
+            //double dij = max( abs(kij), abs(kji));
             fij = M[k] * (vdot_glb->Elem(i_gl) - vdot_glb->Elem(j_gl)) + dij * (v_d_glb->Elem(i_gl) - v_d_glb->Elem(j_gl));
 
             //limit target flux to enforce local bounds for the bar states (note, that dij = dji)
