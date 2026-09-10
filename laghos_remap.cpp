@@ -1663,7 +1663,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    ParGridFunction flux_H1(&pfes_H1);
    VectorGridFunctionCoefficient flux_coeff(&flux);
    flux_H1.ProjectCoefficient(flux_coeff);
-   flux_H1.SetSubVector(v_ess_tdofs, 0.);
+   flux_H1.SetSubVector(v_ess_vdofs, 0.);
 
    RefConvectionIntegrator Ki(flux_H1);
    DenseMatrix K_k;
