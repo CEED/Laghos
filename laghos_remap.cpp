@@ -1730,12 +1730,12 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    {
       const Vector bdU_v(bdU, v*ndof, ndof);
       Vector dU_v(dU, v*ndof, ndof);
-      pfes_H1.GetProlongationMatrix()->MultTranspose(bdU_v, RHS);
+      pfes_H1_s.GetProlongationMatrix()->MultTranspose(bdU_v, RHS);
 
       X = 0.;
       lin_solver.SetOperator(trans->GetInterpolationMatrix(v));
       lin_solver.Mult(RHS, X);
-      pfes_H1.GetProlongationMatrix()->Mult(X, dU_v);
+      pfes_H1_s.GetProlongationMatrix()->Mult(X, dU_v);
    }
 }
 
