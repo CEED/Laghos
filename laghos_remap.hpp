@@ -264,9 +264,6 @@ protected:
    void MCLVel(const SparseMatrix &K_glb, const SparseMatrix &KT_glb,
                const SparseMatrix &M_glb, const Vector &v,
                Vector &d_v) const;
-   
-   void MCLVelComp(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb,
-                   const Vector &v, Vector &d_v) const;
 
    void ComputeVelocityMinMax(const Vector &v, Array<double> &v_min, Array<double> &v_max) const;
    void ComputeTimeDerivatives(const Vector &v, ConvectionIntegrator* conv_int, const ParFiniteElementSpace &pfes, Vector &vdot) const;
@@ -340,6 +337,9 @@ protected:
                                  const Vector &elfun,
                                  Vector &elvec) override;
    };
+
+   void MCLVelComp(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb,
+                   const Vector &v, Vector &d_v) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.
