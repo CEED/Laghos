@@ -1916,9 +1916,8 @@ real_t AdvectorVelocityGeomConsOper::Momentum(const ParGridFunction &rhouJ) cons
    {
       const Vector rhouJ_v(const_cast<ParGridFunction&>(rhouJ), v*ndof, ndof);
       pfes_H1_s.GetRestrictionOperator()->Mult(rhouJ_v, rhouJ_tv);
-      HypreParMatrix &MJ_m = trans->GetInterpolationMatrix(v);
-      MJ_m.Mult(rhouJ_tv, b);
-      mom += b.Sum();
+      const Vector &mJ_m = trans->GetLumpedInterpolationMatrix(v);
+      mom += mJ_m * rhouJ_tv;
    }
    MPI_Allreduce(MPI_IN_PLACE, &mom, 1, MFEM_MPI_REAL_T, MPI_SUM, pfes_H1.GetComm());
    return mom;
