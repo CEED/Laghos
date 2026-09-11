@@ -1671,10 +1671,24 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
       KJ = 0.;
    }
 
+   const int ntdof = pfes_H1_s.GetTrueVSize();
+   const int ndof = pfes_H1_s.GetNDofs();
+
    // Projection of the flux to H1 to exactly eliminate the boundary fluxes
    ParGridFunction flux_H1(&pfes_H1);
    VectorGridFunctionCoefficient flux_coeff(&flux);
-   flux_H1.ProjectCoefficient(flux_coeff);
+   ParLinearForm bflux(&pfes_H1);
+   Vector flux_tH1(ntdof*vdim), bflux_t(ntdof*vdim);
+   bflux.AddDomainIntegrator(new VectorDomainLFIntegrator(flux_coeff));
+   bflux.Assemble();
+   bflux.ParallelAssemble(bflux_t);
+   Vector detJ_t(ntdof), Mv_t(ntdof);
+   detJ.ParallelProject(detJ_t);
+   trans->GetInterpolationMatrix_s().Mult(detJ_t, Mv_t);
+   for (int v = 0; v < vdim; v++)
+      for (int i = 0; i < Mv_t.Size(); i++)
+         flux_tH1(i + v*Mv_t.Size()) = bflux_t(i + v*Mv_t.Size()) / Mv_t(i);
+   flux_H1.Distribute(flux_tH1);
    flux_H1.SetSubVector(v_ess_vdofs, 0.);
 
    RefConvectionIntegrator Ki(flux_H1);
@@ -1725,9 +1739,6 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    lin_solver.SetMaxIter(100);
    lin_solver.SetPrintLevel(0);
    lin_solver.SetPreconditioner(prec);
-
-   const int ntdof = pfes_H1_s.GetTrueVSize();
-   const int ndof = pfes_H1_s.GetNDofs();
 
    Vector X(ntdof), RHS(ntdof);
 
