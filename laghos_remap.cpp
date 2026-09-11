@@ -1885,6 +1885,7 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
          int j_gl = J[k];
          MFEM_ASSERT(j_gl == KT_J[k], "Wrong sparsity pattern!");
          MFEM_ASSERT(j_gl == M_J[k], "Wrong sparsity pattern!");
+         if(i_gl == j_gl || m_glb->Elem(j_gl) == 0.) { continue; }
          const real_t y_val = xy_glb->Elem(j_gl) / x_glb->Elem(j_gl);
          y_min(i_td) = min(y_min(i_td), y_val);
          y_max(i_td) = max(y_max(i_td), y_val);
@@ -1918,20 +1919,22 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
       for(int k = I[i_td]; k < I[i_td+1]; k++)
       {
          int j_gl = J[k];
-         if( i_gl == j_gl || m_glb->Elem(j_gl) == 0.) { continue; }
+         if(i_gl == j_gl) { continue; }
 
-         real_t kij = K[k];
-         real_t kji = KT[k];
+         const real_t kij = K[k];
+         const real_t kji = KT[k];
+         
+         const real_t xy_i = xy_glb->Elem(i_gl);
+         const real_t xy_j = m_glb->Elem(j_gl) != 0. ? xy_glb->Elem(j_gl) : 0.;
 
-         //real_t dij = max(max(0.0,-kji),-kij);
-         real_t dij = max( abs(kij), abs(kji));
-         fij = M[k] * (d_xy_glb->Elem(i_gl) - d_xy_glb->Elem(j_gl)) + dij * (xy_glb->Elem(i_gl) - xy_glb->Elem(j_gl));
+         const real_t dij = max(max(0.0,-kji),-kij);
+         //const real_t dij = max( abs(kij), abs(kji));
+         fij = M[k] * (d_xy_glb->Elem(i_gl) - d_xy_glb->Elem(j_gl)) + dij * (xy_i - xy_j);
 
          //limit target flux to enforce local bounds for the bar states (note, that dij = dji)
-         wij = dij * (xy_glb->Elem(i_gl) + xy_glb->Elem(j_gl))  + K[k] * (xy_glb->Elem(j_gl) - xy_glb->Elem(i_gl));
-         wji = dij * (xy_glb->Elem(i_gl) + xy_glb->Elem(j_gl))  + KT[k]  * (xy_glb->Elem(i_gl) - xy_glb->Elem(j_gl));
+         wij = dij * (xy_i + xy_j) + kij * (xy_j - xy_i);
+         wji = dij * (xy_i + xy_j) + kji * (xy_i - xy_j);
 
-         //KT_glb(i_td, j_gl)
          if(fij > 0)
          {
             fij_bound = min(2.0 * dij * x_new_glb->Elem(i_gl) * ymax_glb->Elem(i_gl) - wij,
@@ -1951,7 +1954,7 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
             //fij_star = min(0.0, fij_star);
          }
 
-         rhs_array[i] += (dij + kij) * xy_glb->Elem(j_gl) - (dij + kji) * xy_glb->Elem(i_gl) + fij_star;
+         rhs_array[i] += (dij + kij) * xy_j - (dij + kji) * xy_i + fij_star;
       }
    }
 
