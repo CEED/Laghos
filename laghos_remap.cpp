@@ -1714,7 +1714,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
       K_k.InvRightScaling(detJ_k);
 
       if (remap_v != RemapAdvector::RemapVelocity::HighOrder)
-         KJ.AddSubMatrix(dofs, dofs, K_k);
+         KJ.AddSubMatrix(dofs, dofs, K_k, 0);
 
       dbx_k.SetSize(ndof*vdim);
       for (int v = 0; v < vdim; v++)
@@ -1774,6 +1774,8 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const
    SparseMatrix K_sm, KT_sm;
    K_m->MergeDiagAndOffd(K_sm);
    KT_m->MergeDiagAndOffd(KT_sm);
+   K_sm.SortColumnIndices();
+   KT_sm.SortColumnIndices();
    delete K_m;
    delete KT_m;
    
@@ -1783,6 +1785,7 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const
    {
       SparseMatrix M_sm;
       trans->GetInterpolationMatrix(v).MergeDiagAndOffd(M_sm);
+      M_sm.SortColumnIndices();
 
       lumpedMr_H1_vec.SetSize(ndof);
       const Vector &lumpedMr_H1_tvec = trans->GetLumpedInterpolationMatrix(v);
@@ -1843,6 +1846,10 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
    const auto K = K_glb.ReadData();
    const auto KT = KT_glb.ReadData();
    const auto M = M_glb.ReadData();
+#ifdef MFEM_DEBUG
+   const auto KT_J = KT_glb.ReadJ();
+   const auto M_J = M_glb.ReadJ();
+#endif // MFEM_DEBUG
 
    for(int i = 0; i < dofs_h1; i++)
    {
@@ -1876,7 +1883,8 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
       for(int k = I[i_td]; k < I[i_td+1]; k++)
       {
          int j_gl = J[k];
-         if(i_gl == j_gl) { continue; }
+         MFEM_ASSERT(j_gl == KT_J[k], "Wrong sparsity pattern!");
+         MFEM_ASSERT(j_gl == M_J[k], "Wrong sparsity pattern!");
          const real_t y_val = xy_glb->Elem(j_gl) / x_glb->Elem(j_gl);
          y_min(i_td) = min(y_min(i_td), y_val);
          y_max(i_td) = max(y_max(i_td), y_val);
