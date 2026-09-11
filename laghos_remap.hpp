@@ -316,7 +316,7 @@ protected:
    const IntegrationRule &ir_rho;
    const ParGridFunction &detJ_L2, &rhoJ_L2;
    std::unique_ptr<SolutionTransfer_H1> trans;
-   mutable ParGridFunction detJ, rhoJ, rhoJ_new;
+   mutable ParGridFunction detJ, rhoJ;
    mutable SparseMatrix KJ;
 
    class RefConvectionIntegrator : public BilinearFormIntegrator
@@ -343,7 +343,7 @@ protected:
    };
 
    void MCLProduct(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb,
-                   const Vector &xy, const Vector &x, const Vector &x_new, Vector &d_xy) const;
+                   const Vector &xy, const Vector &x, Vector &d_xy) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.

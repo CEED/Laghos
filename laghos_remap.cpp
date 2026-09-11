@@ -694,13 +694,6 @@ void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector 
    // Velocity limiting.
    if (op_v)
    {
-      // We need the new detJ and rhoJ in L2 for transfer to H1
-      gcop_th->GetCurrentJacobian(detJ_L2);
-      if (!rhoJ_L2.ParFESpace()) { rhoJ_L2.SetSpace(detJ_L2.ParFESpace()); }
-      const Vector U_rho(const_cast<Vector&>(U), offsets[RemapAdvector::Density], rhoJ_L2.Size()); 
-      const Vector dU_rho(dU, offsets[RemapAdvector::Density], rhoJ_L2.Size()); 
-      add(U_rho, dt, dU_rho, rhoJ_L2);
-
       // Here we assume the thermodynamic state is in one piece
       const Vector v(const_cast<Vector&>(U), offsets[RemapAdvector::Velocity], op_v->Width());
       Vector dv(dU, offsets[RemapAdvector::Velocity], op_v->Width());
@@ -1624,7 +1617,7 @@ AdvectorVelocityGeomConsOper::AdvectorVelocityGeomConsOper(
    const ParGridFunction &detJ_L2, const ParGridFunction &rhoJ_L2)
 : AdvectorVelocityOper(v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, scheme),
   ir_rho(ir_rho_), detJ_L2(detJ_L2), rhoJ_L2(rhoJ_L2),
-  detJ(&pfes_H1_s), rhoJ(&pfes_H1_s), rhoJ_new(&pfes_H1_s), KJ(pfes_H1_s.GetVSize())
+  detJ(&pfes_H1_s), rhoJ(&pfes_H1_s), KJ(pfes_H1_s.GetVSize())
 {
    // Solution transfer
    trans = make_unique<SolutionTransfer_H1>(v_ess_tdofs, v_ess_vdofs, pfes_H1, pfes_H1_s, ir_rho);
@@ -1656,6 +1649,7 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
 
    // Current Jacobians
    trans->TransferJac_Larg2Remap(detJ);
+   // Current density * Jacobian (needed in LimitUpdate())
    trans->TransferDensityJac_L22H1(detJ_L2, rhoJ_L2, detJ, rhoJ);
 
    // RHS
@@ -1763,10 +1757,6 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const
    KJ.GetMemoryData().Delete();
    KJ.GetMemoryData().MakeAlias(K_v.GetMemory(), 0, K_v.Size());
 
-   // Prepare detJ and rhoJ
-   trans->TransferJac_Larg2Remap(detJ);
-   trans->TransferDensityJac_L22H1(detJ_L2, rhoJ_L2, detJ, rhoJ_new);
-
    // Create a temporary ParBilinearForm for parallel assembly
    ParBilinearForm K_form(&pfes_H1_s);
    auto *K_m = K_form.ParallelAssemble(&KJ);
@@ -1797,7 +1787,7 @@ void AdvectorVelocityGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const
       switch (remap_v)
       {
       case RemapAdvector::RemapVelocity::MCL:
-         MCLProduct(K_sm, KT_sm, M_sm, U_v, rhoJ, rhoJ_new, dU_v);
+         MCLProduct(K_sm, KT_sm, M_sm, U_v, rhoJ, dU_v);
          break;
       default:
          MFEM_ABORT("Unsupported remap");
@@ -1827,7 +1817,7 @@ real_t AdvectorVelocityGeomConsOper::Momentum(const ParGridFunction &rhouJ) cons
 
 void AdvectorVelocityGeomConsOper::MCLProduct(
    const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb,
-   const Vector &xy, const Vector &x, const Vector &x_new, Vector &d_xy) const
+   const Vector &xy, const Vector &x, Vector &d_xy) const
 {
    GroupCommunicator &gcomm = pfes_H1_s.GroupComm();
    //Array<double> lumpedmassmatrix_array(lumpedMr_H1_vec.GetData(), lumpedMr_H1_vec.Size());
@@ -1838,8 +1828,7 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
    const int dofs_h1 = pfes_H1_s.GetVSize();
 
    Array<real_t> rhs_array(dofs_h1), udot_array(dofs_h1);
-   HypreParVector m_hpr(&pfes_H1_s), xy_hpr(&pfes_H1_s), x_hpr(&pfes_H1_s), x_new_hpr(&pfes_H1_s), /*xydot(&pfes_H1_s),*/ d_xy_hpr(&pfes_H1_s), y_min(&pfes_H1_s), y_max(&pfes_H1_s);
-   real_t fij, fij_bound, fij_star, wij, wji;
+   HypreParVector m_hpr(&pfes_H1_s), xy_hpr(&pfes_H1_s), x_hpr(&pfes_H1_s), /*xydot(&pfes_H1_s),*/ d_xy_hpr(&pfes_H1_s), y_min(&pfes_H1_s), y_max(&pfes_H1_s);
 
    const auto I = K_glb.ReadI();
    const auto J = K_glb.ReadJ();
@@ -1858,14 +1847,12 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
       {
          xy_hpr(i_td) = xy(i);
          x_hpr(i_td) = x(i);
-         x_new_hpr(i_td) = x_new(i);
          m_hpr(i_td) = lumpedMr_H1_vec(i);
          d_xy_hpr(i_td) = d_xy(i);
       }
    }
    unique_ptr<Vector> xy_glb(xy_hpr.GlobalVector());
    unique_ptr<Vector> x_glb(x_hpr.GlobalVector());
-   unique_ptr<Vector> x_new_glb(x_new_hpr.GlobalVector());
    unique_ptr<Vector> m_glb(m_hpr.GlobalVector());
    MFEM_VERIFY(xy_hpr.Size() == K_glb.Height(), "true dof local vector size weird");
    MFEM_VERIFY( xy_glb->Size() == pfes_H1_s.GlobalTrueVSize(), "glb vector size weird");
@@ -1924,37 +1911,41 @@ void AdvectorVelocityGeomConsOper::MCLProduct(
          const real_t kij = K[k];
          const real_t kji = KT[k];
          
+         const real_t x_i = x_glb->Elem(i_gl);
+         const real_t x_j = m_glb->Elem(j_gl) != 0. ? x_glb->Elem(j_gl) : 0.;
          const real_t xy_i = xy_glb->Elem(i_gl);
          const real_t xy_j = m_glb->Elem(j_gl) != 0. ? xy_glb->Elem(j_gl) : 0.;
 
          const real_t dij = max(max(0.0,-kji),-kij);
          //const real_t dij = max( abs(kij), abs(kji));
-         fij = M[k] * (d_xy_glb->Elem(i_gl) - d_xy_glb->Elem(j_gl)) + dij * (xy_i - xy_j);
+         real_t fij = M[k] * (d_xy_glb->Elem(i_gl) - d_xy_glb->Elem(j_gl)) + dij * (xy_i - xy_j);
 
          //limit target flux to enforce local bounds for the bar states (note, that dij = dji)
-         wij = dij * (xy_i + xy_j) + kij * (xy_j - xy_i);
-         wji = dij * (xy_i + xy_j) + kji * (xy_i - xy_j);
+         const real_t wxij = dij * (x_i + x_j) + kij * (x_j - x_i);
+         const real_t wxji = dij * (x_i + x_j) + kji * (x_i - x_j);
+         const real_t wxyij = dij * (xy_i + xy_j) + kij * (xy_j - xy_i);
+         const real_t wxyji = dij * (xy_i + xy_j) + kji * (xy_i - xy_j);
 
          if(fij > 0)
          {
-            fij_bound = min(2.0 * dij * x_new_glb->Elem(i_gl) * ymax_glb->Elem(i_gl) - wij,
-                            wji - 2.0 * dij * x_new_glb->Elem(j_gl) * ymin_glb->Elem(j_gl));
-            fij_star = min(fij, fij_bound);
+            const real_t fij_bound = min(wxij * ymax_glb->Elem(i_gl) - wxyij,
+                                         wxyji - wxji * ymin_glb->Elem(j_gl));
+            fij = min(fij, fij_bound);
 
             // to get rid of rounding errors wich influence the sign
-            //fij_star = max(0.0, fij_star);
+            //fij = max(0.0, fij_star);
          }
          else
          {
-            fij_bound = max(2.0 * dij * x_new_glb->Elem(i_gl) * ymin_glb->Elem(i_gl) - wij,
-                            wji - 2.0 * dij * x_new_glb->Elem(j_gl) * ymax_glb->Elem(j_gl));
-            fij_star = max(fij, fij_bound);
+            const real_t fij_bound = max(wxij * ymin_glb->Elem(i_gl) - wxyij,
+                                         wxyji - wxji * ymax_glb->Elem(j_gl));
+            fij = max(fij, fij_bound);
 
             // to get rid of rounding errors wich influence the sign
             //fij_star = min(0.0, fij_star);
          }
 
-         rhs_array[i] += (dij + kij) * xy_j - (dij + kji) * xy_i + fij_star;
+         rhs_array[i] += (dij + kij) * xy_j - (dij + kji) * xy_i + fij;
       }
    }
 
