@@ -205,6 +205,8 @@ class AdvectorGeomConsOper : public AdvectorOper, public TimeDependentGeomConsOp
    Array<int> ess_bdr;
    Array<int> ess_tdofs_f;
 
+   mutable ParGridFunction detJ_L2, rhoJ_L2;
+
    class DivRDivRIntegrator : public BilinearFormIntegrator
    {
 #ifndef MFEM_THREAD_SAFE
@@ -312,7 +314,9 @@ class AdvectorVelocityGeomConsOper : public AdvectorVelocityOper, public TimeDep
 {
 protected:
    const IntegrationRule &ir_rho;
+   const ParGridFunction &detJ_L2, &rhoJ_L2;
    std::unique_ptr<SolutionTransfer_H1> trans;
+   mutable ParGridFunction detJ, rhoJ, rhoJ_new;
    mutable SparseMatrix KJ;
 
    class RefConvectionIntegrator : public BilinearFormIntegrator
@@ -338,8 +342,8 @@ protected:
                                  Vector &elvec) override;
    };
 
-   void MCLVelComp(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb,
-                   const Vector &v, Vector &d_v) const;
+   void MCLProduct(const SparseMatrix &K_glb, const SparseMatrix &KT_glb, const SparseMatrix &M_glb,
+                   const Vector &xy, const Vector &x, const Vector &x_new, Vector &d_xy) const;
 
 public:
    // Here pfes is the ParFESpace of the function that will be transferred.
@@ -349,7 +353,9 @@ public:
       const Array<int> &v_ess_vd,
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
-      RemapAdvector::RemapVelocity scheme);
+      RemapAdvector::RemapVelocity scheme,
+      const ParGridFunction &detJ_L2,
+      const ParGridFunction &rhoJ_L2);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override
@@ -474,6 +480,8 @@ public:
 
    void MultConserv(const ParGridFunction &flux, const Vector &U, Vector &K, Vector &dU) const override;
    void LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU) override;
+
+   void GetCurrentJacobian(ParGridFunction &detJ) const;
 
    real_t Mass(const ParGridFunction &rhoJ) const override;
    real_t InternalEnergy(const ParGridFunction &rhoeJ) const override;
