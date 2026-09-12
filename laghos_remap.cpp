@@ -20,6 +20,7 @@
 #include "laghos_remap_fct.hpp"
 #include "laghos_remap_sync.hpp"
 
+//#define LAGHOS_REMAP_TRACK_SOLVERS
 //#define LAGHOS_REMAP_SOLENOIDAL_CORRECTION
 
 using namespace std;
@@ -1745,10 +1746,14 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
    lin_solver.SetRelTol(1e-8);
    lin_solver.SetAbsTol(0.0);
    lin_solver.SetMaxIter(100);
-   lin_solver.SetPrintLevel(3);
    lin_solver.SetPreconditioner(prec);
-
+   
+#ifdef LAGHOS_REMAP_TRACK_SOLVERS
+   lin_solver.SetPrintLevel(3);
    if (pfes_H1_s.GetMyRank() == 0) { cout << "Velocity high-order solve:" << endl; }
+#else
+   lin_solver.SetPrintLevel(0);
+#endif
 
    Vector X(ntdof), RHS(ntdof);
 
@@ -2516,13 +2521,17 @@ void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
    solver.SetRelTol(1e-6);
    const real_t norm_rhs = InnerProduct(pfes_f.GetComm(), RHS, RHS);
    solver.SetAbsTol(norm_rhs * 1e-6);
-   solver.SetMaxIter(1000);
-   solver.SetPrintLevel(3);
+   solver.SetMaxIter(100);
    solver.SetPreconditioner(prec);
    solver.SetOperator(DD_m);
    solver.iterative_mode = true;
 
+#ifdef LAGHOS_REMAP_TRACK_SOLVERS
+   solver.SetPrintLevel(3);
    if (pfes_f.GetMyRank() == 0) { cout << "Flux solve:" << endl; }
+#else
+   solver.SetPrintLevel(0);   
+#endif // LAGHOS_REMAP_TRACK_SOLVERS
    
    solver.Mult(RHS, X);
 
