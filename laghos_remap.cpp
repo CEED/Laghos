@@ -2469,7 +2469,7 @@ void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
    add(x0, t, u, x_now);
 
    // setup the flux
-   if (!flux.FESpace()) { flux.SetSpace(&pfes_f); }
+   flux.SetSpace(&pfes_f);
 
    // mass vector
    Vector rhs(pfes_f.GetVSize());
