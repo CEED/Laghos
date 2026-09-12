@@ -37,6 +37,7 @@ public:
     virtual void Init(TimeDependentGeomConsOperator &f);
 };
 
+/// The classical forward Euler method
 class ForwardEulerSolver : public GeomConsODESolver
 {
     Vector dU;
@@ -44,6 +45,59 @@ class ForwardEulerSolver : public GeomConsODESolver
 public:
     void Init(TimeDependentGeomConsOperator &f) override;
     void Step(Vector &x, real_t &t, real_t &dt) override;
+};
+
+/// General RK-s (s-stage Runge-Kutta) solver
+class RKSolver : public GeomConsODESolver
+{
+    const int s;
+    const real_t *a, *b, *c;
+    real_t *d;
+    Vector *dxs, *Ks;
+    ParGridFunction *fs;
+
+    // This function constructs coefficients that transform eq. (2.16) from
+   // JLG's paper to an update that only uses the previous limited updates.
+   // This function does not depend on the Operator f in any way.
+   void ConstructD();
+
+public:
+    RKSolver(int s_, const real_t a_[], const real_t b_[], const real_t c_[]);
+    void Init(TimeDependentGeomConsOperator &f) override;
+    void Step(Vector &x, real_t &t, real_t &dt) override;
+    virtual ~RKSolver();
+};
+
+/// The classical midpoint method
+class RK2Solver : public RKSolver
+{
+    static const real_t a[], b[], c[];
+public:
+    RK2Solver() : RKSolver(2, a, b, c) { }
+};
+
+/// Third-order, Heun's method
+class RK3Solver : public RKSolver
+{
+    static const real_t a[], b[], c[];
+public:
+    RK3Solver() : RKSolver(3, a, b, c) { }
+};
+
+/// Fourth-order, equidistant rule
+class RK4Solver : public RKSolver
+{
+    static const real_t a[], b[], c[];
+public:
+    RK4Solver() : RKSolver(4, a, b, c) { }
+};
+
+/// Fifth-order, equidistant rule
+class RK6Solver : public RKSolver
+{
+    static const real_t a[], b[], c[];
+public:
+    RK6Solver() : RKSolver(6, a, b, c) { }
 };
 
 } // namespace geom_consistent_solvers

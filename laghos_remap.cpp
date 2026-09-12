@@ -148,7 +148,21 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
       ode_solver = make_unique<RK3SSPSolver>();
       break;
    case RemapScheme::GeomConsistent:
-      ode_solver_gc = make_unique<geom_consistent_solvers::ForwardEulerSolver>();
+      switch (order_v)
+      {
+      case 1:
+         ode_solver_gc = make_unique<geom_consistent_solvers::RK2Solver>();
+         break;
+      case 2:
+         ode_solver_gc = make_unique<geom_consistent_solvers::RK3Solver>();
+         break;
+      case 3:
+         ode_solver_gc = make_unique<geom_consistent_solvers::RK4Solver>();
+         break;
+      default:
+         ode_solver_gc = make_unique<geom_consistent_solvers::RK6Solver>();
+         break;
+      }
       break;
    }
 }
