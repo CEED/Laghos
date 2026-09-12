@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
    args.AddOption(&remap_v, "-rv", "--remap-vel",
                   "Velocity remap scheme (0 - HO, 1 - LO, 2 - HO Target, 3 - MCL, 4 - Clip&Scale)");
    args.AddOption(&remap_scheme, "-r", "--remap-scheme",
-                  "Thermodynamic remap scheme (0 - nonconservative, 1 - geom. consistent)");
+                  "Thermodynamic remap scheme (0 - nonconservative, 1 - geom. consistent, 2 - mixed)");
 #ifdef MFEM_USE_GSLIB
    args.AddOption(&remap_v_gslib, "-rvg", "--rvg", "-no-rvg", "--no-rvg",
                   "Remap v with GSLIB.");

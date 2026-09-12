@@ -149,6 +149,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
       ode_solver = make_unique<RK3SSPSolver>();
       break;
    case RemapScheme::GeomConsistent:
+   case RemapScheme::GeomConsistentMixed:
       switch (order_v)
       {
       case 1:
@@ -187,6 +188,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
+   case RemapScheme::GeomConsistentMixed:
       if (remap_v != RemapVelocity::HighOrder)
       {
          transfer_h1.TransferVelocity_Lagr2Remap(vel, Sgf[Velocity]);
@@ -213,6 +215,7 @@ void RemapAdvector::InitFromLagr(const Vector &nodes0,
       Sgf[Energy]  = eps;
       break;
    case RemapScheme::GeomConsistent:
+   case RemapScheme::GeomConsistentMixed:
       detJ_L2.SetSpace(&pfes_L2); detJ_L2 = 0.;
       transfer_l2.TransferJac_Larg2Remap(detJ_L2);
       transfer_l2.TransferDensityJac_Lagr2Remap(rhoDetJw, detJ_L2, Sgf[Density]);
@@ -261,10 +264,12 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
       break;
    }
    case RemapScheme::GeomConsistent:
+   case RemapScheme::GeomConsistentMixed:
    {
       auto *op = new AdvectorGeomConsOper(
          x0, v_ess_tdofs, v_ess_vdofs, u, *ir_rho,
-         *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v);
+         *pfes_H1_v, pfes_H1_s, pfes_L2, remap_v,
+         remap_scheme != RemapScheme::GeomConsistent);
       ode_solver_gc->Init(*op);
       oper = op;
       ode = ode_solver_gc.get();
@@ -388,6 +393,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       rho0_gf = Sgf[Density];
       break;
    case RemapScheme::GeomConsistent:
+   case RemapScheme::GeomConsistentMixed:
       transfer_l2.TransferJac_Larg2Remap(detJ_L2);
       transfer_l2.TransferDensityJac_Remap2Lagr(detJ_L2, Sgf[Density], rho0_gf);
       break;
@@ -434,6 +440,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
    switch (remap_scheme)
    {
    case RemapScheme::Nonconservative:
+   case RemapScheme::GeomConsistentMixed:
       if (remap_v != RemapVelocity::HighOrder)
       {
          transfer_h1.TransferVelocity_Remap2Lagr(Sgf[Velocity], vel);
@@ -459,6 +466,7 @@ void RemapAdvector::TransferToLagr(ParGridFunction &rho0_gf,
       eps = Sgf[Energy];
       break;
    case RemapScheme::GeomConsistent:
+   case RemapScheme::GeomConsistentMixed:
       transfer_l2.TransferEnergyJac_Remap2Lagr(rhoDetJw, Sgf[Density], Sgf[Energy], eps);
       break;
    }
@@ -592,8 +600,10 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
    ParFiniteElementSpace &pfes_H1,
    ParFiniteElementSpace &pfes_H1_s,
    ParFiniteElementSpace &pfes_L2,
-   RemapAdvector::RemapVelocity remap_v)
+   RemapAdvector::RemapVelocity remap_v,
+   bool mixed_v_)
   : AdvectorOper(x_start, mesh_vel, pfes_H1, pfes_L2),
+    mixed_v(mixed_v_),
     ir_rho(ir_rho_),
     fec_f(pfes_L2.FEColl()->GetOrder(), pfes_L2.GetParMesh()->Dimension()),
     fec_a(pfes_L2.FEColl()->GetOrder()+1, pfes_L2.GetParMesh()->Dimension()),
@@ -603,8 +613,24 @@ AdvectorGeomConsOper::AdvectorGeomConsOper(
 {
    // Velocity advector
    if (remap_v != RemapAdvector::RemapVelocity::None)
-      op_v = make_unique<AdvectorVelocityGeomConsOper>(
-         ir_rho, v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s, remap_v, detJ_L2, rhoJ_L2);
+   {
+      if (mixed_v)
+      {
+         rho.SetSpace(&pfes_L2);
+         rho_coeff.reset(new GridFunctionCoefficient(&rho));
+         u_coeff.reset(new VectorGridFunctionCoefficient(&mesh_vel));
+
+         op_v = make_unique<AdvectorVelocityNonconservativeOper>(
+            v_ess_td, v_ess_vd, *rho_coeff, *u_coeff,
+            pfes_H1, pfes_H1_s, remap_v);
+      }
+      else
+      {
+         op_v = make_unique<AdvectorVelocityGeomConsOper>(
+            ir_rho, v_ess_td, v_ess_vd, pfes_H1, pfes_H1_s,
+            remap_v, detJ_L2, rhoJ_L2);
+      }
+   }
 
    pfes_L2.ExchangeFaceNbrData();
    op_th = make_unique<AdvectorThermoGeomConsOper>(ir_rho, pfes_L2);
@@ -659,16 +685,27 @@ void AdvectorGeomConsOper::MultConserv(const ParGridFunction &flux, const Vector
    // Velocity remap.
    if (op_v)
    {
-      // We need the new detJ and rhoJ in L2 for transfer to H1
-      gcop_th->GetCurrentJacobian(detJ_L2);
-      if (!rhoJ_L2.ParFESpace()) { rhoJ_L2.SetSpace(detJ_L2.ParFESpace()); }
-      const Vector U_rho(const_cast<Vector&>(U), offsets[RemapAdvector::Density], rhoJ_L2.Size());
-      rhoJ_L2 = U_rho;
-
       const Vector &v = bU.GetBlock(RemapAdvector::Velocity);
       Vector &d_v = bdU.GetBlock(RemapAdvector::Velocity);
-      auto *gcop_v = static_cast<AdvectorVelocityGeomConsOper*>(op_v.get());
-      gcop_v->MultConserv(flux, v, K_vvel, d_v);
+      if (mixed_v)
+      {
+         // We need density for velocity mass matrix
+         const ParGridFunction rhoJ(rho.ParFESpace(), const_cast<Vector&>(U), offsets[RemapAdvector::Density]);
+         gcop_th->GetCurrentDensity(rhoJ, rho);
+
+         op_v->Mult(v, d_v);
+      }
+      else
+      {
+         // We need the new detJ and rhoJ in L2 for transfer to H1
+         gcop_th->GetCurrentJacobian(detJ_L2);
+         if (!rhoJ_L2.ParFESpace()) { rhoJ_L2.SetSpace(detJ_L2.ParFESpace()); }
+         const Vector U_rho(const_cast<Vector&>(U), offsets[RemapAdvector::Density], rhoJ_L2.Size());
+         rhoJ_L2 = U_rho;
+
+         auto *gcop_v = static_cast<AdvectorVelocityGeomConsOper*>(op_v.get());
+         gcop_v->MultConserv(flux, v, K_vvel, d_v);
+      }
    }
 
    // Construct offsets and resize the K vector
@@ -707,7 +744,7 @@ void AdvectorGeomConsOper::LimitUpdate(real_t dt, const Vector &U, const Vector 
    gcop_th->LimitUpdate(dt, th, bK.GetBlock(Thermo), dth);
 
    // Velocity limiting.
-   if (op_v)
+   if (op_v && !mixed_v)
    {
       // Here we assume the thermodynamic state is in one piece
       const Vector v(const_cast<Vector&>(U), offsets[RemapAdvector::Velocity], op_v->Width());
@@ -2877,6 +2914,14 @@ void AdvectorThermoGeomConsOper::GetCurrentJacobian(ParGridFunction &detJ) const
 {
    if (!detJ.ParFESpace()) { detJ.SetSpace(&pfes_L2); }
    trans->TransferJac_Larg2Remap(detJ);
+}
+
+void AdvectorThermoGeomConsOper::GetCurrentDensity(const ParGridFunction &rhoJ, ParGridFunction &rho) const
+{
+   if (!rho.ParFESpace()) { rho.SetSpace(&pfes_L2); }
+   ParGridFunction detJ(&pfes_L2);
+   trans->TransferJac_Larg2Remap(detJ);
+   trans->TransferDensityJac_Remap2Lagr(detJ, rhoJ, rho);
 }
 
 real_t AdvectorThermoGeomConsOper::Mass(const ParGridFunction &rhoJ) const

@@ -68,6 +68,7 @@ public:
    {
       Nonconservative,
       GeomConsistent,
+      GeomConsistentMixed,
    };
 
 private:
@@ -195,6 +196,7 @@ public:
 // Performs a single remap advection step - geometrically consistent scheme
 class AdvectorGeomConsOper : public AdvectorOper, public TimeDependentGeomConsOperator
 {
+   bool mixed_v;
    const IntegrationRule &ir_rho;
 
    RT_FECollection fec_f;
@@ -205,7 +207,10 @@ class AdvectorGeomConsOper : public AdvectorOper, public TimeDependentGeomConsOp
    Array<int> ess_bdr;
    Array<int> ess_tdofs_f;
 
-   mutable ParGridFunction detJ_L2, rhoJ_L2;
+   std::unique_ptr<Coefficient> rho_coeff;
+   std::unique_ptr<VectorCoefficient> u_coeff;
+
+   mutable ParGridFunction rho, detJ_L2, rhoJ_L2;
 
    class DivRDivRIntegrator : public BilinearFormIntegrator
    {
@@ -233,7 +238,8 @@ public:
       ParFiniteElementSpace &pfes_H1,
       ParFiniteElementSpace &pfes_H1_s,
       ParFiniteElementSpace &pfes_L2,
-      RemapAdvector::RemapVelocity scheme_v);
+      RemapAdvector::RemapVelocity scheme_v,
+      bool mixed_v);
 
    // Single RK stage solve for all fields contained in U.
    void Mult(const Vector &U, Vector &dU) const override
@@ -482,6 +488,7 @@ public:
    void LimitUpdate(real_t dt, const Vector &U, const Vector &K, Vector &dU) override;
 
    void GetCurrentJacobian(ParGridFunction &detJ) const;
+   void GetCurrentDensity(const ParGridFunction &rhoJ, ParGridFunction &rho) const;
 
    real_t Mass(const ParGridFunction &rhoJ) const override;
    real_t InternalEnergy(const ParGridFunction &rhoeJ) const override;
