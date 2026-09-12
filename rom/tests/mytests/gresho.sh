@@ -1,10 +1,12 @@
 #!/bin/bash
-# Multi-window Sedov run for BEQP and CEQP.
-# Old-job settings (mesh, refinement, cfl) with a shortened time horizon.
+# Multi-window Gresho run for BEQP and CEQP.
+# Old-job settings (mesh, refinement, orders, cfl) with a shortened time
+# horizon.
 
 set -e
 
-P="-p 1 -m data/cube01_hex.mesh -rs 2 -pt 211 -cfl 0.5 -s 7 -tf 0.04"
+P="-p 4 -m data/square_gresho.mesh -rs 4 -ok 2 -ot 1 -cfl 0.35"
+P="$P -s 7 -tf 0.03"
 RUN="srun"
 
 # $1 = sampling type (eqp | eqp_energy), $2 = output dir, $3 = prep ranks
@@ -45,9 +47,9 @@ run_pipeline () {
 }
 
 # Single rank runs
-run_pipeline eqp        sedov_eqp_mw_1r   1
-run_pipeline eqp_energy sedov_ceqp_mw_1r  1
+run_pipeline eqp        gresho_eqp_mw_1r   1
+run_pipeline eqp_energy gresho_ceqp_mw_1r  1
 
 # Multi rank runs
-#run_pipeline eqp        sedov_eqp_mw_2r   2
-#run_pipeline eqp_energy sedov_ceqp_mw_2r  2
+#run_pipeline eqp        gresho_eqp_mw_2r   2
+#run_pipeline eqp_energy gresho_ceqp_mw_2r  2
