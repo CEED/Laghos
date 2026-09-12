@@ -712,12 +712,12 @@ void SolutionTransfer_H1::TransferH1Monotonous(
 
    // Step 1: Compute high-order solution M y_HO = b
    HypreSmoother prec;
-   prec.SetType(HypreSmoother::Jacobi, 1);
+   prec.SetType(HypreSmoother::l1GS, 1);
 
    CGSolver lin_solver(pfes_H1_s.GetComm());
    lin_solver.SetRelTol(1e-10);
    lin_solver.SetAbsTol(0.0);
-   lin_solver.SetMaxIter(100);
+   lin_solver.SetMaxIter(200);
    lin_solver.SetPrintLevel(0);
    lin_solver.SetPreconditioner(prec);
    lin_solver.SetOperator(M);
@@ -866,12 +866,12 @@ void SolutionTransfer_H1::TransferXYH1Monotonous(
 
    // Step 1: Compute high-order solution M (x*y)_HO = b
    HypreSmoother prec;
-   prec.SetType(HypreSmoother::Jacobi, 1);
+   prec.SetType(HypreSmoother::l1GS, 1);
 
    CGSolver lin_solver(pfes_H1_s.GetComm());
    lin_solver.SetRelTol(1e-10);
    lin_solver.SetAbsTol(0.0);
-   lin_solver.SetMaxIter(100);
+   lin_solver.SetMaxIter(200);
    lin_solver.SetPrintLevel(0);
    lin_solver.SetPreconditioner(prec);
    lin_solver.SetOperator(M);

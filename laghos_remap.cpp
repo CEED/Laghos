@@ -1739,14 +1739,16 @@ void AdvectorVelocityGeomConsOper::MultConserv(const ParGridFunction &flux, cons
 
    // Invert by mass matrix
    HypreSmoother prec;
-   prec.SetType(HypreSmoother::Jacobi, 1);
+   prec.SetType(HypreSmoother::l1GS, 1);
 
    CGSolver lin_solver(pfes_H1_s.GetComm());
    lin_solver.SetRelTol(1e-8);
    lin_solver.SetAbsTol(0.0);
    lin_solver.SetMaxIter(100);
-   lin_solver.SetPrintLevel(0);
+   lin_solver.SetPrintLevel(3);
    lin_solver.SetPreconditioner(prec);
+
+   if (pfes_H1_s.GetMyRank() == 0) { cout << "Velocity high-order solve:" << endl; }
 
    Vector X(ntdof), RHS(ntdof);
 
@@ -2520,6 +2522,8 @@ void AdvectorGeomConsOper::ImplicitSolveFlux(real_t dt, ParGridFunction &flux)
    solver.SetOperator(DD_m);
    solver.iterative_mode = true;
 
+   if (pfes_f.GetMyRank() == 0) { cout << "Flux solve:" << endl; }
+   
    solver.Mult(RHS, X);
 
    flux.Distribute(X);
