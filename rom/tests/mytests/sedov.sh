@@ -4,7 +4,7 @@
 
 set -e
 
-P="-p 1 -m data/cube01_hex.mesh -rs 2 -pt 211 -cfl 0.5 -s 7 -tf 0.04"
+P="-p 1 -m data/cube01_hex.mesh -rs 2 -pt 211 -cfl 0.5 -s 7 -tf 0.02"
 RUN="srun"
 
 # $1 = sampling type (eqp | eqp_energy), $2 = output dir, $3 = prep ranks

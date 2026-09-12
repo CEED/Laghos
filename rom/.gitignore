@@ -8,6 +8,7 @@ run
 
 # Do not track log files
 *.log
+*.out
 
 # Do not track executables
 laghos
