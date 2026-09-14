@@ -105,7 +105,8 @@ void InterpolationRemap::Remap(const ParGridFunction &source,
 
 RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
                              double cfl, RemapScheme remap_, RemapVelocity remap_v_,
-                             const Array<int> &ess_tdofs, const Array<int> &ess_vdofs, bool vis)
+                             const Array<int> &ess_tdofs, const Array<int> &ess_vdofs,
+                             bool vis, int vis_steps)
     : pmesh(m, true), dim(pmesh.Dimension()),
     fec_L2(order_e, pmesh.Dimension(), BasisType::Positive),
     fec_H1(order_v, pmesh.Dimension(), BasisType::Positive),
@@ -119,6 +120,7 @@ RemapAdvector::RemapAdvector(const ParMesh &m, int order_v, int order_e,
     remap_v(remap_v_),
     cfl_factor(cfl),
     visualize(vis),
+    vis_steps(vis_steps),
     offsets(), S(), x0()
 {
    const int vsize_H1 = pfes_H1.GetVSize(), vsize_L2 = pfes_L2.GetVSize();
@@ -355,7 +357,7 @@ void RemapAdvector::ComputeAtNewPosition(const Vector &new_nodes)
       oper->SetDt(dt);
       ode->Step(S, t, dt);
 
-      if (visualize)
+      if (visualize && ((ti % vis_steps == 0) || last_step))
       {
          hydrodynamics::VisualizeField(vis_rho, vishost, visport, Sgf[Density],
                                        "Remapped Density", Wx, Wy, Ww, Wh);

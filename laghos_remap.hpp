@@ -85,6 +85,7 @@ private:
 
    const double cfl_factor;
    const bool visualize;
+   const int vis_steps;
 
    // Remap state variables.
    Array<int> offsets;
@@ -104,7 +105,7 @@ public:
    RemapAdvector(const ParMesh &m, int order_v, int order_e, double cfl,
                  RemapScheme remap, RemapVelocity remap_v,
                  const Array<int> &ess_tdofs, const Array<int> &ess_vdofs,
-                 bool visualize);
+                 bool visualize, int vis_steps);
 
    void InitFromLagr(const Vector &nodes0,
                      const ParGridFunction &vel,
