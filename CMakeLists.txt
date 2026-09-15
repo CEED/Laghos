@@ -25,8 +25,7 @@ find_package(HYPRE REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(MPI REQUIRED)
 
-option(LAGHOS_USE_RAJA "Use RAJA" OFF)
-if (LAGHOS_USE_RAJA)
+if (MFEM_USE_RAJA)
   find_package(RAJA REQUIRED)
 endif()
 
@@ -35,7 +34,11 @@ if (LAGHOS_USE_CALIPER)
   find_package(caliper REQUIRED)
 endif()
 
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to use.")
+if (MFEM_USE_RAJA OR MFEM_USE_UMPIRE)
+  set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to use.")
+else()
+  set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard to use.")
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL
   "Force the use of the chosen C++ standard.")
 set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Enable C++ standard extensions.")
