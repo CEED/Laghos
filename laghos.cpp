@@ -413,7 +413,9 @@ int main(int argc, char *argv[])
    const bool sine_cube_mesh =
       (strcmp(mesh_file, "data/cube_a02_b01_c11.mesh") == 0);
    const bool square_mesh =
-      (strcmp(mesh_file, "data/square01_quad.mesh") == 0);
+      (strcmp(mesh_file, "data/square01_quad.mesh") == 0
+      || strcmp(mesh_file, "default") == 0
+      || strcmp(mesh_file, "data/rectangle01_quad.mesh") == 0);
    const bool torus_mesh =
       (strcmp(mesh_file, "data/solid_torus_nurbs.mesh") == 0);
    const bool cube_3d_mesh = cube_corner_mesh || sine_cube_mesh;
@@ -497,30 +499,37 @@ int main(int argc, char *argv[])
       // TODO: make square mesh with distinct boundary attributes
       if (square_mesh)
       {
+         Vector pmin, pmax;
+         pmesh->GetBoundingBox(pmin, pmax);
          const IntegrationRule &nodes = H1FESpace.GetBE(e)->GetNodes();
          ElementTransformation *bdr_tr = H1FESpace.GetBdrElementTransformation(e);
          for (int j = 0; j < nd; j++)
          {
             bdr_tr->Transform(nodes.IntPoint(j), dof_coord);
-            if (fabs(dof_coord(1) - 1.0) < 1e-12)
+            if (fabs(dof_coord(1) - pmax(1)) < 1e-12)
             {
                fit_marker_top[vdofs[j]] = true;
                be_to_surface[e] = 0;
             }
-            else if (fabs(dof_coord(0) - 1.0) < 1e-12)
+            else if (fabs(dof_coord(0) - pmax(0)) < 1e-12)
             {
                fit_marker_right[vdofs[j]] = true;
                be_to_surface[e] = 1;
             }
-            else if (fabs(dof_coord(1)) < 1e-12)
+            else if (fabs(dof_coord(1) - pmin(1)) < 1e-12)
             {
                fit_marker_bottom[vdofs[j]] = true;
                be_to_surface[e] = 2;
             }
-            else if (fabs(dof_coord(0)) < 1e-12)
+            else if (fabs(dof_coord(0) - pmin(0)) < 1e-12)
             {
                fit_marker_left[vdofs[j]] = true;
                be_to_surface[e] = 3;
+            }
+            else
+            {
+               dof_coord.Print();
+               MFEM_ABORT("Boundary DOF does not belong to any analytic surface!");
             }
          }
          continue;
