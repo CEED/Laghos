@@ -1494,14 +1494,25 @@ int main(int argc, char *argv[])
    // For problems 0 and 4 the exact velocity is constant in time.
    if (problem == 0 || problem == 4)
    {
-      const double error_max = v_gf.ComputeMaxError(v_coeff),
-                   error_l1  = v_gf.ComputeL1Error(v_coeff),
-                   error_l2  = v_gf.ComputeL2Error(v_coeff);
+      const double v_error_max = v_gf.ComputeMaxError(v_coeff),
+                   v_error_l1  = v_gf.ComputeL1Error(v_coeff),
+                   v_error_l2  = v_gf.ComputeL2Error(v_coeff);
       if (Mpi::Root())
       {
-         cout << "L_inf  error: " << error_max << endl
-              << "L_1    error: " << error_l1 << endl
-              << "L_2    error: " << error_l2 << endl;
+         cout << "L_inf  v error: " << v_error_max << endl
+              << "L_1    v error: " << v_error_l1 << endl
+              << "L_2    v error: " << v_error_l2 << endl;
+      }
+      
+      FunctionCoefficient e_coeff(e0);
+      const double e_error_max = e_gf.ComputeMaxError(e_coeff),
+                   e_error_l1  = e_gf.ComputeL1Error(e_coeff),
+                   e_error_l2  = e_gf.ComputeL2Error(e_coeff);
+      if (Mpi::Root())
+      {
+         cout << "L_inf  e error: " << e_error_max << endl
+              << "L_1    e error: " << e_error_l1 << endl
+              << "L_2    e error: " << e_error_l2 << endl;
       }
    }
 
