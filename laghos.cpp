@@ -503,30 +503,60 @@ int main(int argc, char *argv[])
          pmesh->GetBoundingBox(pmin, pmax);
          const IntegrationRule &nodes = H1FESpace.GetBE(e)->GetNodes();
          ElementTransformation *bdr_tr = H1FESpace.GetBdrElementTransformation(e);
+
+         Vector midpoint(dim);
+         IntegrationPoint ip_mid;
+         ip_mid.x = 0.5;
+         bdr_tr->Transform(ip_mid, midpoint);
+
+         if (fabs(midpoint(1) - pmax(1)) < 1e-12)
+         {
+            be_to_surface[e] = 0;
+         }
+         else if (fabs(midpoint(0) - pmax(0)) < 1e-12)
+         {
+            be_to_surface[e] = 1;
+         }
+         else if (fabs(midpoint(1) - pmin(1)) < 1e-12)
+         {
+            be_to_surface[e] = 2;
+         }
+         else if (fabs(midpoint(0) - pmin(0)) < 1e-12)
+         {
+            be_to_surface[e] = 3;
+         }
+         else
+         {
+            midpoint.Print();
+            MFEM_ABORT("Boundary element does not belong to any analytic surface!");
+         }
+
          for (int j = 0; j < nd; j++)
          {
             bdr_tr->Transform(nodes.IntPoint(j), dof_coord);
+            bool marked = false;
+
             if (fabs(dof_coord(1) - pmax(1)) < 1e-12)
             {
                fit_marker_top[vdofs[j]] = true;
-               be_to_surface[e] = 0;
+               marked = true;
             }
-            else if (fabs(dof_coord(0) - pmax(0)) < 1e-12)
+            if (fabs(dof_coord(0) - pmax(0)) < 1e-12)
             {
                fit_marker_right[vdofs[j]] = true;
-               be_to_surface[e] = 1;
+               marked = true;
             }
-            else if (fabs(dof_coord(1) - pmin(1)) < 1e-12)
+            if (fabs(dof_coord(1) - pmin(1)) < 1e-12)
             {
                fit_marker_bottom[vdofs[j]] = true;
-               be_to_surface[e] = 2;
+               marked = true;
             }
-            else if (fabs(dof_coord(0) - pmin(0)) < 1e-12)
+            if (fabs(dof_coord(0) - pmin(0)) < 1e-12)
             {
                fit_marker_left[vdofs[j]] = true;
-               be_to_surface[e] = 3;
+               marked = true;
             }
-            else
+            if (!marked)
             {
                dof_coord.Print();
                MFEM_ABORT("Boundary DOF does not belong to any analytic surface!");
