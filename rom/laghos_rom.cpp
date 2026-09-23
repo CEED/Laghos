@@ -1974,10 +1974,15 @@ void ROM_Basis::LoadAbsorptionOffsets(const int window)
     initV->read(path_init + "V" + std::to_string(window));
     initE->read(path_init + "E" + std::to_string(window));
 
+    // norm() is collective on distributed vectors.
+    // It must be called on all ranks.
+    const double normX = initX->norm();
+    const double normV = initV->norm();
+    const double normE = initE->norm();
+
     if (rank == 0)
         cout << "Loaded absorption offsets X, V, E with norms "
-             << initX->norm() << ", " << initV->norm() << ", "
-             << initE->norm() << endl;
+             << normX << ", " << normV << ", " << normE << endl;
 }
 
 double ROM_Basis::MassInnerProduct(const int var, const CAROM::Matrix* basisMat,
