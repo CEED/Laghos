@@ -60,7 +60,7 @@ class QUpdate
 private:
    const int dim, vdim, NQ, NE, Q1D;
    const bool use_viscosity, use_vorticity;
-   const double cfl;
+   const real_t cfl;
    TimingData *timer;
    const IntegrationRule &ir;
    ParFiniteElementSpace &H1, &L2;
@@ -71,7 +71,7 @@ private:
 public:
    QUpdate(const int d, const int ne, const int q1d,
            const bool visc, const bool vort,
-           const double cfl, TimingData *t,
+           const real_t cfl, TimingData *t,
            const ParGridFunction &gamma_gf,
            const IntegrationRule &ir,
            ParFiniteElementSpace &h1, ParFiniteElementSpace &l2):
@@ -112,11 +112,11 @@ protected:
    mutable ParGridFunction x_gf;
    const Array<int> &ess_tdofs;
    const int dim, NE, l2dofs_cnt, h1dofs_cnt, source_type;
-   const double cfl;
+   const real_t cfl;
    const bool use_viscosity, use_vorticity, p_assembly;
-   const double cg_rel_tol;
+   const real_t cg_rel_tol;
    const int cg_max_iter;
-   const double ftz_tol;
+   const real_t ftz_tol;
    const ParGridFunction &gamma_gf;
    // Velocity mass matrix and local inverses of the energy mass matrices. These
    // are constant in time, due to the pointwise mass conservation property.
@@ -148,14 +148,14 @@ protected:
    mutable ParGridFunction rhs_c_gf, dvc_gf;
    mutable Array<int> c_tdofs[3];
 
-   virtual void ComputeMaterialProperties(int nvalues, const double gamma[],
-                                          const double rho[], const double e[],
-                                          double p[], double cs[]) const
+   virtual void ComputeMaterialProperties(int nvalues, const real_t gamma[],
+                                          const real_t rho[], const real_t e[],
+                                          real_t p[], real_t cs[]) const
    {
       for (int v = 0; v < nvalues; v++)
       {
-         p[v]  = (gamma[v] - 1.0) * rho[v] * e[v];
-         cs[v] = sqrt(gamma[v] * (gamma[v]-1.0) * e[v]);
+         p[v]  = (gamma[v] - 1.0_r) * rho[v] * e[v];
+         cs[v] = sqrt(gamma[v] * (gamma[v]-1.0_r) * e[v]);
       }
    }
 
@@ -171,9 +171,10 @@ public:
                            ParGridFunction &rho0_gf,
                            ParGridFunction &gamma_gf,
                            const int source,
-                           const double cfl,
+                           const real_t cfl,
                            const bool visc, const bool vort, const bool pa,
-                           const double cgt, const int cgiter, double ftz_tol,
+                           const real_t cgt, const int cgiter,
+                           real_t ftz_tol,
                            const int order_q);
    ~LagrangianHydroOperator();
 
@@ -188,15 +189,15 @@ public:
    void UpdateMesh(const Vector &S) const;
 
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
-   double GetTimeStepEstimate(const Vector &S) const;
+   real_t GetTimeStepEstimate(const Vector &S) const;
    void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const { qdata_is_current = false; }
 
    // The density values, which are stored only at some quadrature points,
    // are projected as a ParGridFunction.
    void ComputeDensity(ParGridFunction &rho) const;
-   double InternalEnergy(const ParGridFunction &e) const;
-   double KineticEnergy(const ParGridFunction &v) const;
+   real_t InternalEnergy(const ParGridFunction &e) const;
+   real_t KineticEnergy(const ParGridFunction &v) const;
 
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
@@ -208,12 +209,13 @@ public:
 class TaylorCoefficient : public Coefficient
 {
 public:
-   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
+   virtual real_t Eval(ElementTransformation &T, const IntegrationPoint &ip)
    {
       Vector x(2);
       T.Transform(ip, x);
-      return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
-                                  cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
+      return 3.0_r / 8.0_r * M_PI *
+             ( cos(3.0_r*M_PI*x(0)) * cos(M_PI*x(1)) -
+               cos(M_PI*x(0))       * cos(3.0_r*M_PI*x(1)) );
    }
 };
 
@@ -226,7 +228,7 @@ public:
    virtual void Eval(Vector &V, ElementTransformation &T,
                      const IntegrationPoint &ip)
    {
-      V = 0.0; V(1) = -1.0;
+      V = 0.0_r; V(1) = -1.0_r;
    }
 };
 
@@ -239,7 +241,7 @@ protected:
 public:
    HydroODESolver() : hydro_oper(NULL) { }
    virtual void Init(TimeDependentOperator&);
-   virtual void Step(Vector&, double&, double&)
+   virtual void Step(Vector&, real_t&, real_t&)
    { MFEM_ABORT("Time stepping is undefined."); }
 };
 
@@ -251,7 +253,7 @@ protected:
 public:
    RK2AvgSolver() { }
    virtual void Init(TimeDependentOperator &_f);
-   virtual void Step(Vector &S, double &t, double &dt);
+   virtual void Step(Vector &S, real_t &t, real_t &dt);
 };
 
 } // namespace mfem

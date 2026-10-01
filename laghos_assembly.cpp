@@ -30,7 +30,7 @@ void DensityIntegrator::AssembleRHSElementVect(const FiniteElement &fe,
    const int nqp = IntRule->GetNPoints();
    Vector shape(fe.GetDof());
    elvect.SetSize(fe.GetDof());
-   elvect = 0.0;
+   elvect = 0.0_r;
    for (int q = 0; q < nqp; q++)
    {
       fe.CalcShape(IntRule->IntPoint(q), shape);
@@ -51,7 +51,7 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
    const int h1dofs_cnt = test_fe.GetDof();
    const int l2dofs_cnt = trial_fe.GetDof();
    elmat.SetSize(h1dofs_cnt*dim, l2dofs_cnt);
-   elmat = 0.0;
+   elmat = 0.0_r;
    DenseMatrix vshape(h1dofs_cnt, dim), loc_force(h1dofs_cnt, dim);
    Vector shape(l2dofs_cnt), Vloc_force(loc_force.Data(), h1dofs_cnt*dim);
    for (int q = 0; q < nqp; q++)
@@ -63,11 +63,11 @@ void ForceIntegrator::AssembleElementMatrix2(const FiniteElement &trial_fe,
       {
          for (int vd = 0; vd < dim; vd++) // Velocity components.
          {
-            loc_force(i, vd) = 0.0;
+            loc_force(i, vd) = 0.0_r;
             for (int gd = 0; gd < dim; gd++) // Gradient components.
             {
                const int eq = e*nqp + q;
-               const double stressJinvT = qdata.stressJinvT(vd)(eq, gd);
+               const real_t stressJinvT = qdata.stressJinvT(vd)(eq, gd);
                loc_force(i, vd) +=  stressJinvT * vshape(i,gd);
             }
          }
@@ -111,13 +111,13 @@ void MassPAOperator::SetEssentialTrueDofs(Array<int> &dofs)
 
 void MassPAOperator::EliminateRHS(Vector &b) const
 {
-   if (ess_tdofs_count > 0) { b.SetSubVector(ess_tdofs, 0.0); }
+   if (ess_tdofs_count > 0) { b.SetSubVector(ess_tdofs, 0.0_r); }
 }
 
 void MassPAOperator::Mult(const Vector &x, Vector &y) const
 {
    mass->Mult(x, y);
-   if (ess_tdofs_count > 0) { y.SetSubVector(ess_tdofs, 0.0); }
+   if (ess_tdofs_count > 0) { y.SetSubVector(ess_tdofs, 0.0_r); }
 }
 
 ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
@@ -144,41 +144,41 @@ ForcePAOperator::ForcePAOperator(const QuadratureData &qdata,
 
 template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
 void ForceMult2D(const int NE,
-                 const Array<double> &B_,
-                 const Array<double> &Bt_,
-                 const Array<double> &Gt_,
+                 const Array<real_t> &B_,
+                 const Array<real_t> &Bt_,
+                 const Array<real_t> &Gt_,
                  const DenseTensor &sJit_,
                  const Vector &x, Vector &y)
 {
    auto b = Reshape(B_.Read(), Q1D, L1D);
    auto bt = Reshape(Bt_.Read(), D1D, Q1D);
    auto gt = Reshape(Gt_.Read(), D1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
+   const real_t *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
    auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
    auto energy = Reshape(x.Read(), L1D, L1D, NE);
-   const double eps1 = std::numeric_limits<double>::epsilon();
-   const double eps2 = eps1*eps1;
+   const real_t eps1 = std::numeric_limits<real_t>::epsilon();
+   const real_t eps2 = eps1*eps1;
    auto velocity = Reshape(y.Write(), D1D, D1D, DIM, NE);
 
    MFEM_FORALL_2D(e, NE, Q1D, Q1D, 1,
    {
       const int z = MFEM_THREAD_ID(z);
 
-      MFEM_SHARED double B[Q1D][L1D];
-      MFEM_SHARED double Bt[D1D][Q1D];
-      MFEM_SHARED double Gt[D1D][Q1D];
+      MFEM_SHARED real_t B[Q1D][L1D];
+      MFEM_SHARED real_t Bt[D1D][Q1D];
+      MFEM_SHARED real_t Gt[D1D][Q1D];
 
-      MFEM_SHARED double Ez[NBZ][L1D][L1D];
-      double (*E)[L1D] = (double (*)[L1D])(Ez + z);
+      MFEM_SHARED real_t Ez[NBZ][L1D][L1D];
+      real_t (*E)[L1D] = (real_t (*)[L1D])(Ez + z);
 
-      MFEM_SHARED double LQz[2][NBZ][D1D][Q1D];
-      double (*LQ0)[Q1D] = (double (*)[Q1D])(LQz[0] + z);
-      double (*LQ1)[Q1D] = (double (*)[Q1D])(LQz[1] + z);
+      MFEM_SHARED real_t LQz[2][NBZ][D1D][Q1D];
+      real_t (*LQ0)[Q1D] = (real_t (*)[Q1D])(LQz[0] + z);
+      real_t (*LQ1)[Q1D] = (real_t (*)[Q1D])(LQz[1] + z);
 
-      MFEM_SHARED double QQz[3][NBZ][Q1D][Q1D];
-      double (*QQ)[Q1D] = (double (*)[Q1D])(QQz[0] + z);
-      double (*QQ0)[Q1D] = (double (*)[Q1D])(QQz[1] + z);
-      double (*QQ1)[Q1D] = (double (*)[Q1D])(QQz[2] + z);
+      MFEM_SHARED real_t QQz[3][NBZ][Q1D][Q1D];
+      real_t (*QQ)[Q1D] = (real_t (*)[Q1D])(QQz[0] + z);
+      real_t (*QQ0)[Q1D] = (real_t (*)[Q1D])(QQz[1] + z);
+      real_t (*QQ1)[Q1D] = (real_t (*)[Q1D])(QQz[2] + z);
 
       if (z == 0)
       {
@@ -207,7 +207,7 @@ void ForceMult2D(const int NE,
       {
          MFEM_FOREACH_THREAD(qx,x,Q1D)
          {
-            double u = 0.0;
+            real_t u = 0.0_r;
             for (int lx = 0; lx < L1D; ++lx)
             {
                u += B[qx][lx] * E[lx][ly];
@@ -220,7 +220,7 @@ void ForceMult2D(const int NE,
       {
          MFEM_FOREACH_THREAD(qx,x,Q1D)
          {
-            double u = 0.0;
+            real_t u = 0.0_r;
             for (int ly = 0; ly < L1D; ++ly)
             {
                u += B[qy][ly] * LQ0[ly][qx];
@@ -236,8 +236,8 @@ void ForceMult2D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               const double esx = QQ[qy][qx] * sJit(qx,qy,e,0,c);
-               const double esy = QQ[qy][qx] * sJit(qx,qy,e,1,c);
+               const real_t esx = QQ[qy][qx] * sJit(qx,qy,e,0,c);
+               const real_t esy = QQ[qy][qx] * sJit(qx,qy,e,1,c);
                QQ0[qy][qx] = esx;
                QQ1[qy][qx] = esy;
             }
@@ -247,8 +247,8 @@ void ForceMult2D(const int NE,
          {
             MFEM_FOREACH_THREAD(dx,x,D1D)
             {
-               double u = 0.0;
-               double v = 0.0;
+               real_t u = 0.0_r;
+               real_t v = 0.0_r;
                for (int qx = 0; qx < Q1D; ++qx)
                {
                   u += Gt[dx][qx] * QQ0[qy][qx];
@@ -263,8 +263,8 @@ void ForceMult2D(const int NE,
          {
             MFEM_FOREACH_THREAD(dx,x,D1D)
             {
-               double u = 0.0;
-               double v = 0.0;
+               real_t u = 0.0_r;
+               real_t v = 0.0_r;
                for (int qy = 0; qy < Q1D; ++qy)
                {
                   u += LQ0[dx][qy] * Bt[dy][qy];
@@ -281,10 +281,10 @@ void ForceMult2D(const int NE,
          {
             MFEM_FOREACH_THREAD(dx,x,D1D)
             {
-               const double v = velocity(dx,dy,c,e);
+               const real_t v = velocity(dx,dy,c,e);
                if (fabs(v) < eps2)
                {
-                  velocity(dx,dy,c,e) = 0.0;
+                  velocity(dx,dy,c,e) = 0.0_r;
                }
             }
          }
@@ -295,47 +295,47 @@ void ForceMult2D(const int NE,
 
 template<int DIM, int D1D, int Q1D, int L1D> static
 void ForceMult3D(const int NE,
-                 const Array<double> &B_,
-                 const Array<double> &Bt_,
-                 const Array<double> &Gt_,
+                 const Array<real_t> &B_,
+                 const Array<real_t> &Bt_,
+                 const Array<real_t> &Gt_,
                  const DenseTensor &sJit_,
                  const Vector &x, Vector &y)
 {
    auto b = Reshape(B_.Read(), Q1D, L1D);
    auto bt = Reshape(Bt_.Read(), D1D, Q1D);
    auto gt = Reshape(Gt_.Read(), D1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
+   const real_t *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
    auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
    auto energy = Reshape(x.Read(), L1D, L1D, L1D, NE);
-   const double eps1 = std::numeric_limits<double>::epsilon();
-   const double eps2 = eps1*eps1;
+   const real_t eps1 = std::numeric_limits<real_t>::epsilon();
+   const real_t eps2 = eps1*eps1;
    auto velocity = Reshape(y.Write(), D1D, D1D, D1D, DIM, NE);
 
    MFEM_FORALL_3D(e, NE, Q1D, Q1D, Q1D,
    {
       const int z = MFEM_THREAD_ID(z);
 
-      MFEM_SHARED double B[Q1D][L1D];
-      MFEM_SHARED double Bt[D1D][Q1D];
-      MFEM_SHARED double Gt[D1D][Q1D];
+      MFEM_SHARED real_t B[Q1D][L1D];
+      MFEM_SHARED real_t Bt[D1D][Q1D];
+      MFEM_SHARED real_t Gt[D1D][Q1D];
 
-      MFEM_SHARED double E[L1D][L1D][L1D];
+      MFEM_SHARED real_t E[L1D][L1D][L1D];
 
-      MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
-      MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
+      MFEM_SHARED real_t sm0[3][Q1D*Q1D*Q1D];
+      MFEM_SHARED real_t sm1[3][Q1D*Q1D*Q1D];
 
-      double (*MMQ0)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+0);
-      double (*MMQ1)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+1);
-      double (*MMQ2)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+2);
+      real_t (*MMQ0)[D1D][Q1D] = (real_t (*)[D1D][Q1D]) (sm0+0);
+      real_t (*MMQ1)[D1D][Q1D] = (real_t (*)[D1D][Q1D]) (sm0+1);
+      real_t (*MMQ2)[D1D][Q1D] = (real_t (*)[D1D][Q1D]) (sm0+2);
 
-      double (*MQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+0);
-      double (*MQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+1);
-      double (*MQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+2);
+      real_t (*MQQ0)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm1+0);
+      real_t (*MQQ1)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm1+1);
+      real_t (*MQQ2)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm1+2);
 
-      MFEM_SHARED double QQQ[Q1D][Q1D][Q1D];
-      double (*QQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+0);
-      double (*QQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+1);
-      double (*QQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+2);
+      MFEM_SHARED real_t QQQ[Q1D][Q1D][Q1D];
+      real_t (*QQQ0)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm0+0);
+      real_t (*QQQ1)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm0+1);
+      real_t (*QQQ2)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm0+2);
 
       if (z == 0)
       {
@@ -367,7 +367,7 @@ void ForceMult3D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               double u = 0.0;
+               real_t u = 0.0_r;
                for (int lx = 0; lx < L1D; ++lx)
                {
                   u += B[qx][lx] * E[lx][ly][lz];
@@ -383,7 +383,7 @@ void ForceMult3D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               double u = 0.0;
+               real_t u = 0.0_r;
                for (int ly = 0; ly < L1D; ++ly)
                {
                   u += B[qy][ly] * MMQ0[lz][ly][qx];
@@ -399,7 +399,7 @@ void ForceMult3D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               double u = 0.0;
+               real_t u = 0.0_r;
                for (int lz = 0; lz < L1D; ++lz)
                {
                   u += B[qz][lz] * MQQ0[lz][qy][qx];
@@ -417,9 +417,9 @@ void ForceMult3D(const int NE,
             {
                MFEM_FOREACH_THREAD(qx,x,Q1D)
                {
-                  const double esx = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,0,c);
-                  const double esy = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,1,c);
-                  const double esz = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,2,c);
+                  const real_t esx = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,0,c);
+                  const real_t esy = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,1,c);
+                  const real_t esz = QQQ[qz][qy][qx] * sJit(qx,qy,qz,e,2,c);
                   QQQ0[qz][qy][qx] = esx;
                   QQQ1[qz][qy][qx] = esy;
                   QQQ2[qz][qy][qx] = esz;
@@ -433,9 +433,9 @@ void ForceMult3D(const int NE,
             {
                MFEM_FOREACH_THREAD(hx,x,D1D)
                {
-                  double u = 0.0;
-                  double v = 0.0;
-                  double w = 0.0;
+                  real_t u = 0.0_r;
+                  real_t v = 0.0_r;
+                  real_t w = 0.0_r;
                   for (int qx = 0; qx < Q1D; ++qx)
                   {
                      u += Gt[hx][qx] * QQQ0[qz][qy][qx];
@@ -455,9 +455,9 @@ void ForceMult3D(const int NE,
             {
                MFEM_FOREACH_THREAD(hx,x,D1D)
                {
-                  double u = 0.0;
-                  double v = 0.0;
-                  double w = 0.0;
+                  real_t u = 0.0_r;
+                  real_t v = 0.0_r;
+                  real_t w = 0.0_r;
                   for (int qy = 0; qy < Q1D; ++qy)
                   {
                      u += MQQ0[hx][qy][qz] * Bt[hy][qy];
@@ -477,9 +477,9 @@ void ForceMult3D(const int NE,
             {
                MFEM_FOREACH_THREAD(hx,x,D1D)
                {
-                  double u = 0.0;
-                  double v = 0.0;
-                  double w = 0.0;
+                  real_t u = 0.0_r;
+                  real_t v = 0.0_r;
+                  real_t w = 0.0_r;
                   for (int qz = 0; qz < Q1D; ++qz)
                   {
                      u += MMQ0[hx][hy][qz] * Bt[hz][qz];
@@ -500,10 +500,10 @@ void ForceMult3D(const int NE,
             {
                MFEM_FOREACH_THREAD(hx,x,D1D)
                {
-                  const double v = velocity(hx,hy,hz,c,e);
+                  const real_t v = velocity(hx,hy,hz,c,e);
                   if (fabs(v) < eps2)
                   {
-                     velocity(hx,hy,hz,c,e) = 0.0;
+                     velocity(hx,hy,hz,c,e) = 0.0_r;
                   }
                }
             }
@@ -514,17 +514,17 @@ void ForceMult3D(const int NE,
 }
 
 typedef void (*fForceMult)(const int E,
-                           const Array<double> &B,
-                           const Array<double> &Bt,
-                           const Array<double> &Gt,
+                           const Array<real_t> &B,
+                           const Array<real_t> &Bt,
+                           const Array<real_t> &Gt,
                            const DenseTensor &stressJinvT,
                            const Vector &X, Vector &Y);
 
 static void ForceMult(const int DIM, const int D1D, const int Q1D,
                       const int L1D, const int H1D, const int NE,
-                      const Array<double> &B,
-                      const Array<double> &Bt,
-                      const Array<double> &Gt,
+                      const Array<real_t> &B,
+                      const Array<real_t> &Bt,
+                      const Array<real_t> &Gt,
                       const DenseTensor &stressJinvT,
                       const Vector &e,
                       Vector &v)
@@ -566,16 +566,16 @@ void ForcePAOperator::Mult(const Vector &x, Vector &y) const
 
 template<int DIM, int D1D, int Q1D, int L1D, int NBZ = 1> static
 void ForceMultTranspose2D(const int NE,
-                          const Array<double> &Bt_,
-                          const Array<double> &B_,
-                          const Array<double> &G_,
+                          const Array<real_t> &Bt_,
+                          const Array<real_t> &B_,
+                          const Array<real_t> &G_,
                           const DenseTensor &sJit_,
                           const Vector &x, Vector &y)
 {
    auto b = Reshape(B_.Read(), Q1D, D1D);
    auto g = Reshape(G_.Read(), Q1D, D1D);
    auto bt = Reshape(Bt_.Read(), L1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
+   const real_t *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*NE*DIM*DIM);
    auto sJit = Reshape(StressJinvT, Q1D, Q1D, NE, DIM, DIM);
    auto velocity = Reshape(x.Read(), D1D, D1D, DIM, NE);
    auto energy = Reshape(y.Write(), L1D, L1D, NE);
@@ -584,24 +584,24 @@ void ForceMultTranspose2D(const int NE,
    {
       const int z = MFEM_THREAD_ID(z);
 
-      MFEM_SHARED double Bt[L1D][Q1D];
-      MFEM_SHARED double B[Q1D][D1D];
-      MFEM_SHARED double G[Q1D][D1D];
+      MFEM_SHARED real_t Bt[L1D][Q1D];
+      MFEM_SHARED real_t B[Q1D][D1D];
+      MFEM_SHARED real_t G[Q1D][D1D];
 
-      MFEM_SHARED double Vz[NBZ][D1D*D1D];
-      double (*V)[D1D] = (double (*)[D1D])(Vz + z);
+      MFEM_SHARED real_t Vz[NBZ][D1D*D1D];
+      real_t (*V)[D1D] = (real_t (*)[D1D])(Vz + z);
 
-      MFEM_SHARED double DQz[DIM][NBZ][D1D*Q1D];
-      double (*DQ0)[Q1D] = (double (*)[Q1D])(DQz[0] + z);
-      double (*DQ1)[Q1D] = (double (*)[Q1D])(DQz[1] + z);
+      MFEM_SHARED real_t DQz[DIM][NBZ][D1D*Q1D];
+      real_t (*DQ0)[Q1D] = (real_t (*)[Q1D])(DQz[0] + z);
+      real_t (*DQ1)[Q1D] = (real_t (*)[Q1D])(DQz[1] + z);
 
-      MFEM_SHARED double QQz[3][NBZ][Q1D*Q1D];
-      double (*QQ)[Q1D] = (double (*)[Q1D])(QQz[0] + z);
-      double (*QQ0)[Q1D] = (double (*)[Q1D])(QQz[1] + z);
-      double (*QQ1)[Q1D] = (double (*)[Q1D])(QQz[2] + z);
+      MFEM_SHARED real_t QQz[3][NBZ][Q1D*Q1D];
+      real_t (*QQ)[Q1D] = (real_t (*)[Q1D])(QQz[0] + z);
+      real_t (*QQ0)[Q1D] = (real_t (*)[Q1D])(QQz[1] + z);
+      real_t (*QQ1)[Q1D] = (real_t (*)[Q1D])(QQz[2] + z);
 
-      MFEM_SHARED double QLz[NBZ][Q1D*L1D];
-      double (*QL)[L1D] = (double (*)[L1D]) (QLz + z);
+      MFEM_SHARED real_t QLz[NBZ][Q1D*L1D];
+      real_t (*QL)[L1D] = (real_t (*)[L1D]) (QLz + z);
 
       if (z == 0)
       {
@@ -621,7 +621,7 @@ void ForceMultTranspose2D(const int NE,
       {
          MFEM_FOREACH_THREAD(qx,x,Q1D)
          {
-            QQ[qy][qx] = 0.0;
+            QQ[qy][qx] = 0.0_r;
          }
       }
       MFEM_SYNC_THREAD;
@@ -641,11 +641,11 @@ void ForceMultTranspose2D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               double u = 0.0;
-               double v = 0.0;
+               real_t u = 0.0_r;
+               real_t v = 0.0_r;
                for (int dx = 0; dx < D1D; ++dx)
                {
-                  const double input = V[dx][dy];
+                  const real_t input = V[dx][dy];
                   u += B[qx][dx] * input;
                   v += G[qx][dx] * input;
                }
@@ -658,8 +658,8 @@ void ForceMultTranspose2D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               double u = 0.0;
-               double v = 0.0;
+               real_t u = 0.0_r;
+               real_t v = 0.0_r;
                for (int dy = 0; dy < D1D; ++dy)
                {
                   u += DQ1[dy][qx] * B[qy][dy];
@@ -674,8 +674,8 @@ void ForceMultTranspose2D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               const double esx = QQ0[qy][qx] * sJit(qx,qy,e,0,c);
-               const double esy = QQ1[qy][qx] * sJit(qx,qy,e,1,c);
+               const real_t esx = QQ0[qy][qx] * sJit(qx,qy,e,0,c);
+               const real_t esy = QQ1[qy][qx] * sJit(qx,qy,e,1,c);
                QQ[qy][qx] += esx + esy;
             }
          }
@@ -687,7 +687,7 @@ void ForceMultTranspose2D(const int NE,
       {
          MFEM_FOREACH_THREAD(lx,x,L1D)
          {
-            double u = 0.0;
+            real_t u = 0.0_r;
             for (int qx = 0; qx < Q1D; ++qx)
             {
                u += QQ[qy][qx] * Bt[lx][qx];
@@ -700,7 +700,7 @@ void ForceMultTranspose2D(const int NE,
       {
          MFEM_FOREACH_THREAD(lx,x,L1D)
          {
-            double u = 0.0;
+            real_t u = 0.0_r;
             for (int qy = 0; qy < Q1D; ++qy)
             {
                u += QL[qy][lx] * Bt[ly][qy];
@@ -714,9 +714,9 @@ void ForceMultTranspose2D(const int NE,
 
 template<int DIM, int D1D, int Q1D, int L1D> static
 void ForceMultTranspose3D(const int NE,
-                          const Array<double> &Bt_,
-                          const Array<double> &B_,
-                          const Array<double> &G_,
+                          const Array<real_t> &Bt_,
+                          const Array<real_t> &B_,
+                          const Array<real_t> &G_,
                           const DenseTensor &sJit_,
                           const Vector &v_,
                           Vector &e_)
@@ -724,7 +724,7 @@ void ForceMultTranspose3D(const int NE,
    auto b = Reshape(B_.Read(), Q1D, D1D);
    auto g = Reshape(G_.Read(), Q1D, D1D);
    auto bt = Reshape(Bt_.Read(), L1D, Q1D);
-   const double *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
+   const real_t *StressJinvT = Read(sJit_.GetMemory(), Q1D*Q1D*Q1D*NE*DIM*DIM);
    auto sJit = Reshape(StressJinvT, Q1D, Q1D, Q1D, NE, DIM, DIM);
    auto velocity = Reshape(v_.Read(), D1D, D1D, D1D, DIM, NE);
    auto energy = Reshape(e_.Write(), L1D, L1D, L1D, NE);
@@ -733,25 +733,25 @@ void ForceMultTranspose3D(const int NE,
    {
       const int z = MFEM_THREAD_ID(z);
 
-      MFEM_SHARED double Bt[L1D][Q1D];
-      MFEM_SHARED double B[Q1D][D1D];
-      MFEM_SHARED double G[Q1D][D1D];
+      MFEM_SHARED real_t Bt[L1D][Q1D];
+      MFEM_SHARED real_t B[Q1D][D1D];
+      MFEM_SHARED real_t G[Q1D][D1D];
 
-      MFEM_SHARED double sm0[3][Q1D*Q1D*Q1D];
-      MFEM_SHARED double sm1[3][Q1D*Q1D*Q1D];
-      double (*V)[D1D][D1D]    = (double (*)[D1D][D1D]) (sm0+0);
-      double (*MMQ0)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+1);
-      double (*MMQ1)[D1D][Q1D] = (double (*)[D1D][Q1D]) (sm0+2);
+      MFEM_SHARED real_t sm0[3][Q1D*Q1D*Q1D];
+      MFEM_SHARED real_t sm1[3][Q1D*Q1D*Q1D];
+      real_t (*V)[D1D][D1D]    = (real_t (*)[D1D][D1D]) (sm0+0);
+      real_t (*MMQ0)[D1D][Q1D] = (real_t (*)[D1D][Q1D]) (sm0+1);
+      real_t (*MMQ1)[D1D][Q1D] = (real_t (*)[D1D][Q1D]) (sm0+2);
 
-      double (*MQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+0);
-      double (*MQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+1);
-      double (*MQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm1+2);
+      real_t (*MQQ0)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm1+0);
+      real_t (*MQQ1)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm1+1);
+      real_t (*MQQ2)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm1+2);
 
-      double (*QQQ0)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+0);
-      double (*QQQ1)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+1);
-      double (*QQQ2)[Q1D][Q1D] = (double (*)[Q1D][Q1D]) (sm0+2);
+      real_t (*QQQ0)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm0+0);
+      real_t (*QQQ1)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm0+1);
+      real_t (*QQQ2)[Q1D][Q1D] = (real_t (*)[Q1D][Q1D]) (sm0+2);
 
-      MFEM_SHARED double QQQ[Q1D][Q1D][Q1D];
+      MFEM_SHARED real_t QQQ[Q1D][Q1D][Q1D];
 
       if (z == 0)
       {
@@ -773,7 +773,7 @@ void ForceMultTranspose3D(const int NE,
          {
             MFEM_FOREACH_THREAD(qx,x,Q1D)
             {
-               QQQ[qz][qy][qx] = 0.0;
+               QQQ[qz][qy][qx] = 0.0_r;
             }
          }
       }
@@ -798,11 +798,11 @@ void ForceMultTranspose3D(const int NE,
             {
                MFEM_FOREACH_THREAD(qx,x,Q1D)
                {
-                  double u = 0.0;
-                  double v = 0.0;
+                  real_t u = 0.0_r;
+                  real_t v = 0.0_r;
                   for (int dx = 0; dx < D1D; ++dx)
                   {
-                     const double input = V[dx][dy][dz];
+                     const real_t input = V[dx][dy][dz];
                      u += G[qx][dx] * input;
                      v += B[qx][dx] * input;
                   }
@@ -818,9 +818,9 @@ void ForceMultTranspose3D(const int NE,
             {
                MFEM_FOREACH_THREAD(qx,x,Q1D)
                {
-                  double u = 0.0;
-                  double v = 0.0;
-                  double w = 0.0;
+                  real_t u = 0.0_r;
+                  real_t v = 0.0_r;
+                  real_t w = 0.0_r;
                   for (int dy = 0; dy < D1D; ++dy)
                   {
                      u += MMQ0[dz][dy][qx] * B[qy][dy];
@@ -840,9 +840,9 @@ void ForceMultTranspose3D(const int NE,
             {
                MFEM_FOREACH_THREAD(qx,x,Q1D)
                {
-                  double u = 0.0;
-                  double v = 0.0;
-                  double w = 0.0;
+                  real_t u = 0.0_r;
+                  real_t v = 0.0_r;
+                  real_t w = 0.0_r;
                   for (int dz = 0; dz < D1D; ++dz)
                   {
                      u += MQQ0[dz][qy][qx] * B[qz][dz];
@@ -862,9 +862,9 @@ void ForceMultTranspose3D(const int NE,
             {
                MFEM_FOREACH_THREAD(qx,x,Q1D)
                {
-                  const double esx = QQQ0[qz][qy][qx] * sJit(qx,qy,qz,e,0,c);
-                  const double esy = QQQ1[qz][qy][qx] * sJit(qx,qy,qz,e,1,c);
-                  const double esz = QQQ2[qz][qy][qx] * sJit(qx,qy,qz,e,2,c);
+                  const real_t esx = QQQ0[qz][qy][qx] * sJit(qx,qy,qz,e,0,c);
+                  const real_t esy = QQQ1[qz][qy][qx] * sJit(qx,qy,qz,e,1,c);
+                  const real_t esz = QQQ2[qz][qy][qx] * sJit(qx,qy,qz,e,2,c);
                   QQQ[qz][qy][qx] += esx + esy + esz;
                }
             }
@@ -878,7 +878,7 @@ void ForceMultTranspose3D(const int NE,
          {
             MFEM_FOREACH_THREAD(lx,x,L1D)
             {
-               double u = 0.0;
+               real_t u = 0.0_r;
                for (int qx = 0; qx < Q1D; ++qx)
                {
                   u += QQQ[qz][qy][qx] * Bt[lx][qx];
@@ -894,7 +894,7 @@ void ForceMultTranspose3D(const int NE,
          {
             MFEM_FOREACH_THREAD(lx,x,L1D)
             {
-               double u = 0.0;
+               real_t u = 0.0_r;
                for (int qy = 0; qy < Q1D; ++qy)
                {
                   u += MQQ0[qz][qy][lx] * Bt[ly][qy];
@@ -910,7 +910,7 @@ void ForceMultTranspose3D(const int NE,
          {
             MFEM_FOREACH_THREAD(lx,x,L1D)
             {
-               double u = 0.0;
+               real_t u = 0.0_r;
                for (int qz = 0; qz < Q1D; ++qz)
                {
                   u += MMQ0[qz][ly][lx] * Bt[lz][qz];
@@ -924,17 +924,17 @@ void ForceMultTranspose3D(const int NE,
 }
 
 typedef void (*fForceMultTranspose)(const int NE,
-                                    const Array<double> &Bt,
-                                    const Array<double> &B,
-                                    const Array<double> &G,
+                                    const Array<real_t> &Bt,
+                                    const Array<real_t> &B,
+                                    const Array<real_t> &G,
                                     const DenseTensor &sJit,
                                     const Vector &X, Vector &Y);
 
 static void ForceMultTranspose(const int DIM, const int D1D, const int Q1D,
                                const int L1D, const int NE,
-                               const Array<double> &L2Bt,
-                               const Array<double> &H1B,
-                               const Array<double> &H1G,
+                               const Array<real_t> &L2Bt,
+                               const Array<real_t> &H1B,
+                               const Array<real_t> &H1G,
                                const DenseTensor &stressJinvT,
                                const Vector &v,
                                Vector &e)

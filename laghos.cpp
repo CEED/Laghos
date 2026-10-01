@@ -61,30 +61,32 @@
 #include <adiak.hpp>
 #endif
 
+using std::cout;
+using std::endl;
+using namespace mfem;
+
 #if (defined(HYPRE_USING_UMPIRE) || defined(MFEM_USE_UMPIRE)) && (defined(MFEM_USE_CUDA) || defined(MFEM_USE_HIP))
 #define LAGHOS_USE_DEVICE_UMPIRE
 #define LAGHOS_DEVICE_ALLOCATOR_NAME "LAGHOS_DEVICE_POOL"
 #include <umpire/Umpire.hpp>
 #include <umpire/strategy/QuickPool.hpp>
 
-double getDeviceMemoryHighWatermark() {
+real_t getDeviceMemoryHighWatermark()
+{
   auto &rm = umpire::ResourceManager::getInstance();
   auto allocator = rm.getAllocator(LAGHOS_DEVICE_ALLOCATOR_NAME);
-  return ((double) allocator.getHighWatermark()) / (1024 * 1024 * 1024);
+  return static_cast<real_t>(allocator.getHighWatermark()) /
+         (1024.0_r * 1024.0_r * 1024.0_r);
 }
 #endif
-
-using std::cout;
-using std::endl;
-using namespace mfem;
 
 // Choice for the problem setup.
 static int problem, dim;
 
 // Forward declarations.
-double e0(const Vector &);
-double rho0(const Vector &);
-double gamma_func(const Vector &);
+real_t e0(const Vector &);
+real_t rho0(const Vector &);
+real_t gamma_func(const Vector &);
 void v0(const Vector &, Vector &);
 
 static void AssignMeshBdrAttrs2D(Mesh &, real_t, real_t);
@@ -92,7 +94,7 @@ static void AssignMeshBdrAttrs3D(Mesh &, real_t, real_t, real_t, real_t);
 
 static long GetMaxRssMB();
 static void display_banner(std::ostream&);
-static void Checks(const int ti, const double norm, int &checks);
+static void Checks(const int ti, const real_t norm, int &checks);
 static bool HasOption(int argc, char *argv[], const char *short_name,
                       const char *long_name);
 static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
@@ -100,12 +102,13 @@ static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
 
 #ifdef LAGHOS_USE_CALIPER
    static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
-                                 int nx, int ny, int nz, double blast_energy,
-                                 double Sx, double Sy, double Sz,
+                                 int nx, int ny, int nz, real_t blast_energy,
+                                 real_t Sx, real_t Sy, real_t Sz,
                                  int rs_levels, int rp_levels, int problem,
                                  int order_v, int order_e, int order_q,
-                                 int ode_solver_type, double t_final, double cfl,
-                                 double cg_tol, double ftz_tol, double delta_tol,
+                                 int ode_solver_type, real_t t_final,
+                                 real_t cfl, real_t cg_tol, real_t ftz_tol,
+                                 real_t delta_tol,
                                  int cg_max_iter, int max_tsteps,
                                  bool p_assembly, bool impose_visc,
                                  bool visualization, int vis_steps, bool visit,
@@ -140,11 +143,11 @@ int main(int argc, char *argv[])
    int order_e = 1;
    int order_q = -1;
    int ode_solver_type = 4;
-   double t_final = 0.6;
-   double cfl = 0.5;
-   double cg_tol = 1e-8;
-   double ftz_tol = 0.0;
-   double delta_tol = 1e-12;
+   real_t t_final = 0.6_r;
+   real_t cfl = 0.5_r;
+   real_t cg_tol = 1e-8_r;
+   real_t ftz_tol = 0.0_r;
+   real_t delta_tol = 1e-12_r;
    int cg_max_iter = 300;
    int max_tsteps = -1;
    bool p_assembly = true;
@@ -163,8 +166,8 @@ int main(int argc, char *argv[])
    int dev = 0;
    int dev_pool_size = 4;
 
-   double blast_energy = 1;
-   real_t Sx = 1, Sy = 1, Sz = 1;
+   real_t blast_energy = 1.0_r;
+   real_t Sx = 1.0_r, Sy = 1.0_r, Sz = 1.0_r;
 
    bool enable_nc = true;
 
@@ -519,7 +522,7 @@ int main(int argc, char *argv[])
    switch (ode_solver_type)
    {
       case 1: ode_solver = new ForwardEulerSolver; break;
-      case 2: ode_solver = new RK2Solver(0.5); break;
+      case 2: ode_solver = new RK2Solver(0.5_r); break;
       case 3: ode_solver = new RK3SSPSolver; break;
       case 4: ode_solver = new RK4Solver; break;
       case 6: ode_solver = new RK6Solver; break;
@@ -575,7 +578,7 @@ int main(int argc, char *argv[])
    v_gf.ProjectCoefficient(v_coeff);
    for (int i = 0; i < ess_vdofs.Size(); i++)
    {
-      v_gf(ess_vdofs[i]) = 0.0;
+      v_gf(ess_vdofs[i]) = 0.0_r;
    }
    // Sync the data location of v_gf with its base, S
    v_gf.SyncAliasMemory(S);
@@ -594,7 +597,7 @@ int main(int argc, char *argv[])
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
 
-   double blast_position[] = {0.0, 0.0, 0.0};
+   real_t blast_position[] = {0.0_r, 0.0_r, 0.0_r};
    if (problem == 1)
    {
       // For the Sedov test, we use a delta function at the origin.
@@ -661,7 +664,7 @@ int main(int argc, char *argv[])
 
    ParGridFunction rho_gf;
    if (visualization || visit) { hydro.ComputeDensity(rho_gf); }
-   const double energy_init = hydro.InternalEnergy(e_gf) +
+   const real_t energy_init = hydro.InternalEnergy(e_gf) +
                               hydro.KineticEnergy(v_gf);
 
    if (visualization)
@@ -696,7 +699,7 @@ int main(int argc, char *argv[])
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
       visit_dc.SetCycle(0);
-      visit_dc.SetTime(0.0);
+      visit_dc.SetTime(0.0_r);
       visit_dc.Save();
    }
 
@@ -705,15 +708,15 @@ int main(int argc, char *argv[])
    // defines the Mult() method that used by the time integrators.
    ode_solver->Init(hydro);
    hydro.ResetTimeStepEstimate();
-   double t = 0.0, dt = hydro.GetTimeStepEstimate(S), t_old;
+   real_t t = 0.0_r, dt = hydro.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
    long mem=0, mmax=0, msum=0;
    long dmem = 0, dmmax = 0, dmsum = 0;
    int checks = 0;
-   //   const double internal_energy = hydro.InternalEnergy(e_gf);
-   //   const double kinetic_energy = hydro.KineticEnergy(v_gf);
+   //   const real_t internal_energy = hydro.InternalEnergy(e_gf);
+   //   const real_t kinetic_energy = hydro.KineticEnergy(v_gf);
    //   if (mpi.Root())
    //   {
    //      cout << std::fixed;
@@ -760,13 +763,13 @@ int main(int argc, char *argv[])
       steps++;
 
       // Adaptive time step control.
-      const double dt_est = hydro.GetTimeStepEstimate(S);
+      const real_t dt_est = hydro.GetTimeStepEstimate(S);
       if (dt_est < dt)
       {
          // Repeat (solve again) with a decreased time step - decrease of the
          // time estimate suggests appearance of oscillations.
-         dt *= 0.85;
-         if (dt < std::numeric_limits<double>::epsilon())
+         dt *= 0.85_r;
+         if (dt < std::numeric_limits<real_t>::epsilon())
          { MFEM_ABORT("The time step crashed!"); }
          t = t_old;
          S = S_old;
@@ -775,7 +778,7 @@ int main(int argc, char *argv[])
          if (steps < max_tsteps) { last_step = false; }
          ti--; continue;
       }
-      else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+      else if (dt_est > 1.25_r * dt) { dt *= 1.02_r; }
 
       // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
       // data in S. This operation simply updates the Memory validity flags of
@@ -791,8 +794,9 @@ int main(int argc, char *argv[])
 
       if (last_step || (ti % vis_steps) == 0)
       {
-         double lnorm = e_gf * e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh.GetComm());
+         real_t lnorm = e_gf * e_gf, norm;
+         MPI_Allreduce(&lnorm, &norm, 1, MPITypeMap<real_t>::mpi_type,
+                       MPI_SUM, pmesh.GetComm());
          if (mem_usage)
          {
             mem = GetMaxRssMB();
@@ -811,11 +815,11 @@ int main(int argc, char *argv[])
             MPI_Reduce(&mem, &mmax, 1, MPI_LONG, MPI_MAX, 0, pmesh.GetComm());
             MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh.GetComm());
          }
-         // const double internal_energy = hydro.InternalEnergy(e_gf);
-         // const double kinetic_energy = hydro.KineticEnergy(v_gf);
+         // const real_t internal_energy = hydro.InternalEnergy(e_gf);
+         // const real_t kinetic_energy = hydro.KineticEnergy(v_gf);
          if (Mpi::Root())
          {
-            const double sqrt_norm = sqrt(norm);
+            const real_t sqrt_norm = sqrt(norm);
 
             cout << std::fixed;
             cout << "step " << std::setw(5) << ti
@@ -903,15 +907,16 @@ int main(int argc, char *argv[])
       // Problems checks
       if (check)
       {
-         double lnorm = e_gf * e_gf, norm;
-         MPI_Allreduce(&lnorm, &norm, 1, MPI_DOUBLE, MPI_SUM, pmesh.GetComm());
-         const double e_norm = sqrt(norm);
+         real_t lnorm = e_gf * e_gf, norm;
+         MPI_Allreduce(&lnorm, &norm, 1, MPITypeMap<real_t>::mpi_type,
+                       MPI_SUM, pmesh.GetComm());
+         const real_t e_norm = sqrt(norm);
          MFEM_VERIFY(rs_levels == 0 && rp_levels == 0, "check: rs, rp");
          MFEM_VERIFY(order_v == 2, "check: order_v");
          MFEM_VERIFY(order_e == 1, "check: order_e");
          MFEM_VERIFY(ode_solver_type == 4, "check: ode_solver_type");
-         MFEM_VERIFY(t_final == 0.6, "check: t_final");
-         MFEM_VERIFY(cfl == 0.5, "check: cfl");
+         MFEM_VERIFY(t_final == 0.6_r, "check: t_final");
+         MFEM_VERIFY(cfl == 0.5_r, "check: cfl");
          MFEM_VERIFY(dim == 2 || dim == 3, "check: dimension");
          MFEM_VERIFY(std::string(mesh_file) == "data/square01_quad.mesh" ||
                      std::string(mesh_file) == "data/cube01_hex.mesh", "check: mesh_file");
@@ -953,7 +958,7 @@ int main(int argc, char *argv[])
       MPI_Reduce(&mem, &msum, 1, MPI_LONG, MPI_SUM, 0, pmesh.GetComm());
    }
 
-   const double energy_final = hydro.InternalEnergy(e_gf) +
+   const real_t energy_final = hydro.InternalEnergy(e_gf) +
                                hydro.KineticEnergy(v_gf);
    if (Mpi::Root())
    {
@@ -971,7 +976,7 @@ int main(int argc, char *argv[])
    // For problems 0 and 4 the exact velocity is constant in time.
    if (problem == 0 || problem == 4)
    {
-      const double error_max = v_gf.ComputeMaxError(v_coeff),
+      const real_t error_max = v_gf.ComputeMaxError(v_coeff),
                    error_l1  = v_gf.ComputeL1Error(v_coeff),
                    error_l2  = v_gf.ComputeL2Error(v_coeff);
       if (Mpi::Root())
@@ -1091,58 +1096,61 @@ int main(int argc, char *argv[])
    return 0;
 }
 
-double rho0(const Vector &x)
+real_t rho0(const Vector &x)
 {
    switch (problem)
    {
-      case 0: return 1.0;
-      case 1: return 1.0;
-      case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
-      case 3: return (dim == 2) ? (x(0) > 1.0 && x(1) > 1.5) ? 0.125 : 1.0
-                        : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
-                                         (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
-      case 4: return 1.0;
+      case 0: return 1.0_r;
+      case 1: return 1.0_r;
+      case 2: return (x(0) < 0.5_r) ? 1.0_r : 0.1_r;
+      case 3: return (dim == 2) ? (x(0) > 1.0_r && x(1) > 1.5_r) ? 0.125_r : 1.0_r
+                        : x(0) > 1.0_r && ((x(1) < 1.5_r && x(2) < 1.5_r) ||
+                                            (x(1) > 1.5_r && x(2) > 1.5_r))
+                          ? 0.125_r : 1.0_r;
+      case 4: return 1.0_r;
       case 5:
       {
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.5313; }
-         if (x(0) <  0.5 && x(1) <  0.5) { return 0.8; }
-         return 1.0;
+         if (x(0) >= 0.5_r && x(1) >= 0.5_r) { return 0.5313_r; }
+         if (x(0) <  0.5_r && x(1) <  0.5_r) { return 0.8_r; }
+         return 1.0_r;
       }
       case 6:
       {
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 2.0; }
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 3.0; }
-         return 1.0;
+         if (x(0) <  0.5_r && x(1) >= 0.5_r) { return 2.0_r; }
+         if (x(0) >= 0.5_r && x(1) <  0.5_r) { return 3.0_r; }
+         return 1.0_r;
       }
-      case 7: return x(1) >= 0.0 ? 2.0 : 1.0;
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      case 7: return x(1) >= 0.0_r ? 2.0_r : 1.0_r;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0_r;
    }
 }
 
-double gamma_func(const Vector &x)
+real_t gamma_func(const Vector &x)
 {
    switch (problem)
    {
-      case 0: return 5.0 / 3.0;
-      case 1: return 1.4;
-      case 2: return 1.4;
+      case 0: return 5.0_r / 3.0_r;
+      case 1: return 1.4_r;
+      case 2: return 1.4_r;
       case 3:
-         if (dim == 1) { return (x(0) > 0.5) ? 1.4 : 1.5; }
-         else { return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5; }
-      case 4: return 5.0 / 3.0;
-      case 5: return 1.4;
-      case 6: return 1.4;
-      case 7: return 5.0 / 3.0;
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+         if (dim == 1) { return (x(0) > 0.5_r) ? 1.4_r : 1.5_r; }
+         else { return (x(0) > 1.0_r && x(1) <= 1.5_r) ? 1.4_r : 1.5_r; }
+      case 4: return 5.0_r / 3.0_r;
+      case 5: return 1.4_r;
+      case 6: return 1.4_r;
+      case 7: return 5.0_r / 3.0_r;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0_r;
    }
 }
 
-static double rad(double x, double y) { return sqrt(x*x + y*y); }
+static real_t rad(real_t x, real_t y) { return sqrt(x*x + y*y); }
 
 void v0(const Vector &x, Vector &v)
 {
-   const double atn = dim!=1 ? pow((x(0)*(1.0-x(0))*4*x(1)*(1.0-x(1))*4.0),
-                                   0.4) : 0.0;
+   const real_t atn = dim != 1 ?
+                      pow((x(0)*(1.0_r-x(0))*4*x(1)*(1.0_r-x(1))*4.0_r),
+                          0.4_r) :
+                      0.0_r;
    switch (problem)
    {
       case 0:
@@ -1152,125 +1160,136 @@ void v0(const Vector &x, Vector &v)
          {
             v(0) *= cos(M_PI*x(2));
             v(1) *= cos(M_PI*x(2));
-            v(2) = 0.0;
+            v(2) = 0.0_r;
          }
          break;
-      case 1: v = 0.0; break;
-      case 2: v = 0.0; break;
-      case 3: v = 0.0; break;
+      case 1: v = 0.0_r; break;
+      case 2: v = 0.0_r; break;
+      case 3: v = 0.0_r; break;
       case 4:
       {
-         v = 0.0;
-         const double r = rad(x(0), x(1));
-         if (r < 0.2)
+         v = 0.0_r;
+         const real_t r = rad(x(0), x(1));
+         if (r < 0.2_r)
          {
-            v(0) =  5.0 * x(1);
-            v(1) = -5.0 * x(0);
+            v(0) =  5.0_r * x(1);
+            v(1) = -5.0_r * x(0);
          }
-         else if (r < 0.4)
+         else if (r < 0.4_r)
          {
-            v(0) =  2.0 * x(1) / r - 5.0 * x(1);
-            v(1) = -2.0 * x(0) / r + 5.0 * x(0);
+            v(0) =  2.0_r * x(1) / r - 5.0_r * x(1);
+            v(1) = -2.0_r * x(0) / r + 5.0_r * x(0);
          }
          else { }
          break;
       }
       case 5:
       {
-         v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=0.7276*atn, v(1)=0.0*atn; return;}
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.0*atn; return;}
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=0.0*atn, v(1)=0.7276*atn; return; }
+         v = 0.0_r;
+         if (x(0) >= 0.5_r && x(1) >= 0.5_r)
+         { v(0)=0.0_r*atn, v(1)=0.0_r*atn; return; }
+         if (x(0) <  0.5_r && x(1) >= 0.5_r)
+         { v(0)=0.7276_r*atn, v(1)=0.0_r*atn; return; }
+         if (x(0) <  0.5_r && x(1) <  0.5_r)
+         { v(0)=0.0_r*atn, v(1)=0.0_r*atn; return; }
+         if (x(0) >= 0.5_r && x(1) <  0.5_r)
+         { v(0)=0.0_r*atn, v(1)=0.7276_r*atn; return; }
          MFEM_ABORT("Error in problem 5!");
          return;
       }
       case 6:
       {
-         v = 0.0;
-         if (x(0) >= 0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=-0.5*atn; return;}
-         if (x(0) <  0.5 && x(1) >= 0.5) { v(0)=+0.75*atn, v(1)=+0.5*atn; return;}
-         if (x(0) <  0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=+0.5*atn; return;}
-         if (x(0) >= 0.5 && x(1) <  0.5) { v(0)=-0.75*atn, v(1)=-0.5*atn; return;}
+         v = 0.0_r;
+         if (x(0) >= 0.5_r && x(1) >= 0.5_r)
+         { v(0)=+0.75_r*atn, v(1)=-0.5_r*atn; return; }
+         if (x(0) <  0.5_r && x(1) >= 0.5_r)
+         { v(0)=+0.75_r*atn, v(1)=+0.5_r*atn; return; }
+         if (x(0) <  0.5_r && x(1) <  0.5_r)
+         { v(0)=-0.75_r*atn, v(1)=+0.5_r*atn; return; }
+         if (x(0) >= 0.5_r && x(1) <  0.5_r)
+         { v(0)=-0.75_r*atn, v(1)=-0.5_r*atn; return; }
          MFEM_ABORT("Error in problem 6!");
          return;
       }
       case 7:
       {
-         v = 0.0;
-         v(1) = 0.02 * exp(-2*M_PI*x(1)*x(1)) * cos(2*M_PI*x(0));
+         v = 0.0_r;
+         v(1) = 0.02_r * exp(-2.0_r*M_PI*x(1)*x(1)) * cos(2.0_r*M_PI*x(0));
          break;
       }
       default: MFEM_ABORT("Bad number given for problem id!");
    }
 }
 
-double e0(const Vector &x)
+real_t e0(const Vector &x)
 {
    switch (problem)
    {
       case 0:
       {
-         const double denom = 2.0 / 3.0;  // (5/3 - 1) * density.
-         double val;
+         const real_t denom = 2.0_r / 3.0_r;  // (5/3 - 1) * density.
+         real_t val;
          if (x.Size() == 2)
          {
-            val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+            val = 1.0_r + (cos(2.0_r*M_PI*x(0)) + cos(2.0_r*M_PI*x(1))) / 4.0_r;
          }
          else
          {
-            val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
-                           (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+            val = 100.0_r + ((cos(2.0_r*M_PI*x(2)) + 2.0_r) *
+                             (cos(2.0_r*M_PI*x(0)) + cos(2.0_r*M_PI*x(1))) -
+                             2.0_r) / 16.0_r;
          }
          return val/denom;
       }
-      case 1: return 0.0; // This case in initialized in main().
-      case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
-                        : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
-      case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
-                        : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+      case 1: return 0.0_r; // This case in initialized in main().
+      case 2: return (x(0) < 0.5_r) ? 1.0_r / rho0(x) / (gamma_func(x) - 1.0_r)
+                        : 0.1_r / rho0(x) / (gamma_func(x) - 1.0_r);
+      case 3: return (x(0) > 1.0_r) ? 0.1_r / rho0(x) / (gamma_func(x) - 1.0_r)
+                        : 1.0_r / rho0(x) / (gamma_func(x) - 1.0_r);
       case 4:
       {
-         const double r = rad(x(0), x(1)), rsq = x(0) * x(0) + x(1) * x(1);
-         const double gamma = 5.0 / 3.0;
-         if (r < 0.2)
+         const real_t r = rad(x(0), x(1)),
+                      rsq = x(0) * x(0) + x(1) * x(1);
+         const real_t gamma = 5.0_r / 3.0_r;
+         if (r < 0.2_r)
          {
-            return (5.0 + 25.0 / 2.0 * rsq) / (gamma - 1.0);
+            return (5.0_r + 25.0_r / 2.0_r * rsq) / (gamma - 1.0_r);
          }
-         else if (r < 0.4)
+         else if (r < 0.4_r)
          {
-            const double t1 = 9.0 - 4.0 * log(0.2) + 25.0 / 2.0 * rsq;
-            const double t2 = 20.0 * r - 4.0 * log(r);
-            return (t1 - t2) / (gamma - 1.0);
+            const real_t t1 = 9.0_r - 4.0_r * log(0.2_r) +
+                              25.0_r / 2.0_r * rsq;
+            const real_t t2 = 20.0_r * r - 4.0_r * log(r);
+            return (t1 - t2) / (gamma - 1.0_r);
          }
-         else { return (3.0 + 4.0 * log(2.0)) / (gamma - 1.0); }
+         else { return (3.0_r + 4.0_r * log(2.0_r)) / (gamma - 1.0_r); }
       }
       case 5:
       {
-         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 0.4 * irg; }
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
-         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         const real_t irg = 1.0_r / rho0(x) / (gamma_func(x) - 1.0_r);
+         if (x(0) >= 0.5_r && x(1) >= 0.5_r) { return 0.4_r * irg; }
+         if (x(0) <  0.5_r && x(1) >= 0.5_r) { return 1.0_r * irg; }
+         if (x(0) <  0.5_r && x(1) <  0.5_r) { return 1.0_r * irg; }
+         if (x(0) >= 0.5_r && x(1) <  0.5_r) { return 1.0_r * irg; }
          MFEM_ABORT("Error in problem 5!");
-         return 0.0;
+         return 0.0_r;
       }
       case 6:
       {
-         const double irg = 1.0 / rho0(x) / (gamma_func(x) - 1.0);
-         if (x(0) >= 0.5 && x(1) >= 0.5) { return 1.0 * irg; }
-         if (x(0) <  0.5 && x(1) >= 0.5) { return 1.0 * irg; }
-         if (x(0) <  0.5 && x(1) <  0.5) { return 1.0 * irg; }
-         if (x(0) >= 0.5 && x(1) <  0.5) { return 1.0 * irg; }
+         const real_t irg = 1.0_r / rho0(x) / (gamma_func(x) - 1.0_r);
+         if (x(0) >= 0.5_r && x(1) >= 0.5_r) { return 1.0_r * irg; }
+         if (x(0) <  0.5_r && x(1) >= 0.5_r) { return 1.0_r * irg; }
+         if (x(0) <  0.5_r && x(1) <  0.5_r) { return 1.0_r * irg; }
+         if (x(0) >= 0.5_r && x(1) <  0.5_r) { return 1.0_r * irg; }
          MFEM_ABORT("Error in problem 6!");
-         return 0.0;
+         return 0.0_r;
       }
       case 7:
       {
-         const double rho = rho0(x), gamma = gamma_func(x);
-         return (6.0 - rho * x(1)) / (gamma - 1.0) / rho;
+         const real_t rho = rho0(x), gamma = gamma_func(x);
+         return (6.0_r - rho * x(1)) / (gamma - 1.0_r) / rho;
       }
-      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0;
+      default: MFEM_ABORT("Bad number given for problem id!"); return 0.0_r;
    }
 }
 
@@ -1287,12 +1306,13 @@ static void display_banner(std::ostream &os)
 
 #ifdef LAGHOS_USE_CALIPER
 static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
-                                int nx, int ny, int nz, double blast_energy,
-                                double Sx, double Sy, double Sz,
+                                int nx, int ny, int nz, real_t blast_energy,
+                                real_t Sx, real_t Sy, real_t Sz,
                                 int rs_levels, int rp_levels, int problem,
                                 int order_v, int order_e, int order_q,
-                                int ode_solver_type, double t_final, double cfl,
-                                double cg_tol, double ftz_tol, double delta_tol,
+                                int ode_solver_type, real_t t_final, real_t cfl,
+                                real_t cg_tol, real_t ftz_tol,
+                                real_t delta_tol,
                                 int cg_max_iter, int max_tsteps,
                                 bool p_assembly, bool impose_visc,
                                 bool visualization, int vis_steps, bool visit,
@@ -1309,9 +1329,9 @@ static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi
    adiak::value("yelems", ny);
    adiak::value("zelems", nz);
    adiak::value("blast-energy", blast_energy);
-   adiak::value("xwidth", (double)Sx);
-   adiak::value("ywidth", (double)Sy);
-   adiak::value("zwidth", (double)Sz);
+   adiak::value("xwidth", Sx);
+   adiak::value("ywidth", Sy);
+   adiak::value("zwidth", Sz);
    adiak::value("refine-serial", rs_levels);
    adiak::value("refine-parallel", rp_levels);
    adiak::value("problem", problem);
@@ -1414,17 +1434,17 @@ static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
    return false;
 }
 
-static void Checks(const int ti, const double nrm, int &chk)
+static void Checks(const int ti, const real_t nrm, int &chk)
 {
-   const double eps = 1.e-13;
+   const real_t eps = 1.e-13_r;
 
-   auto check = [&](int p, int i, const double res)
+   auto check = [&](int p, int i, const real_t res)
    {
-      auto rerr = [](const double a, const double v, const double eps)
+      auto rerr = [](const real_t a, const real_t v, const real_t eps)
       {
          MFEM_VERIFY(fabs(a) > eps && fabs(v) > eps, "One value is near zero!");
-         const double err_a = fabs((a-v)/a);
-         const double err_v = fabs((a-v)/v);
+         const real_t err_a = fabs((a-v)/a);
+         const real_t err_v = fabs((a-v)/v);
          return fmax(err_a, err_v) < eps;
       };
       if (problem == p && ti == i)
@@ -1438,27 +1458,27 @@ static void Checks(const int ti, const double nrm, int &chk)
       }
    };
 
-   const double it_norms[2][8][2][2] = // dim, problem, {it,norm}
+   const real_t it_norms[2][8][2][2] = // dim, problem, {it,norm}
    {
       {
-         {{5, 6.546538624534384e+00}, { 27, 7.588576357792927e+00}},
-         {{5, 3.508254945225794e+00}, { 15, 2.756444596823211e+00}},
-         {{5, 1.020745795651244e+01}, { 59, 1.721590205901898e+01}},
-         {{5, 8.000000000000000e+00}, { 16, 8.000000000000000e+00}},
-         {{5, 3.446324942352448e+01}, { 18, 3.446844033767240e+01}},
-         {{5, 1.030899557252528e+01}, { 36, 1.057362418574309e+01}},
-         {{5, 8.039707010835693e+00}, { 36, 8.316970976817373e+00}},
-         {{5, 1.514929259650760e+01}, { 25, 1.514931278155159e+01}},
+         {{5, 6.546538624534384e+00_r}, { 27, 7.588576357792927e+00_r}},
+         {{5, 3.508254945225794e+00_r}, { 15, 2.756444596823211e+00_r}},
+         {{5, 1.020745795651244e+01_r}, { 59, 1.721590205901898e+01_r}},
+         {{5, 8.000000000000000e+00_r}, { 16, 8.000000000000000e+00_r}},
+         {{5, 3.446324942352448e+01_r}, { 18, 3.446844033767240e+01_r}},
+         {{5, 1.030899557252528e+01_r}, { 36, 1.057362418574309e+01_r}},
+         {{5, 8.039707010835693e+00_r}, { 36, 8.316970976817373e+00_r}},
+         {{5, 1.514929259650760e+01_r}, { 25, 1.514931278155159e+01_r}},
       },
       {
-         {{5, 1.198510951452527e+03}, {188, 1.199384410059154e+03}},
-         {{5, 6.695818592962833e+00}, { 20, 4.267902387082487e+00}},
-         {{5, 2.041491591302486e+01}, { 59, 3.443180411803796e+01}},
-         {{5, 1.600000000000000e+01}, { 16, 1.600000000000000e+01}},
-         {{5, 6.892649884704898e+01}, { 18, 6.893688067534482e+01}},
-         {{5, 2.061984481890964e+01}, { 36, 2.114519664792607e+01}},
-         {{5, 1.607988713996459e+01}, { 36, 1.662736010353023e+01}},
-         {{5, 3.029858112572883e+01}, { 24, 3.029858832743707e+01}}
+         {{5, 1.198510951452527e+03_r}, {188, 1.199384410059154e+03_r}},
+         {{5, 6.695818592962833e+00_r}, { 20, 4.267902387082487e+00_r}},
+         {{5, 2.041491591302486e+01_r}, { 59, 3.443180411803796e+01_r}},
+         {{5, 1.600000000000000e+01_r}, { 16, 1.600000000000000e+01_r}},
+         {{5, 6.892649884704898e+01_r}, { 18, 6.893688067534482e+01_r}},
+         {{5, 2.061984481890964e+01_r}, { 36, 2.114519664792607e+01_r}},
+         {{5, 1.607988713996459e+01_r}, { 36, 1.662736010353023e+01_r}},
+         {{5, 3.029858112572883e+01_r}, { 24, 3.029858832743707e+01_r}}
       }
    };
 
@@ -1467,7 +1487,7 @@ static void Checks(const int ti, const double nrm, int &chk)
       for (int i=0; i<2; i++)
       {
          const int it = static_cast<int>(it_norms[dim-2][p][i][0]);
-         const double norm = it_norms[dim-2][p][i][1];
+         const real_t norm = it_norms[dim-2][p][i][1];
          check(p, it, norm);
       }
    }
@@ -1476,12 +1496,12 @@ static void Checks(const int ti, const double nrm, int &chk)
 static void AssignMeshBdrAttrs2D(Mesh& mesh, real_t xmin, real_t xmax)
 {
    Vector pos(3);
-   constexpr real_t tol = 1e-6;
+   constexpr real_t tol = 1e-6_r;
    const int NBE = mesh.GetNBE();
    IntegrationPoint center;
-   center.x = 0.5;
-   center.y = 0.5;
-   center.z = 0.5;
+   center.x = 0.5_r;
+   center.y = 0.5_r;
+   center.z = 0.5_r;
    for (int b = 0; b < NBE; b++)
    {
       Element *bel = mesh.GetBdrElement(b);
@@ -1500,12 +1520,12 @@ static void AssignMeshBdrAttrs3D(Mesh &mesh, real_t xmin, real_t xmax,
                                  real_t ymin, real_t ymax)
 {
    Vector pos(3);
-   constexpr real_t tol = 1e-6;
+   constexpr real_t tol = 1e-6_r;
    const int NBE = mesh.GetNBE();
    IntegrationPoint center;
-   center.x = 0.5;
-   center.y = 0.5;
-   center.z = 0.5;
+   center.x = 0.5_r;
+   center.y = 0.5_r;
+   center.z = 0.5_r;
    for (int b = 0; b < NBE; b++)
    {
       Element *bel = mesh.GetBdrElement(b);

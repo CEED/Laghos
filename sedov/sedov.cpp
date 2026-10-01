@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
   int ny = 2;
   int nz = 2;
   int order_q = 4;
-  double t_final = 0.6;
+  real_t t_final = 0.6;
   const char *basename = "results/Sedov";
   real_t Sx = 1, Sy = 1, Sz = 1;
 
