@@ -215,10 +215,8 @@ restarting. For example, the following stops the triple-point problem at the
 first natural accepted step at or after time 2, then restarts it to time 5:
 
 ```sh
-mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa \
-  -cs checkpoints/at2 -ct 2.0
-mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa \
-  -cr checkpoints/at2
+mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa -cs checkpoints/at2 -ct 2.0
+mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa -cr checkpoints/at2
 ```
 
 The checkpoint-time run retains the uninterrupted run's adaptive time-step
@@ -231,8 +229,7 @@ for byte-for-byte comparison.
 An in-memory replay test can be performed entirely within one MPI run:
 
 ```sh
-mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa \
-  -mrt
+mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa -mrt
 ```
 
 This stores rank-local checkpoints at the first natural accepted steps at or
