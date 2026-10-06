@@ -207,6 +207,27 @@ The latter produces the following specific internal energy plot (notice the `-vi
 
 <img src="data/tp.png" width="500" height="500">
 
+#### Checkpoint and restart
+
+MFEM's exact ODE checkpoint format can store one restart file per MPI rank.
+Use the same mesh, discretization, solver, device, and MPI rank count when
+restarting. For example, the following stops the triple-point problem at the
+first natural accepted step at or after time 2, then restarts it to time 5:
+
+```sh
+mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa \
+  -cs checkpoints/at2 -ct 2.0
+mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 5.0 -pa \
+  -cr checkpoints/at2
+```
+
+The checkpoint-time run retains the uninterrupted run's adaptive time-step
+sequence. In contrast, running with `-tf 2.0` shortens the last step to land
+exactly at time 2 and therefore defines a different trajectory. Without
+`-ct`, `-cs` saves the final accepted state. Supplying `-cs` on both a direct
+and a restarted time-5 run makes their rank-local checkpoint files suitable
+for byte-for-byte comparison.
+
 ## Verification of Results
 
 To make sure the results are correct, we tabulate reference final iterations

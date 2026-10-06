@@ -47,6 +47,8 @@
 //
 
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
@@ -97,6 +99,13 @@ static bool HasOption(int argc, char *argv[], const char *short_name,
                       const char *long_name);
 static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
                                       OptionsParser &args);
+
+static std::string RankCheckpointDirectory(const char *root, int rank)
+{
+   std::ostringstream path;
+   path << root << "/rank_" << std::setfill('0') << std::setw(6) << rank;
+   return path.str();
+}
 
 #ifdef LAGHOS_USE_CALIPER
    static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
@@ -162,6 +171,9 @@ int main(int argc, char *argv[])
    bool gpu_aware_mpi = false;
    int dev = 0;
    int dev_pool_size = 4;
+   const char *checkpoint_save = "";
+   const char *checkpoint_restart = "";
+   double checkpoint_stop_time = -1.0;
 
    double blast_energy = 1;
    real_t Sx = 1, Sy = 1, Sz = 1;
@@ -275,6 +287,13 @@ int main(int argc, char *argv[])
                   "--conforming",
                   "Use non-conforming meshes. Requires a 2D or 3D mesh.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
+   args.AddOption(&checkpoint_save, "-cs", "--checkpoint-save",
+                  "Directory in which to save a rank-local restart.");
+   args.AddOption(&checkpoint_restart, "-cr", "--checkpoint-restart",
+                  "Directory from which to restore a rank-local restart.");
+   args.AddOption(&checkpoint_stop_time, "-ct", "--checkpoint-time",
+                  "Save and stop at the first natural step at or after this "
+                  "time (requires --checkpoint-save).");
    args.Parse();
    if (!args.Good())
    {
@@ -283,6 +302,15 @@ int main(int argc, char *argv[])
    }
 
    if (!ValidateElemPerMpiOptions(elem_per_mpi, argc, argv, args)) { return 1; }
+
+   if (checkpoint_stop_time >= 0.0 && checkpoint_save[0] == '\0')
+   {
+      if (Mpi::Root())
+      {
+         mfem::err << "--checkpoint-time requires --checkpoint-save.\n";
+      }
+      return 1;
+   }
 
    if (Mpi::Root())
    {
@@ -655,6 +683,42 @@ int main(int argc, char *argv[])
                                                 cg_tol, cg_max_iter, ftz_tol,
                                                 order_q);
 
+   // The explicit Runge--Kutta solvers used by Laghos have no continuation
+   // history between accepted steps.  Their complete restart state is the
+   // monolithic solution, physical time, next step size, and accepted-step ID.
+   ode_solver->Init(hydro);
+   hydro.ResetTimeStepEstimate();
+   TimePoint checkpoint_time;
+   real_t &t = checkpoint_time.time;
+   real_t dt = hydro.GetTimeStepEstimate(S), t_old;
+   ODEVectorCheckpointAdapter checkpoint_adapter(S, checkpoint_time, dt);
+
+   if (checkpoint_restart[0] != '\0')
+   {
+      FileCheckpointStorage storage(
+         RankCheckpointDirectory(checkpoint_restart, myid));
+      const CheckpointId checkpoint_id = 1;
+      MFEM_VERIFY(storage.Contains(checkpoint_id),
+                  "Restart checkpoint is missing for an MPI rank.");
+      const Snapshot snapshot = storage.Restore(checkpoint_id);
+      const ODECheckpointData metadata =
+         ODECheckpointSerializer::Decode(checkpoint_id, snapshot);
+      MFEM_VERIFY(metadata.state.Size() == S.Size(),
+                  "Restart state size does not match this Laghos problem.");
+      checkpoint_adapter.Restore(metadata.time.step, snapshot, checkpoint_id);
+      MFEM_VERIFY(t < t_final,
+                  "Restart time must be smaller than the final time.");
+      ode_solver->Init(hydro);
+      hydro.ResetQuadratureData();
+      pmesh.NewNodes(x_gf, false);
+      if (Mpi::Root())
+      {
+         cout << "Restarted checkpoint at step " << checkpoint_time.step
+              << ", t = " << std::setprecision(17) << t
+              << ", dt = " << dt << endl;
+      }
+   }
+
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
@@ -695,17 +759,14 @@ int main(int argc, char *argv[])
       visit_dc.RegisterField("Density",  &rho_gf);
       visit_dc.RegisterField("Velocity", &v_gf);
       visit_dc.RegisterField("Specific Internal Energy", &e_gf);
-      visit_dc.SetCycle(0);
-      visit_dc.SetTime(0.0);
+      visit_dc.SetCycle(static_cast<int>(checkpoint_time.step));
+      visit_dc.SetTime(t);
       visit_dc.Save();
    }
 
    // Perform time-integration (looping over the time iterations, ti, with a
    // time-step dt). The object oper is of type LagrangianHydroOperator that
    // defines the Mult() method that used by the time integrators.
-   ode_solver->Init(hydro);
-   hydro.ResetTimeStepEstimate();
-   double t = 0.0, dt = hydro.GetTimeStepEstimate(S), t_old;
    bool last_step = false;
    int steps = 0;
    BlockVector S_old(S);
@@ -738,7 +799,8 @@ int main(int argc, char *argv[])
 #ifdef LAGHOS_USE_CALIPER
    CALI_CXX_MARK_LOOP_BEGIN(mainloop_annotation, "timestep loop");
 #endif
-   int ti = 1;
+   int ti = static_cast<int>(checkpoint_time.step) + 1;
+   bool checkpoint_written = false;
    for (; !last_step; ti++)
    {
 #ifdef LAGHOS_USE_CALIPER
@@ -776,6 +838,26 @@ int main(int argc, char *argv[])
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+
+      checkpoint_time.step = ti;
+      if (checkpoint_stop_time >= 0.0 && t >= checkpoint_stop_time)
+      {
+         FileCheckpointStorage storage(
+            RankCheckpointDirectory(checkpoint_save, myid));
+         const CheckpointId checkpoint_id = 1;
+         storage.Store(checkpoint_id,
+                       checkpoint_adapter.Capture(checkpoint_time.step,
+                                                  checkpoint_id));
+         checkpoint_written = true;
+         last_step = true;
+         MPI_Barrier(pmesh.GetComm());
+         if (Mpi::Root())
+         {
+            cout << "Saved checkpoint at step " << checkpoint_time.step
+                 << ", t = " << std::setprecision(17) << t
+                 << ", dt = " << dt << endl;
+         }
+      }
 
       // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
       // data in S. This operation simply updates the Memory validity flags of
@@ -922,6 +1004,23 @@ int main(int argc, char *argv[])
    CALI_CXX_MARK_LOOP_END(mainloop_annotation);
    adiak::value("steps", ti);
 #endif
+
+   if (checkpoint_save[0] != '\0' && !checkpoint_written)
+   {
+      FileCheckpointStorage storage(
+         RankCheckpointDirectory(checkpoint_save, myid));
+      const CheckpointId checkpoint_id = 1;
+      storage.Store(checkpoint_id,
+                    checkpoint_adapter.Capture(checkpoint_time.step,
+                                               checkpoint_id));
+      MPI_Barrier(pmesh.GetComm());
+      if (Mpi::Root())
+      {
+         cout << "Saved checkpoint at step " << checkpoint_time.step
+              << ", t = " << std::setprecision(17) << t
+              << ", dt = " << dt << endl;
+      }
+   }
 
    MFEM_VERIFY(!check || checks == 2, "Check error!");
 
