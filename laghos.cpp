@@ -47,6 +47,7 @@
 //
 
 #include <fstream>
+#include <cstring>
 #include <iomanip>
 #include <sstream>
 #include <sys/time.h>
@@ -174,6 +175,7 @@ int main(int argc, char *argv[])
    const char *checkpoint_save = "";
    const char *checkpoint_restart = "";
    double checkpoint_stop_time = -1.0;
+   bool memory_replay_test = false;
 
    double blast_energy = 1;
    real_t Sx = 1, Sy = 1, Sz = 1;
@@ -294,6 +296,10 @@ int main(int argc, char *argv[])
    args.AddOption(&checkpoint_stop_time, "-ct", "--checkpoint-time",
                   "Save and stop at the first natural step at or after this "
                   "time (requires --checkpoint-save).");
+   args.AddOption(&memory_replay_test, "-mrt", "--memory-replay-test",
+                  "-no-mrt", "--no-memory-replay-test",
+                  "Replay in-memory checkpoints near times 1 and 2 to the "
+                  "final state and verify exact reconstruction.");
    args.Parse();
    if (!args.Good())
    {
@@ -308,6 +314,18 @@ int main(int argc, char *argv[])
       if (Mpi::Root())
       {
          mfem::err << "--checkpoint-time requires --checkpoint-save.\n";
+      }
+      return 1;
+   }
+   if (memory_replay_test &&
+       (t_final <= 2.0 || checkpoint_stop_time >= 0.0 ||
+        checkpoint_restart[0] != '\0'))
+   {
+      if (Mpi::Root())
+      {
+         mfem::err << "--memory-replay-test requires --t-final > 2 and "
+                   << "cannot be combined with --checkpoint-time or "
+                   << "--checkpoint-restart.\n";
       }
       return 1;
    }
@@ -801,6 +819,9 @@ int main(int argc, char *argv[])
 #endif
    int ti = static_cast<int>(checkpoint_time.step) + 1;
    bool checkpoint_written = false;
+   MemoryCheckpointStorage memory_checkpoints;
+   StateId memory_checkpoint_steps[2] = {-1, -1};
+   real_t memory_checkpoint_times[2] = {0.0, 0.0};
    for (; !last_step; ti++)
    {
 #ifdef LAGHOS_USE_CALIPER
@@ -840,6 +861,30 @@ int main(int argc, char *argv[])
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
       checkpoint_time.step = ti;
+      if (memory_replay_test)
+      {
+         const real_t targets[2] = {1.0, 2.0};
+         for (int checkpoint = 0; checkpoint < 2; checkpoint++)
+         {
+            if (memory_checkpoint_steps[checkpoint] < 0 &&
+                t >= targets[checkpoint])
+            {
+               const CheckpointId checkpoint_id = checkpoint + 1;
+               memory_checkpoints.Store(
+                  checkpoint_id,
+                  checkpoint_adapter.Capture(checkpoint_time.step,
+                                             checkpoint_id));
+               memory_checkpoint_steps[checkpoint] = checkpoint_time.step;
+               memory_checkpoint_times[checkpoint] = t;
+               if (Mpi::Root())
+               {
+                  cout << "Stored in-memory checkpoint " << checkpoint_id
+                       << " at step " << checkpoint_time.step
+                       << ", t = " << std::setprecision(17) << t << endl;
+               }
+            }
+         }
+      }
       if (checkpoint_stop_time >= 0.0 && t >= checkpoint_stop_time)
       {
          FileCheckpointStorage storage(
@@ -1181,6 +1226,107 @@ int main(int argc, char *argv[])
       if (Mpi::Root())
       {
          cout << "Density L2 error: " << sqrt(lrho_err) << endl;
+      }
+   }
+
+   if (memory_replay_test)
+   {
+      MFEM_VERIFY(memory_checkpoint_steps[0] >= 0 &&
+                  memory_checkpoint_steps[1] >= 0,
+                  "Both in-memory checkpoint times must be reached.");
+
+      const StateId terminal_step = checkpoint_time.step;
+      const real_t terminal_time = t;
+      const Snapshot terminal_snapshot =
+         checkpoint_adapter.Capture(terminal_step);
+
+      auto block_norm = [&](const Vector &block)
+      {
+         const real_t local_norm_squared = block * block;
+         real_t global_norm_squared = 0.0;
+         MPI_Allreduce(&local_norm_squared, &global_norm_squared, 1,
+                       MPITypeMap<real_t>::mpi_type, MPI_SUM, pmesh.GetComm());
+         return std::sqrt(global_norm_squared);
+      };
+
+      const real_t reference_norms[3] =
+      {
+         block_norm(x_gf), block_norm(v_gf), block_norm(e_gf)
+      };
+
+      for (int checkpoint = 0; checkpoint < 2; checkpoint++)
+      {
+         const CheckpointId checkpoint_id = checkpoint + 1;
+         const Snapshot snapshot = memory_checkpoints.Restore(checkpoint_id);
+         checkpoint_adapter.Restore(memory_checkpoint_steps[checkpoint],
+                                    snapshot, checkpoint_id);
+         ode_solver->Init(hydro);
+         hydro.ResetQuadratureData();
+         pmesh.NewNodes(x_gf, false);
+
+         StateId replay_step = memory_checkpoint_steps[checkpoint] + 1;
+         while (replay_step <= terminal_step)
+         {
+            if (t + dt >= terminal_time) { dt = terminal_time - t; }
+            S_old = S;
+            t_old = t;
+            hydro.ResetTimeStepEstimate();
+            ode_solver->Step(S, t, dt);
+
+            const real_t dt_est = hydro.GetTimeStepEstimate(S);
+            if (dt_est < dt)
+            {
+               dt *= 0.85;
+               MFEM_VERIFY(dt >= std::numeric_limits<real_t>::epsilon(),
+                           "The replay time step crashed.");
+               t = t_old;
+               S = S_old;
+               hydro.ResetQuadratureData();
+               continue;
+            }
+            if (dt_est > 1.25 * dt) { dt *= 1.02; }
+            checkpoint_time.step = replay_step++;
+         }
+
+         x_gf.SyncAliasMemory(S);
+         v_gf.SyncAliasMemory(S);
+         e_gf.SyncAliasMemory(S);
+         pmesh.NewNodes(x_gf, false);
+
+         const Snapshot replayed_snapshot =
+            checkpoint_adapter.Capture(terminal_step);
+         const int local_mismatch =
+            replayed_snapshot.Size() != terminal_snapshot.Size() ||
+            std::memcmp(replayed_snapshot.Data(), terminal_snapshot.Data(),
+                        terminal_snapshot.Size()) != 0;
+         int global_mismatch = 0;
+         MPI_Allreduce(&local_mismatch, &global_mismatch, 1, MPI_INT, MPI_MAX,
+                       pmesh.GetComm());
+
+         const real_t replayed_norms[3] =
+         {
+            block_norm(x_gf), block_norm(v_gf), block_norm(e_gf)
+         };
+         const bool norms_match =
+            replayed_norms[0] == reference_norms[0] &&
+            replayed_norms[1] == reference_norms[1] &&
+            replayed_norms[2] == reference_norms[2];
+
+         if (Mpi::Root())
+         {
+            cout << std::defaultfloat << std::setprecision(17)
+                 << "In-memory replay from checkpoint " << checkpoint_id
+                 << " (step " << memory_checkpoint_steps[checkpoint]
+                 << ", t = " << memory_checkpoint_times[checkpoint] << ")\n"
+                 << "  terminal norms: |x| = " << replayed_norms[0]
+                 << ", |v| = " << replayed_norms[1]
+                 << ", |e| = " << replayed_norms[2] << '\n'
+                 << "  exact terminal state: "
+                 << (global_mismatch == 0 && norms_match ? "PASS" : "FAIL")
+                 << endl;
+         }
+         MFEM_VERIFY(global_mismatch == 0 && norms_match,
+                     "In-memory checkpoint replay changed the terminal state.");
       }
    }
 

@@ -228,6 +228,19 @@ exactly at time 2 and therefore defines a different trajectory. Without
 and a restarted time-5 run makes their rank-local checkpoint files suitable
 for byte-for-byte comparison.
 
+An in-memory replay test can be performed entirely within one MPI run:
+
+```sh
+mpirun -np 4 ./laghos -p 3 -m data/rectangle01_quad.mesh -rs 2 -tf 3.0 -pa \
+  -mrt
+```
+
+This stores rank-local checkpoints at the first natural accepted steps at or
+after times 1 and 2. After reaching time 3, Laghos independently restores each
+checkpoint, repeats the adaptive trajectory to the terminal accepted step, and
+requires both the complete serialized state and the global position, velocity,
+and energy norms to match exactly.
+
 ## Verification of Results
 
 To make sure the results are correct, we tabulate reference final iterations
