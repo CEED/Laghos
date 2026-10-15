@@ -719,7 +719,7 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
    {
       using namespace std;
       // FOM = (FOM1 * T1 + FOM2 * T2 + FOM3 * T3) / (T1 + T2 + T3)
-      const HYPRE_Int H1iter = p_assembly ? (timer.H1iter/dim) : timer.H1iter;
+      const HYPRE_BigInt H1iter = p_assembly ? (timer.H1iter/dim) : timer.H1iter;
       const double FOM1 = 1e-6 * H1GTVSize * H1iter / T[0];
       const double FOM2 = 1e-6 * steps * (H1GTVSize + L2GTVSize) / T[2];
       const double FOM3 = 1e-6 * alldata[1] * ir.GetNPoints() / T[3];
@@ -747,8 +747,8 @@ void LagrangianHydroOperator::PrintTimingData(bool IamRoot, int steps,
            << FOM << endl;
       if (!fom) { return; }
       const int QPT = ir.GetNPoints();
-      const HYPRE_Int GNZones = alldata[2];
-      const long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
+      const HYPRE_BigInt GNZones = alldata[2];
+      const long long ndofs = 2*H1GTVSize + L2GTVSize + QPT*GNZones;
       cout << endl;
       cout << "| Ranks " << "| Zones   "
            << "| H1 dofs " << "| L2 dofs "
