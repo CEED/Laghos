@@ -48,8 +48,8 @@ struct TimingData
    // These accumulate the total processed dofs or quad points:
    // #(CG iterations) for the L2 CG solve.
    // #quads * #(RK sub steps) for the quadrature data computations.
-   HYPRE_Int H1iter, L2iter;
-   HYPRE_Int quad_tstep;
+   HYPRE_BigInt H1iter, L2iter;
+   HYPRE_BigInt quad_tstep;
 
    TimingData(const HYPRE_Int l2d) :
       L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
@@ -198,6 +198,7 @@ public:
    double InternalEnergy(const ParGridFunction &e) const;
    double KineticEnergy(const ParGridFunction &v) const;
 
+   auto GetH1Iter() const { return timer.H1iter; }
    int GetH1VSize() const { return H1.GetVSize(); }
    const Array<int> &GetBlockOffsets() const { return block_offsets; }
 
