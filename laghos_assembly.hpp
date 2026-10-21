@@ -49,11 +49,11 @@ struct QuadratureData
 
    // Initial length scale. This represents a notion of local mesh size.
    // We assume that all initial zones have similar size.
-   double h0;
+   real_t h0;
 
    // Estimate of the minimum time step over all quadrature points. This is
    // recomputed at every time step to achieve adaptive time stepping.
-   double dt_est;
+   real_t dt_est;
 
    QuadratureData(int dim, int NE, int quads_per_el)
       : Jac0inv(dim, dim, NE * quads_per_el),
