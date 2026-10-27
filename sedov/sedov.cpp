@@ -110,7 +110,7 @@ int main(int argc, char *argv[]) {
 
   // Parallel partitioning of the mesh.
   std::unique_ptr<ParMesh> pmesh;
-  const int num_tasks = Mpi::WorldSize();
+  // const int num_tasks = Mpi::WorldSize();
 
   if (myid == 0) {
     std::cout << "Non-Cartesian partitioning through METIS will be used.\n";
@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
         r += dr[i] * dr[i];
       }
       r = sqrt(r);
-      if (r) {
+      if (r != 0.0) {
         for (int i = 0; i < dim; ++i) {
           dr[i] /= r;
         }
@@ -219,8 +219,8 @@ int main(int argc, char *argv[]) {
   {
     std::stringstream fname;
     fname << basename << "_qfunc";
-    std::ofstream out(fname.str());
-    qfunc.Save(out);
+    std::ofstream ofs(fname.str());
+    qfunc.Save(ofs);
   }
   return 0;
 }
