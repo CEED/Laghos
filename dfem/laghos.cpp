@@ -33,7 +33,7 @@
 #include <mfem.hpp>
 
 // TODO: Do we want this to be included from mfem.hpp automatically now?
-// #include "fem/dfem/doperator.hpp"
+#include "fem/dfem/doperator.hpp"
 #include "linalg/tensor.hpp"
 #ifdef MFEM_USE_PETSC
 #include "linalg/petsc.hpp"
@@ -47,7 +47,7 @@
 // #include <string>
 
 using namespace mfem;
-using mfem::future::tensor;
+using mfem::internal::tensor;
 
 constexpr int VELOCITY = 0;
 constexpr int DENSITY0 = 1;

@@ -51,7 +51,7 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 #include "fem/qinterp/eval.hpp"
-#include "fem/qinterp/det.hpp"
+// #include "fem/qinterp/det.hpp"
 #include "fem/qinterp/grad.hpp"
 #include "fem/integ/bilininteg_mass_kernels.hpp"
 
@@ -394,7 +394,8 @@ int main(int argc, char *argv[])
    {
       if (elem_per_mpi)
       {
-         mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
+         MFEM_ABORT("PartitionMPI is not supported yet.");
+         /*mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
                              rp_levels, mpi_partitioning);
          // scale mesh by Sx, Sy, Sz
          switch (dim)
@@ -421,7 +422,7 @@ int main(int argc, char *argv[])
                });
                AssignMeshBdrAttrs3D(mesh, 0_r, Sx, 0_r, Sy);
                break;
-         }
+         }*/
       }
       else
       {
