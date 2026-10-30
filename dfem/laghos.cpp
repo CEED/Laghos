@@ -46,6 +46,10 @@
 #include <cstring>
 // #include <string>
 
+#ifdef LAGHOS_TESTS
+#include "laghos_tests.hpp"
+#endif
+
 using namespace mfem;
 using mfem::internal::tensor;
 
@@ -222,20 +226,21 @@ struct TaylorSourceQFunction
 };
 
 
-static inline MFEM_HOST_DEVICE
-std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2>> eig2(
-                                                    tensor<real_t, 2, 2> &A)
-{
-   return eig(A);
-}
+// static inline MFEM_HOST_DEVICE
+// std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2> >
+// eig2(tensor<real_t, 2, 2> &A)
+// {
+//    return eig(A);
+// }
 
-static inline MFEM_HOST_DEVICE
-std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2>> grad_eig2(
-                                                    tensor<real_t, 2, 2> &A,
-                                                    tensor<real_t, 2, 2> &dA)
-{
-   return grad_eig(A, dA);
-}
+// static inline MFEM_HOST_DEVICE
+// std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2> >
+// grad_eig2(
+//    tensor<real_t, 2, 2> &A,
+//    tensor<real_t, 2, 2> &dA)
+// {
+//    return grad_eig(A, dA);
+// }
 
 // void* __enzyme_register_derivative_eig[] =
 // {
@@ -264,8 +269,8 @@ matd_t<DIM> qdata_setup(
 {
    using matd = matd_t<DIM>;
 
-   constexpr real_t eps = 1e-12;
-   constexpr real_t vorticity_coeff = 1.0;
+   // constexpr real_t eps = 1e-12;
+   // constexpr real_t vorticity_coeff = 1.0;
    real_t p, cs;
    const real_t detJ = det(J);
    const matd invJ = inv(J);
@@ -280,7 +285,7 @@ matd_t<DIM> qdata_setup(
 
    if (use_viscosity)
    {
-      auto softstep = [](const real_t &width, const real_t x)
+      /*auto softstep = [](const real_t &width, const real_t x)
       {
          // Clamping to prevend under/overflow.
          // This does not affect smoothness, it's only for extreme values.
@@ -296,7 +301,7 @@ matd_t<DIM> qdata_setup(
          real_t y0 = width;
          real_t shift = 2.0 * width * atanh(1.0 - 2.0 * y0);
          return 0.5 + 0.5 * tanh(0.5 * (x-shift) / width);
-      };
+      };*/
 
       // y0 is value at x=0.
       auto softstep7 = [](const real_t &width, const real_t y0, const real_t x)
@@ -2652,9 +2657,13 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
+#ifndef LAGHOS_TESTS
 int main(int argc, char *argv[])
+#else
+int laghos(int argc, char *argv[], LaghosResults &results)
+#endif
 {
-   Mpi::Init();
+   if (!Mpi::IsInitialized()) { Mpi::Init(); }
    Hypre::Init();
 
    out << std::setprecision(15);
@@ -3300,6 +3309,10 @@ int main(int argc, char *argv[])
       //    verr_gf(i) = abs(verr_gf(i) - v_gf(i));
       // }
 
+#ifdef LAGHOS_TESTS
+      results.steps = ti;
+#endif
+
       if (ti % vis_steps == 0 || last_step)
       {
          if (Mpi::Root()) { out << "dt_est: " << dt_est << "\n"; }
@@ -3343,6 +3356,23 @@ int main(int argc, char *argv[])
           << "Energy diff: " << fabs(energy_init - energy_final) << std::endl;
    }
 
+#ifdef LAGHOS_TESTS
+   {
+      Vector x_tdofs, v_tdofs, e_tdofs;
+      x_gf.GetTrueDofs(x_tdofs);
+      v_gf.GetTrueDofs(v_tdofs);
+      e_gf.GetTrueDofs(e_tdofs);
+      const MPI_Comm comm = mesh.GetComm();
+      results.t = t;
+      results.dt = dt;
+      results.energy_init = energy_init;
+      results.energy_final = energy_final;
+      results.x_norm = std::sqrt(InnerProduct(comm, x_tdofs, x_tdofs));
+      results.v_norm = std::sqrt(InnerProduct(comm, v_tdofs, v_tdofs));
+      results.e_norm = std::sqrt(InnerProduct(comm, e_tdofs, e_tdofs));
+   }
+#endif
+
    if (problem == 0)
    {
       const real_t v_err_max = v_gf.ComputeMaxError(v_coeff);
@@ -3356,6 +3386,7 @@ int main(int argc, char *argv[])
       }
    }
 
+#ifndef LAGHOS_TESTS // no output files from the tests
    if (problem == 1)
    {
       hydro->DensityScatter();
@@ -3376,6 +3407,7 @@ int main(int argc, char *argv[])
       mesh.SaveAsOne("3point.mesh");
       rho_gf.SaveAsOne("3point.gf");
    }
+#endif // LAGHOS_TESTS
 
    delete hydro;
 

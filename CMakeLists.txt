@@ -130,5 +130,6 @@ target_link_libraries(sedov
 )
 
 if (MFEM_USE_ENZYME)
+  enable_testing()
   add_subdirectory(dfem)
 endif()
