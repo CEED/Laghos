@@ -149,7 +149,7 @@ std::tuple<T, tensor<T, n>> sinvpm(const tensor<T, n, n> &A, int maxit, T tol)
 {
    auto shift = [](const tensor<T, n, n> &A, const T& mu)
    {
-      const auto I = mfem::future::Identity<n>();
+      const auto I = mfem::internal::Identity<n>();
       tensor<T, n, n> B = A;
       B -= mu * I;
       return B;

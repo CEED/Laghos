@@ -128,3 +128,7 @@ target_link_libraries(sedov
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
 )
+
+if (MFEM_USE_ENZYME)
+  add_subdirectory(dfem)
+endif()
