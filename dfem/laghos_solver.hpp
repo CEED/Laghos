@@ -89,10 +89,6 @@ public:
            max_line_iter(5),
            hydro(hydro) {}
 
-      void SetBacktrackingFactor(real_t b) { beta = b; }
-      void SetArmijoConstant(real_t a) { alpha = a; }
-      void SetMaxLineSearchIter(int n) { max_line_iter = n; }
-
    protected:
       void ProcessNewState(const Vector &x) const override;
 
@@ -135,7 +131,6 @@ public:
       virtual MemoryClass GetMemoryClass() const override;
 
       real_t h;
-      std::function<void(const Vector &, Vector &)> jvp, assembled_jvp;
       const int H1tsize, L2tsize;
       mutable Vector w, z;
 
@@ -321,7 +316,6 @@ public:
    mutable FunctionCoefficient rho0_coeff;
    OperatorJacobiSmoother *Mv_Jprec = nullptr;
    mutable Vector RHSv, rhsv, X, Xx, Xv, Xvc, Xe, K, Kx, Kv, Ke, B, RHSe, rhse;
-   const int nl2dofs;
    bool fd_gradient;
    int dump_jacobians;
    const int nonlinear_maximum_iterations;

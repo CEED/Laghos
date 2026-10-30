@@ -37,9 +37,7 @@
 
 #include "laghos_solver.hpp"
 
-// #include <sstream>
 #include <cstring>
-// #include <string>
 
 #include "laghos_tests.hpp"
 
@@ -50,7 +48,7 @@ int petsc_lag_steps;
 
 int main(int argc, char *argv[])
 {
-   LaghosResults *results = laghos_results; // set by laghos_tests, see laghos_tests.hpp
+   LaghosResults *results = laghos_results; // set by laghos_tests
    if (!Mpi::IsInitialized()) { Mpi::Init(); }
    Hypre::Init();
 
@@ -108,7 +106,7 @@ int main(int argc, char *argv[])
    }
    if (petsc_opts_provided && !mesh_provided)
    {
-      // Match the old PETSc prototype default mesh.
+      // Default mesh of the PETSc runs
       mesh_file = "../../data/inline-quad.mesh";
    }
 
@@ -199,7 +197,7 @@ int main(int argc, char *argv[])
 
       MFEMInitializePetsc(&petsc_argc, &petsc_args);
 
-      // Keep output formatting consistent with laghos_petsc.cpp for PETSc runs.
+      // Output precision of the PETSc runs
       out << std::setprecision(6);
 #else
       MFEM_ABORT("MFEM is not built with PETSc");
@@ -244,9 +242,6 @@ int main(int argc, char *argv[])
    {
       serial_mesh.UniformRefinement();
    }
-
-   // serial_mesh.EnsureNCMesh();
-   // serial_mesh.RandomRefinement(0.1);
 
    // The mesh dimension can change based on selected problem setup (e.g. -p 2).
    dim = serial_mesh.Dimension();
@@ -699,12 +694,6 @@ int main(int argc, char *argv[])
       {
          paraview_save(ti, t);
       }
-
-      // verr_gf.ProjectCoefficient(v_coeff);
-      // for (int i = 0; i < verr_gf.Size(); i++)
-      // {
-      //    verr_gf(i) = abs(verr_gf(i) - v_gf(i));
-      // }
 
       if (results)
       {

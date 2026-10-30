@@ -28,8 +28,6 @@ MassPAOperator::MassPAOperator(ParFiniteElementSpace &pfes,
    Operator(pfes.GetTrueVSize()),
    comm(pfes.GetParMesh()->GetComm()),
    dim(pfes.GetMesh()->Dimension()),
-   NE(pfes.GetMesh()->GetNE()),
-   vsize(pfes.GetVSize()),
    pabf(&pfes),
    ess_tdofs_count(0),
    ess_tdofs(0)

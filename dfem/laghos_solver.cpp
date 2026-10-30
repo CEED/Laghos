@@ -16,8 +16,8 @@
 
 #include "laghos_solver.hpp"
 
-// TODO: Do we want this to be included from mfem.hpp automatically now?
-// Its non-inline definitions restrict it to this translation unit
+// Not included by mfem.hpp, its non-inline definitions restrict it to this
+// translation unit
 #include "fem/dfem/doperator.hpp"
 #include "linalg/kernels.hpp"
 
@@ -87,17 +87,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-void threshold(Vector &v)
-{
-   for (int i = 0; i < v.Size(); i++)
-   {
-      if (abs(v(i)) <= 1e-12)
-      {
-         v(i) = 0.0;
-      }
-   }
-}
-
 MFEM_HOST_DEVICE inline
 real_t taylor_source(const Vector &x)
 {
@@ -106,84 +95,9 @@ real_t taylor_source(const Vector &x)
 };
 
 MFEM_HOST_DEVICE inline
-real_t smoothmin(real_t a, real_t b, real_t k = 1e6)
-{
-   return -1.0 / k * log(exp(-k * a) + exp(-k * b));
-}
-
-MFEM_HOST_DEVICE inline
 real_t smoothmax(real_t a, real_t b, real_t k = 1e-6)
 {
    return 0.5 * (a + b + sqrt((a-b)*(a-b) + k*k));
-}
-
-MFEM_HOST_DEVICE inline
-real_t smoothabs(real_t x, real_t k = 1e-6)
-{
-   return sqrt(x * x + k);
-}
-
-template <typename T, int n>
-MFEM_HOST_DEVICE inline
-tensor<T, n> shift(const tensor<T, n> &v, T s)
-{
-   tensor<T, n> sv;
-   for (int i = 0; i < n; i++)
-   {
-      sv(i) = v(i) - s;
-   }
-   return sv;
-}
-
-template <typename T, int n>
-MFEM_HOST_DEVICE inline
-T min(const tensor<T, n> &v)
-{
-   T min = std::numeric_limits<T>::min();
-   for (int i = 0; i < n; i++)
-   {
-      if (v(i) < min)
-      {
-         min = v(i);
-      }
-   }
-   return min;
-}
-
-template <typename T, int n>
-MFEM_HOST_DEVICE inline
-std::tuple<T, tensor<T, n>> sinvpm(const tensor<T, n, n> &A, int maxit, T tol)
-{
-   auto shift = [](const tensor<T, n, n> &A, const T& mu)
-   {
-      const auto I = mfem::future::IdentityMatrix<n>();
-      tensor<T, n, n> B = A;
-      B -= mu * I;
-      return B;
-   };
-
-   auto As = shift(A, tol);
-   auto mu = min(std::get<0>(eig(As)));
-   tensor<T, n> x = {};
-   x(0) = 1.0;
-   x = x / norm(x);
-   const auto Binv = inv(shift(A, mu));
-   auto y = Binv * x;
-   auto la = dot(y, x);
-
-   for (int i = 0; i < maxit; i++)
-   {
-      // const auto err = norm(y - la * x) / norm(y);
-      // if (err <= tol)
-      // {
-      //    break;
-      // }
-      x = y / norm(y);
-      y = Binv * x;
-      la = dot(y, x);
-   }
-
-   return {mu + 1.0 / la, x};
 }
 
 // Smooth transition between 0 and 1 for x in [-eps, eps].
@@ -204,30 +118,8 @@ void ComputeMaterialProperties(const real_t &gamma, const real_t &rho,
    cs = sqrt(gamma * (gamma - 1.0) * E);
 }
 
-// static inline MFEM_HOST_DEVICE
-// std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2> >
-// eig2(tensor<real_t, 2, 2> &A)
-// {
-//    return eig(A);
-// }
-
-// static inline MFEM_HOST_DEVICE
-// std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2> >
-// grad_eig2(
-//    tensor<real_t, 2, 2> &A,
-//    tensor<real_t, 2, 2> &dA)
-// {
-//    return grad_eig(A, dA);
-// }
-
-// void* __enzyme_register_derivative_eig[] =
-// {
-//    (std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2>>*)eig2,
-//    (std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2>>*)grad_eig2,
-// };
-
-// dfem-dev has no 3x3 calcsv: local copy from the dfem-laghos-dev-av branch,
-// commit d911c400de "calcsv for 3x3", to be removed once it lands in dfem-dev
+// Singular value i of a 3x3 matrix, in decreasing order, from the closed-form
+// eigenvalues of A^T A
 template <typename T> MFEM_HOST_DEVICE
 T calcsv(const future::tensor<T, 3, 3> A, const int i)
 {
@@ -306,12 +198,11 @@ T calcsv(const future::tensor<T, 3, 3> A, const int i)
       if (r < -1.0) { r = -1.0; }
       if (r >  1.0) { r =  1.0; }
 
-      const double pi = 3.141592653589793238462643383279502884;
       const double phi = std::acos(r) / 3.0;
 
       // These are the eigenvalues of B, ordered as e0 >= e1 >= e2 in exact arithmetic
       e0 = q + 2.0*p*std::cos(phi);
-      e2 = q + 2.0*p*std::cos(phi + 2.0*pi/3.0);
+      e2 = q + 2.0*p*std::cos(phi + 2.0*M_PI/3.0);
       e1 = 3.0*q - e0 - e2;
    }
 
@@ -350,8 +241,6 @@ matd_t<DIM> qdata_setup(
 {
    using matd = matd_t<DIM>;
 
-   // constexpr real_t eps = 1e-12;
-   // constexpr real_t vorticity_coeff = 1.0;
    real_t p, cs;
    const real_t detJ = det(J);
    const matd invJ = inv(J);
@@ -368,24 +257,6 @@ matd_t<DIM> qdata_setup(
 
    if (use_viscosity)
    {
-      /*auto softstep = [](const real_t &width, const real_t x)
-      {
-         // Clamping to prevend under/overflow.
-         // This does not affect smoothness, it's only for extreme values.
-         // [-40,40] covers most practical values.
-         //auto arg = std::max(std::min(x / (width + 1e-6), 40.0), -40.0);
-
-         // Smooth transition from 0 to 1; symmetric around the zero.
-         // width: controls the slope of the sigmoid; lower -> sharper.
-         // value(0) = 0.5, value(+width) ~ 0.73, value(-width) ~ 0.27.
-         //return 1.0 / (1.0 + std::exp(-arg));
-
-         // Value at x=0.
-         real_t y0 = width;
-         real_t shift = 2.0 * width * atanh(1.0 - 2.0 * y0);
-         return 0.5 + 0.5 * tanh(0.5 * (x-shift) / width);
-      };*/
-
       // y0 is value at x=0.
       auto softstep7 = [](const real_t &width, const real_t y0, const real_t x)
       {
@@ -393,14 +264,9 @@ matd_t<DIM> qdata_setup(
          return 0.5 + 0.5 * tanh(0.5 * (x-shift) / width);
       };
 
+      // Diffuse the kink at |x| ~ 0, activates as |x| approaches eps
       auto softabs = [](const real_t &eps, const real_t x)
       {
-         // Clamping to prevend under/overflow; doesn't affect smoothness.
-         //auto e = std::max(eps, 1e-6_r);
-
-         // Diffuse the kink at |x| ~ 0. Activates as |x| approaches eps.
-         //return sqrt(x * x + e * e);
-
          return hypot(x, eps);
       };
 
@@ -439,84 +305,12 @@ matd_t<DIM> qdata_setup(
       }
       else if (viscosity_type == 2)
       {
-         // Default Laghos viscosity.
-         // auto symdvdx = sym(dvdxi * invJ);
-         // auto [eigvals, eigvecs] = eig(symdvdx);
-
-         // // Measure of maximal compression.
-         // const real_t mu = eigvals(0);
-         // vecd compr_dir = get_col(eigvecs, 0);
-
-         // auto ph_dir = (J * inv(J0)) * compr_dir;
-         // const real_t h = h0 * norm(ph_dir) / norm(compr_dir);
-         // auto visc_coeff = 2.0 * rho * h * h * fabs(mu);
-         // visc_coeff += 0.5 * rho * h * cs * vorticity_coeff *
-         //               (1.0 - softstep(eps, mu - 2.0 * eps));
-         // stress += visc_coeff * symdvdx;
-         // dt_visc_coeff = visc_coeff;
+         // No artificial viscosity term
       }
-      else if (viscosity_type == 21)
+      else if (viscosity_type == 21 || viscosity_type == 22 ||
+               viscosity_type == 4)
       {
          MFEM_ABORT("works only in 2D!");
-
-         // Default Laghos viscosity through a power method to
-         // get the measure of maximal compression.
-         // auto symdvdx = sym(dvdxi * invJ);
-         // auto [mu, compr_dir] = sinvpm(symdvdx, 10, 1e-12);
-
-         // auto ph_dir = (J * inv(J0)) * compr_dir;
-         // const real_t h = h0 * norm(ph_dir) / norm(compr_dir);
-         // auto visc_coeff = 2.0 * rho * h * h * softabs(1e-6, mu);
-         // visc_coeff += 0.5 * rho * h * cs * vorticity_coeff *
-         //               (1.0 - softstep(eps, mu - 2.0 * eps));
-         // stress += visc_coeff * symdvdx;
-         // dt_visc_coeff = visc_coeff;
-      }
-      else if (viscosity_type == 22)
-      {
-         MFEM_ABORT("works only in 2D!");
-
-         // const auto delta = 0.2 * cs;
-
-         // auto symdvdx = sym(dvdxi * invJ);
-         // auto [eigvals, eigvecs] = eig2(symdvdx);
-
-         // // Measure of maximal compression.
-         // const real_t mu = eigvals(0);
-         // vecd compr_dir = get_col(eigvecs, 0);
-         // for (int i = 0; i < compr_dir.first_dim; i++)
-         // {
-         //    compr_dir(i) = softstep(delta, compr_dir(i));
-         // }
-
-         // auto ph_dir = (J * inv(J0)) * compr_dir;
-         // const real_t h = h0 * norm(ph_dir) / norm(compr_dir);
-         // auto visc_coeff = 2.0 * rho * h * h * softabs(delta, mu);
-         // visc_coeff += 0.5 * rho * h * cs * vorticity_coeff *
-         //               (1.0 - softstep(eps, mu - 2.0 * eps));
-         // if (!std::isfinite(visc_coeff)) { out << "err\n"; exit(1); }
-         // stress += visc_coeff * symdvdx;
-         // dt_visc_coeff = visc_coeff;
-      }
-      else if (viscosity_type == 4)
-      {
-         MFEM_ABORT("works only in 2D!");
-
-         // Viscosity type 4 from the paper (use all eigenvalues).
-         // auto symdvdx = sym(dvdxi * invJ);
-         // auto [lam, s] = eig(symdvdx);
-         // const auto delta = 0.2 * cs;
-
-         // for (int k = 0; k < DIMENSION; k++)
-         // {
-         //    const auto ph_dir = (J * inv(J0)) * s(k);
-         //    const real_t h = h0 * norm(ph_dir) / norm(s(k));
-         //    auto visc_coeff = 2.0 * rho * h * h * softabs(delta, lam(k));
-         //    visc_coeff += 0.5 * rho * h * cs * vorticity_coeff *
-         //                  (1.0 - softstep(delta, lam(k) - 2.0 * eps));
-         //    stress += visc_coeff * symdvdx;
-         //    dt_visc_coeff += visc_coeff;
-         // }
       }
       else if (viscosity_type == 7)
       {
@@ -550,14 +344,11 @@ matd_t<DIM> qdata_setup(
 
    if (rho < 0.0)
    {
-      //MFEM_ABORT("negative density on quadrature point \n" "detJ = " << detJ);
-      //exit(1);
       dt_est = 0.0;
    }
 
    if (detJ < 0.0)
    {
-      //MFEM_ABORT("inverted element detected in qdata_setup");
       // This will force repetition of the step with smaller dt.
       dt_est = 0.0;
    }
@@ -773,8 +564,6 @@ real_t LagrangianHydroOperator::LineSearchNewtonSolver::ComputeScalingFactor(
       if (new_norm <= initial_norm - alpha * lambda * grad_norm)
       {
          // Found acceptable step
-         // if (Mpi::Root())
-         // { out << "linesearch good lambda: " << lambda << "\n"; }
          return lambda;
       }
 
@@ -820,7 +609,6 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    yx += wx;
 
    // velocity
-   // wv.SetSubVector(hydro.ess_tdof, 0.0);
    dRvdx->Mult(wx, Zv);
    if (zv.CheckFinite() != 0)
    {
@@ -833,7 +621,6 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    MFEM_VERIFY(zv.CheckFinite() == 0, "err");
    zv *= h;
    yv += zv;
-   // hydro.Mv.TrueAddMult(wv, yv);
    Vector wvc, yvc;
    for (int c = 0; c < hydro.H1.GetMesh()->Dimension(); c++)
    {
@@ -849,13 +636,6 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    zv *= h;
    yv += zv;
    yv.SetSubVector(hydro.ess_tdof, 0.0);
-
-   // for (int i = 0; i < hydro.ess_tdof.Size(); i++)
-   // {
-   //    // yv(hydro.ess_tdof[i]) = uv(hydro.ess_tdof[i]);
-   //    yv(hydro.ess_tdof[i]) = 0.0;
-   // }
-   // yv = 0.0;
 
    // energy
    //                          [ wx ]
@@ -884,7 +664,6 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    dRede->Mult(we, Ze);
    MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    ze *= -h;
-   // OLD hydro.Me.TrueAddMult(we, ze);
    hydro.Me->FullAddMult(we, ze);
    MFEM_VERIFY(ze.CheckFinite() == 0, "err");
 
@@ -947,7 +726,6 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
 
    if (hydro.preconditioner_type == PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG)
    {
-      // if (Mpi::Root()) { out << "building pc\n"; }
       vv_mat.reset(Mv_hdRvdv_mat);
       amg_v.reset(new HypreBoomerAMG(*vv_mat));
       amg_v->SetPrintLevel(0);
@@ -1109,15 +887,12 @@ void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
    Rx = kx;
    Rx -= uv;
 
-   // out << "in qupdate\n";
-   // pretty_print(ux_l);
    hydro.qdata_is_current = false;
    hydro.UpdateQuadratureData(u_l);
 
    MultiVector RV{Rv};
    hydro.momentum_pa->Mult(MultiVector{hydro.qdata->stressp}, RV);
 
-   // hydro.Mv.TrueAddMult(kv, Rv);
    Vector kvc, Rvc;
    for (int c = 0; c < hydro.H1.GetMesh()->Dimension(); c++)
    {
@@ -1143,7 +918,6 @@ void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
       Re -= e_source_t;
    }
 
-   // hydro.Me.TrueAddMult(ke, Re);
    hydro.Me->FullAddMult(ke, Re);
 
    Rx.SyncAliasMemory(R);
@@ -1157,12 +931,6 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
    u = k;
    u *= dt;
    u += x;
-
-   auto kptr = const_cast<Vector*>(&k);
-   Vector kx, kv, ke;
-   kx.MakeRef(*kptr, 0, H1tsize);
-   kv.MakeRef(*kptr, H1tsize, H1tsize);
-   ke.MakeRef(*kptr, 2*H1tsize, L2tsize);
 
    Vector ux, uv, ue;
    ux.MakeRef(u, 0, H1tsize);
@@ -1223,11 +991,6 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
          fd_jacobian->PrintMatlab(fdjacmat);
          fdjacmat.close();
 
-         // hydro.preconditioner->SetOperator(*jacobian);
-         // std::ofstream jprecmat("jprecmat.m");
-         // hydro.preconditioner->block_hypre->PrintMatlab(jprecmat);
-         // jprecmat.close();
-
          if (dump_jacobians == 1)
          {
             exit(0);
@@ -1248,9 +1011,6 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
          // [ x ]  size H1tsize
          // [ v ]  size H1tsize
          // [ e ]  size L2tsize
-
-         const int H1tsize = hydro.H1.GetTrueVSize();
-         const int L2tsize = hydro.L2.GetTrueVSize();
 
          //
          // Build diagonal blocks through HypreParMatrix to guarantee a
@@ -1295,14 +1055,14 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
          // Rvdv.
          auto dRvdv_ptr = AssembleMatrix(*jacobian->dRvdv);
          HypreParMatrix &dRvdv_mat = *dRvdv_ptr;
-         ParBilinearForm Mv(&hydro.H1);
-         Mv.AddDomainIntegrator(new VectorMassIntegrator(hydro.rho0_coeff,
-                                                         &hydro.ir));
-         Mv.Assemble();
-         Mv.Finalize();
-         HypreParMatrix Mv_mat;
-         Mv.FormSystemMatrix(mfem::Array<int>(), Mv_mat);
-         HypreParMatrix *dRvdv_combined = Add(1.0, Mv_mat, h, dRvdv_mat);
+         ParBilinearForm mass_v(&hydro.H1);
+         mass_v.AddDomainIntegrator(new VectorMassIntegrator(hydro.rho0_coeff,
+                                                             &hydro.ir));
+         mass_v.Assemble();
+         mass_v.Finalize();
+         HypreParMatrix mass_v_mat;
+         mass_v.FormSystemMatrix(mfem::Array<int>(), mass_v_mat);
+         HypreParMatrix *dRvdv_combined = Add(1.0, mass_v_mat, h, dRvdv_mat);
          auto tmp0 = dRvdv_combined->EliminateRowsCols(hydro.ess_tdof);
          delete tmp0;
          PetscParMatrix dRvdv_petsc(dRvdv_combined);
@@ -1340,14 +1100,14 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
          auto dRede_ptr = AssembleMatrix(*jacobian->dRede);
          HypreParMatrix &dRede_mat = *dRede_ptr;
          PetscParMatrix dRede_petsc(&dRede_mat);
-         ParBilinearForm Me(&hydro.L2);
-         Me.AddDomainIntegrator(new MassIntegrator(hydro.rho0_coeff,
-                                                   &hydro.ir));
-         Me.Assemble();
-         Me.Finalize();
-         HypreParMatrix Me_mat;
-         Me.FormSystemMatrix(mfem::Array<int>(), Me_mat);
-         PetscParMatrix Me_petsc(&Me_mat);
+         ParBilinearForm mass_e(&hydro.L2);
+         mass_e.AddDomainIntegrator(new MassIntegrator(hydro.rho0_coeff,
+                                                       &hydro.ir));
+         mass_e.Assemble();
+         mass_e.Finalize();
+         HypreParMatrix mass_e_mat;
+         mass_e.FormSystemMatrix(mfem::Array<int>(), mass_e_mat);
+         PetscParMatrix Me_petsc(&mass_e_mat);
          PetscErrorCode ierr = MatAYPX(dRede_petsc, -h, Me_petsc,
                                        MatStructure::DIFFERENT_NONZERO_PATTERN);
          MFEM_VERIFY(ierr == PETSC_SUCCESS, "MatAYPX(dRede) failed");
@@ -1449,7 +1209,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    B(H1c.GetTrueVSize()),
    RHSe(L2.GetTrueVSize()),
    rhse(L2.GetVSize()),
-   nl2dofs(L2.GetFE(0)->GetDof()),
    fd_gradient(fd_gradient),
    dump_jacobians(dump_jacobians),
    nonlinear_maximum_iterations(nonlinear_maximum_iterations),
@@ -1515,20 +1274,17 @@ LagrangianHydroOperator::LagrangianHydroOperator(
       gmres->SetMaxIter(krylov_maximum_iterations);
       gmres->SetRelTol(1e-12);
       gmres->SetAbsTol(0.0);
-      //gmres->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
       gmres->SetPrintLevel(IterativeSolver::PrintLevel().None());
       gmres->SetPreconditioner(*preconditioner);
       krylov.reset(gmres);
 
       newton.reset(new LineSearchNewtonSolver(MPI_COMM_WORLD, *this));
       newton->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
-      //newton->SetPrintLevel(IterativeSolver::PrintLevel().None());
       newton->SetOperator(*residual);
       newton->SetSolver(*krylov);
       newton->SetMaxIter(nonlinear_maximum_iterations);
       newton->SetRelTol(nonlinear_relative_tolerance);
       newton->SetAbsTol(0.0);
-      // newton->SetAdaptiveLinRtol();
    }
 }
 
@@ -1553,9 +1309,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
    // solve position
    dx = v;
 
-   // out << ">>> dx\n";
-   // pretty_print(dx);
-
    // solve velocity
    {
       dv = 0.0;
@@ -1564,8 +1317,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       momentum_pa->Mult(MultiVector{qdata->stressp}, Y);
       RHSv.Neg();
       H1.GetRestrictionMatrix()->MultTranspose(RHSv, rhsv);
-
-      // pretty_print(rhsv);
 
       // solve for each velocity component
       const int size = H1c.GetVSize();
@@ -1606,8 +1357,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
          dvc.GetMemory().SyncAlias(dSdt.GetMemory(), dvc.Size());
       }
    }
-   // out << ">>> dv\n";
-   // pretty_print(dv);
 
    // solve energy
    {
@@ -1641,15 +1390,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       cg.SetPrintLevel(-1);
       cg.Mult(rhse, de);
       de.GetMemory().SyncAlias(dSdt.GetMemory(), de.Size());
-
-      // out << ">>> de\n";
-      // pretty_print(de);
    }
 
    qdata_is_current = false;
-
-   // out << ">>> dSdt\n";
-   // pretty_print(dSdt);
 }
 
 void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
@@ -1904,7 +1647,6 @@ real_t LagrangianHydroOperator::ComputeMinDet(const Vector &S) const
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (qdata_is_current) { return; }
-   // out << "updating qdata\n";
    qdata_is_current = true;
 
    auto sptr = const_cast<Vector*>(&S);
@@ -1997,10 +1739,6 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    }
    h0 /= (double) H1.GetOrder(0);
 
-   // const real_t h0 = sqrt(vol_global / ne_global) /
-   //                   static_cast<real_t>(H1.GetOrder(0));
-
-   // qdata->order_v = order_v;
    qdata->dt_est = std::numeric_limits<real_t>::infinity();
 
    auto d_external_data = external_data.ReadWrite();
@@ -2008,7 +1746,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    Array<int> all_domain_attr(mesh.attributes.Max());
    all_domain_attr = 1;
 
-   // Contains a ParametricSpace.
+   // Output on a quadrature space
    std::shared_ptr<DifferentiableOperator> dt_est_mf;
    {
       future::tuple dt_est_kernel_ao =
@@ -2049,7 +1787,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
                                      all_domain_attr);
    }
 
-   // Contains a ParametricSpace.
+   // Output on a quadrature space
    std::shared_ptr<DifferentiableOperator> update_qdata;
    {
       future::tuple update_qdata_kernel_ao =
@@ -2330,7 +2068,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
                                       density_kernel_oo, ir, all_domain_attr);
    }
 
-   // Create taylor source oeprator
+   // Create taylor source operator
    std::shared_ptr<DifferentiableOperator> taylor_source_mf;
    {
       future::tuple taylor_source_kernel_ao =

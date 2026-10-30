@@ -194,7 +194,7 @@ public:
    const ParBilinearForm &GetBF() const { return pabf; }
 
    const MPI_Comm comm;
-   const int dim, NE, vsize;
+   const int dim;
    ParBilinearForm pabf;
    int ess_tdofs_count;
    Array<int> ess_tdofs;

@@ -17,7 +17,7 @@ add_executable(laghos_dfem laghos.cpp)
 target_link_libraries(laghos_dfem PUBLIC laghos_dfem_lib)
 
 # Non-regression tests, see laghos_tests.cpp, with the Catch2 single header
-# of the MFEM source tree (tests/unit/catch.hpp), as in quest/mfem/dft
+# of the MFEM source tree (tests/unit/catch.hpp)
 get_target_property(mfemIncludeDirs mfem INTERFACE_INCLUDE_DIRECTORIES)
 find_path(CATCH_INCLUDE_DIR catch.hpp
   HINTS ${MFEM_SOURCE_DIR} ${MFEM_DIR} ${MFEM_DIR}/.. ${mfemIncludeDirs}
