@@ -19,8 +19,6 @@
 #include "mfem.hpp"
 
 // fem/dfem/doperator.hpp has non-inline definitions, see laghos_solver.cpp
-#include "fem/dfem/parametricspace.hpp"
-#include "fem/dfem/tuple.hpp"
 #include "linalg/tensor.hpp"
 
 namespace mfem
@@ -29,7 +27,7 @@ namespace mfem
 namespace hydrodynamics
 {
 
-using mfem::internal::tensor;
+using mfem::future::tensor;
 
 constexpr int VELOCITY = 0;
 constexpr int DENSITY0 = 1;
@@ -55,12 +53,13 @@ struct TaylorSourceQFunction
    TaylorSourceQFunction() = default;
 
    MFEM_HOST_DEVICE inline
-   auto operator()(const vecd &x, const matd &J, const real_t &w) const
+   void operator()(const vecd &x, const matd &J, const real_t &w,
+                   real_t &s) const
    {
       auto f = 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
                                     cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
 
-      return mfem::tuple{f * det(J) * w};
+      s = f * det(J) * w;
    }
 };
 
@@ -73,9 +72,9 @@ public:
    MomentumPAQFunction() = default;
 
    MFEM_HOST_DEVICE inline
-   auto operator()(const matd &stressJiT) const
+   void operator()(const matd &stressJiT, matd &f) const
    {
-      return mfem::tuple{stressJiT};
+      f = stressJiT;
    }
 };
 
@@ -88,9 +87,9 @@ public:
    EnergyConservationPAQFunction() = default;
 
    MFEM_HOST_DEVICE inline
-   auto operator()(const matd &dvdxi, const matd &stressJiT) const
+   void operator()(const matd &dvdxi, const matd &stressJiT, real_t &f) const
    {
-      return mfem::tuple{ddot(stressJiT, dvdxi)};
+      f = ddot(stressJiT, dvdxi);
    }
 };
 
@@ -107,9 +106,10 @@ public:
       const real_t &E,
       const real_t &rho0,
       const matd &J0,
-      const real_t &w) const
+      const real_t &w,
+      real_t &ie) const
    {
-      return mfem::tuple{rho0 * E * det(J0) * w};
+      ie = rho0 * E * det(J0) * w;
    }
 };
 
@@ -127,9 +127,10 @@ public:
       const vecd &v,
       const real_t &rho0,
       const matd &J0,
-      const real_t &w) const
+      const real_t &w,
+      real_t &ke) const
    {
-      return mfem::tuple{rho0 * 0.5 * v * v * det(J0) * w};
+      ke = rho0 * 0.5 * v * v * det(J0) * w;
    }
 };
 
@@ -142,38 +143,37 @@ public:
    DensityQFunction() = default;
 
    MFEM_HOST_DEVICE inline
-   auto operator() (
+   void operator() (
       const real_t &rho0,
       const matd &J0,
-      const real_t &w) const
+      const real_t &w,
+      real_t &m) const
    {
-      return mfem::tuple{rho0 * det(J0) * w};
+      m = rho0 * det(J0) * w;
    }
 };
 
 struct QuadratureData
 {
    static constexpr int aux_dim = 1;
-   QuadratureData(const ParMesh &mesh, const IntegrationRule &ir) :
-      StressSpace(mesh.Dimension(), mesh.Dimension()*mesh.Dimension(),
-                  ir.GetNPoints(),
-                  mesh.Dimension()*mesh.Dimension()*ir.GetNPoints()*mesh.GetNE()),
+   QuadratureData(ParMesh &mesh, const IntegrationRule &ir) :
+      qspace(mesh, ir),
+      StressSpace(qspace, mesh.Dimension()*mesh.Dimension()),
       stressp(StressSpace),
-      R(mesh.Dimension(),
-        aux_dim,
-        ir.GetNPoints(),
-        aux_dim*ir.GetNPoints()*mesh.GetNE()),
+      R(qspace, aux_dim),
       dt_est(R)
    {
       dt_est.UseDevice(true);
       stressp.UseDevice(true);
    }
 
-   ParametricSpace StressSpace;
-   ParametricFunction stressp;
+   QuadratureSpace qspace;
 
-   ParametricSpace R;
-   ParametricFunction dt_est;
+   VectorQuadratureSpace StressSpace;
+   QuadratureFunction stressp;
+
+   VectorQuadratureSpace R;
+   QuadratureFunction dt_est;
 };
 
 class MassPAOperator : public Operator

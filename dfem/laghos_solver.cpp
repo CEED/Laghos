@@ -27,6 +27,13 @@ namespace mfem
 namespace hydrodynamics
 {
 
+using future::FieldDescriptor;
+using future::Gradient;
+using future::Identity;
+using future::Value;
+using future::Weight;
+using future::pretty_print;
+
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
@@ -149,7 +156,7 @@ std::tuple<T, tensor<T, n>> sinvpm(const tensor<T, n, n> &A, int maxit, T tol)
 {
    auto shift = [](const tensor<T, n, n> &A, const T& mu)
    {
-      const auto I = mfem::internal::Identity<n>();
+      const auto I = mfem::future::IdentityMatrix<n>();
       tensor<T, n, n> B = A;
       B -= mu * I;
       return B;
@@ -218,6 +225,109 @@ void ComputeMaterialProperties(const real_t &gamma, const real_t &rho,
 //    (std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2>>*)eig2,
 //    (std::tuple<tensor<real_t, 2>, tensor<real_t, 2, 2>>*)grad_eig2,
 // };
+
+// dfem-dev has no 3x3 calcsv: local copy from the dfem-laghos-dev-av branch,
+// commit d911c400de "calcsv for 3x3", to be removed once it lands in dfem-dev
+template <typename T> MFEM_HOST_DEVICE
+T calcsv(const future::tensor<T, 3, 3> A, const int i)
+{
+   double mult;
+   double a00, a01, a02, a10, a11, a12, a20, a21, a22;
+
+   a00 = A(0, 0); a01 = A(0, 1); a02 = A(0, 2);
+   a10 = A(1, 0); a11 = A(1, 1); a12 = A(1, 2);
+   a20 = A(2, 0); a21 = A(2, 1); a22 = A(2, 2);
+
+   {
+      double d_max = fabs(a00);
+      if (d_max < fabs(a01)) { d_max = fabs(a01); }
+      if (d_max < fabs(a02)) { d_max = fabs(a02); }
+      if (d_max < fabs(a10)) { d_max = fabs(a10); }
+      if (d_max < fabs(a11)) { d_max = fabs(a11); }
+      if (d_max < fabs(a12)) { d_max = fabs(a12); }
+      if (d_max < fabs(a20)) { d_max = fabs(a20); }
+      if (d_max < fabs(a21)) { d_max = fabs(a21); }
+      if (d_max < fabs(a22)) { d_max = fabs(a22); }
+      future::GetScalingFactor(d_max, mult);
+   }
+
+   a00 /= mult; a01 /= mult; a02 /= mult;
+   a10 /= mult; a11 /= mult; a12 /= mult;
+   a20 /= mult; a21 /= mult; a22 /= mult;
+
+   // Build B = A^T A (symmetric positive semidefinite)
+   const double b00 = a00*a00 + a10*a10 + a20*a20;
+   const double b01 = a00*a01 + a10*a11 + a20*a21;
+   const double b02 = a00*a02 + a10*a12 + a20*a22;
+   const double b11 = a01*a01 + a11*a11 + a21*a21;
+   const double b12 = a01*a02 + a11*a12 + a21*a22;
+   const double b22 = a02*a02 + a12*a12 + a22*a22;
+
+   double e0, e1, e2;
+
+   // Closed-form eigenvalues for symmetric 3x3 matrix
+   // See eigenvalue algorithm - stable trigonometric form
+   const double p1 = b01*b01 + b02*b02 + b12*b12;
+   if (p1 == 0.0)
+   {
+      // B is diagonal
+      e0 = b00;
+      e1 = b11;
+      e2 = b22;
+   }
+   else
+   {
+      const double q = (b00 + b11 + b22) / 3.0;
+
+      const double c00 = b00 - q;
+      const double c11 = b11 - q;
+      const double c22 = b22 - q;
+
+      const double p2 = c00*c00 + c11*c11 + c22*c22 + 2.0*p1;
+      const double p = std::sqrt(p2 / 6.0);
+
+      // C = (1/p) * (B - q I)
+      const double invp = 1.0 / p;
+      const double c01 = b01 * invp;
+      const double c02 = b02 * invp;
+      const double c12 = b12 * invp;
+      const double cc00 = c00 * invp;
+      const double cc11 = c11 * invp;
+      const double cc22 = c22 * invp;
+
+      // r = det(C) / 2
+      const double detC =
+         cc00*(cc11*cc22 - c12*c12) -
+         c01*(c01*cc22 - c12*c02) +
+         c02*(c01*c12 - cc11*c02);
+      double r = 0.5 * detC;
+
+      // Clamp r into [-1, 1] to avoid NaNs from acos due to roundoff
+      if (r < -1.0) { r = -1.0; }
+      if (r >  1.0) { r =  1.0; }
+
+      const double pi = 3.141592653589793238462643383279502884;
+      const double phi = std::acos(r) / 3.0;
+
+      // These are the eigenvalues of B, ordered as e0 >= e1 >= e2 in exact arithmetic
+      e0 = q + 2.0*p*std::cos(phi);
+      e2 = q + 2.0*p*std::cos(phi + 2.0*pi/3.0);
+      e1 = 3.0*q - e0 - e2;
+   }
+
+   // Enforce non-negativity (B is PSD, but roundoff can make tiny negatives)
+   if (e0 < 0.0) { e0 = 0.0; }
+   if (e1 < 0.0) { e1 = 0.0; }
+   if (e2 < 0.0) { e2 = 0.0; }
+
+   // Select requested eigenvalue by sorting (robust even in nearly-degenerate cases)
+   const double emax = fmax(e0, fmax(e1, e2));
+   const double emin = fmin(e0, fmin(e1, e2));
+   const double emid = (e0 + e1 + e2) - emax - emin;
+
+   const double chosen = (i == 0) ? emax : ((i == 1) ? emid : emin);
+   return std::sqrt(chosen) * mult;
+}
 
 template <int DIM>
 MFEM_HOST_DEVICE inline
@@ -479,11 +589,11 @@ struct TimeStepEstimateQFunction
       external_data(external_data) {}
 
    MFEM_HOST_DEVICE inline
-   auto operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
+   void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
                    const matd &J, const real_t &gamma, const real_t &E,
-                   const real_t &w) const
+                   const real_t &w, real_t &dt_est) const
    {
-      real_t dt_est = std::numeric_limits<real_t>::infinity();
+      dt_est = std::numeric_limits<real_t>::infinity();
 
       // Reuse qdata_setup() for the dt estimate logic; ignore its stress output.
       (void)qdata_setup<DIM>(
@@ -496,8 +606,6 @@ struct TimeStepEstimateQFunction
          external_data[EXT_DATA_IDX::VISC_Q1],
          external_data[EXT_DATA_IDX::VISC_Q2],
          dt_est);
-
-      return mfem::tuple{dt_est};
    }
 
    real_t *external_data;
@@ -512,14 +620,14 @@ struct UpdateQuadratureDataQFunction
       external_data(external_data) {}
 
    MFEM_HOST_DEVICE inline
-   auto operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
+   void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
                    const matd &J, const real_t &gamma, const real_t &E,
-                   const real_t &w) const
+                   const real_t &w, matd &stressJiT) const
    {
       // Do not update the global dt estimate here; that will be computed
       // through a proper reduction over quadrature points.
       real_t dt_est_dummy = std::numeric_limits<real_t>::infinity();
-      auto stressJiT =
+      stressJiT =
          qdata_setup<DIM>(
             dvdxi, rho0, J0, J, gamma, E, w,
             external_data[EXT_DATA_IDX::H0],
@@ -530,7 +638,6 @@ struct UpdateQuadratureDataQFunction
             external_data[EXT_DATA_IDX::VISC_Q1],
             external_data[EXT_DATA_IDX::VISC_Q2],
             dt_est_dummy);
-      return mfem::tuple{stressJiT};
    }
 
    real_t *external_data;
@@ -546,11 +653,11 @@ public:
       external_data(external_data) {}
 
    MFEM_HOST_DEVICE inline
-   auto operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
+   void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
                    const matd &J, const real_t &gamma, const real_t &E,
-                   const real_t &w) const
+                   const real_t &w, matd &stressJiT) const
    {
-      auto stressJiT =
+      stressJiT =
          qdata_setup<DIM>(
             dvdxi, rho0, J0, J, gamma, E, w,
             external_data[EXT_DATA_IDX::H0],
@@ -561,7 +668,6 @@ public:
             external_data[EXT_DATA_IDX::VISC_Q1],
             external_data[EXT_DATA_IDX::VISC_Q2],
             dt_est_dummy);
-      return mfem::tuple{stressJiT};
    }
 
    mutable real_t dt_est_dummy = std::numeric_limits<real_t>::infinity();
@@ -585,7 +691,8 @@ public:
       const matd &J,
       const real_t &gamma,
       const real_t &E,
-      const real_t &w) const
+      const real_t &w,
+      real_t &de) const
    {
       auto stressJiT =
          qdata_setup<DIM>(
@@ -598,7 +705,7 @@ public:
             external_data[EXT_DATA_IDX::VISC_Q1],
             external_data[EXT_DATA_IDX::VISC_Q2],
             dt_est);
-      return mfem::tuple{ddot(stressJiT, dvdxi)};
+      de = ddot(stressJiT, dvdxi);
    }
 
    mutable real_t dt_est = std::numeric_limits<real_t>::infinity();
@@ -619,9 +726,7 @@ void LagrangianHydroOperator::LineSearchNewtonSolver::ProcessNewState(
    if (min_detJ <= 0.0)
    {
       out << "ProcessNewState negative detJ = " << min_detJ << "\n";
-      illegal_state = true;
    }
-   illegal_state = false;
 }
 
 real_t LagrangianHydroOperator::LineSearchNewtonSolver::ComputeScalingFactor(
@@ -681,6 +786,14 @@ real_t LagrangianHydroOperator::LineSearchNewtonSolver::ComputeScalingFactor(
    return 0.0;
 }
 
+// DerivativeOperator::Assemble returns a new matrix, owned by the caller
+static std::unique_ptr<HypreParMatrix> AssembleMatrix(DerivativeOperator &d)
+{
+   HypreParMatrix *A = nullptr;
+   d.Assemble(A);
+   return std::unique_ptr<HypreParMatrix>(A);
+}
+
 void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    const Vector &u, Vector &y) const
 {
@@ -694,6 +807,7 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    zx.MakeRef(z, 0, H1tsize);
    zv.MakeRef(z, H1tsize, H1tsize);
    ze.MakeRef(z, 2*H1tsize, L2tsize);
+   MultiVector Zv{zv}, Ze{ze};
 
    Vector yx, yv, ye;
    yx.MakeRef(y, 0, H1tsize);
@@ -707,7 +821,7 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
 
    // velocity
    // wv.SetSubVector(hydro.ess_tdof, 0.0);
-   dRvdx->Mult(wx, zv);
+   dRvdx->Mult(wx, Zv);
    if (zv.CheckFinite() != 0)
    {
       pretty_print(zv);
@@ -715,7 +829,7 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    MFEM_VERIFY(zv.CheckFinite() == 0, "err");
    zv *= h;
    yv = zv;
-   dRvdv->Mult(wv, zv);
+   dRvdv->Mult(wv, Zv);
    MFEM_VERIFY(zv.CheckFinite() == 0, "err");
    zv *= h;
    yv += zv;
@@ -730,7 +844,7 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    }
    yv.SyncAliasMemory(y);
 
-   dRvde->Mult(we, zv);
+   dRvde->Mult(we, Zv);
    MFEM_VERIFY(zv.CheckFinite() == 0, "err");
    zv *= h;
    yv += zv;
@@ -749,22 +863,25 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    //                          [ we ]
    //
 
-   dRedx->Mult(wx, ze);
+   dRedx->Mult(wx, Ze);
    MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    if (problem == 0)
    {
-      dTaylorSourcedx->AddMult(wx, ze);
+      Vector ts(L2tsize);
+      MultiVector Ts{ts};
+      dTaylorSourcedx->Mult(wx, Ts);
+      ze += ts;
       MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    }
    ze *= -h;
    ye = ze;
 
-   dRedv->Mult(wv, ze);
+   dRedv->Mult(wv, Ze);
    MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    ze *= -h;
    ye += ze;
 
-   dRede->Mult(we, ze);
+   dRede->Mult(we, Ze);
    MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    ze *= -h;
    // OLD hydro.Me.TrueAddMult(we, ze);
@@ -817,15 +934,15 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
                             tdof_offsets, &dRxdx_diag);
 
    // dRvdv = (Mv + h dF/dv)
-   HypreParMatrix dRvdv_mat;
-   jacobian->dRvdv->Assemble(dRvdv_mat);
+   auto dRvdv_ptr = AssembleMatrix(*jacobian->dRvdv);
+   HypreParMatrix &dRvdv_mat = *dRvdv_ptr;
    HypreParMatrix *Mv_hdRvdv_mat = Add(1.0, hydro.Mv_mat, h, dRvdv_mat);
    auto tmp2 = Mv_hdRvdv_mat->EliminateRowsCols(hydro.ess_tdof);
    delete tmp2;
 
    // dRede = Me - h * dF^T/de
-   HypreParMatrix dRede_mat;
-   jacobian->dRede->Assemble(dRede_mat);
+   auto dRede_ptr = AssembleMatrix(*jacobian->dRede);
+   HypreParMatrix &dRede_mat = *dRede_ptr;
    HypreParMatrix *Me_hdRede_mat = Add(1.0, hydro.Me_mat, -h, dRede_mat);
 
    if (hydro.preconditioner_type == PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG)
@@ -864,14 +981,14 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
       // yv = (Mv + h * dF/dv) * wv + h * dF/dx * wx + h * dF/de * we
 
       // dRvdx = h * dF/dx
-      HypreParMatrix dRvdx_mat;
-      jacobian->dRvdx->Assemble(dRvdx_mat);
+      auto dRvdx_ptr = AssembleMatrix(*jacobian->dRvdx);
+      HypreParMatrix &dRvdx_mat = *dRvdx_ptr;
       dRvdx_mat.EliminateRows(hydro.ess_tdof);
       dRvdx_mat *= h;
 
       // dRvde = h * dF/de
-      HypreParMatrix dRvde_mat;
-      jacobian->dRvde->Assemble(dRvde_mat);
+      auto dRvde_ptr = AssembleMatrix(*jacobian->dRvde);
+      HypreParMatrix &dRvde_mat = *dRvde_ptr;
       dRvde_mat.EliminateRows(hydro.ess_tdof);
       dRvde_mat *= h;
 
@@ -880,21 +997,21 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
       // ye = (Me - h * dF/de) * we - h * dF/dx * wx - h * dF/dv * wv
 
       // dRedx = -h * dF^T/dx
-      HypreParMatrix dRedx_mat;
-      jacobian->dRedx->Assemble(dRedx_mat);
+      auto dRedx_ptr = AssembleMatrix(*jacobian->dRedx);
+      HypreParMatrix &dRedx_mat = *dRedx_ptr;
 
       if (problem == 0)
       {
-         HypreParMatrix dTaylorSourcedx_mat;
-         jacobian->dTaylorSourcedx->Assemble(dTaylorSourcedx_mat);
+         auto dTaylorSourcedx_ptr = AssembleMatrix(*jacobian->dTaylorSourcedx);
+         HypreParMatrix &dTaylorSourcedx_mat = *dTaylorSourcedx_ptr;
          dRedx_mat.Add(1.0, dTaylorSourcedx_mat);
       }
 
       dRedx_mat *= -h;
 
       // dRedv = -h * dF^T/dv
-      HypreParMatrix dRedv_mat;
-      jacobian->dRedv->Assemble(dRedv_mat);
+      auto dRedv_ptr = AssembleMatrix(*jacobian->dRedv);
+      HypreParMatrix &dRedv_mat = *dRedv_ptr;
       auto tmp1 = dRedv_mat.EliminateCols(hydro.ess_tdof);
       delete tmp1;
       dRedv_mat *= -h;
@@ -997,8 +1114,8 @@ void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
    hydro.qdata_is_current = false;
    hydro.UpdateQuadratureData(u_l);
 
-   hydro.momentum_pa->SetParameters({&hydro.qdata->stressp});
-   hydro.momentum_pa->Mult(uv, Rv);
+   MultiVector RV{Rv};
+   hydro.momentum_pa->Mult(MultiVector{hydro.qdata->stressp}, RV);
 
    // hydro.Mv.TrueAddMult(kv, Rv);
    Vector kvc, Rvc;
@@ -1013,15 +1130,16 @@ void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
 
    Rv.SetSubVector(hydro.ess_tdof, 0.0);
 
-   hydro.energy_conservation_pa->SetParameters({&uv_l, &hydro.qdata->stressp});
-   hydro.energy_conservation_pa->Mult(ue, Re);
+   MultiVector RE{Re};
+   hydro.energy_conservation_pa->Mult(MultiVector{uv_l, hydro.qdata->stressp},
+                                      RE);
 
    Re.Neg();
 
    if (problem == 0)
    {
-      hydro.taylor_source_mf->SetParameters({&ux_l});
-      hydro.taylor_source_mf->Mult(e_source_t, e_source_t);
+      MultiVector ES{e_source_t};
+      hydro.taylor_source_mf->Mult(MultiVector{ux}, ES);
       Re -= e_source_t;
    }
 
@@ -1051,15 +1169,6 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
    uv.MakeRef(u, H1tsize, H1tsize);
    ue.MakeRef(u, 2*H1tsize, L2tsize);
 
-   Vector ux_l, uv_l, ue_l;
-   ux_l.MakeRef(u_l, 0, H1vsize);
-   uv_l.MakeRef(u_l, H1vsize, H1vsize);
-   ue_l.MakeRef(u_l, 2*H1vsize, L2vsize);
-
-   hydro.H1.GetProlongationMatrix()->Mult(ux, ux_l);
-   hydro.H1.GetProlongationMatrix()->Mult(uv, uv_l);
-   hydro.L2.GetProlongationMatrix()->Mult(ue, ue_l);
-
    if (fd_gradient)
    {
       fd_jacobian = std::make_shared<FDJacobian>(*this, k, 1e-8);
@@ -1067,26 +1176,34 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
    }
    else
    {
-      auto dRvdx = hydro.momentum_mf->GetDerivative(COORDINATES, {&uv_l},
-      {&hydro.rho0, &hydro.x0, &ux_l, &hydro.material, &ue_l});
+      // The derivatives take their state as T-vectors, in the inputs order
+      Vector rho0_t(L2tsize), x0_t(H1tsize),
+             material_t(hydro.material.ParFESpace()->GetTrueVSize());
+      hydro.L2.GetRestrictionMatrix()->Mult(hydro.rho0, rho0_t);
+      hydro.H1.GetRestrictionMatrix()->Mult(hydro.x0, x0_t);
+      hydro.material.ParFESpace()->GetRestrictionMatrix()->Mult(hydro.material,
+                                                                material_t);
+      const MultiVector Rv_state{uv, rho0_t, x0_t, ux, material_t, ue};
+      const MultiVector Re_state{ue, uv, rho0_t, x0_t, ux, material_t};
 
-      auto dRvdv = hydro.momentum_mf->GetDerivative(VELOCITY, {&uv_l},
-      {&hydro.rho0, &hydro.x0, &ux_l, &hydro.material, &ue_l});
+      auto dRvdx = hydro.momentum_mf->GetDerivative(COORDINATES, Rv_state);
 
-      auto dRvde = hydro.momentum_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, {&uv_l},
-      {&hydro.rho0, &hydro.x0, &ux_l, &hydro.material, &ue_l});
+      auto dRvdv = hydro.momentum_mf->GetDerivative(VELOCITY, Rv_state);
 
-      auto dRedx = hydro.energy_conservation_mf->GetDerivative(COORDINATES, {&ue_l},
-      {&uv_l, &hydro.rho0, &hydro.x0, &ux_l, &hydro.material});
+      auto dRvde = hydro.momentum_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY,
+                                                    Rv_state);
 
-      auto dRedv = hydro.energy_conservation_mf->GetDerivative(VELOCITY, {&ue_l},
-      {&uv_l, &hydro.rho0, &hydro.x0, &ux_l, &hydro.material});
+      auto dRedx = hydro.energy_conservation_mf->GetDerivative(COORDINATES,
+                                                               Re_state);
+
+      auto dRedv = hydro.energy_conservation_mf->GetDerivative(VELOCITY,
+                                                               Re_state);
 
       auto dRede = hydro.energy_conservation_mf->GetDerivative(
-      SPECIFIC_INTERNAL_ENERGY, {&ue_l},
-      {&uv_l, &hydro.rho0, &hydro.x0, &ux_l, &hydro.material});
+                      SPECIFIC_INTERNAL_ENERGY, Re_state);
 
-      auto dTaylorSourcedx = hydro.taylor_source_mf->GetDerivative(COORDINATES, {&ue_l}, {&ux_l});
+      auto dTaylorSourcedx = hydro.taylor_source_mf->GetDerivative(
+                                COORDINATES, MultiVector{ux});
 
       jacobian = std::make_shared<LagrangianHydroJacobianOperator>(
                     hydro, dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede, dTaylorSourcedx, dt);
@@ -1169,15 +1286,15 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
          PetscParMatrix dRxdv_petsc(&dRxdv_mat);
 
          // Rvdx.
-         HypreParMatrix dRvdx_mat;
-         jacobian->dRvdx->Assemble(dRvdx_mat);
+         auto dRvdx_ptr = AssembleMatrix(*jacobian->dRvdx);
+         HypreParMatrix &dRvdx_mat = *dRvdx_ptr;
          dRvdx_mat.EliminateRows(hydro.ess_tdof);
          PetscParMatrix dRvdx_petsc(&dRvdx_mat);
          dRvdx_petsc *= h;
 
          // Rvdv.
-         HypreParMatrix dRvdv_mat;
-         jacobian->dRvdv->Assemble(dRvdv_mat);
+         auto dRvdv_ptr = AssembleMatrix(*jacobian->dRvdv);
+         HypreParMatrix &dRvdv_mat = *dRvdv_ptr;
          ParBilinearForm Mv(&hydro.H1);
          Mv.AddDomainIntegrator(new VectorMassIntegrator(hydro.rho0_coeff,
                                                          &hydro.ir));
@@ -1192,36 +1309,36 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
          delete dRvdv_combined;
 
          // Rvde.
-         HypreParMatrix dRvde_mat;
-         jacobian->dRvde->Assemble(dRvde_mat);
+         auto dRvde_ptr = AssembleMatrix(*jacobian->dRvde);
+         HypreParMatrix &dRvde_mat = *dRvde_ptr;
          dRvde_mat.EliminateRows(hydro.ess_tdof);
          PetscParMatrix dRvde_petsc(&dRvde_mat);
          dRvde_petsc *= h;
 
          // Redx.
-         HypreParMatrix dRedx_mat;
-         jacobian->dRedx->Assemble(dRedx_mat);
+         auto dRedx_ptr = AssembleMatrix(*jacobian->dRedx);
+         HypreParMatrix &dRedx_mat = *dRedx_ptr;
          PetscParMatrix dRedx_petsc(&dRedx_mat);
          if (problem == 0)
          {
-            HypreParMatrix dTaylorSourcedx_mat;
-            jacobian->dTaylorSourcedx->Assemble(dTaylorSourcedx_mat);
+            auto dTaylorSourcedx_ptr = AssembleMatrix(*jacobian->dTaylorSourcedx);
+            HypreParMatrix &dTaylorSourcedx_mat = *dTaylorSourcedx_ptr;
             PetscParMatrix dTaylorSourcedx_petsc(&dTaylorSourcedx_mat);
             dRedx_petsc += dTaylorSourcedx_petsc;
          }
          dRedx_petsc *= -h;
 
          // Redv.
-         HypreParMatrix dRedv_mat;
-         jacobian->dRedv->Assemble(dRedv_mat);
+         auto dRedv_ptr = AssembleMatrix(*jacobian->dRedv);
+         HypreParMatrix &dRedv_mat = *dRedv_ptr;
          auto tmp1 = dRedv_mat.EliminateCols(hydro.ess_tdof);
          delete tmp1;
          PetscParMatrix dRedv_petsc(&dRedv_mat);
          dRedv_petsc *= -h;
 
          // Rede.
-         HypreParMatrix dRede_mat;
-         jacobian->dRede->Assemble(dRede_mat);
+         auto dRede_ptr = AssembleMatrix(*jacobian->dRede);
+         HypreParMatrix &dRede_mat = *dRede_ptr;
          PetscParMatrix dRede_petsc(&dRede_mat);
          ParBilinearForm Me(&hydro.L2);
          Me.AddDomainIntegrator(new MassIntegrator(hydro.rho0_coeff,
@@ -1443,11 +1560,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
    {
       dv = 0.0;
 
-      H1.GetRestrictionMatrix()->Mult(v, Xv);
-      // momentum_mf->SetParameters({&rho0, &x0, &x, &material, &e});
-      // momentum_mf->Mult(Xv, RHSv);
-      momentum_pa->SetParameters({&qdata->stressp});
-      momentum_pa->Mult(Xv, RHSv);
+      MultiVector Y{RHSv};
+      momentum_pa->Mult(MultiVector{qdata->stressp}, Y);
       RHSv.Neg();
       H1.GetRestrictionMatrix()->MultTranspose(RHSv, rhsv);
 
@@ -1499,11 +1613,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
    {
       de = 0.0;
 
-      L2.GetRestrictionMatrix()->Mult(e, Xe);
-      // energy_conservation_mf->SetParameters({&v, &rho0, &x0, &x, &material});
-      // energy_conservation_mf->Mult(Xe, RHSe);
-      energy_conservation_pa->SetParameters({&v, &qdata->stressp});
-      energy_conservation_pa->Mult(Xe, RHSe);
+      MultiVector Y{RHSe};
+      energy_conservation_pa->Mult(MultiVector{v, qdata->stressp}, Y);
       L2.GetRestrictionMatrix()->MultTranspose(RHSe, rhse);
 
       if (problem == 0 && L2.GetMesh()->Dimension() == 2)
@@ -1677,9 +1788,9 @@ real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e)
 {
    const auto mt = Device::GetDeviceMemoryType();
    Vector E(L2.GetTrueVSize(), mt), Y(L2.GetTrueVSize(), mt);
-   total_internal_energy_mf->SetParameters({&rho0, &x0});
    L2.GetRestrictionMatrix()->Mult(e, E);
-   total_internal_energy_mf->Mult(E, Y);
+   MultiVector MY{Y};
+   total_internal_energy_mf->Mult(MultiVector{E, rho0, x0}, MY);
    const real_t ie_local = Y.Sum();
    real_t ie_global = 0.0;
    MPI_Allreduce(&ie_local, &ie_global, 1, MPI_DOUBLE, MPI_SUM,
@@ -1690,10 +1801,9 @@ real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e)
 real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v)
 {
    const auto mt = Device::GetDeviceMemoryType();
-   Vector V(H1.GetTrueVSize(), mt), Y(L2.GetTrueVSize(), mt);
-   total_kinetic_energy_mf->SetParameters({&rho0, &x0});
-   H1.GetRestrictionMatrix()->Mult(v, V);
-   total_kinetic_energy_mf->Mult(V, Y);
+   Vector Y(L2.GetTrueVSize(), mt);
+   MultiVector MY{Y};
+   total_kinetic_energy_mf->Mult(MultiVector{v, rho0, x0}, MY);
    const real_t ke_local = Y.Sum();
    real_t ke_global = 0.0;
    MPI_Allreduce(&ke_local, &ke_global, 1, MPI_DOUBLE, MPI_SUM,
@@ -1718,9 +1828,9 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
    Array<int> dofs(l2dofs_cnt);
    MassIntegrator mi(&ir);
 
-   density_mf->SetParameters({&x0});
    L2.GetProlongationMatrix()->MultTranspose(rho0, rho0_t);
-   density_mf->Mult(rho0_t, rhs);
+   MultiVector Y{rhs};
+   density_mf->Mult(MultiVector{rho0_t, x0}, Y);
    L2.GetProlongationMatrix()->Mult(rhs, rhs_l);
 
    for (int e = 0; e < L2.GetParMesh()->GetNE(); e++)
@@ -1803,8 +1913,8 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    x.MakeRef(&H1, *sptr, 0);
    v.MakeRef(&H1, *sptr, H1vsize);
    e.MakeRef(&L2, *sptr, 2*H1vsize);
-   update_qdata->SetParameters({&v, &rho0, &x0, &x, &material, &e});
-   update_qdata->Mult(qdata->stressp, qdata->stressp);
+   MultiVector Y{qdata->stressp};
+   update_qdata->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
 
    // As stock Laghos: the estimate is the min over all the updates
    if (stage_dt_estimate)
@@ -1821,8 +1931,8 @@ real_t LagrangianHydroOperator::LocalTimeStepEstimate(const Vector &S) const
    x.MakeRef(&H1, *sptr, 0);
    v.MakeRef(&H1, *sptr, H1vsize);
    e.MakeRef(&L2, *sptr, 2*H1vsize);
-   dtest_mf->SetParameters({&v, &rho0, &x0, &x, &material, &e});
-   dtest_mf->Mult(qdata->dt_est, qdata->dt_est);
+   MultiVector Y{qdata->dt_est};
+   dtest_mf->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
    return qdata->dt_est.Min();
 }
 
@@ -1901,7 +2011,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Contains a ParametricSpace.
    std::shared_ptr<DifferentiableOperator> dt_est_mf;
    {
-      mfem::tuple dt_est_kernel_ao =
+      future::tuple dt_est_kernel_ao =
       {
          Gradient<VELOCITY>{},
          Value<DENSITY0>{},
@@ -1912,14 +2022,9 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Weight{}
       };
 
-      mfem::tuple dt_est_kernel_oo = {None<DT_EST>{}};
+      future::tuple dt_est_kernel_oo = {Identity<DT_EST>{}};
 
-      std::vector dt_est_solutions =
-      {
-         FieldDescriptor{DT_EST, &qdata->R}
-      };
-
-      std::vector dt_est_parameters =
+      std::vector dt_est_inputs =
       {
          FieldDescriptor{VELOCITY, &H1},
          FieldDescriptor{DENSITY0, &L2},
@@ -1929,8 +2034,14 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2},
       };
 
+      std::vector dt_est_outputs =
+      {
+         FieldDescriptor{DT_EST, &qdata->R}
+      };
+
       dt_est_mf = std::make_shared<DifferentiableOperator>(
-                     dt_est_solutions, dt_est_parameters, mesh);
+                     dt_est_inputs, dt_est_outputs, mesh);
+      dt_est_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
       TimeStepEstimateQFunction<DIM> dt_est_qf(d_external_data);
       dt_est_mf->AddDomainIntegrator(dt_est_qf, dt_est_kernel_ao,
                                      dt_est_kernel_oo,
@@ -1941,7 +2052,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Contains a ParametricSpace.
    std::shared_ptr<DifferentiableOperator> update_qdata;
    {
-      mfem::tuple update_qdata_kernel_ao =
+      future::tuple update_qdata_kernel_ao =
       {
          Gradient<VELOCITY>{},
          Value<DENSITY0>{},
@@ -1952,14 +2063,9 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Weight{}
       };
 
-      mfem::tuple update_qdata_kernel_oo = {None<STRESS_TENSOR>{}};
+      future::tuple update_qdata_kernel_oo = {Identity<STRESS_TENSOR>{}};
 
-      std::vector<FieldDescriptor> update_qdata_solutions =
-      {
-         {STRESS_TENSOR, &qdata->StressSpace}
-      };
-
-      std::vector<FieldDescriptor> update_qdata_parameters =
+      std::vector<FieldDescriptor> update_qdata_inputs =
       {
          {VELOCITY, &H1},
          {DENSITY0, &L2},
@@ -1969,8 +2075,14 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          {SPECIFIC_INTERNAL_ENERGY, &L2},
       };
 
+      std::vector<FieldDescriptor> update_qdata_outputs =
+      {
+         {STRESS_TENSOR, &qdata->StressSpace}
+      };
+
       update_qdata = std::make_shared<DifferentiableOperator>(
-                        update_qdata_solutions, update_qdata_parameters, mesh);
+                        update_qdata_inputs, update_qdata_outputs, mesh);
+      update_qdata->SetMultLevel(DifferentiableOperator::LVECTOR);
       UpdateQuadratureDataQFunction<DIM> update_qdata_qf(d_external_data);
       update_qdata->AddDomainIntegrator(update_qdata_qf, update_qdata_kernel_ao,
                                         update_qdata_kernel_oo,
@@ -1981,7 +2093,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create momentum operator
    std::shared_ptr<DifferentiableOperator> momentum_mf;
    {
-      mfem::tuple momentum_mf_kernel_ao =
+      future::tuple momentum_mf_kernel_ao =
       {
          Gradient<VELOCITY>{},
          Value<DENSITY0>{},
@@ -1992,18 +2104,14 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Weight{}
       };
 
-      mfem::tuple momentum_mf_kernel_oo = {Gradient<VELOCITY>{}};
+      future::tuple momentum_mf_kernel_oo = {Gradient<VELOCITY>{}};
 
       // <sigma, grad(w) * J^-T> * det(J) * weights
       // <sigma(J^-T det(J) weights), grad(w)>
 
-      std::vector momentum_mf_solutions =
+      std::vector momentum_mf_inputs =
       {
-         FieldDescriptor{VELOCITY, &H1}
-      };
-
-      std::vector momentum_mf_parameters =
-      {
+         FieldDescriptor{VELOCITY, &H1},
          FieldDescriptor{DENSITY0, &L2},
          FieldDescriptor{COORDINATES0, &H1},
          FieldDescriptor{COORDINATES, &H1},
@@ -2011,8 +2119,13 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2},
       };
 
+      std::vector momentum_mf_outputs =
+      {
+         FieldDescriptor{VELOCITY, &H1}
+      };
+
       momentum_mf = std::make_shared<DifferentiableOperator>(
-                       momentum_mf_solutions, momentum_mf_parameters, mesh);
+                       momentum_mf_inputs, momentum_mf_outputs, mesh);
 
       MomentumQFunction<DIM> momentum_qf(d_external_data);
       auto derivatives =
@@ -2023,14 +2136,14 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
 
    std::shared_ptr<DifferentiableOperator> momentum_pa;
    {
-      mfem::tuple momentum_pa_kernel_ao = {None<STRESS_TENSOR>{}};
-      mfem::tuple momentum_pa_kernel_oo = {Gradient<VELOCITY>{}};
+      future::tuple momentum_pa_kernel_ao = {Identity<STRESS_TENSOR>{}};
+      future::tuple momentum_pa_kernel_oo = {Gradient<VELOCITY>{}};
 
-      std::vector<FieldDescriptor> momentum_pa_solutions = {{VELOCITY, &H1}};
-      std::vector<FieldDescriptor> momentum_pa_parameters = {{STRESS_TENSOR, &qdata->StressSpace}};
+      std::vector<FieldDescriptor> momentum_pa_inputs = {{STRESS_TENSOR, &qdata->StressSpace}};
+      std::vector<FieldDescriptor> momentum_pa_outputs = {{VELOCITY, &H1}};
 
       momentum_pa = std::make_shared<DifferentiableOperator>(
-                       momentum_pa_solutions, momentum_pa_parameters, mesh);
+                       momentum_pa_inputs, momentum_pa_outputs, mesh);
 
       MomentumPAQFunction<DIM> momentum_pa_qf;
       momentum_pa->AddDomainIntegrator(momentum_pa_qf, momentum_pa_kernel_ao,
@@ -2040,7 +2153,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create energy conservation operator
    std::shared_ptr<DifferentiableOperator> energy_conservation_mf;
    {
-      mfem::tuple energy_conservation_mf_kernel_ao =
+      future::tuple energy_conservation_mf_kernel_ao =
       {
          Gradient<VELOCITY>{},
          Value<DENSITY0>{},
@@ -2051,18 +2164,14 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Weight{}
       };
 
-      mfem::tuple energy_conservation_mf_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
+      future::tuple energy_conservation_mf_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
 
       // <sigma, grad(v) * inv(J) * phi> * det(J) * w
       // <sigma(J^-T det(J) w), grad(v) * inv(J)>
 
-      std::vector energy_conservation_mf_solutions =
+      std::vector energy_conservation_mf_inputs =
       {
-         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
-      };
-
-      std::vector energy_conservation_mf_parameters =
-      {
+         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2},
          FieldDescriptor{VELOCITY, &H1},
          FieldDescriptor{DENSITY0, &L2},
          FieldDescriptor{COORDINATES0, &H1},
@@ -2070,9 +2179,14 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          FieldDescriptor{MATERIAL, material_gf.ParFESpace()},
       };
 
+      std::vector energy_conservation_mf_outputs =
+      {
+         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
+      };
+
       energy_conservation_mf =
          std::make_shared<DifferentiableOperator>(
-            energy_conservation_mf_solutions, energy_conservation_mf_parameters, mesh);
+            energy_conservation_mf_inputs, energy_conservation_mf_outputs, mesh);
 
       EnergyConservationQFunction<DIM> energy_conservation_qf(d_external_data);
       auto derivatives =
@@ -2084,23 +2198,24 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
 
    std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
    {
-      mfem::tuple energy_conservation_pa_kernel_ao = {Gradient<VELOCITY>{}, None<STRESS_TENSOR>{}};
-      mfem::tuple energy_conservation_pa_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
+      future::tuple energy_conservation_pa_kernel_ao = {Gradient<VELOCITY>{}, Identity<STRESS_TENSOR>{}};
+      future::tuple energy_conservation_pa_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
 
-      std::vector<FieldDescriptor> energy_conservation_pa_solutions =
-      {
-         {SPECIFIC_INTERNAL_ENERGY, &L2}
-      };
-
-      std::vector<FieldDescriptor> energy_conservation_pa_parameters =
+      std::vector<FieldDescriptor> energy_conservation_pa_inputs =
       {
          {VELOCITY, &H1},
          {STRESS_TENSOR, &qdata->StressSpace}
       };
 
+      std::vector<FieldDescriptor> energy_conservation_pa_outputs =
+      {
+         {SPECIFIC_INTERNAL_ENERGY, &L2}
+      };
+
       energy_conservation_pa =
          std::make_shared<DifferentiableOperator>(
-            energy_conservation_pa_solutions, energy_conservation_pa_parameters, mesh);
+            energy_conservation_pa_inputs, energy_conservation_pa_outputs, mesh);
+      energy_conservation_pa->SetMultLevel(DifferentiableOperator::LVECTOR);
 
       EnergyConservationPAQFunction<DIM> energy_conservation_pa_qf;
       energy_conservation_pa->AddDomainIntegrator(
@@ -2111,7 +2226,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create total internal energy operator
    std::shared_ptr<DifferentiableOperator> total_internal_energy_mf;
    {
-      mfem::tuple total_internal_energy_kernel_ao =
+      future::tuple total_internal_energy_kernel_ao =
       {
          Value<SPECIFIC_INTERNAL_ENERGY>{},
          Value<DENSITY0>{},
@@ -2119,24 +2234,26 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Weight{}
       };
 
-      mfem::tuple total_internal_energy_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
+      future::tuple total_internal_energy_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
 
-      std::vector total_internal_energy_solutions =
+      std::vector total_internal_energy_inputs =
       {
-         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
-      };
-
-      std::vector total_internal_energy_parameters =
-      {
+         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2},
          FieldDescriptor{DENSITY0, &L2},
          FieldDescriptor{COORDINATES0, &H1}
       };
 
+      std::vector total_internal_energy_outputs =
+      {
+         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
+      };
+
       total_internal_energy_mf =
          std::make_shared<DifferentiableOperator>(
-            total_internal_energy_solutions,
-            total_internal_energy_parameters,
+            total_internal_energy_inputs,
+            total_internal_energy_outputs,
             mesh);
+      total_internal_energy_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
 
       TotalInternalEnergyQFunction<DIM> total_internal_energy_qf;
       total_internal_energy_mf->AddDomainIntegrator(
@@ -2147,7 +2264,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create total kinetic energy operator
    std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf;
    {
-      mfem::tuple total_kinetic_energy_kernel_ao =
+      future::tuple total_kinetic_energy_kernel_ao =
       {
          Value<VELOCITY>{},
          Value<DENSITY0>{},
@@ -2155,23 +2272,26 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Weight{}
       };
 
-      mfem::tuple total_kinetic_energy_kernel_oo = {Value<DENSITY0>{}};
+      future::tuple total_kinetic_energy_kernel_oo = {Value<DENSITY0>{}};
 
-      std::vector total_kinetic_energy_solutions =
+      std::vector total_kinetic_energy_inputs =
       {
-         FieldDescriptor{VELOCITY, &H1}
-      };
-
-      std::vector total_kinetic_energy_parameters =
-      {
+         FieldDescriptor{VELOCITY, &H1},
          FieldDescriptor{DENSITY0, &L2},
          FieldDescriptor{COORDINATES0, &H1}
       };
 
+      // The kinetic energy density is an L2 field
+      std::vector total_kinetic_energy_outputs =
+      {
+         FieldDescriptor{DENSITY0, &L2}
+      };
+
       total_kinetic_energy_mf =
          std::make_shared<DifferentiableOperator>(
-            total_kinetic_energy_solutions,
-            total_kinetic_energy_parameters, mesh);
+            total_kinetic_energy_inputs,
+            total_kinetic_energy_outputs, mesh);
+      total_kinetic_energy_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
       TotalKineticEnergyQFunction<DIM> total_kinetic_energy_qf;
       total_kinetic_energy_mf->AddDomainIntegrator(
          total_kinetic_energy_qf, total_kinetic_energy_kernel_ao,
@@ -2181,27 +2301,29 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create density operator
    std::shared_ptr<DifferentiableOperator> density_mf;
    {
-      mfem::tuple density_kernel_ao =
+      future::tuple density_kernel_ao =
       {
          Value<DENSITY0>{},
          Gradient<COORDINATES0>{},
          Weight{}
       };
 
-      mfem::tuple density_kernel_oo = {Value<DENSITY0>{}};
+      future::tuple density_kernel_oo = {Value<DENSITY0>{}};
 
-      std::vector density_solutions =
+      std::vector density_inputs =
+      {
+         FieldDescriptor{DENSITY0, &L2},
+         FieldDescriptor{COORDINATES0, &H1}
+      };
+
+      std::vector density_outputs =
       {
          FieldDescriptor{DENSITY0, &L2}
       };
 
-      std::vector density_parameters =
-      {
-         FieldDescriptor{COORDINATES0, &H1}
-      };
-
       density_mf = std::make_shared<DifferentiableOperator>(
-                      density_solutions, density_parameters, mesh);
+                      density_inputs, density_outputs, mesh);
+      density_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
 
       DensityQFunction<DIM> density_qf;
       density_mf->AddDomainIntegrator(density_qf, density_kernel_ao,
@@ -2211,27 +2333,27 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create taylor source oeprator
    std::shared_ptr<DifferentiableOperator> taylor_source_mf;
    {
-      mfem::tuple taylor_source_kernel_ao =
+      future::tuple taylor_source_kernel_ao =
       {
          Value<COORDINATES>{},
          Gradient<COORDINATES>{},
          Weight{}
       };
 
-      mfem::tuple taylor_source_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
+      future::tuple taylor_source_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
 
-      std::vector taylor_source_solutions =
-      {
-         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
-      };
-
-      std::vector taylor_source_parameters =
+      std::vector taylor_source_inputs =
       {
          FieldDescriptor{COORDINATES, &H1}
       };
 
+      std::vector taylor_source_outputs =
+      {
+         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
+      };
+
       taylor_source_mf = std::make_shared<DifferentiableOperator>(
-                            taylor_source_solutions, taylor_source_parameters, mesh);
+                            taylor_source_inputs, taylor_source_outputs, mesh);
 
       TaylorSourceQFunction<DIM> taylor_source_qf;
       auto derivatives = std::integer_sequence<size_t, COORDINATES> {};

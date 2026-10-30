@@ -35,12 +35,19 @@ namespace mfem
 {
 
 // From fem/dfem, whose doperator.hpp is only included by laghos_solver.cpp
+namespace future
+{
 class DifferentiableOperator;
 class DerivativeOperator;
 class FDJacobian;
+}
 
 namespace hydrodynamics
 {
+
+using future::DifferentiableOperator;
+using future::DerivativeOperator;
+using future::FDJacobian;
 
 enum EXT_DATA_IDX
 {
