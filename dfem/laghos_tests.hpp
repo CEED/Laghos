@@ -12,11 +12,17 @@
 #ifndef LAGHOS_DFEM_TESTS_HPP
 #define LAGHOS_DFEM_TESTS_HPP
 
+#include <vector>
 #include <mfem.hpp>
 
 /// Final quantities of a dFEM Laghos run, checked by laghos_tests
 struct LaghosResults
 {
+   struct Step { int ti; mfem::real_t t, dt; };
+   long long ne = 0, h1_dofs = 0, l2_dofs = 0; // global sizes
+   mfem::real_t dt_init = 0.0; // initial time step estimate
+   int repeats = 0; // repeated time steps
+   std::vector<Step> history; // accepted time steps
    int steps = 0;
    mfem::real_t t = 0.0, dt = 0.0;
    mfem::real_t energy_init = 0.0, energy_final = 0.0;

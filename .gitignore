@@ -3,5 +3,8 @@
 /laghos
 user.cmake
 .DS_Store
-/build
+/build*
 
+/*.out
+/*.gf
+/*.mesh

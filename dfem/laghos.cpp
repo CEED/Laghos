@@ -551,7 +551,7 @@ public:
             external_data[EXT_DATA_IDX::ORDER_VEL],
             external_data[EXT_DATA_IDX::CFL],
             static_cast<bool>(external_data[EXT_DATA_IDX::VISCOSITY_FLAG]),
-            external_data[EXT_DATA_IDX::VISCOSITY_TYPE],
+            static_cast<int>(external_data[EXT_DATA_IDX::VISCOSITY_TYPE]),
             external_data[EXT_DATA_IDX::VISC_Q1],
             external_data[EXT_DATA_IDX::VISC_Q2],
             dt_est_dummy);
@@ -603,7 +603,7 @@ public:
             external_data[EXT_DATA_IDX::ORDER_VEL],
             external_data[EXT_DATA_IDX::CFL],
             static_cast<bool>(external_data[EXT_DATA_IDX::VISCOSITY_FLAG]),
-            external_data[EXT_DATA_IDX::VISCOSITY_TYPE],
+            static_cast<int>(external_data[EXT_DATA_IDX::VISCOSITY_TYPE]),
             external_data[EXT_DATA_IDX::VISC_Q1],
             external_data[EXT_DATA_IDX::VISC_Q2],
             dt_est);
@@ -785,10 +785,10 @@ public:
    public:
       LineSearchNewtonSolver(MPI_Comm comm, const LagrangianHydroOperator &hydro)
          : NewtonSolver(comm),
-           hydro(hydro),
            beta(0.5),    // Backtracking reduction factor
            alpha(1e-2),  // Sufficient decrease constant (Armijo condition)
-           max_line_iter(5) {}
+           max_line_iter(5),
+           hydro(hydro) {}
 
       void SetBacktrackingFactor(real_t b) { beta = b; }
       void SetArmijoConstant(real_t a) { alpha = a; }
@@ -2697,7 +2697,6 @@ int laghos(int argc, char *argv[], LaghosResults &results)
    int dump_jacobians = 0;
    int nretry = 100;
    const char *petsc_opts = "";
-   bool petsc_legacy_dt = false;
    bool petsc_opts_provided = false;
    bool mesh_provided = false;
    for (int i = 1; i < argc; i++)
@@ -2872,6 +2871,11 @@ int laghos(int argc, char *argv[], LaghosResults &results)
       out << "num kinematic dofs: " << global_h1tsize << "\n";
       out << "num thermodynamic dofs: " << global_l2tsize << "\n";
    }
+#ifdef LAGHOS_TESTS
+   results.ne = global_ne;
+   results.h1_dofs = global_h1tsize;
+   results.l2_dofs = global_l2tsize;
+#endif
 
    Array<int> ess_tdof, ess_vdofs;
    {
@@ -3151,6 +3155,9 @@ int laghos(int argc, char *argv[], LaghosResults &results)
    {
       out << "time step estimate: " << dt << "\n";
    }
+#ifdef LAGHOS_TESTS
+   results.dt_init = dt;
+#endif
 
    real_t t_old;
    bool last_step = false;
@@ -3264,6 +3271,9 @@ int laghos(int argc, char *argv[], LaghosResults &results)
                   nretry--;
                }
 
+#ifdef LAGHOS_TESTS
+               results.repeats++;
+#endif
                ti--; continue;
             }
             else if (hydro->newton_max_iter <= 1)
@@ -3285,6 +3295,9 @@ int laghos(int argc, char *argv[], LaghosResults &results)
          hydro->ResetQuadratureData();
          last_step = false;
          if (Mpi::Root()) { out << "Repeating step " << ti << std::endl; }
+#ifdef LAGHOS_TESTS
+         results.repeats++;
+#endif
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
@@ -3311,6 +3324,7 @@ int laghos(int argc, char *argv[], LaghosResults &results)
 
 #ifdef LAGHOS_TESTS
       results.steps = ti;
+      results.history.push_back({ti, t, dt});
 #endif
 
       if (ti % vis_steps == 0 || last_step)
