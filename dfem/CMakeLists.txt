@@ -1,16 +1,20 @@
 # dFEM kernels are differentiated by Enzyme at compile time (ClangEnzyme plugin)
 find_package(Enzyme REQUIRED HINTS ${ENZYME_DIR})
 
-add_executable(laghos_dfem laghos.cpp)
+# Assembly and solver, compiled once for laghos_dfem and laghos_tests
+add_library(laghos_dfem_lib OBJECT laghos_assembly.cpp laghos_solver.cpp)
 
-target_include_directories(laghos_dfem PUBLIC "${MFEM_DIR}/../../../include/mfem")
+target_include_directories(laghos_dfem_lib PUBLIC "${MFEM_DIR}/../../../include/mfem")
 
-target_link_libraries(laghos_dfem
+target_link_libraries(laghos_dfem_lib
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
   PUBLIC ClangEnzymeFlags
 )
+
+add_executable(laghos_dfem laghos.cpp)
+target_link_libraries(laghos_dfem PUBLIC laghos_dfem_lib)
 
 # Non-regression tests, see laghos_tests.cpp, with the Catch2 single header
 # of the MFEM source tree (tests/unit/catch.hpp), as in quest/mfem/dft
@@ -29,19 +33,13 @@ message(STATUS "Catch2 for laghos_tests: ${CATCH_INCLUDE_DIR}/catch.hpp")
 # laghos.cpp again, with its main as laghos(), called by the tests
 add_library(laghos_tests_lib OBJECT laghos.cpp)
 target_compile_definitions(laghos_tests_lib PRIVATE main=laghos)
-target_include_directories(laghos_tests_lib PUBLIC "${MFEM_DIR}/../../../include/mfem")
-target_link_libraries(laghos_tests_lib
-  PUBLIC mfem
-  PUBLIC MPI::MPI_CXX
-  PUBLIC HYPRE::HYPRE
-  PUBLIC ClangEnzymeFlags
-)
+target_link_libraries(laghos_tests_lib PUBLIC laghos_dfem_lib)
 
 add_executable(laghos_tests laghos_tests.cpp)
 target_include_directories(laghos_tests SYSTEM PRIVATE ${CATCH_INCLUDE_DIR})
 target_compile_definitions(laghos_tests PRIVATE
   LAGHOS_DATA_DIR="${PROJECT_SOURCE_DIR}/data/")
-target_link_libraries(laghos_tests PRIVATE laghos_tests_lib)
+target_link_libraries(laghos_tests PRIVATE laghos_tests_lib laghos_dfem_lib)
 
 # No colors in the ctest logs: mpiexec may give the ranks a pseudo-terminal
 foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
