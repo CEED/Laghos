@@ -111,6 +111,24 @@ const Test runs[] =
       9.7893419572273734e-06, 1.2501143644784798e-01,
       2.7832196671533371e+01, 3.3771156618999734e+00, 5.7714521901242946e+01
    },
+   // Stock-comparable Sedov: stock Laghos tensor viscosity (-av-type 1) and
+   // time step estimate (-stock-dt), same steps, dt, ΔE and |e| as
+   //   laghos -dim 2 -nx 1 -ny 1 -rs 3 -p 1 -ok 2 -ot 1 -s 3 -cfl 0.5 -tf 0.05 -fa
+   //   laghos -dim 3 -nx 2 -ny 2 -nz 2 -rs 1 -p 1 -ok 2 -ot 1 -s 3 -cfl 0.5 -tf 0.02 -fa
+   {
+      "sedov_2d_stock", "explicit RK3SSP, Q2-Q1, stock av, 2D",
+      "square01_quad.mesh",
+      "-p 1 -dim 2 -rs 3 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.05",
+      22, 1.5244822594611736e-03, 2.5005546874349194e-01, 1.4102287121585931e+01,
+      4.5117390396546329e+00, 4.0702975696596390e+01
+   },
+   {
+      "sedov_3d_stock", "explicit RK3SSP, Q2-Q1, stock av, 3D",
+      "cube01_hex.mesh",
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02",
+      4, 4.3725299546347671e-03, 1.2503911284057320e-01, 2.7832229285175657e+01,
+      3.4262677669332566e+00, 5.6552559708003621e+01
+   },
    {
       "taylor_green_2d", "explicit RK4, Q3-Q2, no av, 2D",
       "square01_quad.mesh",
@@ -246,6 +264,12 @@ TEST_CASE("sedov_2d_rk2", "[dfem][explicit][sedov][2d]")
 
 TEST_CASE("sedov_3d", "[dfem][explicit][sedov][3d]")
 { LaghosTest("sedov_3d"); }
+
+TEST_CASE("sedov_2d_stock", "[dfem][explicit][sedov][2d][stock]")
+{ LaghosTest("sedov_2d_stock"); }
+
+TEST_CASE("sedov_3d_stock", "[dfem][explicit][sedov][3d][stock]")
+{ LaghosTest("sedov_3d_stock"); }
 
 TEST_CASE("taylor_green_2d", "[dfem][explicit][taylor-green][2d]")
 { LaghosTest("taylor_green_2d"); }

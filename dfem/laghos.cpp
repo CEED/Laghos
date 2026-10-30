@@ -35,6 +35,7 @@
 // TODO: Do we want this to be included from mfem.hpp automatically now?
 #include "fem/dfem/doperator.hpp"
 #include "linalg/tensor.hpp"
+#include "linalg/kernels.hpp"
 #ifdef MFEM_USE_PETSC
 #include "linalg/petsc.hpp"
 #include "petscmat.h"
@@ -276,7 +277,9 @@ matd_t<DIM> qdata_setup(
    const matd invJ = inv(J);
    matd stress{{{0.0}}};
    const real_t rho = rho0 * det(J0) / detJ;
-   const real_t Ez = smoothmax(0.0, E, 1e-6);
+   // The stock Laghos viscosity (type 1) also uses the stock clamp of E
+   const bool stock_av = use_viscosity && viscosity_type == 1;
+   const real_t Ez = stock_av ? fmax(0.0, E) : smoothmax(0.0, E, 1e-6);
    real_t dt_visc_coeff = 0.0;
 
    ComputeMaterialProperties(gamma, rho, Ez, p, cs);
@@ -321,7 +324,40 @@ matd_t<DIM> qdata_setup(
          return hypot(x, eps);
       };
 
-      if (viscosity_type == 2)
+      if (viscosity_type == 1)
+      {
+         // Stock Laghos tensor viscosity, see QUpdateBody in laghos_solver.cpp
+         // (without the vorticity scaling, as for the stock Sedov problem).
+         // The symmetric velocity gradient eigenvector of the smallest
+         // eigenvalue gives the direction of maximal compression, which
+         // defines the length scale h from the initial one h0.
+         const matd sgrad_v = sym(dvdxi * invJ);
+         real_t sgrad_v_data[DIM*DIM], eig_val[DIM], eig_vec[DIM*DIM];
+         for (int j = 0; j < DIM; j++)
+         {
+            for (int i = 0; i < DIM; i++) { sgrad_v_data[i + DIM*j] = sgrad_v(i, j); }
+         }
+         if constexpr (DIM == 1)
+         {
+            eig_val[0] = sgrad_v_data[0];
+            eig_vec[0] = 1.0;
+         }
+         else { kernels::CalcEigenvalues<DIM>(sgrad_v_data, eig_val, eig_vec); }
+         vecd_t<DIM> compr_dir;
+         for (int k = 0; k < DIM; k++) { compr_dir(k) = eig_vec[k]; }
+         const vecd_t<DIM> ph_dir = (J * inv(J0)) * compr_dir;
+         const real_t h = h0 * norm(ph_dir) / norm(compr_dir);
+         // Measure of maximal compression
+         const real_t mu = eig_val[0];
+         // Quadratic term, then a smooth "if (mu < 0) += 0.5 rho h cs"
+         constexpr real_t eps = 1e-12;
+         real_t visc_coeff = 2.0 * rho * h * h * fabs(mu);
+         visc_coeff += 0.5 * rho * h * cs *
+                       (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
+         stress += visc_coeff * sgrad_v;
+         dt_visc_coeff = visc_coeff;
+      }
+      else if (viscosity_type == 2)
       {
          // Default Laghos viscosity.
          // auto symdvdx = sym(dvdxi * invJ);
@@ -1929,6 +1965,7 @@ public:
    {
       external_data[EXT_DATA_IDX::DT_ESTIMATE] =
          std::numeric_limits<double>::infinity();
+      dt_est_stages = std::numeric_limits<real_t>::infinity();
    }
 
    void ResetQuadratureData() const
@@ -1950,17 +1987,8 @@ public:
       UpdateMesh(S);
       UpdateQuadratureData(S);
 
-      auto sptr = const_cast<Vector*>(&S);
-      const int H1vsize = H1.GetVSize();
-      ParGridFunction x, v, e;
-      x.MakeRef(&H1, *sptr, 0);
-      v.MakeRef(&H1, *sptr, H1vsize);
-      e.MakeRef(&L2, *sptr, 2*H1vsize);
-
-      dtest_mf->SetParameters({&v, &rho0, &x0, &x, &material, &e});
-      dtest_mf->Mult(qdata->dt_est, qdata->dt_est);
-
-      real_t dt_est_local = qdata->dt_est.Min();
+      real_t dt_est_local = LocalTimeStepEstimate(S);
+      if (stage_dt_estimate) { dt_est_local = fmin(dt_est_local, dt_est_stages); }
 
       real_t dt_est_global;
       MPI_Allreduce(&dt_est_local, &dt_est_global, 1, MPITypeMap<real_t>::mpi_type,
@@ -2102,6 +2130,26 @@ public:
       e.MakeRef(&L2, *sptr, 2*H1vsize);
       update_qdata->SetParameters({&v, &rho0, &x0, &x, &material, &e});
       update_qdata->Mult(qdata->stressp, qdata->stressp);
+
+      // As stock Laghos: the estimate is the min over all the updates
+      if (stage_dt_estimate)
+      {
+         dt_est_stages = fmin(dt_est_stages, LocalTimeStepEstimate(S));
+      }
+   }
+
+   // Min of the time step estimate over the local quadrature points at S
+   real_t LocalTimeStepEstimate(const Vector &S) const
+   {
+      auto sptr = const_cast<Vector*>(&S);
+      const int H1vsize = H1.GetVSize();
+      ParGridFunction x, v, e;
+      x.MakeRef(&H1, *sptr, 0);
+      v.MakeRef(&H1, *sptr, H1vsize);
+      e.MakeRef(&L2, *sptr, 2*H1vsize);
+      dtest_mf->SetParameters({&v, &rho0, &x0, &x, &material, &e});
+      dtest_mf->Mult(qdata->dt_est, qdata->dt_est);
+      return qdata->dt_est.Min();
    }
 
    virtual MemoryClass GetMemoryClass() const override
@@ -2171,6 +2219,9 @@ public:
    Vector &external_data;
    const bool use_petsc;
    mutable bool qdata_is_current = false;
+   // Stock Laghos time step estimate, min over all the RK stages (explicit)
+   bool stage_dt_estimate = false;
+   mutable real_t dt_est_stages = std::numeric_limits<real_t>::infinity();
 };
 
 template <int DIM>
@@ -2693,6 +2744,7 @@ int laghos(int argc, char *argv[], LaghosResults &results)
    int viscosity_type = 2;
    real_t viscosity_q1 = 0.5;
    real_t viscosity_q2 = 1.0;
+   bool stock_dt = false;
    int preconditioner_type = PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG;
    int dump_jacobians = 0;
    int nretry = 100;
@@ -2759,11 +2811,17 @@ int laghos(int argc, char *argv[], LaghosResults &results)
    args.AddOption(&paraview, "-paraview", "--paraview",
                   "-no-paraview", "--no-paraview",
                   "Enable ParaView output (VTK files; can be expensive).");
-   args.AddOption(&viscosity_type, "-av-type", "--av-type", "");
+   args.AddOption(&viscosity_type, "-av-type", "--av-type",
+                  "Artificial viscosity type: 1 stock Laghos tensor viscosity"
+                  " (explicit only), 7 smooth viscosity.");
    args.AddOption(&viscosity_q1, "-av-q1", "--av-q1",
                   "Artificial viscosity (type 7) linear coefficient.");
    args.AddOption(&viscosity_q2, "-av-q2", "--av-q2",
                   "Artificial viscosity (type 7) quadratic coefficient.");
+   args.AddOption(&stock_dt, "-stock-dt", "--stock-dt",
+                  "-no-stock-dt", "--no-stock-dt",
+                  "Time step estimate as the min over all the RK stages and "
+                  "the new state, as stock Laghos (explicit only).");
    args.AddOption(&dump_jacobians, "-dump-jacobians", "--dump-jacobians", "");
    args.AddOption(&nretry, "-nretry", "--nretry", "");
    args.AddOption(&petsc_opts, "-petsc-opts", "--petsc-opts",
@@ -3092,6 +3150,7 @@ int laghos(int argc, char *argv[], LaghosResults &results)
       }
       default: MFEM_ABORT("unsupported mesh dimension: " << dim);
    }
+   hydro->stage_dt_estimate = stock_dt;
 
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)

@@ -39,7 +39,7 @@ target_link_libraries(laghos_tests
   PUBLIC ClangEnzymeFlags
 )
 
-foreach(test sedov_2d sedov_2d_rk2 sedov_3d
+foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
              taylor_green_2d taylor_green_3d taylor_green_3d_av)
   add_test(NAME dfem_${test}
     COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
@@ -47,7 +47,7 @@ foreach(test sedov_2d sedov_2d_rk2 sedov_3d
 endforeach()
 
 # Same references in parallel
-foreach(test sedov_2d sedov_3d taylor_green_2d)
+foreach(test sedov_2d sedov_3d sedov_2d_stock sedov_3d_stock taylor_green_2d)
   add_test(NAME dfem_${test}_np2
     COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
             $<TARGET_FILE:laghos_tests> ${test})
