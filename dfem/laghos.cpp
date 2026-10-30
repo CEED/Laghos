@@ -47,9 +47,7 @@
 #include <cstring>
 // #include <string>
 
-#ifdef LAGHOS_TESTS
-#include "laghos_tests.hpp"
-#endif
+#include "laghos.hpp"
 
 using namespace mfem;
 using mfem::internal::tensor;
@@ -2708,11 +2706,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-#ifndef LAGHOS_TESTS
-int main(int argc, char *argv[])
-#else
-int laghos(int argc, char *argv[], LaghosResults &results)
-#endif
+int laghos(int argc, char *argv[], LaghosResults *results)
 {
    if (!Mpi::IsInitialized()) { Mpi::Init(); }
    Hypre::Init();
@@ -2741,6 +2735,7 @@ int laghos(int argc, char *argv[], LaghosResults &results)
    int vis_steps = 1;
    bool glvis = false;
    bool paraview = false;
+   bool save_files = true;
    int viscosity_type = 2;
    real_t viscosity_q1 = 0.5;
    real_t viscosity_q2 = 1.0;
@@ -2811,6 +2806,9 @@ int laghos(int argc, char *argv[], LaghosResults &results)
    args.AddOption(&paraview, "-paraview", "--paraview",
                   "-no-paraview", "--no-paraview",
                   "Enable ParaView output (VTK files; can be expensive).");
+   args.AddOption(&save_files, "-save", "--save-files",
+                  "-no-save", "--no-save-files",
+                  "Save the final mesh and fields (and rho.out) files.");
    args.AddOption(&viscosity_type, "-av-type", "--av-type",
                   "Artificial viscosity type: 1 stock Laghos tensor viscosity"
                   " (explicit only), 7 smooth viscosity.");
@@ -2929,11 +2927,12 @@ int laghos(int argc, char *argv[], LaghosResults &results)
       out << "num kinematic dofs: " << global_h1tsize << "\n";
       out << "num thermodynamic dofs: " << global_l2tsize << "\n";
    }
-#ifdef LAGHOS_TESTS
-   results.ne = global_ne;
-   results.h1_dofs = global_h1tsize;
-   results.l2_dofs = global_l2tsize;
-#endif
+   if (results)
+   {
+      results->ne = global_ne;
+      results->h1_dofs = global_h1tsize;
+      results->l2_dofs = global_l2tsize;
+   }
 
    Array<int> ess_tdof, ess_vdofs;
    {
@@ -3214,9 +3213,7 @@ int laghos(int argc, char *argv[], LaghosResults &results)
    {
       out << "time step estimate: " << dt << "\n";
    }
-#ifdef LAGHOS_TESTS
-   results.dt_init = dt;
-#endif
+   if (results) { results->dt_init = dt; }
 
    real_t t_old;
    bool last_step = false;
@@ -3330,9 +3327,7 @@ int laghos(int argc, char *argv[], LaghosResults &results)
                   nretry--;
                }
 
-#ifdef LAGHOS_TESTS
-               results.repeats++;
-#endif
+               if (results) { results->repeats++; }
                ti--; continue;
             }
             else if (hydro->newton_max_iter <= 1)
@@ -3354,9 +3349,7 @@ int laghos(int argc, char *argv[], LaghosResults &results)
          hydro->ResetQuadratureData();
          last_step = false;
          if (Mpi::Root()) { out << "Repeating step " << ti << std::endl; }
-#ifdef LAGHOS_TESTS
-         results.repeats++;
-#endif
+         if (results) { results->repeats++; }
          ti--; continue;
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
@@ -3381,10 +3374,11 @@ int laghos(int argc, char *argv[], LaghosResults &results)
       //    verr_gf(i) = abs(verr_gf(i) - v_gf(i));
       // }
 
-#ifdef LAGHOS_TESTS
-      results.steps = ti;
-      results.history.push_back({ti, t, dt});
-#endif
+      if (results)
+      {
+         results->steps = ti;
+         results->history.push_back({ti, t, dt});
+      }
 
       if (ti % vis_steps == 0 || last_step)
       {
@@ -3429,22 +3423,21 @@ int laghos(int argc, char *argv[], LaghosResults &results)
           << "Energy diff: " << fabs(energy_init - energy_final) << std::endl;
    }
 
-#ifdef LAGHOS_TESTS
+   if (results)
    {
       Vector x_tdofs, v_tdofs, e_tdofs;
       x_gf.GetTrueDofs(x_tdofs);
       v_gf.GetTrueDofs(v_tdofs);
       e_gf.GetTrueDofs(e_tdofs);
       const MPI_Comm comm = mesh.GetComm();
-      results.t = t;
-      results.dt = dt;
-      results.energy_init = energy_init;
-      results.energy_final = energy_final;
-      results.x_norm = std::sqrt(InnerProduct(comm, x_tdofs, x_tdofs));
-      results.v_norm = std::sqrt(InnerProduct(comm, v_tdofs, v_tdofs));
-      results.e_norm = std::sqrt(InnerProduct(comm, e_tdofs, e_tdofs));
+      results->t = t;
+      results->dt = dt;
+      results->energy_init = energy_init;
+      results->energy_final = energy_final;
+      results->x_norm = std::sqrt(InnerProduct(comm, x_tdofs, x_tdofs));
+      results->v_norm = std::sqrt(InnerProduct(comm, v_tdofs, v_tdofs));
+      results->e_norm = std::sqrt(InnerProduct(comm, e_tdofs, e_tdofs));
    }
-#endif
 
    if (problem == 0)
    {
@@ -3459,28 +3452,29 @@ int laghos(int argc, char *argv[], LaghosResults &results)
       }
    }
 
-#ifndef LAGHOS_TESTS // no output files from the tests
-   if (problem == 1)
+   if (save_files)
    {
-      hydro->DensityScatter();
-   }
+      if (problem == 1)
+      {
+         hydro->DensityScatter();
+      }
 
-   if (problem == 0 && dim == 3)
-   {
-      mesh.SaveAsOne("tgreen.mesh");
-      v_gf.SaveAsOne("tgreen.gf");
+      if (problem == 0 && dim == 3)
+      {
+         mesh.SaveAsOne("tgreen.mesh");
+         v_gf.SaveAsOne("tgreen.gf");
+      }
+      if (problem == 1 && dim == 3)
+      {
+         mesh.SaveAsOne("sedov.mesh");
+         rho_gf.SaveAsOne("sedov.gf");
+      }
+      if (problem == 3)
+      {
+         mesh.SaveAsOne("3point.mesh");
+         rho_gf.SaveAsOne("3point.gf");
+      }
    }
-   if (problem == 1 && dim == 3)
-   {
-      mesh.SaveAsOne("sedov.mesh");
-      rho_gf.SaveAsOne("sedov.gf");
-   }
-   if (problem == 3)
-   {
-      mesh.SaveAsOne("3point.mesh");
-      rho_gf.SaveAsOne("3point.gf");
-   }
-#endif // LAGHOS_TESTS
 
    delete hydro;
 

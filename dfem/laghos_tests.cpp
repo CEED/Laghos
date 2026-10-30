@@ -29,7 +29,7 @@
 #include <string>
 #include <vector>
 
-#include "laghos_tests.hpp"
+#include "laghos.hpp"
 #include "laghos_report.hpp"
 
 #define CATCH_CONFIG_RUNNER
@@ -60,7 +60,7 @@ AlmostEq(T x, T y, T tolerance = 10.0*std::numeric_limits<T>::epsilon())
 struct Test
 {
    static constexpr const char *binary = "laghos";
-   static constexpr const char *common = "-no-glvis -no-paraview -vs 1000";
+   static constexpr const char *common = "-no-glvis -no-paraview -no-save -vs 1000";
    static constexpr real_t tolerance = 1e-10;
    const std::string name, desc, mesh, options;
    const int steps;
@@ -178,7 +178,7 @@ static void LaghosTest(const std::string &name)
    LaghosResults res;
    const bool out_enabled = mfem::out.IsEnabled();
    if (!verbose) { mfem::out.Disable(); }
-   const int ret = laghos(static_cast<int>(args.size()) - 1, args.data(), res);
+   const int ret = laghos(static_cast<int>(args.size()) - 1, args.data(), &res);
    if (out_enabled) { mfem::out.Enable(); }
 
    const bool root = mfem::Mpi::Root();

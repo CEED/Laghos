@@ -9,13 +9,13 @@
 // terms of the BSD-3 license. We welcome feedback and contributions, see file
 // CONTRIBUTING.md for details.
 
-#ifndef LAGHOS_DFEM_TESTS_HPP
-#define LAGHOS_DFEM_TESTS_HPP
+#ifndef LAGHOS_DFEM_HPP
+#define LAGHOS_DFEM_HPP
 
 #include <vector>
 #include <mfem.hpp>
 
-/// Final quantities of a dFEM Laghos run, checked by laghos_tests
+/// Quantities of a dFEM Laghos run, filled when given to laghos()
 struct LaghosResults
 {
    struct Step { int ti; mfem::real_t t, dt; };
@@ -29,7 +29,8 @@ struct LaghosResults
    mfem::real_t x_norm = 0.0, v_norm = 0.0, e_norm = 0.0;
 };
 
-/// laghos.cpp main, when compiled with LAGHOS_TESTS
-int laghos(int argc, char *argv[], LaghosResults &results);
+/// dFEM Laghos run with the command line arguments, see laghos_main.cpp,
+/// filling results when not null, as for laghos_tests.cpp
+int laghos(int argc, char *argv[], LaghosResults *results = nullptr);
 
-#endif // LAGHOS_DFEM_TESTS_HPP
+#endif // LAGHOS_DFEM_HPP

@@ -1,16 +1,20 @@
 # dFEM kernels are differentiated by Enzyme at compile time (ClangEnzyme plugin)
 find_package(Enzyme REQUIRED HINTS ${ENZYME_DIR})
 
-add_executable(laghos_dfem laghos.cpp)
+# laghos.cpp compiled once, for laghos_dfem and laghos_tests
+add_library(laghos_dfem_lib OBJECT laghos.cpp)
 
-target_include_directories(laghos_dfem PUBLIC "${MFEM_DIR}/../../../include/mfem")
+target_include_directories(laghos_dfem_lib PUBLIC "${MFEM_DIR}/../../../include/mfem")
 
-target_link_libraries(laghos_dfem
+target_link_libraries(laghos_dfem_lib
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
   PUBLIC ClangEnzymeFlags
 )
+
+add_executable(laghos_dfem laghos_main.cpp)
+target_link_libraries(laghos_dfem PRIVATE laghos_dfem_lib)
 
 # Non-regression tests, see laghos_tests.cpp, with the Catch2 single header
 # of the MFEM source tree (tests/unit/catch.hpp), as in quest/mfem/dft
@@ -26,18 +30,11 @@ if (NOT CATCH_INCLUDE_DIR)
 endif()
 message(STATUS "Catch2 for laghos_tests: ${CATCH_INCLUDE_DIR}/catch.hpp")
 
-add_executable(laghos_tests laghos_tests.cpp laghos.cpp)
+add_executable(laghos_tests laghos_tests.cpp)
 target_include_directories(laghos_tests SYSTEM PRIVATE ${CATCH_INCLUDE_DIR})
 target_compile_definitions(laghos_tests PRIVATE
-  LAGHOS_TESTS
   LAGHOS_DATA_DIR="${PROJECT_SOURCE_DIR}/data/")
-target_include_directories(laghos_tests PUBLIC "${MFEM_DIR}/../../../include/mfem")
-target_link_libraries(laghos_tests
-  PUBLIC mfem
-  PUBLIC MPI::MPI_CXX
-  PUBLIC HYPRE::HYPRE
-  PUBLIC ClangEnzymeFlags
-)
+target_link_libraries(laghos_tests PRIVATE laghos_dfem_lib)
 
 foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
              taylor_green_2d taylor_green_3d taylor_green_3d_av)
