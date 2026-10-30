@@ -142,16 +142,51 @@ const Test runs[] =
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -tf 0.05",
       7,
-      1.9746163022951384e-03, 1.4993325901772420e+02,
-      1.1859991863857640e+01, 6.2046602782719855e+00, 1.1985122651149325e+03
+      1.9746163022951384e-03, 1.4993325901494498e+02,
+      1.1859990900590070e+01, 6.2046596711615782e+00, 1.1985122282081534e+03
    },
    {
       "taylor_green_3d_av", "explicit RK4, Q2-Q1, av-type 7, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 7 -tf 0.05",
       18,
-      1.4960934056207102e-03, 1.4993325988985328e+02,
-      1.1858399469894451e+01, 9.9669267367608894e-01, 1.1994458165617593e+03
+      1.4960934056207102e-03, 1.4993325988669309e+02,
+      1.1858399916887008e+01, 9.9668537477810759e-01, 1.1994457713114568e+03
+   },
+   // Smaller runs of the README 'Verification of Results' cases, with stock
+   // defaults (Q2-Q1, RK4, cfl 0.5), compared with (data/ meshes, -pa)
+   //   laghos -p 0 -m square01_quad.mesh -rs 1 -tf 0.05   (README 1)
+   //   laghos -p 0 -m cube01_hex.mesh -rs 1 -tf 0.01      (README 2)
+   //   laghos -p 1 -m square01_quad.mesh -rs 2 -tf 0.05   (README 3)
+   //   laghos -p 1 -m cube01_hex.mesh -rs 1 -tf 0.02      (README 4, -E0 1)
+   // dFEM Laghos starts from a 1x1 square, one more -rs than the 2x2 mesh
+   {
+      "readme_taylor_green_2d", "README 1, explicit RK4, Q2-Q1, no av, 2D",
+      "square01_quad.mesh",
+      "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 4 -cfl 0.5 -tf 0.05",
+      2, 1.7273414632041139e-02, 1.7496138442784803e+00, 7.5755635427647361e+00,
+      6.3210512132666858e+00, 1.2508147843915047e+01
+   },
+   {
+      "readme_taylor_green_3d", "README 2, explicit RK4, Q2-Q1, no av, 3D",
+      "cube01_hex.mesh",
+      "-p 0 -dim 3 -rs 1 -ov 2 -oe 1 -s 4 -cfl 0.5 -tf 0.01",
+      3, 1.8178734530672098e-03, 1.4993721050652641e+02, 2.7831009958537454e+01,
+      1.4156587512698188e+01, 3.3898742905766835e+03
+   },
+   {
+      "readme_sedov_2d", "README 3, explicit RK4, Q2-Q1, stock av, 2D",
+      "square01_quad.mesh",
+      "-p 1 -dim 2 -rs 3 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.05",
+      21, 1.8984422273346600e-03, 2.5000401709103320e-01, 1.4102285371332647e+01,
+      4.5108287429679663e+00, 4.0693374548498461e+01
+   },
+   {
+      "readme_sedov_3d", "README 4, explicit RK4, Q2-Q1, stock av, 3D",
+      "cube01_hex.mesh",
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02",
+      4, 4.3725299546347671e-03, 1.2500220220066449e-01, 2.7832227632579837e+01,
+      3.4200678868617302e+00, 5.6528006524554613e+01
    },
 };
 
@@ -279,6 +314,18 @@ TEST_CASE("taylor_green_3d", "[dfem][explicit][taylor-green][3d]")
 
 TEST_CASE("taylor_green_3d_av", "[dfem][explicit][taylor-green][3d]")
 { LaghosTest("taylor_green_3d_av"); }
+
+TEST_CASE("readme_taylor_green_2d", "[dfem][explicit][readme][taylor-green][2d]")
+{ LaghosTest("readme_taylor_green_2d"); }
+
+TEST_CASE("readme_taylor_green_3d", "[dfem][explicit][readme][taylor-green][3d]")
+{ LaghosTest("readme_taylor_green_3d"); }
+
+TEST_CASE("readme_sedov_2d", "[dfem][explicit][readme][sedov][2d]")
+{ LaghosTest("readme_sedov_2d"); }
+
+TEST_CASE("readme_sedov_3d", "[dfem][explicit][readme][sedov][3d]")
+{ LaghosTest("readme_sedov_3d"); }
 
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[]) try

@@ -1830,7 +1830,7 @@ public:
          energy_conservation_pa->Mult(Xe, RHSe);
          L2.GetRestrictionMatrix()->MultTranspose(RHSe, rhse);
 
-         if (problem == 0)
+         if (problem == 0 && L2.GetMesh()->Dimension() == 2)
          {
             LinearForm e_source(&L2);
             e_source = 0.0;
