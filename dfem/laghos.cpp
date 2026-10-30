@@ -47,7 +47,7 @@
 #include <cstring>
 // #include <string>
 
-#include "laghos.hpp"
+#include "laghos_tests.hpp"
 
 using namespace mfem;
 using mfem::internal::tensor;
@@ -325,10 +325,10 @@ matd_t<DIM> qdata_setup(
       if (viscosity_type == 1)
       {
          // Stock Laghos tensor viscosity, see QUpdateBody in laghos_solver.cpp
-         // (without the vorticity scaling, as for the stock Sedov problem).
+         // (without the vorticity scaling, as for the stock Sedov problem)
          // The symmetric velocity gradient eigenvector of the smallest
          // eigenvalue gives the direction of maximal compression, which
-         // defines the length scale h from the initial one h0.
+         // defines the length scale h from the initial one h0
          const matd sgrad_v = sym(dvdxi * invJ);
          real_t sgrad_v_data[DIM*DIM], eig_val[DIM], eig_vec[DIM*DIM];
          for (int j = 0; j < DIM; j++)
@@ -2706,8 +2706,9 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-int laghos(int argc, char *argv[], LaghosResults *results)
+int main(int argc, char *argv[])
 {
+   LaghosResults *results = laghos_results; // set by laghos_tests, see laghos_tests.hpp
    if (!Mpi::IsInitialized()) { Mpi::Init(); }
    Hypre::Init();
 

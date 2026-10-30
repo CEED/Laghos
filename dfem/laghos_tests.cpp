@@ -11,12 +11,12 @@
 //
 // Non-regression tests of the dFEM Laghos explicit path, with the Catch2 of
 // MFEM's tests/unit/catch.hpp:
+//
 //   laghos_tests                  runs all the tests
 //   laghos_tests sedov_2d         runs one test by name, as done by CTest
 //   laghos_tests "[taylor-green]" runs the tests with a given tag
 //   laghos_tests -v ...           also shows the raw Laghos output
 //   laghos_tests -h               Catch2 help
-// Colors are off when stdout is not a TTY or when NO_COLOR is set.
 
 #include <algorithm>
 #include <cmath>
@@ -29,8 +29,7 @@
 #include <string>
 #include <vector>
 
-#include "laghos.hpp"
-#include "laghos_report.hpp"
+#include "laghos_tests.hpp"
 
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
@@ -42,6 +41,7 @@ using mfem::real_t;
 #endif
 
 static bool verbose = false; // -v: keep the raw Laghos output
+static struct { int passed = 0, total = 0; } summary; // final report line
 
 ///////////////////////////////////////////////////////////////////////////////
 template <class T>
@@ -60,7 +60,8 @@ AlmostEq(T x, T y, T tolerance = 10.0*std::numeric_limits<T>::epsilon())
 struct Test
 {
    static constexpr const char *binary = "laghos";
-   static constexpr const char *common = "-no-glvis -no-paraview -no-save -vs 1000";
+   static constexpr const char *common =
+      "-no-glvis -no-paraview -no-save -vs 1000";
    static constexpr real_t tolerance = 1e-10;
    const std::string name, desc, mesh, options;
    const int steps;
@@ -81,10 +82,6 @@ struct Test
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// Explicit path only (-s <= 10, the RK solvers calling hydro->Mult).
-// p0/p1 build their own Cartesian mesh, the -m mesh is only read.
-// Reference values: steps, dt, final energy, |x|, |v|, |e| (true dofs l2 norms)
-// MFEM: 01-dfem-laghos-dev-av (dfem-laghos-dev-av-macos), 7cc9281ce8
 const Test runs[] =
 {
    {
@@ -188,6 +185,48 @@ const Test runs[] =
       4, 4.3725299546347671e-03, 1.2500220220066449e-01, 2.7832227632579837e+01,
       3.4200678868617302e+00, 5.6528006524554613e+01
    },
+   // More 3D: lowest order Q1-Q0, stock av on a smooth flow, and the triple
+   // point, the only problem reading its -m mesh (box with two materials),
+   // stock-comparable runs as
+   //   laghos -p 0 -dim 3 -m cube01_hex.mesh -rs 1 -ok 1 -ot 0 -s 4 -tf 0.05
+   //   laghos -p 1 -dim 3 -m cube01_hex.mesh -rs 1 -ok 1 -ot 0 -s 3 -tf 0.1
+   //   laghos -p 0 -dim 3 -m cube01_hex.mesh -rs 0 -ok 2 -ot 1 -s 4 -iv -tf 0.05
+   //   laghos -p 3 -dim 3 -m box01_hex.mesh -rs 0 -ok 2 -ot 1 -s 4 -tf 0.2
+   {
+      "taylor_green_3d_q1q0", "explicit RK4, Q1-Q0, no av, 3D",
+      "cube01_hex.mesh",
+      "-p 0 -dim 3 -rs 1 -ov 1 -oe 0 -s 4 -cfl 0.5 -tf 0.05",
+      7, 6.6060646756573873e-04, 1.4990434628565481e+02, 1.1859894505936010e+01,
+      5.5879520246439682e+00, 1.1985981660785569e+03
+   },
+   {
+      "sedov_3d_q1q0_stock", "explicit RK3SSP, Q1-Q0, stock av, 3D",
+      "cube01_hex.mesh",
+      "-p 1 -dim 3 -rs 1 -ov 1 -oe 0 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.1",
+      6, 4.5106785655475044e-03, 1.2526730824116419e-01, 1.1868845859494494e+01,
+      1.9848019446683176e+00, 6.8841771094494320e+00
+   },
+   {
+      "taylor_green_3d_stock_av", "explicit RK4, Q2-Q1, stock av, 3D",
+      "cube01_hex.mesh",
+      "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.05",
+      14, 1.1438157810123699e-03, 1.4993326044731037e+02, 1.1858537217399940e+01,
+      1.7347628571356015e+00, 1.1993939640687433e+03
+   },
+   {
+      "triple_point_3d", "explicit RK4, Q2-Q1, stock av, 3D",
+      "box01_hex.mesh",
+      "-p 3 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.2",
+      5, 3.2015046545843445e-02, 3.0150228406430880e+01, 7.0909362959399473e+01,
+      2.1011239969290898e+00, 1.6921507332503591e+01
+   },
+   {
+      "triple_point_3d_av", "explicit RK4, Q2-Q1, av-type 7, 3D",
+      "box01_hex.mesh",
+      "-p 3 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 7 -tf 0.2",
+      10, 1.0248581728371387e-02, 3.0150198118370763e+01, 7.0902482097110010e+01,
+      1.3479830805551927e+00, 1.6939266983223721e+01
+   },
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -213,7 +252,9 @@ static void LaghosTest(const std::string &name)
    LaghosResults res;
    const bool out_enabled = mfem::out.IsEnabled();
    if (!verbose) { mfem::out.Disable(); }
-   const int ret = laghos(static_cast<int>(args.size()) - 1, args.data(), &res);
+   laghos_results = &res;
+   const int ret = laghos(static_cast<int>(args.size()) - 1, args.data());
+   laghos_results = nullptr;
    if (out_enabled) { mfem::out.Enable(); }
 
    const bool root = mfem::Mpi::Root();
@@ -221,7 +262,15 @@ static void LaghosTest(const std::string &name)
    if (root && ret != 0) { report::Row().Fail("laghos").Int("returned", ret); }
    REQUIRE(ret == 0);
 
-   struct Check { const char *label; real_t value, ref; bool ok; };
+   struct Check
+   {
+      const char *label; real_t value, ref; bool ok;
+      real_t Rel() const
+      {
+         return std::abs(value - ref) /
+                std::max(std::abs(ref), std::numeric_limits<real_t>::min());
+      }
+   };
    const Check checks[] =
    {
       {"dt", res.dt, test.dt, AlmostEq(res.dt, test.dt, Test::tolerance)},
@@ -232,7 +281,14 @@ static void LaghosTest(const std::string &name)
    };
    const bool steps_ok = res.steps == test.steps;
    bool ok = steps_ok;
-   for (const auto &c : checks) { ok = ok && c.ok; }
+   real_t rel_max = 0.0;
+   for (const auto &c : checks)
+   {
+      ok = ok && c.ok;
+      rel_max = std::isnan(c.Rel()) ? c.Rel() : std::max(rel_max, c.Rel());
+   }
+   ++summary.total;
+   if (ok) { ++summary.passed; }
 
    if (root)
    {
@@ -250,7 +306,7 @@ static void LaghosTest(const std::string &name)
          report::Row().Tag("step " + std::to_string(h.ti))
          .Num("t", h.t).Num("dt", h.dt);
       }
-      report::Row().Tag("energy").Num("E₀", res.energy_init)
+      report::Row().Color(report::Yellow()).Tag("energy").Num("E₀", res.energy_init)
       .Num("E", res.energy_final)
       .Num("|ΔE|", std::abs(res.energy_final - res.energy_init), 2)
       .Int("repeats", res.repeats, 2);
@@ -258,7 +314,7 @@ static void LaghosTest(const std::string &name)
          report::Row row;
          row.Tag("check").Int("steps", res.steps, 3);
          for (const auto &c : checks) { row.Num(c.label, c.value); }
-         row.Mark(ok);
+         row.Rel("rel", rel_max, Test::tolerance).Mark(ok);
       }
 
       if (!ok)
@@ -271,11 +327,8 @@ static void LaghosTest(const std::string &name)
          for (const auto &c : checks)
          {
             if (c.ok) { continue; }
-            const real_t rel = std::abs(c.value - c.ref) /
-                               std::max(std::abs(c.ref),
-                                        std::numeric_limits<real_t>::min());
             report::Row(16).Fail(c.label).Num("got", c.value)
-            .Num("ref", c.ref).Num("rel", rel, 2);
+            .Num("ref", c.ref).Rel("rel", c.Rel(), Test::tolerance);
          }
          // Same layout as the runs[] reference values, to update them if needed
          std::ostringstream os;
@@ -315,10 +368,12 @@ TEST_CASE("taylor_green_3d", "[dfem][explicit][taylor-green][3d]")
 TEST_CASE("taylor_green_3d_av", "[dfem][explicit][taylor-green][3d]")
 { LaghosTest("taylor_green_3d_av"); }
 
-TEST_CASE("readme_taylor_green_2d", "[dfem][explicit][readme][taylor-green][2d]")
+TEST_CASE("readme_taylor_green_2d",
+          "[dfem][explicit][readme][taylor-green][2d]")
 { LaghosTest("readme_taylor_green_2d"); }
 
-TEST_CASE("readme_taylor_green_3d", "[dfem][explicit][readme][taylor-green][3d]")
+TEST_CASE("readme_taylor_green_3d",
+          "[dfem][explicit][readme][taylor-green][3d]")
 { LaghosTest("readme_taylor_green_3d"); }
 
 TEST_CASE("readme_sedov_2d", "[dfem][explicit][readme][sedov][2d]")
@@ -326,6 +381,22 @@ TEST_CASE("readme_sedov_2d", "[dfem][explicit][readme][sedov][2d]")
 
 TEST_CASE("readme_sedov_3d", "[dfem][explicit][readme][sedov][3d]")
 { LaghosTest("readme_sedov_3d"); }
+
+TEST_CASE("taylor_green_3d_q1q0", "[dfem][explicit][taylor-green][3d]")
+{ LaghosTest("taylor_green_3d_q1q0"); }
+
+TEST_CASE("sedov_3d_q1q0_stock", "[dfem][explicit][sedov][3d][stock]")
+{ LaghosTest("sedov_3d_q1q0_stock"); }
+
+TEST_CASE("taylor_green_3d_stock_av",
+          "[dfem][explicit][taylor-green][3d][stock]")
+{ LaghosTest("taylor_green_3d_stock_av"); }
+
+TEST_CASE("triple_point_3d", "[dfem][explicit][triple-point][3d][stock]")
+{ LaghosTest("triple_point_3d"); }
+
+TEST_CASE("triple_point_3d_av", "[dfem][explicit][triple-point][3d]")
+{ LaghosTest("triple_point_3d_av"); }
 
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[]) try
@@ -359,11 +430,16 @@ int main(int argc, char* argv[]) try
       args.push_back(out_flag);
       args.push_back(dev_null);
    }
-   return Catch::Session().run(static_cast<int>(args.size()), args.data());
+   const int ret = Catch::Session().run(static_cast<int>(args.size()),
+                                        args.data());
+   if (mfem::Mpi::Root() && summary.total > 0)
+   {
+      report::Summary("laghos_tests", summary.passed, summary.total);
+   }
+   return ret;
 }
 catch (std::exception& e)
 {
-   std::cerr << "\033[31m..xxxXXX[ERROR]XXXxxx.." << std::endl;
-   std::cerr << "\033[31m{}" << e.what() << std::endl;
+   std::cerr << "\x1b[31m" << e.what() << "\x1b[m" << std::endl;
    return EXIT_FAILURE;
 }
