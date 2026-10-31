@@ -16,15 +16,10 @@
 
 #include "laghos_solver.hpp"
 
-// Not included by mfem.hpp, its non-inline definitions restrict it to this
-// translation unit
 #include "fem/dfem/doperator.hpp"
 #include "linalg/kernels.hpp"
 
-namespace mfem
-{
-
-namespace hydrodynamics
+namespace mfem::hydrodynamics
 {
 
 using future::FieldDescriptor;
@@ -1976,6 +1971,4 @@ template LagrangianHydroOperator *CreateLagrangianHydroOperator<3>(
    const int &preconditioner_lag,
    const PRECONDITIONER_TYPE &preconditioner_type);
 
-} // namespace hydrodynamics
-
-} // namespace mfem
+} // namespace mfem::hydrodynamics

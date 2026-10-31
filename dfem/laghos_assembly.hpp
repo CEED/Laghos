@@ -17,14 +17,9 @@
 #pragma once
 
 #include "mfem.hpp"
-
-// fem/dfem/doperator.hpp has non-inline definitions, see laghos_solver.cpp
 #include "linalg/tensor.hpp"
 
-namespace mfem
-{
-
-namespace hydrodynamics
+namespace mfem::hydrodynamics
 {
 
 using mfem::future::tensor;
@@ -56,8 +51,9 @@ struct TaylorSourceQFunction
    void operator()(const vecd &x, const matd &J, const real_t &w,
                    real_t &s) const
    {
-      auto f = 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
-                                    cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
+      const auto f = 3.0 / 8.0 * M_PI *
+                     (cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
+                      cos(M_PI*x(0)) * cos(3.0*M_PI*x(1)));
 
       s = f * det(J) * w;
    }
@@ -201,6 +197,4 @@ public:
    OperatorPtr mass;
 };
 
-} // namespace hydrodynamics
-
-} // namespace mfem
+} // namespace mfem::hydrodynamics
