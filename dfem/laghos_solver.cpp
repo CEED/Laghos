@@ -310,7 +310,7 @@ matd_t<DIM> qdata_setup(
       else if (viscosity_type == 21 || viscosity_type == 22 ||
                viscosity_type == 4)
       {
-         MFEM_ABORT("works only in 2D!");
+         MFEM_ABORT_KERNEL("works only in 2D!");
       }
       else if (viscosity_type == 7)
       {
@@ -339,7 +339,7 @@ matd_t<DIM> qdata_setup(
 
          dt_visc_coeff = mu;
       }
-      else { MFEM_ABORT("wrong viscosity option"); }
+      else { MFEM_ABORT_KERNEL("wrong viscosity option"); }
    }
 
    if (rho < 0.0)
