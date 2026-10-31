@@ -14,12 +14,14 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 //
-// Non-regression tests of the dFEM Laghos explicit path, with the Catch2 of
-// MFEM's tests/unit/catch.hpp:
+// Non-regression tests of the dFEM Laghos explicit and implicit paths, with
+// the Catch2 of MFEM's tests/unit/catch.hpp:
 //
 //   laghos_tests                  runs all the tests
 //   laghos_tests sedov_2d         runs one test by name, as done by CTest
 //   laghos_tests "[taylor-green]" runs the tests with a given tag
+//   laghos_tests "[explicit]"     runs the explicit tests only, ctest -L explicit
+//   laghos_tests "[implicit]"     runs the implicit tests only, ctest -L implicit
 //   laghos_tests -v ...           also shows the raw Laghos output
 //   laghos_tests -h               Catch2 help
 
@@ -67,18 +69,18 @@ struct Test
    static constexpr const char *binary = "laghos";
    static constexpr const char *common =
       "-no-glvis -no-paraview -no-save -vs 1000";
-   static constexpr real_t tolerance = 1e-10;
    const std::string name, desc, mesh, options;
    const int steps;
-   const real_t dt, energy, x_norm, v_norm, e_norm;
+   const real_t dt, energy, x_norm, v_norm, e_norm, tolerance;
    Test(const char *name, const char *desc, const char *mesh,
         const char *options,
         const int steps, const real_t dt, const real_t energy,
-        const real_t x_norm, const real_t v_norm, const real_t e_norm):
+        const real_t x_norm, const real_t v_norm, const real_t e_norm,
+        const real_t tolerance = 1e-10):
       name(name), desc(desc), mesh(mesh),
       options(std::string(options) + " " + common),
       steps(steps), dt(dt), energy(energy),
-      x_norm(x_norm), v_norm(v_norm), e_norm(e_norm) {}
+      x_norm(x_norm), v_norm(v_norm), e_norm(e_norm), tolerance(tolerance) {}
    std::string Command() const
    {
       return std::string(binary) + " -m " + LAGHOS_DATA_DIR + mesh + " " +
@@ -232,6 +234,51 @@ const Test runs[] =
       10, 1.0248581728371387e-02, 3.0150198118370763e+01, 7.0902482097110010e+01,
       1.3479830805551927e+00, 1.6939266983223721e+01
    },
+   // Implicit ImplicitMidpoint (-s 12) and BackwardEuler (-s 11), Newton with
+   // GMRES and block-diagonal AMG (-pt 1), no PETSc, references of the
+   // pre-dfem-dev MFEM (01-dfem-laghos-dev-av 7cc9281ce8, laghos-dfem 157bcf1)
+   {
+      "implicit_taylor_green_2d", "implicit midpoint, Q2-Q1, no av, 2D",
+      "square01_quad.mesh",
+      "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      1, 2.5000000000000000e-01, 1.7496144709791834e+00, 7.6158393763847849e+00,
+      6.1657639728600806e+00, 1.2801715728172615e+01, 1e-8
+   },
+   {
+      "implicit_taylor_green_2d_be", "implicit backward Euler, Q2-Q1, no av, 2D",
+      "square01_quad.mesh",
+      "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 11 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      1, 2.5000000000000000e-01, 1.7144424302407082e+00, 7.5355450090088745e+00,
+      5.5950119610093045e+00, 1.3076511553426874e+01, 1e-8
+   },
+   {
+      "implicit_sedov_2d", "implicit midpoint, Q2-Q1, no av, 2D",
+      "square01_quad.mesh",
+      "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      2, 4.7799374999999998e-02, 2.4999999998372771e-01, 7.5895841452573265e+00,
+      3.3576691897422939e+00, 1.0426342267073755e+01, 1e-8
+   },
+   {
+      "implicit_sedov_2d_av", "implicit midpoint, Q2-Q1, av-type 7, 2D",
+      "square01_quad.mesh",
+      "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      10, 7.5072974222040595e-03, 2.4999999999994080e-01, 7.5866802435482432e+00,
+      1.8988891018276433e+00, 1.2690442177254132e+01, 1e-8
+   },
+   {
+      "implicit_taylor_green_3d", "implicit midpoint, Q2-Q1, no av, 3D",
+      "cube01_hex.mesh",
+      "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      1, 1.0000000000000001e-01, 1.4993325956929385e+02, 1.1867413170385170e+01,
+      6.3036483349202497e+00, 1.1986500608668955e+03, 1e-8
+   },
+   {
+      "implicit_sedov_3d_av", "implicit midpoint, Q2-Q1, av-type 7, 3D",
+      "cube01_hex.mesh",
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.02 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      4, 7.6537470312500536e-04, 1.2499999999868094e-01, 2.7832191726334166e+01,
+      3.3944688370441605e+00, 5.7726749810098475e+01, 1e-8
+   },
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -278,11 +325,11 @@ static void LaghosTest(const std::string &name)
    };
    const Check checks[] =
    {
-      {"dt", res.dt, test.dt, AlmostEq(res.dt, test.dt, Test::tolerance)},
-      {"E", res.energy_final, test.energy, AlmostEq(res.energy_final, test.energy, Test::tolerance)},
-      {"‖x‖", res.x_norm, test.x_norm, AlmostEq(res.x_norm, test.x_norm, Test::tolerance)},
-      {"‖v‖", res.v_norm, test.v_norm, AlmostEq(res.v_norm, test.v_norm, Test::tolerance)},
-      {"‖e‖", res.e_norm, test.e_norm, AlmostEq(res.e_norm, test.e_norm, Test::tolerance)},
+      {"dt", res.dt, test.dt, AlmostEq(res.dt, test.dt, test.tolerance)},
+      {"E", res.energy_final, test.energy, AlmostEq(res.energy_final, test.energy, test.tolerance)},
+      {"‖x‖", res.x_norm, test.x_norm, AlmostEq(res.x_norm, test.x_norm, test.tolerance)},
+      {"‖v‖", res.v_norm, test.v_norm, AlmostEq(res.v_norm, test.v_norm, test.tolerance)},
+      {"‖e‖", res.e_norm, test.e_norm, AlmostEq(res.e_norm, test.e_norm, test.tolerance)},
    };
    const bool steps_ok = res.steps == test.steps;
    bool ok = steps_ok;
@@ -319,7 +366,7 @@ static void LaghosTest(const std::string &name)
          report::Row row;
          row.Tag("check").Int("steps", res.steps, 3);
          for (const auto &c : checks) { row.Num(c.label, c.value); }
-         row.Rel("rel", rel_max, Test::tolerance).Mark(ok);
+         row.Rel("rel", rel_max, test.tolerance).Mark(ok);
       }
 
       if (!ok)
@@ -333,7 +380,7 @@ static void LaghosTest(const std::string &name)
          {
             if (c.ok) { continue; }
             report::Row(16).Fail(c.label).Num("got", c.value)
-            .Num("ref", c.ref).Rel("rel", c.Rel(), Test::tolerance);
+            .Num("ref", c.ref).Rel("rel", c.Rel(), test.tolerance);
          }
          // Same layout as the runs[] reference values, to update them if needed
          std::ostringstream os;
@@ -402,6 +449,24 @@ TEST_CASE("triple_point_3d", "[dfem][explicit][triple-point][3d][stock]")
 
 TEST_CASE("triple_point_3d_av", "[dfem][explicit][triple-point][3d]")
 { LaghosTest("triple_point_3d_av"); }
+
+TEST_CASE("implicit_taylor_green_2d", "[dfem][implicit][taylor-green][2d]")
+{ LaghosTest("implicit_taylor_green_2d"); }
+
+TEST_CASE("implicit_taylor_green_2d_be", "[dfem][implicit][taylor-green][2d]")
+{ LaghosTest("implicit_taylor_green_2d_be"); }
+
+TEST_CASE("implicit_sedov_2d", "[dfem][implicit][sedov][2d]")
+{ LaghosTest("implicit_sedov_2d"); }
+
+TEST_CASE("implicit_sedov_2d_av", "[dfem][implicit][sedov][2d]")
+{ LaghosTest("implicit_sedov_2d_av"); }
+
+TEST_CASE("implicit_taylor_green_3d", "[dfem][implicit][taylor-green][3d]")
+{ LaghosTest("implicit_taylor_green_3d"); }
+
+TEST_CASE("implicit_sedov_3d_av", "[dfem][implicit][sedov][3d]")
+{ LaghosTest("implicit_sedov_3d_av"); }
 
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[]) try

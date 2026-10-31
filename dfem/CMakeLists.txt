@@ -51,7 +51,8 @@ foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
   add_test(NAME dfem_${test}
     COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
             $<TARGET_FILE:laghos_tests> ${test})
-  set_tests_properties(dfem_${test} PROPERTIES ENVIRONMENT NO_COLOR=1)
+  set_tests_properties(dfem_${test} PROPERTIES ENVIRONMENT NO_COLOR=1
+    LABELS explicit)
 endforeach()
 
 # Same references in parallel
@@ -63,7 +64,8 @@ foreach(test sedov_2d sedov_3d sedov_2d_stock sedov_3d_stock taylor_green_2d
   add_test(NAME dfem_${test}_np2
     COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
             $<TARGET_FILE:laghos_tests> ${test})
-  set_tests_properties(dfem_${test}_np2 PROPERTIES ENVIRONMENT NO_COLOR=1)
+  set_tests_properties(dfem_${test}_np2 PROPERTIES ENVIRONMENT NO_COLOR=1
+    LABELS explicit)
 endforeach()
 
 # Same references on an odd number of ranks, readme_sedov_3d drifts by 1.5e-10
@@ -75,5 +77,20 @@ foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
   add_test(NAME dfem_${test}_np3
     COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3
             $<TARGET_FILE:laghos_tests> ${test})
-  set_tests_properties(dfem_${test}_np3 PROPERTIES ENVIRONMENT NO_COLOR=1)
+  set_tests_properties(dfem_${test}_np3 PROPERTIES ENVIRONMENT NO_COLOR=1
+    LABELS explicit)
+endforeach()
+
+# Implicit Newton and AMG runs with the references of the pre-dfem-dev MFEM,
+# ctest -L implicit, or ctest -LE implicit for the explicit tests only
+foreach(test implicit_taylor_green_2d implicit_taylor_green_2d_be
+             implicit_sedov_2d implicit_sedov_2d_av
+             implicit_taylor_green_3d implicit_sedov_3d_av)
+  foreach(np 1 2 3)
+    add_test(NAME dfem_${test}_np${np}
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+              $<TARGET_FILE:laghos_tests> ${test})
+    set_tests_properties(dfem_${test}_np${np} PROPERTIES ENVIRONMENT NO_COLOR=1
+      LABELS implicit)
+  endforeach()
 endforeach()
