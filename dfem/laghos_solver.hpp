@@ -17,10 +17,6 @@
 #pragma once
 
 #include "mfem.hpp"
-#ifdef MFEM_USE_PETSC
-#include "linalg/petsc.hpp"
-#include "petscmat.h"
-#endif
 
 #include <limits>
 #include <memory>
@@ -29,7 +25,6 @@
 
 // Set from the command line in laghos.cpp
 extern int problem;
-extern int petsc_lag_steps;
 
 namespace mfem
 {
@@ -207,9 +202,6 @@ public:
       mutable Vector u, u_l, e_source_t;
       mutable std::shared_ptr<FDJacobian> fd_jacobian;
       mutable std::shared_ptr<LagrangianHydroJacobianOperator> jacobian;
-#ifdef MFEM_USE_PETSC
-      mutable std::unique_ptr<PetscParMatrix> petsc_jacobian;
-#endif
       bool fd_gradient;
       int dump_jacobians;
    };
@@ -241,8 +233,7 @@ public:
       const int &krylov_maximum_iterations,
       const int &preconditioner_lag,
       const PRECONDITIONER_TYPE &preconditioner_type,
-      Vector& external_data,
-      const bool use_petsc);
+      Vector& external_data);
 
    void Mult(const Vector &S, Vector &dSdt) const override;
 
@@ -306,11 +297,7 @@ public:
    std::shared_ptr<Preconditioner> preconditioner;
    std::shared_ptr<Solver> krylov;
    std::shared_ptr<NewtonSolver> newton;
-#ifdef MFEM_USE_PETSC
-   PetscNonlinearSolver *snes = nullptr;
-#endif
    real_t current_dt = 0.0;
-   int petsc_lag = 0;
    int lag = 0;
 
    mutable FunctionCoefficient rho0_coeff;
@@ -326,7 +313,6 @@ public:
    bool newton_converged = true;
    int  newton_max_iter = -1;
    Vector &external_data;
-   const bool use_petsc;
    mutable bool qdata_is_current = false;
    // Stock Laghos time step estimate, min over all the RK stages (explicit)
    bool stage_dt_estimate = false;
@@ -351,8 +337,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type,
-   const bool use_petsc);
+   const PRECONDITIONER_TYPE &preconditioner_type);
 
 } // namespace hydrodynamics
 

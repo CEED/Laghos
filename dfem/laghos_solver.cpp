@@ -999,147 +999,6 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
          hydro.ess_tdof = ess_tdof_backup;
       }
 
-      if (hydro.use_petsc)
-      {
-#ifdef MFEM_USE_PETSC
-         const real_t h = jacobian->h;
-         auto comm = hydro.H1.GetComm();
-
-         // Build the assembled PETSc Jacobian.
-         //
-         // Layout:
-         // [ x ]  size H1tsize
-         // [ v ]  size H1tsize
-         // [ e ]  size L2tsize
-
-         //
-         // Build diagonal blocks through HypreParMatrix to guarantee a
-         // consistent parallel layout.
-         //
-
-         HYPRE_BigInt *H1_tdof_offsets = hydro.H1.GetTrueDofOffsets();
-
-         // Rxdx.
-         SparseMatrix dRxdx_diag(hydro.H1.GetTrueVSize());
-         for (int i = 0; i < dRxdx_diag.Height(); i++)
-         {
-            dRxdx_diag.Set(i, i, 1.0);
-         }
-         dRxdx_diag.Finalize();
-         HypreParMatrix dRxdx_mat(comm, hydro.H1.GlobalTrueVSize(),
-                                  H1_tdof_offsets, &dRxdx_diag);
-         PetscParMatrix dRxdx_petsc(&dRxdx_mat);
-
-         // Rxdv.
-         SparseMatrix dRxdv_diag(hydro.H1.GetTrueVSize());
-         for (int i = 0; i < dRxdv_diag.Height(); i++)
-         {
-            dRxdv_diag.Set(i, i, -h);
-         }
-         for (int i = 0; i < hydro.ess_tdof.Size(); i++)
-         {
-            dRxdv_diag.Set(hydro.ess_tdof[i], hydro.ess_tdof[i], 0.0);
-         }
-         dRxdv_diag.Finalize();
-         HypreParMatrix dRxdv_mat(comm, hydro.H1.GlobalTrueVSize(),
-                                  H1_tdof_offsets, &dRxdv_diag);
-         PetscParMatrix dRxdv_petsc(&dRxdv_mat);
-
-         // Rvdx.
-         auto dRvdx_ptr = AssembleMatrix(*jacobian->dRvdx);
-         HypreParMatrix &dRvdx_mat = *dRvdx_ptr;
-         dRvdx_mat.EliminateRows(hydro.ess_tdof);
-         PetscParMatrix dRvdx_petsc(&dRvdx_mat);
-         dRvdx_petsc *= h;
-
-         // Rvdv.
-         auto dRvdv_ptr = AssembleMatrix(*jacobian->dRvdv);
-         HypreParMatrix &dRvdv_mat = *dRvdv_ptr;
-         ParBilinearForm mass_v(&hydro.H1);
-         mass_v.AddDomainIntegrator(new VectorMassIntegrator(hydro.rho0_coeff,
-                                                             &hydro.ir));
-         mass_v.Assemble();
-         mass_v.Finalize();
-         HypreParMatrix mass_v_mat;
-         mass_v.FormSystemMatrix(mfem::Array<int>(), mass_v_mat);
-         HypreParMatrix *dRvdv_combined = Add(1.0, mass_v_mat, h, dRvdv_mat);
-         auto tmp0 = dRvdv_combined->EliminateRowsCols(hydro.ess_tdof);
-         delete tmp0;
-         PetscParMatrix dRvdv_petsc(dRvdv_combined);
-         delete dRvdv_combined;
-
-         // Rvde.
-         auto dRvde_ptr = AssembleMatrix(*jacobian->dRvde);
-         HypreParMatrix &dRvde_mat = *dRvde_ptr;
-         dRvde_mat.EliminateRows(hydro.ess_tdof);
-         PetscParMatrix dRvde_petsc(&dRvde_mat);
-         dRvde_petsc *= h;
-
-         // Redx.
-         auto dRedx_ptr = AssembleMatrix(*jacobian->dRedx);
-         HypreParMatrix &dRedx_mat = *dRedx_ptr;
-         PetscParMatrix dRedx_petsc(&dRedx_mat);
-         if (problem == 0)
-         {
-            auto dTaylorSourcedx_ptr = AssembleMatrix(*jacobian->dTaylorSourcedx);
-            HypreParMatrix &dTaylorSourcedx_mat = *dTaylorSourcedx_ptr;
-            PetscParMatrix dTaylorSourcedx_petsc(&dTaylorSourcedx_mat);
-            dRedx_petsc += dTaylorSourcedx_petsc;
-         }
-         dRedx_petsc *= -h;
-
-         // Redv.
-         auto dRedv_ptr = AssembleMatrix(*jacobian->dRedv);
-         HypreParMatrix &dRedv_mat = *dRedv_ptr;
-         auto tmp1 = dRedv_mat.EliminateCols(hydro.ess_tdof);
-         delete tmp1;
-         PetscParMatrix dRedv_petsc(&dRedv_mat);
-         dRedv_petsc *= -h;
-
-         // Rede.
-         auto dRede_ptr = AssembleMatrix(*jacobian->dRede);
-         HypreParMatrix &dRede_mat = *dRede_ptr;
-         PetscParMatrix dRede_petsc(&dRede_mat);
-         ParBilinearForm mass_e(&hydro.L2);
-         mass_e.AddDomainIntegrator(new MassIntegrator(hydro.rho0_coeff,
-                                                       &hydro.ir));
-         mass_e.Assemble();
-         mass_e.Finalize();
-         HypreParMatrix mass_e_mat;
-         mass_e.FormSystemMatrix(mfem::Array<int>(), mass_e_mat);
-         PetscParMatrix Me_petsc(&mass_e_mat);
-         PetscErrorCode ierr = MatAYPX(dRede_petsc, -h, Me_petsc,
-                                       MatStructure::DIFFERENT_NONZERO_PATTERN);
-         MFEM_VERIFY(ierr == PETSC_SUCCESS, "MatAYPX(dRede) failed");
-
-         Array<int> offsets(4);
-         offsets[0] = 0;
-         offsets[1] = H1tsize;
-         offsets[2] = H1tsize;
-         offsets[3] = L2tsize;
-         offsets.PartialSum();
-
-         BlockOperator block_op(offsets);
-         block_op.SetBlock(0, 0, &dRxdx_petsc);
-         block_op.SetBlock(0, 1, &dRxdv_petsc);
-         block_op.SetBlock(1, 0, &dRvdx_petsc);
-         block_op.SetBlock(1, 1, &dRvdv_petsc);
-         block_op.SetBlock(1, 2, &dRvde_petsc);
-         block_op.SetBlock(2, 0, &dRedx_petsc);
-         block_op.SetBlock(2, 1, &dRedv_petsc);
-         block_op.SetBlock(2, 2, &dRede_petsc);
-
-         // Recreate the PETSc matrix every time. Trying to update the
-         // underlying Mat in-place is error-prone because the temporary
-         // block/matrix objects go out of scope after this call.
-         petsc_jacobian.reset(
-            new PetscParMatrix(comm, &block_op, Operator::PETSC_MATAIJ));
-         return *petsc_jacobian;
-#else
-         MFEM_ABORT("MFEM is not built with PETSc");
-#endif
-      }
-
       return *jacobian;
    }
 }
@@ -1171,8 +1030,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
    const PRECONDITIONER_TYPE &preconditioner_type,
-   Vector& external_data,
-   const bool use_petsc) :
+   Vector& external_data) :
    TimeDependentOperator(2*H1.GetVSize()+L2.GetVSize()),
    H1(H1),
    L2(L2),
@@ -1216,8 +1074,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    krylov_maximum_iterations(krylov_maximum_iterations),
    preconditioner_lag(preconditioner_lag),
    preconditioner_type(preconditioner_type),
-   external_data(external_data),
-   use_petsc(use_petsc)
+   external_data(external_data)
 {
    Mv = new MassPAOperator(H1c, ir, rho0_coeff);
    Array<int> empty_tdofs;
@@ -1253,39 +1110,24 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    residual.reset(new LagrangianHydroResidualOperator(*this, X, fd_gradient,
                                                       dump_jacobians));
 
-   if (use_petsc)
-   {
-#ifdef MFEM_USE_PETSC
-      snes = new PetscNonlinearSolver(MPI_COMM_WORLD);
-      snes->SetOperator(*residual);
-      snes->SetRelTol(nonlinear_relative_tolerance);
-      snes->SetMaxIter(nonlinear_maximum_iterations);
-      snes->SetJacobianType(Operator::PETSC_MATAIJ);
-#else
-      MFEM_ABORT("MFEM is not built with PETSc");
-#endif
-   }
-   else
-   {
-      preconditioner.reset(new Preconditioner(*this));
+   preconditioner.reset(new Preconditioner(*this));
 
-      auto gmres = new GMRESSolver(MPI_COMM_WORLD);
-      gmres->SetKDim(500);
-      gmres->SetMaxIter(krylov_maximum_iterations);
-      gmres->SetRelTol(1e-12);
-      gmres->SetAbsTol(0.0);
-      gmres->SetPrintLevel(IterativeSolver::PrintLevel().None());
-      gmres->SetPreconditioner(*preconditioner);
-      krylov.reset(gmres);
+   auto gmres = new GMRESSolver(MPI_COMM_WORLD);
+   gmres->SetKDim(500);
+   gmres->SetMaxIter(krylov_maximum_iterations);
+   gmres->SetRelTol(1e-12);
+   gmres->SetAbsTol(0.0);
+   gmres->SetPrintLevel(IterativeSolver::PrintLevel().None());
+   gmres->SetPreconditioner(*preconditioner);
+   krylov.reset(gmres);
 
-      newton.reset(new LineSearchNewtonSolver(MPI_COMM_WORLD, *this));
-      newton->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
-      newton->SetOperator(*residual);
-      newton->SetSolver(*krylov);
-      newton->SetMaxIter(nonlinear_maximum_iterations);
-      newton->SetRelTol(nonlinear_relative_tolerance);
-      newton->SetAbsTol(0.0);
-   }
+   newton.reset(new LineSearchNewtonSolver(MPI_COMM_WORLD, *this));
+   newton->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
+   newton->SetOperator(*residual);
+   newton->SetSolver(*krylov);
+   newton->SetMaxIter(nonlinear_maximum_iterations);
+   newton->SetRelTol(nonlinear_relative_tolerance);
+   newton->SetAbsTol(0.0);
 }
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
@@ -1421,53 +1263,23 @@ void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
 
    Vector zero;
    K = X;
-   if (use_petsc)
+   if (current_dt != dt || lag >= preconditioner_lag)
    {
-#ifdef MFEM_USE_PETSC
-      // PETSc's SNES may cache internal state that depends on the operator.
-      // Recreate the SNES object periodically (and when the timestep
-      // changes) to avoid stale Jacobian/preconditioner state across
-      // time steps/stages, especially when users request Jacobian lagging
-      // through `-snes_lag_jacobian`.
-      if (current_dt != dt || snes == nullptr || petsc_lag >= petsc_lag_steps)
-      {
-         current_dt = dt;
-         petsc_lag = 0;
-         delete snes;
-         snes = new PetscNonlinearSolver(MPI_COMM_WORLD);
-         snes->SetOperator(*residual);
-         snes->SetRelTol(nonlinear_relative_tolerance);
-         snes->SetMaxIter(nonlinear_maximum_iterations);
-         snes->SetJacobianType(Operator::PETSC_MATAIJ);
-      }
-      petsc_lag++;
-
-      snes->Mult(zero, K);
-      newton_converged = (snes->GetConverged() > 0);
-#else
-      MFEM_ABORT("MFEM is not built with PETSc");
-#endif
+      lag = 0;
+      current_dt = dt;
+      preconditioner->SetRebuildFlag(true);
    }
-   else
+   lag++;
+
+   newton->Mult(zero, K);
+
+   // If some SDIRK stage didn't converge, keep it at false.
+   // (these are reset after every time step).
+   if (newton_converged)
    {
-      if (current_dt != dt || lag >= preconditioner_lag)
-      {
-         lag = 0;
-         current_dt = dt;
-         preconditioner->SetRebuildFlag(true);
-      }
-      lag++;
-
-      newton->Mult(zero, K);
-
-      // If some SDIRK stage didn't converge, keep it at false.
-      // (these are reset after every time step).
-      if (newton_converged)
-      {
-         newton_converged = newton->GetConverged();
-      }
-      newton_max_iter = std::max(newton_max_iter, newton->GetNumIterations());
+      newton_converged = newton->GetConverged();
    }
+   newton_max_iter = std::max(newton_max_iter, newton->GetNumIterations());
 
    Kx.MakeRef(K, 0, H1.GetTrueVSize());
    Kv.MakeRef(K, H1.GetTrueVSize(), H1.GetTrueVSize());
@@ -1685,9 +1497,6 @@ MemoryClass LagrangianHydroOperator::GetMemoryClass() const
 
 LagrangianHydroOperator::~LagrangianHydroOperator()
 {
-#ifdef MFEM_USE_PETSC
-   delete snes;
-#endif
    delete Mv;
    delete Mv_Jprec;
    delete Me;
@@ -1710,8 +1519,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type,
-   const bool use_petsc)
+   const PRECONDITIONER_TYPE &preconditioner_type)
 {
    ParMesh &mesh = *H1.GetParMesh();
 
@@ -2127,8 +1935,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
              krylov_maximum_iterations,
              preconditioner_lag,
              preconditioner_type,
-             external_data,
-             use_petsc);
+             external_data);
 }
 
 // Explicit instantiations for the 2D and 3D meshes
@@ -2149,8 +1956,7 @@ template LagrangianHydroOperator *CreateLagrangianHydroOperator<2>(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type,
-   const bool use_petsc);
+   const PRECONDITIONER_TYPE &preconditioner_type);
 
 template LagrangianHydroOperator *CreateLagrangianHydroOperator<3>(
    ParFiniteElementSpace &H1,
@@ -2168,8 +1974,7 @@ template LagrangianHydroOperator *CreateLagrangianHydroOperator<3>(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type,
-   const bool use_petsc);
+   const PRECONDITIONER_TYPE &preconditioner_type);
 
 } // namespace hydrodynamics
 

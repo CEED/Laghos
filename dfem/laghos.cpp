@@ -37,14 +37,11 @@
 
 #include "laghos_solver.hpp"
 
-#include <cstring>
-
 #include "laghos_tests.hpp"
 
 using namespace mfem;
 
 int problem = 0;
-int petsc_lag_steps;
 
 int main(int argc, char *argv[])
 {
@@ -85,31 +82,6 @@ int main(int argc, char *argv[])
       hydrodynamics::PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG;
    int dump_jacobians = 0;
    int nretry = 100;
-   const char *petsc_opts = "";
-   bool petsc_opts_provided = false;
-   bool mesh_provided = false;
-   for (int i = 1; i < argc; i++)
-   {
-      if (strcmp(argv[i], "-petsc-opts") == 0 || strcmp(argv[i], "--petsc-opts") == 0)
-      {
-         petsc_opts_provided = true;
-         break;
-      }
-   }
-   for (int i = 1; i < argc; i++)
-   {
-      if (strcmp(argv[i], "-m") == 0 || strcmp(argv[i], "--mesh") == 0)
-      {
-         mesh_provided = true;
-         break;
-      }
-   }
-   if (petsc_opts_provided && !mesh_provided)
-   {
-      // Default mesh of the PETSc runs
-      mesh_file = "../../data/inline-quad.mesh";
-   }
-
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh",
@@ -164,45 +136,12 @@ int main(int argc, char *argv[])
                   "the new state, as stock Laghos (explicit only).");
    args.AddOption(&dump_jacobians, "-dump-jacobians", "--dump-jacobians", "");
    args.AddOption(&nretry, "-nretry", "--nretry", "");
-   args.AddOption(&petsc_opts, "-petsc-opts", "--petsc-opts",
-                  "PETSc options (enables PETSc SNES path).");
    args.ParseCheck();
 
    Device device(device_config);
    if (Mpi::Root()) { device.Print(); }
 
    real_t blast_energy = (dim == 2) ? 0.25 : 0.125;
-
-   const bool use_petsc = petsc_opts_provided;
-   if (use_petsc)
-   {
-#ifdef MFEM_USE_PETSC
-      std::vector<char*> petsc_argv;
-      petsc_argv.push_back(argv[0]); // Program name as first arg
-
-      // Split petsc_opts string into individual arguments.
-      std::string opts_str(petsc_opts);
-      std::istringstream iss(opts_str);
-      std::string arg;
-
-      while (iss >> arg)
-      {
-         char* arg_copy = new char[arg.length() + 1];
-         std::strcpy(arg_copy, arg.c_str());
-         petsc_argv.push_back(arg_copy);
-      }
-
-      int petsc_argc = static_cast<int>(petsc_argv.size());
-      char** petsc_args = petsc_argv.data();
-
-      MFEMInitializePetsc(&petsc_argc, &petsc_args);
-
-      // Output precision of the PETSc runs
-      out << std::setprecision(6);
-#else
-      MFEM_ABORT("MFEM is not built with PETSc");
-#endif
-   }
 
    Mesh serial_mesh = Mesh(mesh_file, true, true);
 
@@ -458,8 +397,7 @@ int main(int argc, char *argv[])
                     fd_gradient, dump_jacobians,
                     nonlinear_maximum_iterations, nonlinear_relative_tolerance,
                     krylov_maximum_iterations, preconditioner_lag,
-                    (hydrodynamics::PRECONDITIONER_TYPE)preconditioner_type,
-                    use_petsc);
+                    (hydrodynamics::PRECONDITIONER_TYPE)preconditioner_type);
          break;
       }
       case 3:
@@ -470,8 +408,7 @@ int main(int argc, char *argv[])
                     fd_gradient, dump_jacobians,
                     nonlinear_maximum_iterations, nonlinear_relative_tolerance,
                     krylov_maximum_iterations, preconditioner_lag,
-                    (hydrodynamics::PRECONDITIONER_TYPE)preconditioner_type,
-                    use_petsc);
+                    (hydrodynamics::PRECONDITIONER_TYPE)preconditioner_type);
          break;
       }
       default: MFEM_ABORT("unsupported mesh dimension: " << dim);
@@ -486,10 +423,10 @@ int main(int argc, char *argv[])
       case 3: ode_solver = new RK3SSPSolver; break;
       case 4: ode_solver = new RK4Solver; break;
       case 6: ode_solver = new RK6Solver; break;
-      case 11: ode_solver = new BackwardEulerSolver; petsc_lag_steps = 1; break;
-      case 12: ode_solver = new ImplicitMidpointSolver; petsc_lag_steps = 2; break;
-      case 13: ode_solver = new SDIRK33Solver; petsc_lag_steps = 3; break;
-      case 14: ode_solver = new SDIRK34Solver; petsc_lag_steps = 3; break;
+      case 11: ode_solver = new BackwardEulerSolver; break;
+      case 12: ode_solver = new ImplicitMidpointSolver; break;
+      case 13: ode_solver = new SDIRK33Solver; break;
+      case 14: ode_solver = new SDIRK34Solver; break;
       default:
          out << "Unknown ODE solver type: " << ode_solver_type << '\n';
          return -1;
@@ -622,20 +559,8 @@ int main(int argc, char *argv[])
                   out << "Repeating step " << ti << " with dt: " << dt << "." << std::endl;
                   if (!hydro->newton_converged)
                   {
-                     if (use_petsc)
-                     {
-#ifdef MFEM_USE_PETSC
-                        out << "SNES did not converge in "
-                            << hydro->snes->GetNumIterations() << " iterations.\n";
-#else
-                        out << "SNES did not converge.\n";
-#endif
-                     }
-                     else
-                     {
-                        out << "Newton did not converge in "
-                            << hydro->newton_max_iter << " iterations.\n";
-                     }
+                     out << "Newton did not converge in "
+                         << hydro->newton_max_iter << " iterations.\n";
                   }
                   else { out << "Estimated dt lower than taken dt.\n"; }
                }
@@ -798,10 +723,6 @@ int main(int argc, char *argv[])
    }
 
    delete hydro;
-
-#ifdef MFEM_USE_PETSC
-   if (use_petsc) { MFEMFinalizePetsc(); }
-#endif
 
    return 0;
 }

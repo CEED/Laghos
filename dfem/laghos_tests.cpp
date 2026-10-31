@@ -235,7 +235,7 @@ const Test runs[] =
       1.3479830805551927e+00, 1.6939266983223721e+01
    },
    // Implicit ImplicitMidpoint (-s 12) and BackwardEuler (-s 11), Newton with
-   // GMRES and block-diagonal AMG (-pt 1), no PETSc, references of the
+   // GMRES and block-diagonal AMG (-pt 1), references of the
    // pre-dfem-dev MFEM (01-dfem-laghos-dev-av 7cc9281ce8, laghos-dfem 157bcf1)
    {
       "implicit_taylor_green_2d", "implicit midpoint, Q2-Q1, no av, 2D",
