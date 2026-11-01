@@ -18,21 +18,21 @@
 // explicit:
 //   mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -av -av-type 7 -ov 4 -oe 3 -rs 1 -cfl 0.5 -s 2 -vs 50
 // implicit:
-//   mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -nmi 50 -pt 1 -kmi 20 -av -av-type 7 -ov 3 -oe 2 -rs 2 -cfl 32 -s 12 -vs 10
+//   mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -nmi 50 -pt 0 -kmi 20 -av -av-type 7 -ov 3 -oe 2 -rs 2 -cfl 32 -s 12 -vs 10
 //
 // Sedov:
 // explicit:
 //   mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -av -av-type 7 -ov 2 -oe 1 -s 3 -cfl 0.5 -rs 3 -vs 50
 // implicit:
-//   mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -nmi 50 -pt 1 -kmi 20 -av -av-type 7 -ov 2 -oe 1 -s 12 -cfl 8 -vs 10 -rs 3
+//   mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -nmi 50 -pt 0 -kmi 20 -av -av-type 7 -ov 2 -oe 1 -s 12 -cfl 8 -vs 10 -rs 3
 //
 // TG:
 // explicit 2D, 3D:
 //   mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -ov 3 -oe 2 -rs 2 -cfl 0.5 -s 4 -vs 100
 //   mpirun -np 8 laghos -m ./cube.mesh -p 0 -glvis -tf 0.75 -av -av-type 7 -ov 2 -oe 1 -rs 1 -cfl 0.5 -s 4 -vs 10
 // implicit 2D, 3D:
-//   mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -nmi 50 -pt 1 -kmi 20 -ov 3 -oe 2 -rs 3 -cfl 32 -s 12 -vs 10
-//   mpirun -np 8 laghos -m ./cube.mesh -p 0 -glvis -tf 0.75 -av -av-type 7 -nmi 50 -pt 1 -kmi 20 -ov 2 -oe 1 -rs 1 -cfl 32 -s 12 -vs 10
+//   mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -nmi 50 -pt 0 -kmi 20 -ov 3 -oe 2 -rs 3 -cfl 32 -s 12 -vs 10
+//   mpirun -np 8 laghos -m ./cube.mesh -p 0 -glvis -tf 0.75 -av -av-type 7 -nmi 50 -pt 0 -kmi 20 -ov 2 -oe 1 -rs 1 -cfl 32 -s 12 -vs 10
 
 
 #include "laghos_solver.hpp"
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
    args.AddOption(&preconditioner_lag, "-pl", "--pl",
                   "Number of nonlinear solves to wait before updating the preconditioner.");
    args.AddOption(&preconditioner_type, "-pt", "--pt",
-                  "Preconditioner type: 0 - SuperLU_DIST, 1 - Block Diagonal AMG");
+                  "Preconditioner type: 0 - Block Diagonal AMG");
    args.AddOption(&vis_steps, "-vs", "--vis-steps",
                   "Number of visualization steps.");
    args.AddOption(&glvis, "-glvis", "--glvis", "-no-glvis", "--no-glvis", "");

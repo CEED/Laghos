@@ -235,47 +235,47 @@ const Test runs[] =
       1.3479830805551927e+00, 1.6939266983223721e+01
    },
    // Implicit ImplicitMidpoint (-s 12) and BackwardEuler (-s 11), Newton with
-   // GMRES and block-diagonal AMG (-pt 1), references of the
+   // GMRES and block-diagonal AMG (-pt 0), references of the
    // pre-dfem-dev MFEM (01-dfem-laghos-dev-av 7cc9281ce8, laghos-dfem 157bcf1)
    {
       "implicit_taylor_green_2d", "implicit midpoint, Q2-Q1, no av, 2D",
       "square01_quad.mesh",
-      "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       1, 2.5000000000000000e-01, 1.7496144709791834e+00, 7.6158393763847849e+00,
       6.1657639728600806e+00, 1.2801715728172615e+01, 1e-8
    },
    {
       "implicit_taylor_green_2d_be", "implicit backward Euler, Q2-Q1, no av, 2D",
       "square01_quad.mesh",
-      "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 11 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 11 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       1, 2.5000000000000000e-01, 1.7144424302407082e+00, 7.5355450090088745e+00,
       5.5950119610093045e+00, 1.3076511553426874e+01, 1e-8
    },
    {
       "implicit_sedov_2d", "implicit midpoint, Q2-Q1, no av, 2D",
       "square01_quad.mesh",
-      "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       2, 4.7799374999999998e-02, 2.4999999998372771e-01, 7.5895841452573265e+00,
       3.3576691897422939e+00, 1.0426342267073755e+01, 1e-8
    },
    {
       "implicit_sedov_2d_av", "implicit midpoint, Q2-Q1, av-type 7, 2D",
       "square01_quad.mesh",
-      "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       10, 7.5072974222040595e-03, 2.4999999999994080e-01, 7.5866802435482432e+00,
       1.8988891018276433e+00, 1.2690442177254132e+01, 1e-8
    },
    {
       "implicit_taylor_green_3d", "implicit midpoint, Q2-Q1, no av, 3D",
       "cube01_hex.mesh",
-      "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       1, 1.0000000000000001e-01, 1.4993325956929385e+02, 1.1867413170385170e+01,
       6.3036483349202497e+00, 1.1986500608668955e+03, 1e-8
    },
    {
       "implicit_sedov_3d_av", "implicit midpoint, Q2-Q1, av-type 7, 3D",
       "cube01_hex.mesh",
-      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.02 -nmi 50 -nrt 1e-10 -kmi 20 -pt 1",
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.02 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       4, 7.6537470312500536e-04, 1.2499999999868094e-01, 2.7832191726334166e+01,
       3.3944688370441605e+00, 5.7726749810098475e+01, 1e-8
    },

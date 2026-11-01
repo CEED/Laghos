@@ -689,23 +689,11 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
 
    jacobian = dynamic_cast<const LagrangianHydroJacobianOperator*>(&op);
    MFEM_VERIFY(jacobian != nullptr, "Preconditioner error.");
+   MFEM_VERIFY(hydro.preconditioner_type ==
+               PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG,
+               "Unknown preconditioner type.");
 
-   auto comm = hydro.H1.GetComm();
    const real_t h = jacobian->h;
-
-   HYPRE_BigInt *tdof_offsets = hydro.H1.GetTrueDofOffsets();
-
-   // First row
-   // Rx = x - h * v
-   // yx = I * wx - h I * wv
-   SparseMatrix dRxdx_diag(hydro.H1.GetTrueVSize());
-   for (int i = 0; i < dRxdx_diag.Height(); i++)
-   {
-      dRxdx_diag.Set(i, i, 1.0);
-   }
-   dRxdx_diag.Finalize();
-   HypreParMatrix dRxdx_mat(comm, hydro.H1.GlobalTrueVSize(),
-                            tdof_offsets, &dRxdx_diag);
 
    // dRvdv = (Mv + h dF/dv)
    auto dRvdv_ptr = AssembleMatrix(*jacobian->dRvdv);
@@ -719,97 +707,13 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
    HypreParMatrix &dRede_mat = *dRede_ptr;
    HypreParMatrix *Me_hdRede_mat = Add(1.0, hydro.Me_mat, -h, dRede_mat);
 
-   if (hydro.preconditioner_type == PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG)
-   {
-      vv_mat.reset(Mv_hdRvdv_mat);
-      amg_v.reset(new HypreBoomerAMG(*vv_mat));
-      amg_v->SetPrintLevel(0);
+   vv_mat.reset(Mv_hdRvdv_mat);
+   amg_v.reset(new HypreBoomerAMG(*vv_mat));
+   amg_v->SetPrintLevel(0);
 
-      ee_mat.reset(Me_hdRede_mat);
-      amg_e.reset(new HypreBoomerAMG(*ee_mat));
-      amg_e->SetPrintLevel(0);
-   }
-
-   else if (hydro.preconditioner_type == PRECONDITIONER_TYPE::SUPERLU)
-   {
-#ifdef MFEM_USE_SUPERLU
-      // dRxdv = -h * I
-      SparseMatrix dRxdv_diag(hydro.H1.GetTrueVSize());
-      for (int i = 0; i < dRxdv_diag.Height(); i++)
-      {
-         dRxdv_diag.Set(i, i, -h);
-      }
-
-      for (int i = 0; i < hydro.ess_tdof.Size(); i++)
-      {
-         dRxdv_diag.Set(hydro.ess_tdof[i], hydro.ess_tdof[i], 0.0);
-      }
-      dRxdv_diag.Finalize();
-
-      HypreParMatrix dRxdv_mat(comm, hydro.H1.GlobalTrueVSize(),
-                               tdof_offsets, &dRxdv_diag);
-
-      // Second row
-      // Rv = Mv * v + F * I
-      // yv = (Mv + h * dF/dv) * wv + h * dF/dx * wx + h * dF/de * we
-
-      // dRvdx = h * dF/dx
-      auto dRvdx_ptr = AssembleMatrix(*jacobian->dRvdx);
-      HypreParMatrix &dRvdx_mat = *dRvdx_ptr;
-      dRvdx_mat.EliminateRows(hydro.ess_tdof);
-      dRvdx_mat *= h;
-
-      // dRvde = h * dF/de
-      auto dRvde_ptr = AssembleMatrix(*jacobian->dRvde);
-      HypreParMatrix &dRvde_mat = *dRvde_ptr;
-      dRvde_mat.EliminateRows(hydro.ess_tdof);
-      dRvde_mat *= h;
-
-      // Third row
-      // Re = Me * e - F^T
-      // ye = (Me - h * dF/de) * we - h * dF/dx * wx - h * dF/dv * wv
-
-      // dRedx = -h * dF^T/dx
-      auto dRedx_ptr = AssembleMatrix(*jacobian->dRedx);
-      HypreParMatrix &dRedx_mat = *dRedx_ptr;
-
-      if (problem == 0)
-      {
-         auto dTaylorSourcedx_ptr = AssembleMatrix(*jacobian->dTaylorSourcedx);
-         HypreParMatrix &dTaylorSourcedx_mat = *dTaylorSourcedx_ptr;
-         dRedx_mat.Add(1.0, dTaylorSourcedx_mat);
-      }
-
-      dRedx_mat *= -h;
-
-      // dRedv = -h * dF^T/dv
-      auto dRedv_ptr = AssembleMatrix(*jacobian->dRedv);
-      HypreParMatrix &dRedv_mat = *dRedv_ptr;
-      auto tmp1 = dRedv_mat.EliminateCols(hydro.ess_tdof);
-      delete tmp1;
-      dRedv_mat *= -h;
-
-      Array2D<const HypreParMatrix*> blocks(3, 3);
-      blocks = nullptr;
-      blocks(0, 0) = &dRxdx_mat;
-      blocks(0, 1) = &dRxdv_mat;
-      blocks(1, 0) = &dRvdx_mat;
-      blocks(1, 1) = Mv_hdRvdv_mat;
-      blocks(1, 2) = &dRvde_mat;
-      blocks(2, 0) = &dRedx_mat;
-      blocks(2, 1) = &dRedv_mat;
-      blocks(2, 2) = Me_hdRede_mat;
-
-      superlu_solver.reset(new SuperLUSolver(MPI_COMM_WORLD, 1));
-      block_hypre.reset(HypreParMatrixFromBlocks(blocks, nullptr));
-      superlu_mat.reset(new SuperLURowLocMatrix(*block_hypre));
-      superlu_solver->SetSymmetricPattern(false);
-      superlu_solver->SetOperator(*superlu_mat);
-      superlu_solver->SetPrintStatistics(false);
-#else
-      MFEM_ABORT("MFEM is not built with SuperLU");
-#endif
-   }
+   ee_mat.reset(Me_hdRede_mat);
+   amg_e.reset(new HypreBoomerAMG(*ee_mat));
+   amg_e->SetPrintLevel(0);
 
    rebuild = false;
 }
@@ -817,31 +721,20 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
 void LagrangianHydroOperator::Preconditioner::Mult(const Vector &x,
                                                    Vector &y) const
 {
-   if (hydro.preconditioner_type == PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG)
-   {
-      w = x;
-      Vector wx, wv, we;
-      wx.MakeRef(w, 0, hydro.H1.GetTrueVSize());
-      wv.MakeRef(w, hydro.H1.GetTrueVSize(), hydro.H1.GetTrueVSize());
-      we.MakeRef(w, 2*hydro.H1.GetTrueVSize(), hydro.L2.GetTrueVSize());
+   w = x;
+   Vector wx, wv, we;
+   wx.MakeRef(w, 0, hydro.H1.GetTrueVSize());
+   wv.MakeRef(w, hydro.H1.GetTrueVSize(), hydro.H1.GetTrueVSize());
+   we.MakeRef(w, 2*hydro.H1.GetTrueVSize(), hydro.L2.GetTrueVSize());
 
-      Vector yx, yv, ye;
-      yx.MakeRef(y, 0, hydro.H1.GetTrueVSize());
-      yv.MakeRef(y, hydro.H1.GetTrueVSize(), hydro.H1.GetTrueVSize());
-      ye.MakeRef(y, 2*hydro.H1.GetTrueVSize(), hydro.L2.GetTrueVSize());
+   Vector yx, yv, ye;
+   yx.MakeRef(y, 0, hydro.H1.GetTrueVSize());
+   yv.MakeRef(y, hydro.H1.GetTrueVSize(), hydro.H1.GetTrueVSize());
+   ye.MakeRef(y, 2*hydro.H1.GetTrueVSize(), hydro.L2.GetTrueVSize());
 
-      yx = wx;
-      amg_v->Mult(wv, yv);
-      amg_e->Mult(we, ye);
-   }
-   else if (hydro.preconditioner_type == PRECONDITIONER_TYPE::SUPERLU)
-   {
-#ifdef MFEM_USE_SUPERLU
-      superlu_solver->Mult(x, y);
-#else
-      MFEM_ABORT("MFEM is not built with SuperLU");
-#endif
-   }
+   yx = wx;
+   amg_v->Mult(wv, yv);
+   amg_e->Mult(we, ye);
 }
 
 void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(

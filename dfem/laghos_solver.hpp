@@ -13,7 +13,6 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-
 #pragma once
 
 #include "mfem.hpp"
@@ -26,18 +25,14 @@
 // Set from the command line in laghos.cpp
 extern int problem;
 
-namespace mfem
-{
-
-// From fem/dfem, whose doperator.hpp is only included by laghos_solver.cpp
-namespace future
+namespace mfem::future
 {
 class DifferentiableOperator;
 class DerivativeOperator;
 class FDJacobian;
 }
 
-namespace hydrodynamics
+namespace mfem::hydrodynamics
 {
 
 using future::DifferentiableOperator;
@@ -59,8 +54,7 @@ enum EXT_DATA_IDX
 
 enum PRECONDITIONER_TYPE
 {
-   SUPERLU,
-   BLOCK_DIAGONAL_AMG,
+   BLOCK_DIAGONAL_AMG = 0,
 };
 
 // Visualize the given parallel grid function, using a GLVis server on the
@@ -157,15 +151,10 @@ public:
       LagrangianHydroOperator &hydro;
       bool rebuild = true;
       const LagrangianHydroJacobianOperator *jacobian = nullptr;
-      std::shared_ptr<HypreParMatrix> block_hypre;
       std::shared_ptr<HypreParMatrix> vv_mat;
       std::shared_ptr<HypreBoomerAMG> amg_v;
       std::shared_ptr<HypreParMatrix> ee_mat;
       std::shared_ptr<HypreBoomerAMG> amg_e;
-#ifdef MFEM_USE_SUPERLU
-      std::shared_ptr<SuperLURowLocMatrix> superlu_mat;
-      std::shared_ptr<SuperLUSolver> superlu_solver;
-#endif
    };
 
    class LagrangianHydroResidualOperator : public Operator
@@ -314,7 +303,7 @@ public:
    int  newton_max_iter = -1;
    Vector &external_data;
    mutable bool qdata_is_current = false;
-   // Stock Laghos time step estimate, min over all the RK stages (explicit)
+   // Laghos time step estimate, min over all the RK stages
    bool stage_dt_estimate = false;
    mutable real_t dt_est_stages = std::numeric_limits<real_t>::infinity();
 };
@@ -339,6 +328,5 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const int &preconditioner_lag,
    const PRECONDITIONER_TYPE &preconditioner_type);
 
-} // namespace hydrodynamics
+} // namespace mfem::hydrodynamics
 
-} // namespace mfem
