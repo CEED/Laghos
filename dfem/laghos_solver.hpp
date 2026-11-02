@@ -13,49 +13,20 @@
 // the planning and preparation of a capable exascale ecosystem, including
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
-#pragma once
+
+#ifndef MFEM_LAGHOS_SOLVER
+#define MFEM_LAGHOS_SOLVER
 
 #include "mfem.hpp"
-
-#include <limits>
-#include <memory>
-
 #include "laghos_assembly.hpp"
 
-// Set from the command line in laghos.cpp
-extern int problem;
+#ifdef MFEM_USE_MPI
 
-namespace mfem::future
-{
-class DifferentiableOperator;
-class DerivativeOperator;
-class FDJacobian;
-}
-
-namespace mfem::hydrodynamics
+namespace mfem
 {
 
-using future::DifferentiableOperator;
-using future::DerivativeOperator;
-using future::FDJacobian;
-
-enum EXT_DATA_IDX
+namespace hydrodynamics
 {
-   CFL = 0,
-   ORDER_VEL,
-   VISCOSITY_FLAG,
-   VISCOSITY_TYPE,
-   VISC_Q1,
-   VISC_Q2,
-   H0,
-   DT_ESTIMATE,
-   COUNT
-};
-
-enum PRECONDITIONER_TYPE
-{
-   BLOCK_DIAGONAL_AMG = 0,
-};
 
 // Visualize the given parallel grid function, using a GLVis server on the
 // specified host and port. Set the visualization window title, and optionally,
@@ -64,8 +35,33 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec = false);
 
+struct TimingData
+{
+   // Total times for all major computations:
+   // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
+   StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
+
+   // Store the number of dofs of the corresponding local CG
+   const HYPRE_Int L2dof;
+
+   // These accumulate the total processed dofs or quad points:
+   // #(CG iterations) for the L2 CG solve.
+   // #quads * #(RK sub steps) for the quadrature data computations.
+   HYPRE_BigInt H1iter, L2iter;
+   HYPRE_BigInt quad_tstep;
+
+   TimingData(const HYPRE_Int l2d) :
+      L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
+};
+
+// [⚠️ LEGACY ⚠️] class QUpdate ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+// Given a solutions state (x, v, e), this class performs all necessary
+// computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
 class LagrangianHydroOperator : public TimeDependentOperator
 {
+protected:
+
 public:
 
    class LineSearchNewtonSolver : public NewtonSolver
@@ -94,6 +90,12 @@ public:
 
    class LagrangianHydroJacobianOperator : public Operator
    {
+      const real_t h;
+      const int H1tsize, L2tsize;
+      mutable Vector w, z;
+      LagrangianHydroOperator &hydro;
+      std::shared_ptr<DerivativeOperator>
+      dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede, dTaylorSourcedx;
    public:
       LagrangianHydroJacobianOperator(
          LagrangianHydroOperator &hydro,
@@ -118,50 +120,46 @@ public:
       void Mult(const Vector &u, Vector &y) const override;
 
       virtual MemoryClass GetMemoryClass() const override;
-
-      real_t h;
-      const int H1tsize, L2tsize;
-      mutable Vector w, z;
-
-      LagrangianHydroOperator &hydro;
-      std::shared_ptr<DerivativeOperator> dRvdx;
-      std::shared_ptr<DerivativeOperator> dRvdv;
-      std::shared_ptr<DerivativeOperator> dRvde;
-      std::shared_ptr<DerivativeOperator> dRedx;
-      std::shared_ptr<DerivativeOperator> dRedv;
-      std::shared_ptr<DerivativeOperator> dRede;
-      std::shared_ptr<DerivativeOperator> dTaylorSourcedx;
+      const real_t GetH() const { return h; }
+      auto GetdRvdv() const { return dRvdv; }
+      auto GetdRede() const { return dRede; }
    };
 
    class Preconditioner : public Solver
    {
+      mutable Vector w;
+      LagrangianHydroOperator &hydro;
+      bool rebuild = true;
+      const LagrangianHydroJacobianOperator *jacobian = nullptr;
+      std::shared_ptr<HypreParMatrix> vv_mat, ee_mat;
+      std::shared_ptr<HypreBoomerAMG> amg_v, amg_e;
    public:
       Preconditioner(LagrangianHydroOperator &hydro) :
-         Solver(hydro.Height()),
-         hydro(hydro)
-      {};
+         Solver(hydro.Height()), hydro(hydro) {};
 
       void SetRebuildFlag(bool flag);
 
       void SetOperator(const Operator &op) override;
 
       void Mult(const Vector &x, Vector &y) const override;
-
-      mutable Vector w;
-      LagrangianHydroOperator &hydro;
-      bool rebuild = true;
-      const LagrangianHydroJacobianOperator *jacobian = nullptr;
-      std::shared_ptr<HypreParMatrix> vv_mat;
-      std::shared_ptr<HypreBoomerAMG> amg_v;
-      std::shared_ptr<HypreParMatrix> ee_mat;
-      std::shared_ptr<HypreBoomerAMG> amg_e;
    };
 
    class LagrangianHydroResidualOperator : public Operator
    {
    public:
-      LagrangianHydroResidualOperator(LagrangianHydroOperator &hydro,
-                                      const Vector &x, bool fd_gradient, int dump_jacobians) :
+      LagrangianHydroOperator &hydro;
+      real_t dt;
+      const int H1tsize, H1vsize, L2tsize, L2vsize;
+      const Vector &x;
+      mutable Vector u, u_l, e_source_t;
+      mutable std::shared_ptr<FDJacobian> fd_jacobian;
+      mutable std::shared_ptr<LagrangianHydroJacobianOperator> jacobian;
+      bool fd_gradient;
+      int dump_jacobians;
+   public:
+      LagrangianHydroResidualOperator(
+         LagrangianHydroOperator &hydro, const Vector &x,
+         const bool fd_gradient, const int dump_jacobians) :
          Operator(2*hydro.H1.GetTrueVSize()+hydro.L2.GetTrueVSize()),
          hydro(hydro),
          H1tsize(hydro.H1.GetTrueVSize()),
@@ -180,69 +178,60 @@ public:
       void Mult(const Vector &k, Vector &R) const override;
 
       Operator& GetGradient(const Vector &k) const override;
-
-      LagrangianHydroOperator &hydro;
-      real_t dt;
-      const int H1tsize;
-      const int H1vsize;
-      const int L2tsize;
-      const int L2vsize;
-      const Vector &x;
-      mutable Vector u, u_l, e_source_t;
-      mutable std::shared_ptr<FDJacobian> fd_jacobian;
-      mutable std::shared_ptr<LagrangianHydroJacobianOperator> jacobian;
-      bool fd_gradient;
-      int dump_jacobians;
    };
 
-   LagrangianHydroOperator(
-      ParFiniteElementSpace &H1,
-      ParFiniteElementSpace &L2,
-      Array<int> &ess_tdof,
-      const IntegrationRule &ir,
-      FunctionCoefficient &rho0_coeff,
-      ParGridFunction &x0_gf,
-      ParGridFunction &rho0_gf,
-      ParGridFunction &material_gf,
-      std::shared_ptr<DifferentiableOperator> update_qdata,
-      std::shared_ptr<DifferentiableOperator> dtest_mf,
-      std::shared_ptr<DifferentiableOperator> momentum_mf,
-      std::shared_ptr<DifferentiableOperator> momentum_pa,
-      std::shared_ptr<DifferentiableOperator> energy_conservation_mf,
-      std::shared_ptr<DifferentiableOperator> energy_conservation_pa,
-      std::shared_ptr<DifferentiableOperator> total_internal_energy_mf,
-      std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf,
-      std::shared_ptr<DifferentiableOperator> density_mf,
-      std::shared_ptr<DifferentiableOperator> taylor_source_mf,
-      std::shared_ptr<QuadratureData> qdata,
-      const bool &fd_gradient,
-      const int &dump_jacobians,
-      const int &nonlinear_maximum_iterations,
-      const real_t &nonlinear_relative_tolerance,
-      const int &krylov_maximum_iterations,
-      const int &preconditioner_lag,
-      const PRECONDITIONER_TYPE &preconditioner_type,
-      Vector& external_data);
+   enum PRECONDITIONER_TYPE { BLOCK_DIAGONAL_AMG = 0 };
 
+   LagrangianHydroOperator(ParFiniteElementSpace &H1,
+                           ParFiniteElementSpace &L2,
+                           Array<int> &ess_tdof,
+                           const IntegrationRule &ir,
+                           FunctionCoefficient &rho0_coeff,
+                           ParGridFunction &x0_gf,
+                           ParGridFunction &rho0_gf,
+                           ParGridFunction &material_gf,
+                           std::shared_ptr<DifferentiableOperator> update_qdata,
+                           std::shared_ptr<DifferentiableOperator> dtest_mf,
+                           std::shared_ptr<DifferentiableOperator> momentum_mf,
+                           std::shared_ptr<DifferentiableOperator> momentum_pa,
+                           std::shared_ptr<DifferentiableOperator> energy_conservation_mf,
+                           std::shared_ptr<DifferentiableOperator> energy_conservation_pa,
+                           std::shared_ptr<DifferentiableOperator> total_internal_energy_mf,
+                           std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf,
+                           std::shared_ptr<DifferentiableOperator> density_mf,
+                           std::shared_ptr<DifferentiableOperator> taylor_source_mf,
+                           std::shared_ptr<QuadratureData> qdata,
+                           const bool &fd_gradient,
+                           const int &dump_jacobians,
+                           const int &nonlinear_maximum_iterations,
+                           const real_t &nonlinear_relative_tolerance,
+                           const int &krylov_maximum_iterations,
+                           const int &preconditioner_lag,
+                           const PRECONDITIONER_TYPE &preconditioner_type,
+                           Vector& external_data);
+   ~LagrangianHydroOperator();
+
+   // Solve for dx_dt, dv_dt and de_dt.
    void Mult(const Vector &S, Vector &dSdt) const override;
 
-   void ImplicitSolve(const real_t dt, const Vector &x, Vector &k) override;
+   virtual MemoryClass GetMemoryClass() const override;
 
    void UpdateMesh(const Vector &S) const;
 
-   void ResetTimeStepEstimate();
-
+   // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
+   real_t GetTimeStepEstimate(const Vector &S);
+   void ResetTimeStepEstimate() const;
    void ResetQuadratureData() const;
 
+   // The density values, which are stored only at some quadrature points,
+   // are projected as a ParGridFunction.
+   void ComputeDensity(ParGridFunction &rho) const;
+   real_t InternalEnergy(ParGridFunction &e) const;
+   real_t KineticEnergy(ParGridFunction &v) const;
+
+   void ImplicitSolve(const real_t dt, const Vector &x, Vector &k) override;
+
    void ResetNewtonInfo();
-
-   real_t GetTimeStepEstimate(const Vector &S);
-
-   real_t InternalEnergy(ParGridFunction &e);
-
-   real_t KineticEnergy(ParGridFunction &v);
-
-   void ComputeDensity(ParGridFunction &rho);
 
    void DensityScatter();
 
@@ -253,19 +242,12 @@ public:
    // Min of the time step estimate over the local quadrature points at S
    real_t LocalTimeStepEstimate(const Vector &S) const;
 
-   virtual MemoryClass GetMemoryClass() const override;
-
-   ~LagrangianHydroOperator();
-
-   ParFiniteElementSpace &H1;
-   ParFiniteElementSpace &L2;
+   ParFiniteElementSpace &H1, &L2;
    mutable ParFiniteElementSpace H1c;
    Array<int> &ess_tdof;
    mutable Array<int> c_tdofs[3];
    const IntegrationRule &ir;
-   ParGridFunction &x0;
-   ParGridFunction &rho0;
-   ParGridFunction &material;
+   ParGridFunction &x0, &rho0, &material;
    std::shared_ptr<DifferentiableOperator> update_qdata;
    std::shared_ptr<DifferentiableOperator> dtest_mf;
    std::shared_ptr<DifferentiableOperator> momentum_mf;
@@ -326,7 +308,20 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type);
+   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type);
 
-} // namespace mfem::hydrodynamics
+// [⚠️ LEGACY ⚠️] class TaylorCoefficient ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 
+// [⚠️ LEGACY ⚠️] class RTCoefficient ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+} // namespace hydrodynamics
+
+// [⚠️ LEGACY ⚠️] class HydroODESolver ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+// [⚠️ LEGACY ⚠️] class RK2AvgSolver ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+} // namespace mfem
+
+#endif // MFEM_USE_MPI
+
+#endif // MFEM_LAGHOS

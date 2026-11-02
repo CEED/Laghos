@@ -67,10 +67,11 @@
 #include <umpire/Umpire.hpp>
 #include <umpire/strategy/QuickPool.hpp>
 
-double getDeviceMemoryHighWatermark() {
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto allocator = rm.getAllocator(LAGHOS_DEVICE_ALLOCATOR_NAME);
-  return ((double) allocator.getHighWatermark()) / (1024 * 1024 * 1024);
+double getDeviceMemoryHighWatermark()
+{
+   auto &rm = umpire::ResourceManager::getInstance();
+   auto allocator = rm.getAllocator(LAGHOS_DEVICE_ALLOCATOR_NAME);
+   return ((double) allocator.getHighWatermark()) / (1024 * 1024 * 1024);
 }
 #endif
 
@@ -99,21 +100,22 @@ static bool ValidateElemPerMpiOptions(int elem_per_mpi, int argc, char *argv[],
                                       OptionsParser &args);
 
 #ifdef LAGHOS_USE_CALIPER
-   static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
-                                 int nx, int ny, int nz, double blast_energy,
-                                 double Sx, double Sy, double Sz,
-                                 int rs_levels, int rp_levels, int problem,
-                                 int order_v, int order_e, int order_q,
-                                 int ode_solver_type, double t_final, double cfl,
-                                 double cg_tol, double ftz_tol, double delta_tol,
-                                 int cg_max_iter, int max_tsteps,
-                                 bool p_assembly, bool impose_visc,
-                                 bool visualization, int vis_steps, bool visit,
-                                 bool gfprint, const char *basename,
-                                 const char *device, bool check,
-                                 bool check_exact_sedov, bool mem_usage,
-                                 bool fom, bool gpu_aware_mpi, int dev_pool_size,
-                                 bool enable_nc, int dev);
+static void RecordAdiakMetadata(int dim, const char *mesh_file,
+                                int elem_per_mpi,
+                                int nx, int ny, int nz, double blast_energy,
+                                double Sx, double Sy, double Sz,
+                                int rs_levels, int rp_levels, int problem,
+                                int order_v, int order_e, int order_q,
+                                int ode_solver_type, double t_final, double cfl,
+                                double cg_tol, double ftz_tol, double delta_tol,
+                                int cg_max_iter, int max_tsteps,
+                                bool p_assembly, bool impose_visc,
+                                bool visualization, int vis_steps, bool visit,
+                                bool gfprint, const char *basename,
+                                const char *device, bool check,
+                                bool check_exact_sedov, bool mem_usage,
+                                bool fom, bool gpu_aware_mpi, int dev_pool_size,
+                                bool enable_nc, int dev);
 #endif
 
 int main(int argc, char *argv[])
@@ -168,15 +170,15 @@ int main(int argc, char *argv[])
 
    bool enable_nc = true;
 
-   #ifdef LAGHOS_USE_CALIPER
-      cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
-      CALI_CXX_MARK_FUNCTION;
-   
-      MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
-      void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
-      adiak::init(adiak_mpi_comm_ptr);
-      adiak::collect_all();
-   #endif
+#ifdef LAGHOS_USE_CALIPER
+   cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
+   CALI_CXX_MARK_FUNCTION;
+
+   MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
+   void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
+   adiak::init(adiak_mpi_comm_ptr);
+   adiak::collect_all();
+#endif
 
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
@@ -288,8 +290,8 @@ int main(int argc, char *argv[])
    {
       args.PrintOptions(cout);
 
-      #ifdef LAGHOS_USE_CALIPER
-         RecordAdiakMetadata(dim, mesh_file, elem_per_mpi, nx, ny, nz,
+#ifdef LAGHOS_USE_CALIPER
+      RecordAdiakMetadata(dim, mesh_file, elem_per_mpi, nx, ny, nz,
                           blast_energy, Sx, Sy, Sz, rs_levels, rp_levels,
                           problem, order_v, order_e, order_q, ode_solver_type,
                           t_final, cfl, cg_tol, ftz_tol, delta_tol,
@@ -297,7 +299,7 @@ int main(int argc, char *argv[])
                           visualization, vis_steps, visit, gfprint, basename,
                           device, check, check_exact_sedov, mem_usage, fom,
                           gpu_aware_mpi, dev_pool_size, enable_nc, dev);
-      #endif
+#endif
    }
 
    if (check_exact_sedov)
@@ -395,7 +397,7 @@ int main(int argc, char *argv[])
       if (elem_per_mpi)
       {
          MFEM_ABORT("PartitionMPI is not supported yet.");
-         /*mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
+         mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
                              rp_levels, mpi_partitioning);
          // scale mesh by Sx, Sy, Sz
          switch (dim)
@@ -422,7 +424,7 @@ int main(int argc, char *argv[])
                });
                AssignMeshBdrAttrs3D(mesh, 0_r, Sx, 0_r, Sy);
                break;
-         }*/
+         }
       }
       else
       {
@@ -997,7 +999,8 @@ int main(int argc, char *argv[])
    if (Mpi::Root())
    {
       cout << "Umpire device memory pool size: " << dev_pool_size << " GB" << endl;
-      cout << "Umpire device memory high water mark: " << getDeviceMemoryHighWatermark() << " GB" << endl;
+      cout << "Umpire device memory high water mark: " <<
+           getDeviceMemoryHighWatermark() << " GB" << endl;
 #ifdef LAGHOS_USE_CALIPER
       adiak::value("umpire_device_pool_size", dev_pool_size);
       adiak::value("umpire_device_high_water_mark", getDeviceMemoryHighWatermark());
@@ -1287,7 +1290,8 @@ static void display_banner(std::ostream &os)
 }
 
 #ifdef LAGHOS_USE_CALIPER
-static void RecordAdiakMetadata(int dim, const char *mesh_file, int elem_per_mpi,
+static void RecordAdiakMetadata(int dim, const char *mesh_file,
+                                int elem_per_mpi,
                                 int nx, int ny, int nz, double blast_energy,
                                 double Sx, double Sy, double Sz,
                                 int rs_levels, int rp_levels, int problem,

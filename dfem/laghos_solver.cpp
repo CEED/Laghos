@@ -15,19 +15,18 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 
 #include "laghos_solver.hpp"
-
-#include "fem/dfem/doperator.hpp"
 #include "linalg/kernels.hpp"
+#include "fem/dfem/doperator.hpp"
 
-namespace mfem::hydrodynamics
+#ifdef MFEM_USE_MPI
+
+extern int problem;
+
+namespace mfem
 {
 
-using future::FieldDescriptor;
-using future::Gradient;
-using future::Identity;
-using future::Value;
-using future::Weight;
-using future::pretty_print;
+namespace hydrodynamics
+{
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
@@ -734,17 +733,17 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
                PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG,
                "Unknown preconditioner type.");
 
-   const real_t h = jacobian->h;
+   const real_t h = jacobian->GetH();
 
    // dRvdv = (Mv + h dF/dv)
-   auto dRvdv_ptr = AssembleMatrix(*jacobian->dRvdv);
+   auto dRvdv_ptr = AssembleMatrix(*jacobian->GetdRvdv());
    HypreParMatrix &dRvdv_mat = *dRvdv_ptr;
    HypreParMatrix *Mv_hdRvdv_mat = Add(1.0, hydro.Mv_mat, h, dRvdv_mat);
    auto tmp2 = Mv_hdRvdv_mat->EliminateRowsCols(hydro.ess_tdof);
    delete tmp2;
 
    // dRede = Me - h * dF^T/de
-   auto dRede_ptr = AssembleMatrix(*jacobian->dRede);
+   auto dRede_ptr = AssembleMatrix(*jacobian->GetdRede());
    HypreParMatrix &dRede_mat = *dRede_ptr;
    HypreParMatrix *Me_hdRede_mat = Add(1.0, hydro.Me_mat, -h, dRede_mat);
 
@@ -1231,7 +1230,7 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
    H1.GetParMesh()->NewNodes(mesh_nodes, false);
 }
 
-void LagrangianHydroOperator::ResetTimeStepEstimate()
+void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
    external_data[EXT_DATA_IDX::DT_ESTIMATE] =
       std::numeric_limits<double>::infinity();
@@ -1268,7 +1267,7 @@ real_t LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S)
    return dt_est_global;
 }
 
-real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e)
+real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e) const
 {
    const auto mt = Device::GetDeviceMemoryType();
    Vector E(L2.GetTrueVSize(), mt), Y(L2.GetTrueVSize(), mt);
@@ -1282,7 +1281,7 @@ real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e)
    return ie_global;
 }
 
-real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v)
+real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v) const
 {
    const auto mt = Device::GetDeviceMemoryType();
    Vector Y(L2.GetTrueVSize(), mt);
@@ -1295,7 +1294,7 @@ real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v)
    return ke_global;
 }
 
-void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho)
+void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
 
@@ -1448,7 +1447,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type)
+   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type)
 {
    ParMesh &mesh = *H1.GetParMesh();
 
@@ -1886,7 +1885,7 @@ template LagrangianHydroOperator *CreateLagrangianHydroOperator<2>(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type);
+   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type);
 
 template LagrangianHydroOperator *CreateLagrangianHydroOperator<3>(
    ParFiniteElementSpace &H1,
@@ -1904,6 +1903,10 @@ template LagrangianHydroOperator *CreateLagrangianHydroOperator<3>(
    const real_t &nonlinear_relative_tolerance,
    const int &krylov_maximum_iterations,
    const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type);
+   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type);
 
-} // namespace mfem::hydrodynamics
+} // namespace hydrodynamics
+
+} // namespace mfem
+
+#endif // MFEM_USE_MPI

@@ -14,34 +14,56 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 //
-// 3point:
-// explicit:
-//   mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -av -av-type 7 -ov 4 -oe 3 -rs 1 -cfl 0.5 -s 2 -vs 50
-// implicit:
-//   mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -nmi 50 -pt 0 -kmi 20 -av -av-type 7 -ov 3 -oe 2 -rs 2 -cfl 32 -s 12 -vs 10
+//                     __                __
+//                    / /   ____  ____  / /_  ____  _____
+//                   / /   / __ `/ __ `/ __ \/ __ \/ ___/
+//                  / /___/ /_/ / /_/ / / / / /_/ (__  )
+//                 /_____/\__,_/\__, /_/ /_/\____/____/
+//                             /____/
 //
-// Sedov:
-// explicit:
-//   mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -av -av-type 7 -ov 2 -oe 1 -s 3 -cfl 0.5 -rs 3 -vs 50
-// implicit:
-//   mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -nmi 50 -pt 0 -kmi 20 -av -av-type 7 -ov 2 -oe 1 -s 12 -cfl 8 -vs 10 -rs 3
+//             High-order Lagrangian Hydrodynamics Miniapp
 //
-// TG:
-// explicit 2D, 3D:
-//   mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -ov 3 -oe 2 -rs 2 -cfl 0.5 -s 4 -vs 100
-//   mpirun -np 8 laghos -m ./cube.mesh -p 0 -glvis -tf 0.75 -av -av-type 7 -ov 2 -oe 1 -rs 1 -cfl 0.5 -s 4 -vs 10
-// implicit 2D, 3D:
-//   mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -nmi 50 -pt 0 -kmi 20 -ov 3 -oe 2 -rs 3 -cfl 32 -s 12 -vs 10
-//   mpirun -np 8 laghos -m ./cube.mesh -p 0 -glvis -tf 0.75 -av -av-type 7 -nmi 50 -pt 0 -kmi 20 -ov 2 -oe 1 -rs 1 -cfl 32 -s 12 -vs 10
-
+// Laghos(LAGrangian High-Order Solver) is a miniapp that solves the
+// time-dependent Euler equation of compressible gas dynamics in a moving
+// Lagrangian frame using unstructured high-order finite element spatial
+// discretization and explicit high-order time-stepping. Laghos is based on the
+// numerical algorithm described in the following article:
+//
+//    V. Dobrev, Tz. Kolev and R. Rieben, "High-order curvilinear finite element
+//    methods for Lagrangian hydrodynamics", SIAM Journal on Scientific
+//    Computing, (34) 2012, pp. B606–B641, https://doi.org/10.1137/120864672.
+//
+// Test problems:
+//    p = 0  --> Taylor-Green vortex (smooth problem).
+//       explicit 2D: mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -ov 3 -oe 2 -rs 2 -cfl 0.5 -s 4  -vs 100
+//       explicit 3D: mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -ov 2 -oe 1 -rs 1 -cfl 0.5 -s 4  -vs 10 -av -av-type 7 -m ./cube.mesh
+//       implicit 2D: mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -ov 3 -oe 2 -rs 3 -cfl 32  -s 12 -vs 10 -nmi 50 -pt 0 -kmi 20
+//       implicit 3D: mpirun -np 8 laghos -p 0 -glvis -tf 0.75 -ov 2 -oe 1 -rs 1 -cfl 32  -s 12 -vs 10 -av -av-type 7 -nmi 50 -pt 0 -kmi 20 -m ./cube.mesh
+//    p = 1  --> Sedov blast.
+//       explicit: mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -av -av-type 7 -ov 2 -oe 1 -s  3 -cfl 0.5 -rs 3 -vs 50
+//       implicit: mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -av -av-type 7 -ov 2 -oe 1 -s 12 -cfl 8   -rs 3 -vs 10 -nmi 50 -pt 0 -kmi 20
+//    p = 2  --> 1D Sod shock tube.
+//    p = 3  --> Triple point.
+//       explicit: mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -av -av-type 7 -ov 4 -oe 3 -rs 1 -cfl 0.5 -s 2  -vs 50
+//       implicit: mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -av -av-type 7 -ov 3 -oe 2 -rs 2 -cfl 32  -s 12 -vs 10 -nmi 50 -pt 0 -kmi 20
+//    p = 4  --> Gresho vortex (smooth problem).
+//    p = 5  --> 2D Riemann problem, config. 12 of doi.org/10.1002/num.10025
+//    p = 6  --> 2D Riemann problem, config.  6 of doi.org/10.1002/num.10025
+//    p = 7  --> 2D Rayleigh-Taylor instability problem.
+//
+// Sample runs: see README.md, section 'Verification of Results'.
 
 #include "laghos_solver.hpp"
-
 #include "laghos_tests.hpp"
 
+using std::cout;
+using std::endl;
 using namespace mfem;
 
-int problem = 0;
+static void display_banner(std::ostream&);
+
+// Choice for the problem setup.
+int problem;
 
 int main(int argc, char *argv[])
 {
@@ -49,29 +71,39 @@ int main(int argc, char *argv[])
    if (!Mpi::IsInitialized()) { Mpi::Init(); }
    Hypre::Init();
 
-   out << std::setprecision(15);
+   // Print the banner.
+   if (Mpi::Root()) { display_banner(cout); }
 
-   const char *device_config = "cpu";
+   mfem::out << std::setprecision(15);
 
+   problem = 1;
+   int dim = 3;
    const char *mesh_file = "./rectangle01_quad.mesh";
-
-   int dim = 2;
    int refinements = 0;
    int order_v = 2;
    int order_e = 1;
    int order_q = -1;
-   real_t t_final = 0.0;
-   real_t blast_position[] = {0.0, 0.0, 0.0};
    int ode_solver_type = 4;
+   real_t t_final = 0.6;
+   real_t cfl = 0.5;
+   // double cg_tol = 1e-8;
+   // double ftz_tol = 0.0;
+   // double delta_tol = 1e-12;
+   // int cg_max_iter = 300;
+   // int max_tsteps = -1;
+   // bool p_assembly = true;
+   // bool impose_visc = false;
+   // bool visualization = false;
+   int vis_steps = 5;
+   const char *device = "cpu";
+   real_t blast_position[] = {0.0, 0.0, 0.0};
    bool fd_gradient = false;
    bool use_viscosity = false;
-   real_t cfl = 0.5;
    real_t nonlinear_relative_tolerance = 1e-5;
    int nonlinear_maximum_iterations = 10;
    int krylov_maximum_iterations = 10;
    int preconditioner_lag = 0;
-   int vis_steps = 1;
-   bool glvis = false;
+   bool visualization = false;
    bool paraview = false;
    bool save_files = true;
    int viscosity_type = 2;
@@ -79,13 +111,15 @@ int main(int argc, char *argv[])
    real_t viscosity_q2 = 1.0;
    bool stock_dt = false;
    int preconditioner_type =
-      hydrodynamics::PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG;
+      hydrodynamics::LagrangianHydroOperator::PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG;
    int dump_jacobians = 0;
    int nretry = 100;
+   bool gpu_aware_mpi = false;
+   int dev = 0;
+
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
-   args.AddOption(&mesh_file, "-m", "--mesh",
-                  "Mesh file to use.");
+   args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
    args.AddOption(&refinements, "-rs", "--ref", "");
    args.AddOption(&order_v, "-ov", "--ov", "");
    args.AddOption(&order_e, "-oe", "--oe", "");
@@ -93,7 +127,7 @@ int main(int argc, char *argv[])
    args.AddOption(&t_final, "-tf", "--tf", "");
    args.AddOption(&problem, "-p", "--p", "");
    args.AddOption(&cfl, "-cfl", "--cfl", "");
-   args.AddOption(&device_config, "-d", "--device",
+   args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&use_viscosity, "-av", "--av", "-no-av", "--no-av", "");
    args.AddOption(&fd_gradient, "-fd", "--fd", "-no-fd", "--no-fd", "");
@@ -116,7 +150,8 @@ int main(int argc, char *argv[])
                   "Preconditioner type: 0 - Block Diagonal AMG");
    args.AddOption(&vis_steps, "-vs", "--vis-steps",
                   "Number of visualization steps.");
-   args.AddOption(&glvis, "-glvis", "--glvis", "-no-glvis", "--no-glvis", "");
+   args.AddOption(&visualization, "-glvis", "--glvis", "-no-glvis", "--no-glvis",
+                  "");
    args.AddOption(&paraview, "-paraview", "--paraview",
                   "-no-paraview", "--no-paraview",
                   "Enable ParaView output (VTK files; can be expensive).");
@@ -136,10 +171,17 @@ int main(int argc, char *argv[])
                   "the new state, as stock Laghos (explicit only).");
    args.AddOption(&dump_jacobians, "-dump-jacobians", "--dump-jacobians", "");
    args.AddOption(&nretry, "-nretry", "--nretry", "");
+   args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
+                  "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
+   args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.ParseCheck();
+   if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 
-   Device device(device_config);
-   if (Mpi::Root()) { device.Print(); }
+   // Configure the device from the command line options
+   Device backend;
+   backend.Configure(device, dev);
+   backend.SetGPUAwareMPI(gpu_aware_mpi);
+   if (Mpi::Root()) { backend.Print(); }
 
    real_t blast_energy = (dim == 2) ? 0.25 : 0.125;
 
@@ -147,8 +189,8 @@ int main(int argc, char *argv[])
 
    if ((dim == 2) && (problem == 0 || problem == 1))
    {
-      serial_mesh = Mesh(Mesh::MakeCartesian2D(1, 1, Element::QUADRILATERAL,
-                                               true));
+      serial_mesh =
+         Mesh(Mesh::MakeCartesian2D(1, 1, Element::QUADRILATERAL, true));
       const int NBE = serial_mesh.GetNBE();
       for (int b = 0; b < NBE; b++)
       {
@@ -159,8 +201,8 @@ int main(int argc, char *argv[])
    }
    if (dim == 3 && (problem == 0 || problem == 1))
    {
-      serial_mesh = Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON,
-                                               true));
+      serial_mesh =
+         Mesh(Mesh::MakeCartesian3D(2, 2, 2, Element::HEXAHEDRON, true));
       const int NBE = serial_mesh.GetNBE();
       for (int b = 0; b < NBE; b++)
       {
@@ -184,15 +226,14 @@ int main(int argc, char *argv[])
 
    // The mesh dimension can change based on selected problem setup (e.g. -p 2).
    dim = serial_mesh.Dimension();
-
    ParMesh mesh = ParMesh(MPI_COMM_WORLD, serial_mesh);
 
    // Define the parallel finite element spaces. We use:
    // - H1 (Gauss-Lobatto, continuous) for position and velocity.
    // - L2 (Bernstein, discontinuous) for specific internal energy.
+   L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    H1_FECollection H1FEC(order_v, dim);
    ParFiniteElementSpace H1FESpace(&mesh, &H1FEC, dim);
-   L2_FECollection L2FEC(order_e, dim, BasisType::Positive);
    ParFiniteElementSpace L2FESpace(&mesh, &L2FEC);
 
    const auto global_ne = mesh.GetGlobalNE();
@@ -212,6 +253,8 @@ int main(int argc, char *argv[])
       results->l2_dofs = global_l2tsize;
    }
 
+   // Boundary conditions: all tests use v.n = 0 on the boundary, and we assume
+   // that the boundaries are straight.
    Array<int> ess_tdof, ess_vdofs;
    {
       Array<int> ess_bdr(mesh.bdr_attributes.Max()), dofs_marker, dofs_list;
@@ -253,7 +296,7 @@ int main(int argc, char *argv[])
 
    ParGridFunction x0_gf = x_gf;
 
-   auto v0 = [](const Vector &x, Vector &v)
+   const auto v0 = [](const Vector &x, Vector &v)
    {
       switch (problem)
       {
@@ -273,7 +316,6 @@ int main(int argc, char *argv[])
          default: MFEM_ABORT("error");
       }
    };
-
    VectorFunctionCoefficient v_coeff(dim, v0);
    v_gf.ProjectCoefficient(v_coeff);
    for (int i = 0; i < ess_vdofs.Size(); i++)
@@ -282,7 +324,13 @@ int main(int argc, char *argv[])
    }
    v_gf.SyncAliasMemory(S);
 
-   auto rho0 = [&dim](const Vector &x)
+   // Initialize density and specific internal energy values. We interpolate in
+   // a non-positive basis to get the correct values at the dofs. Then we do an
+   // L2 projection to the positive basis in which we actually compute. The goal
+   // is to get a high-order representation of the initial condition. Note that
+   // this density is a temporary function and it will not be updated during the
+   // time evolution.
+   const auto rho0 = [&dim](const Vector &x)
    {
       switch (problem)
       {
@@ -292,10 +340,9 @@ int main(int argc, char *argv[])
          case 3: return (dim == 2) ? x(0) > 1.0 && x(1) > 1.5 ? 0.125 : 1.0
                            : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
                                             (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
-         default: MFEM_ABORT("error");
+         default: MFEM_ABORT("Problem not supported yet");
       }
    };
-
    ParGridFunction rho0_gf(&L2FESpace);
    FunctionCoefficient rho0_coeff(rho0);
    L2_FECollection l2_fec(order_e, mesh.Dimension());
@@ -304,7 +351,7 @@ int main(int argc, char *argv[])
    l2_rho0_gf.ProjectCoefficient(rho0_coeff);
    rho0_gf.ProjectGridFunction(l2_rho0_gf);
 
-   auto gamma_func = [](const Vector &x)
+   const auto gamma_func = [](const Vector &x)
    {
       switch (problem)
       {
@@ -312,35 +359,7 @@ int main(int argc, char *argv[])
          case 1: return 1.4;
          case 2: return 1.4;
          case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
-         default: MFEM_ABORT("error");
-      }
-   };
-
-   auto e0 = [&rho0, &gamma_func](const Vector &x)
-   {
-      switch (problem)
-      {
-         case 0:
-         {
-            const real_t denom = 2.0 / 3.0;  // (5/3 - 1) * density.
-            real_t val;
-            if (x.Size() == 2)
-            {
-               val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
-            }
-            else
-            {
-               val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
-                              (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
-            }
-            return val/denom;
-         }
-         case 1: return 0.0; // This case in initialized in main().
-         case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
-                           : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
-         case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
-                           : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
-         default: MFEM_ABORT("error");
+         default: MFEM_ABORT("Problem not supported yet");
       }
    };
 
@@ -352,20 +371,48 @@ int main(int argc, char *argv[])
    }
    else
    {
+      const auto e0 = [&rho0, &gamma_func](const Vector &x)
+      {
+         switch (problem)
+         {
+            case 0:
+            {
+               const real_t denom = 2.0 / 3.0;  // (5/3 - 1) * density.
+               real_t val;
+               if (x.Size() == 2)
+               {
+                  val = 1.0 + (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) / 4.0;
+               }
+               else
+               {
+                  val = 100.0 + ((cos(2*M_PI*x(2)) + 2) *
+                                 (cos(2*M_PI*x(0)) + cos(2*M_PI*x(1))) - 2) / 16.0;
+               }
+               return val/denom;
+            }
+            case 1: return 0.0; // This case in initialized in main().
+            case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
+                              : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
+            case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
+                              : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
+            default: MFEM_ABORT("Problem not supported yet");
+         }
+      };
       FunctionCoefficient e_coeff(e0);
       l2_e.ProjectCoefficient(e_coeff);
    }
 
    e_gf.ProjectGridFunction(l2_e);
+   // Sync the data location of e_gf with its base, S
    e_gf.SyncAliasMemory(S);
 
-   L2_FECollection material_fec(0, dim);
-   ParFiniteElementSpace L2CFESpace(&mesh, &material_fec);
-   ParGridFunction material_gf(&L2CFESpace);
-   FunctionCoefficient material_coeff(gamma_func);
-   material_gf.ProjectCoefficient(material_coeff);
-
-   ParGridFunction rho_gf(&L2FESpace);
+   // Piecewise constant ideal gas coefficient over the Lagrangian mesh. The
+   // gamma values are projected on function that's constant on the moving mesh.
+   L2_FECollection mat_fec(0, dim);
+   ParFiniteElementSpace mat_fes(&mesh, &mat_fec);
+   ParGridFunction mat_gf(&mat_fes);
+   FunctionCoefficient mat_coeff(gamma_func);
+   mat_gf.ProjectCoefficient(mat_coeff);
 
    IntegrationRule ir = IntRules.Get(mesh.GetElementBaseGeometry(0),
                                      3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1);
@@ -387,28 +434,30 @@ int main(int argc, char *argv[])
       std::numeric_limits<real_t>::infinity();
 
    hydrodynamics::LagrangianHydroOperator *hydro = nullptr;
+   using PRECONDITIONER_TYPE =
+      hydrodynamics::LagrangianHydroOperator::PRECONDITIONER_TYPE;
    switch (dim)
    {
       case 2:
       {
          hydro = hydrodynamics::CreateLagrangianHydroOperator<2>(
                     H1FESpace, L2FESpace, ess_tdof, rho0_coeff,
-                    x0_gf, rho0_gf, material_gf, external_data, ir,
+                    x0_gf, rho0_gf, mat_gf, external_data, ir,
                     fd_gradient, dump_jacobians,
                     nonlinear_maximum_iterations, nonlinear_relative_tolerance,
                     krylov_maximum_iterations, preconditioner_lag,
-                    (hydrodynamics::PRECONDITIONER_TYPE)preconditioner_type);
+                    (PRECONDITIONER_TYPE) preconditioner_type);
          break;
       }
       case 3:
       {
          hydro = hydrodynamics::CreateLagrangianHydroOperator<3>(
                     H1FESpace, L2FESpace, ess_tdof, rho0_coeff,
-                    x0_gf, rho0_gf, material_gf, external_data, ir,
+                    x0_gf, rho0_gf, mat_gf, external_data, ir,
                     fd_gradient, dump_jacobians,
                     nonlinear_maximum_iterations, nonlinear_relative_tolerance,
                     krylov_maximum_iterations, preconditioner_lag,
-                    (hydrodynamics::PRECONDITIONER_TYPE)preconditioner_type);
+                    (PRECONDITIONER_TYPE) preconditioner_type);
          break;
       }
       default: MFEM_ABORT("unsupported mesh dimension: " << dim);
@@ -433,6 +482,7 @@ int main(int argc, char *argv[])
    }
    ode_solver->Init(*hydro);
 
+   ParGridFunction rho_gf(&L2FESpace);
    hydro->ComputeDensity(rho_gf);
    const real_t energy_init = hydro->InternalEnergy(e_gf) +
                               hydro->KineticEnergy(v_gf);
@@ -440,7 +490,7 @@ int main(int argc, char *argv[])
    socketstream vis_rho, vis_v, vis_e;
    char vishost[] = "localhost";
    int  visport   = 19916;
-   if (glvis)
+   if (visualization)
    {
       // Make sure all MPI ranks have sent their 'v' solution before initiating
       // another set of GLVis connections (one from each rank):
@@ -469,6 +519,9 @@ int main(int argc, char *argv[])
       out << "energy initial: " << energy_init << "\n";
    }
 
+   // Perform time-integration (looping over the time iterations, ti, with a
+   // time-step dt). The object oper is of type LagrangianHydroOperator that
+   // defines the Mult() method that used by the time integrators.
    real_t t = 0.0;
    hydro->ResetTimeStepEstimate();
    real_t dt = hydro->GetTimeStepEstimate(S);
@@ -484,12 +537,10 @@ int main(int argc, char *argv[])
    BlockVector S_old(S);
 
    std::unique_ptr<QuadratureSpace> qs;
-   std::unique_ptr<QuadratureFunction> vqf;
-   std::unique_ptr<QuadratureFunction> rqf;
-   std::unique_ptr<QuadratureFunction> eqf;
+   std::unique_ptr<QuadratureFunction> vqf, rqf, eqf;
    std::unique_ptr<ParaViewDataCollection> dc;
 
-   auto paraview_save = [&](const int ti, const real_t time)
+   const auto paraview_save = [&](const int ti, const real_t time)
    {
       if (!dc) { return; }
       hydro->ComputeDensity(rho_gf);
@@ -515,7 +566,7 @@ int main(int argc, char *argv[])
       dc->RegisterField("velocity", &v_gf);
       dc->RegisterField("density", &rho_gf);
       dc->RegisterField("specific_internal_energy", &e_gf);
-      dc->RegisterField("material", &material_gf);
+      dc->RegisterField("material", &mat_gf);
       dc->RegisterQField("velocity_qf", vqf.get());
       dc->RegisterQField("density_qf", rqf.get());
       dc->RegisterQField("specific_internal_energy_qf", eqf.get());
@@ -536,6 +587,9 @@ int main(int argc, char *argv[])
       hydro->ResetTimeStepEstimate();
 
       hydro->ResetNewtonInfo();
+
+      // S is the vector of dofs, t is the current time, and dt is the time step
+      // to advance.
       ode_solver->Step(S, t, dt);
 
       // Adaptive time step control.
@@ -606,6 +660,9 @@ int main(int argc, char *argv[])
       }
       else if (dt_est > 1.25 * dt) { dt *= 1.02; }
 
+      // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
+      // data in S. This operation simply updates the Memory validity flags of
+      // the sub-vectors to match those of S.
       x_gf.SyncAliasMemory(S);
       v_gf.SyncAliasMemory(S);
       e_gf.SyncAliasMemory(S);
@@ -639,7 +696,7 @@ int main(int argc, char *argv[])
          }
       }
 
-      if (glvis && (ti % vis_steps == 0 || last_step))
+      if (visualization && (ti % vis_steps == 0 || last_step))
       {
          hydro->ComputeDensity(rho_gf);
          int Wx = 0, Wy = 0; // window position
@@ -725,4 +782,15 @@ int main(int argc, char *argv[])
    delete hydro;
 
    return 0;
+}
+
+static void display_banner(std::ostream &os)
+{
+   os << endl
+      << "       __                __                 " << endl
+      << "      / /   ____  ____  / /_  ____  _____   " << endl
+      << "     / /   / __ `/ __ `/ __ \\/ __ \\/ ___/ " << endl
+      << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << endl
+      << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << endl
+      << "               /____/                       " << endl << endl;
 }

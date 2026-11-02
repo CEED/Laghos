@@ -18,11 +18,35 @@
 
 #include "mfem.hpp"
 #include "linalg/tensor.hpp"
+#include <fem/dfem/doperator.hpp>
 
 #include <type_traits>
 
 namespace mfem::hydrodynamics
 {
+
+using mfem::future::DifferentiableOperator;
+using mfem::future::DerivativeOperator;
+using mfem::future::FDJacobian;
+using mfem::future::FieldDescriptor;
+using mfem::future::Gradient;
+using mfem::future::Identity;
+using mfem::future::Value;
+using mfem::future::Weight;
+using mfem::future::pretty_print;
+
+enum EXT_DATA_IDX
+{
+   CFL = 0,
+   ORDER_VEL,
+   VISCOSITY_FLAG,
+   VISCOSITY_TYPE,
+   VISC_Q1,
+   VISC_Q2,
+   H0,
+   DT_ESTIMATE,
+   COUNT
+};
 
 constexpr int VELOCITY = 0;
 constexpr int DENSITY0 = 1;
