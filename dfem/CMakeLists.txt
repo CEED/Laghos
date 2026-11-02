@@ -1,5 +1,6 @@
 # Assembly and solver, compiled once for laghos_dfem and laghos_tests
-add_library(laghos_dfem_lib OBJECT laghos_assembly.cpp laghos_solver.cpp laghos_hydro.cpp)
+add_library(laghos_dfem_lib OBJECT laghos_assembly.cpp laghos_solver.cpp
+            laghos_hydro.cpp laghos_momentum.cpp laghos_energy.cpp)
 
 target_include_directories(laghos_dfem_lib PUBLIC "${MFEM_DIR}/../../../include/mfem")
 

@@ -43,6 +43,26 @@ constexpr int SPECIFIC_INTERNAL_ENERGY = 5;
 constexpr int DT_EST = 8;
 constexpr int STRESS_TENSOR = 9;
 
+// Builds the dFEM momentum operator, with its Jacobian blocks
+template <int DIM>
+std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   real_t *d_external_data);
+
+// Builds the dFEM energy conservation operator, with its Jacobian blocks
+template <int DIM>
+std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   real_t *d_external_data);
+
 // Builds the dFEM operators and returns a new LagrangianHydroOperator
 template <int DIM>
 LagrangianHydroOperator *CreateLagrangianHydroOperator(
