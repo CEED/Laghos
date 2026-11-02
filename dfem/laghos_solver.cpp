@@ -89,25 +89,25 @@ real_t taylor_source(const Vector &x)
                                cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
 };
 
-MFEM_HOST_DEVICE inline
-real_t smoothmax(real_t a, real_t b, real_t k = 1e-6)
+template <typename T> MFEM_HOST_DEVICE inline
+T smoothmax(const real_t a, const T b, const real_t k = 1e-6)
 {
    return 0.5 * (a + b + sqrt((a-b)*(a-b) + k*k));
 }
 
 // Smooth transition between 0 and 1 for x in [-eps, eps].
-MFEM_HOST_DEVICE inline
-real_t smooth_step_01(real_t x, real_t eps)
+template <typename T> MFEM_HOST_DEVICE inline
+T smooth_step_01(const T x, const real_t eps)
 {
-   const real_t y = (x + eps) / (2.0 * eps);
-   if (y < 0.0) { return 0.0; }
-   if (y > 1.0) { return 1.0; }
+   const T y = (x + eps) / (2.0 * eps);
+   if (y < 0.0) { return T{0.0}; }
+   if (y > 1.0) { return T{1.0}; }
    return (3.0 - 2.0 * y) * y * y;
 }
 
-MFEM_HOST_DEVICE inline
-void ComputeMaterialProperties(const real_t &gamma, const real_t &rho,
-                               const real_t &E, real_t &p, real_t &cs)
+template <typename T> MFEM_HOST_DEVICE inline
+void ComputeMaterialProperties(const real_t &gamma, const T &rho,
+                               const T &E, T &p, T &cs)
 {
    p = (gamma - 1.0) * rho * E;
    cs = sqrt(gamma * (gamma - 1.0) * E);
@@ -118,43 +118,45 @@ void ComputeMaterialProperties(const real_t &gamma, const real_t &rho,
 template <typename T> MFEM_HOST_DEVICE
 T calcsv(const future::tensor<T, 3, 3> A, const int i)
 {
+   using std::acos, std::cos, std::fabs, std::fmax, std::fmin, std::sqrt;
    double mult;
-   double a00, a01, a02, a10, a11, a12, a20, a21, a22;
+   T a00, a01, a02, a10, a11, a12, a20, a21, a22;
 
    a00 = A(0, 0); a01 = A(0, 1); a02 = A(0, 2);
    a10 = A(1, 0); a11 = A(1, 1); a12 = A(1, 2);
    a20 = A(2, 0); a21 = A(2, 1); a22 = A(2, 2);
 
    {
-      double d_max = fabs(a00);
-      if (d_max < fabs(a01)) { d_max = fabs(a01); }
-      if (d_max < fabs(a02)) { d_max = fabs(a02); }
-      if (d_max < fabs(a10)) { d_max = fabs(a10); }
-      if (d_max < fabs(a11)) { d_max = fabs(a11); }
-      if (d_max < fabs(a12)) { d_max = fabs(a12); }
-      if (d_max < fabs(a20)) { d_max = fabs(a20); }
-      if (d_max < fabs(a21)) { d_max = fabs(a21); }
-      if (d_max < fabs(a22)) { d_max = fabs(a22); }
+      // The scaling factor is a power of 2, without derivative
+      double d_max = 0.0;
+      for (int m = 0; m < 3; m++)
+      {
+         for (int n = 0; n < 3; n++)
+         {
+            const double a_mn = fabs(future::get_value(A(m, n)));
+            if (d_max < a_mn) { d_max = a_mn; }
+         }
+      }
       future::GetScalingFactor(d_max, mult);
    }
 
-   a00 /= mult; a01 /= mult; a02 /= mult;
-   a10 /= mult; a11 /= mult; a12 /= mult;
-   a20 /= mult; a21 /= mult; a22 /= mult;
+   a00 = a00 / mult; a01 = a01 / mult; a02 = a02 / mult;
+   a10 = a10 / mult; a11 = a11 / mult; a12 = a12 / mult;
+   a20 = a20 / mult; a21 = a21 / mult; a22 = a22 / mult;
 
    // Build B = A^T A (symmetric positive semidefinite)
-   const double b00 = a00*a00 + a10*a10 + a20*a20;
-   const double b01 = a00*a01 + a10*a11 + a20*a21;
-   const double b02 = a00*a02 + a10*a12 + a20*a22;
-   const double b11 = a01*a01 + a11*a11 + a21*a21;
-   const double b12 = a01*a02 + a11*a12 + a21*a22;
-   const double b22 = a02*a02 + a12*a12 + a22*a22;
+   const T b00 = a00*a00 + a10*a10 + a20*a20;
+   const T b01 = a00*a01 + a10*a11 + a20*a21;
+   const T b02 = a00*a02 + a10*a12 + a20*a22;
+   const T b11 = a01*a01 + a11*a11 + a21*a21;
+   const T b12 = a01*a02 + a11*a12 + a21*a22;
+   const T b22 = a02*a02 + a12*a12 + a22*a22;
 
-   double e0, e1, e2;
+   T e0, e1, e2;
 
    // Closed-form eigenvalues for symmetric 3x3 matrix
    // See eigenvalue algorithm - stable trigonometric form
-   const double p1 = b01*b01 + b02*b02 + b12*b12;
+   const T p1 = b01*b01 + b02*b02 + b12*b12;
    if (p1 == 0.0)
    {
       // B is diagonal
@@ -164,40 +166,41 @@ T calcsv(const future::tensor<T, 3, 3> A, const int i)
    }
    else
    {
-      const double q = (b00 + b11 + b22) / 3.0;
+      const T q = (b00 + b11 + b22) / 3.0;
 
-      const double c00 = b00 - q;
-      const double c11 = b11 - q;
-      const double c22 = b22 - q;
+      const T c00 = b00 - q;
+      const T c11 = b11 - q;
+      const T c22 = b22 - q;
 
-      const double p2 = c00*c00 + c11*c11 + c22*c22 + 2.0*p1;
-      const double p = std::sqrt(p2 / 6.0);
+      const T p2 = c00*c00 + c11*c11 + c22*c22 + 2.0*p1;
+      const T p = sqrt(p2 / 6.0);
 
       // C = (1/p) * (B - q I)
-      const double invp = 1.0 / p;
-      const double c01 = b01 * invp;
-      const double c02 = b02 * invp;
-      const double c12 = b12 * invp;
-      const double cc00 = c00 * invp;
-      const double cc11 = c11 * invp;
-      const double cc22 = c22 * invp;
+      const T invp = 1.0 / p;
+      const T c01 = b01 * invp;
+      const T c02 = b02 * invp;
+      const T c12 = b12 * invp;
+      const T cc00 = c00 * invp;
+      const T cc11 = c11 * invp;
+      const T cc22 = c22 * invp;
 
       // r = det(C) / 2
-      const double detC =
+      const T detC =
          cc00*(cc11*cc22 - c12*c12) -
          c01*(c01*cc22 - c12*c02) +
          c02*(c01*c12 - cc11*c02);
-      double r = 0.5 * detC;
+      T r = 0.5 * detC;
 
-      // Clamp r into [-1, 1] to avoid NaNs from acos due to roundoff
-      if (r < -1.0) { r = -1.0; }
-      if (r >  1.0) { r =  1.0; }
+      // Clamp r into [-1, 1] to avoid NaNs from acos due to roundoff, the
+      // bounds of repeated eigenvalues where acos has no derivative included
+      if (r <= -1.0) { r = -1.0; }
+      if (r >=  1.0) { r =  1.0; }
 
-      const double phi = std::acos(r) / 3.0;
+      const T phi = acos(r) / 3.0;
 
       // These are the eigenvalues of B, ordered as e0 >= e1 >= e2 in exact arithmetic
-      e0 = q + 2.0*p*std::cos(phi);
-      e2 = q + 2.0*p*std::cos(phi + 2.0*M_PI/3.0);
+      e0 = q + 2.0*p*cos(phi);
+      e2 = q + 2.0*p*cos(phi + 2.0*M_PI/3.0);
       e1 = 3.0*q - e0 - e2;
    }
 
@@ -207,23 +210,25 @@ T calcsv(const future::tensor<T, 3, 3> A, const int i)
    if (e2 < 0.0) { e2 = 0.0; }
 
    // Select requested eigenvalue by sorting (robust even in nearly-degenerate cases)
-   const double emax = fmax(e0, fmax(e1, e2));
-   const double emin = fmin(e0, fmin(e1, e2));
-   const double emid = (e0 + e1 + e2) - emax - emin;
+   const T emax = fmax(e0, fmax(e1, e2));
+   const T emin = fmin(e0, fmin(e1, e2));
+   const T emid = (e0 + e1 + e2) - emax - emin;
 
-   const double chosen = (i == 0) ? emax : ((i == 1) ? emid : emin);
-   return std::sqrt(chosen) * mult;
+   const T chosen = (i == 0) ? emax : ((i == 1) ? emid : emin);
+   // Singular A, where the square root has no derivative
+   if (chosen == 0.0) { return chosen * mult; }
+   return sqrt(chosen) * mult;
 }
 
-template <int DIM>
+template <int DIM, typename T>
 MFEM_HOST_DEVICE inline
-matd_t<DIM> qdata_setup(
-   const matd_t<DIM> &dvdxi,
+matd_t<DIM, T> qdata_setup(
+   const matd_t<DIM, T> &dvdxi,
    const real_t &rho0,
    const matd_t<DIM> &J0,
-   const matd_t<DIM> &J,
+   const matd_t<DIM, T> &J,
    const real_t &gamma,
-   const real_t &E,
+   const T &E,
    const real_t &w,
    const real_t &h0,
    const real_t &order_v,
@@ -234,17 +239,17 @@ matd_t<DIM> qdata_setup(
    const real_t &visc_q2,
    real_t &dt_est)
 {
-   using matd = matd_t<DIM>;
+   using matd = matd_t<DIM, T>;
 
-   real_t p, cs;
-   const real_t detJ = det(J);
+   T p, cs;
+   const T detJ = det(J);
    const matd invJ = inv(J);
-   matd stress{{{0.0}}};
-   const real_t rho = rho0 * det(J0) / detJ;
+   matd stress{};
+   const T rho = rho0 * det(J0) / detJ;
    // The stock Laghos viscosity (type 1) also uses the stock clamp of E
    const bool stock_av = use_viscosity && viscosity_type == 1;
-   const real_t Ez = stock_av ? fmax(0.0, E) : smoothmax(0.0, E, 1e-6);
-   real_t dt_visc_coeff = 0.0;
+   const T Ez = stock_av ? fmax(0.0, E) : smoothmax(0.0, E, 1e-6);
+   T dt_visc_coeff{0.0};
 
    ComputeMaterialProperties(gamma, rho, Ez, p, cs);
 
@@ -253,14 +258,14 @@ matd_t<DIM> qdata_setup(
    if (use_viscosity)
    {
       // y0 is value at x=0.
-      auto softstep7 = [](const real_t &width, const real_t y0, const real_t x)
+      auto softstep7 = [](const T &width, const real_t y0, const T x)
       {
-         real_t shift = 2.0 * width * atanh(1.0 - 2.0 * y0);
+         const T shift = 2.0 * width * atanh(1.0 - 2.0 * y0);
          return 0.5 + 0.5 * tanh(0.5 * (x-shift) / width);
       };
 
       // Diffuse the kink at |x| ~ 0, activates as |x| approaches eps
-      auto softabs = [](const real_t &eps, const real_t x)
+      auto softabs = [](const T &eps, const T x)
       {
          return hypot(x, eps);
       };
@@ -276,7 +281,10 @@ matd_t<DIM> qdata_setup(
          real_t sgrad_v_data[DIM*DIM], eig_val[DIM], eig_vec[DIM*DIM];
          for (int j = 0; j < DIM; j++)
          {
-            for (int i = 0; i < DIM; i++) { sgrad_v_data[i + DIM*j] = sgrad_v(i, j); }
+            for (int i = 0; i < DIM; i++)
+            {
+               sgrad_v_data[i + DIM*j] = future::get_value(sgrad_v(i, j));
+            }
          }
          if constexpr (DIM == 1)
          {
@@ -284,15 +292,44 @@ matd_t<DIM> qdata_setup(
             eig_vec[0] = 1.0;
          }
          else { kernels::CalcEigenvalues<DIM>(sgrad_v_data, eig_val, eig_vec); }
-         vecd_t<DIM> compr_dir;
+         vecd_t<DIM, T> compr_dir;
          for (int k = 0; k < DIM; k++) { compr_dir(k) = eig_vec[k]; }
-         const vecd_t<DIM> ph_dir = (J * inv(J0)) * compr_dir;
-         const real_t h = h0 * norm(ph_dir) / norm(compr_dir);
          // Measure of maximal compression
-         const real_t mu = eig_val[0];
+         T mu{eig_val[0]};
+         if constexpr (future::is_dual_number_v<T>)
+         {
+            // Tangents of the eigenpair (l0, v0) of S from the eigenpairs
+            // (lk, vk): dl0 = v0.dS.v0, dv0 = sum vk.dS.v0 / (l0 - lk) vk,
+            // without the terms of the eigenvalues equal to l0
+            auto vdSv = [&](const int a, const int b)
+            {
+               real_t vdSv_ab = 0.0;
+               for (int i = 0; i < DIM; i++)
+               {
+                  for (int j = 0; j < DIM; j++)
+                  {
+                     vdSv_ab += eig_vec[a*DIM + i] * sgrad_v(i, j).gradient *
+                                eig_vec[b*DIM + j];
+                  }
+               }
+               return vdSv_ab;
+            };
+            mu.gradient = vdSv(0, 0);
+            for (int k = 1; k < DIM; k++)
+            {
+               if (eig_val[k] == eig_val[0]) { continue; }
+               const real_t c = vdSv(k, 0) / (eig_val[0] - eig_val[k]);
+               for (int i = 0; i < DIM; i++)
+               {
+                  compr_dir(i).gradient += c * eig_vec[k*DIM + i];
+               }
+            }
+         }
+         const vecd_t<DIM, T> ph_dir = (J * inv(J0)) * compr_dir;
+         const T h = h0 * norm(ph_dir) / norm(compr_dir);
          // Quadratic term, then a smooth "if (mu < 0) += 0.5 rho h cs"
          constexpr real_t eps = 1e-12;
-         real_t visc_coeff = 2.0 * rho * h * h * fabs(mu);
+         T visc_coeff = 2.0 * rho * h * h * fabs(mu);
          visc_coeff += 0.5 * rho * h * cs *
                        (1.0 - smooth_step_01(mu - 2.0 * eps, eps));
          stress += visc_coeff * sgrad_v;
@@ -317,7 +354,7 @@ matd_t<DIM> qdata_setup(
 
          // Coarses mesh h for the domain.
          const real_t h_coarse = 1.0;
-         real_t dv_scale = 2.0 * h / h_coarse * cs;
+         const T dv_scale = 2.0 * h / h_coarse * cs;
 
          // Smooth activation switch.
          // Motivation: in compression, delta_v < 0.
@@ -349,12 +386,14 @@ matd_t<DIM> qdata_setup(
    }
    else
    {
-      real_t sv = calcsv(J, DIM-1);
+      // The dt estimate is a plain value side output
+      const real_t sv = future::get_value(calcsv(J, DIM-1));
 
       const real_t hmin = sv / static_cast<real_t>(order_v);
       const real_t ihmin = 1.0 / hmin;
-      const real_t irhoihminsq = ihmin * ihmin / rho;
-      const real_t idt = cs / hmin + 2.5 * dt_visc_coeff * irhoihminsq;
+      const real_t irhoihminsq = ihmin * ihmin / future::get_value(rho);
+      const real_t idt = future::get_value(cs) / hmin +
+                         2.5 * future::get_value(dt_visc_coeff) * irhoihminsq;
 
       if (idt > 0.0)
       {
@@ -429,19 +468,20 @@ struct UpdateQuadratureDataQFunction
    real_t *external_data;
 };
 
-template <int DIM>
+template <int DIM, typename T>
 class MomentumQFunction
 {
    using matd = matd_t<DIM>;
+   using dmatd = matd_t<DIM, T>;
 
 public:
    MomentumQFunction(real_t *external_data) :
       external_data(external_data) {}
 
    MFEM_HOST_DEVICE inline
-   void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
-                   const matd &J, const real_t &gamma, const real_t &E,
-                   const real_t &w, matd &stressJiT) const
+   void operator()(const dmatd &dvdxi, const real_t &rho0, const matd &J0,
+                   const dmatd &J, const real_t &gamma, const T &E,
+                   const real_t &w, dmatd &stressJiT) const
    {
       stressJiT =
          qdata_setup<DIM>(
@@ -460,10 +500,11 @@ public:
    real_t *external_data;
 };
 
-template <int DIM>
+template <int DIM, typename T>
 class EnergyConservationQFunction
 {
    using matd = matd_t<DIM>;
+   using dmatd = matd_t<DIM, T>;
 
 public:
    EnergyConservationQFunction(const real_t *external_data) :
@@ -471,14 +512,14 @@ public:
 
    MFEM_HOST_DEVICE inline
    auto operator()(
-      const matd &dvdxi,
+      const dmatd &dvdxi,
       const real_t &rho0,
       const matd &J0,
-      const matd &J,
+      const dmatd &J,
       const real_t &gamma,
-      const real_t &E,
+      const T &E,
       const real_t &w,
-      real_t &de) const
+      T &de) const
    {
       auto stressJiT =
          qdata_setup<DIM>(
@@ -1561,7 +1602,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
       momentum_mf = std::make_shared<DifferentiableOperator>(
                        momentum_mf_inputs, momentum_mf_outputs, mesh);
 
-      MomentumQFunction<DIM> momentum_qf(d_external_data);
+      MomentumQFunction<DIM, dscalar_t> momentum_qf(d_external_data);
       auto derivatives =
          std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
       momentum_mf->AddDomainIntegrator(momentum_qf, momentum_mf_kernel_ao,
@@ -1622,7 +1663,8 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          std::make_shared<DifferentiableOperator>(
             energy_conservation_mf_inputs, energy_conservation_mf_outputs, mesh);
 
-      EnergyConservationQFunction<DIM> energy_conservation_qf(d_external_data);
+      EnergyConservationQFunction<DIM, dscalar_t> energy_conservation_qf(
+         d_external_data);
       auto derivatives =
          std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
       energy_conservation_mf->AddDomainIntegrator(
@@ -1789,7 +1831,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
       taylor_source_mf = std::make_shared<DifferentiableOperator>(
                             taylor_source_inputs, taylor_source_outputs, mesh);
 
-      TaylorSourceQFunction<DIM> taylor_source_qf;
+      TaylorSourceQFunction<DIM, dscalar_t> taylor_source_qf;
       auto derivatives = std::integer_sequence<size_t, COORDINATES> {};
       taylor_source_mf->AddDomainIntegrator(taylor_source_qf, taylor_source_kernel_ao,
                                             taylor_source_kernel_oo, ir, all_domain_attr,

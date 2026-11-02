@@ -19,10 +19,10 @@
 #include "mfem.hpp"
 #include "linalg/tensor.hpp"
 
+#include <type_traits>
+
 namespace mfem::hydrodynamics
 {
-
-using mfem::future::tensor;
 
 constexpr int VELOCITY = 0;
 constexpr int DENSITY0 = 1;
@@ -33,23 +33,29 @@ constexpr int SPECIFIC_INTERNAL_ENERGY = 5;
 constexpr int DT_EST = 8;
 constexpr int STRESS_TENSOR = 9;
 
-template <int DIM>
-using vecd_t = tensor<real_t, DIM>;
+using mfem::future::tensor;
 
-template <int DIM>
-using matd_t = tensor<real_t, DIM, DIM>;
+using dscalar_t =
+   std::conditional_t<mfem::UseEnzyme, real_t,
+   mfem::future::dual<real_t, real_t>>;
 
-template <int DIM>
+template <int DIM, typename T = real_t>
+using vecd_t = tensor<T, DIM>;
+
+template <int DIM, typename T = real_t>
+using matd_t = tensor<T, DIM, DIM>;
+
+template <int DIM, typename T>
 struct TaylorSourceQFunction
 {
-   using vecd = vecd_t<DIM>;
-   using matd = matd_t<DIM>;
+   using vecd = vecd_t<DIM, T>;
+   using matd = matd_t<DIM, T>;
 
    TaylorSourceQFunction() = default;
 
    MFEM_HOST_DEVICE inline
    void operator()(const vecd &x, const matd &J, const real_t &w,
-                   real_t &s) const
+                   T &s) const
    {
       const auto f = 3.0 / 8.0 * M_PI *
                      (cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -

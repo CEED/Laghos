@@ -1,6 +1,3 @@
-# dFEM kernels are differentiated by Enzyme at compile time (ClangEnzyme plugin)
-find_package(Enzyme REQUIRED HINTS ${ENZYME_DIR})
-
 # Assembly and solver, compiled once for laghos_dfem and laghos_tests
 add_library(laghos_dfem_lib OBJECT laghos_assembly.cpp laghos_solver.cpp)
 
@@ -10,8 +7,12 @@ target_link_libraries(laghos_dfem_lib
   PUBLIC mfem
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
-  PUBLIC ClangEnzymeFlags
 )
+
+if (MFEM_USE_ENZYME)
+  find_package(Enzyme REQUIRED HINTS ${ENZYME_DIR})
+  target_link_libraries(laghos_dfem_lib PUBLIC ClangEnzymeFlags)
+endif()
 
 add_executable(laghos_dfem laghos.cpp)
 target_link_libraries(laghos_dfem PUBLIC laghos_dfem_lib)
@@ -84,7 +85,7 @@ endforeach()
 # Implicit Newton and AMG runs with the references of the pre-dfem-dev MFEM,
 # ctest -L implicit, or ctest -LE implicit for the explicit tests only
 foreach(test implicit_taylor_green_2d implicit_taylor_green_2d_be
-             implicit_sedov_2d implicit_sedov_2d_av
+             implicit_sedov_2d implicit_sedov_2d_av implicit_sedov_2d_av1
              implicit_taylor_green_3d implicit_sedov_3d_av)
   foreach(np 1 2 3)
     add_test(NAME dfem_${test}_np${np}

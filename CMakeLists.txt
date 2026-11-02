@@ -129,7 +129,5 @@ target_link_libraries(sedov
   PUBLIC HYPRE::HYPRE
 )
 
-if (MFEM_USE_ENZYME)
-  enable_testing()
-  add_subdirectory(dfem)
-endif()
+enable_testing()
+add_subdirectory(dfem)

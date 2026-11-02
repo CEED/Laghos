@@ -51,7 +51,7 @@
 #include <sys/resource.h>
 #include "laghos_solver.hpp"
 #include "fem/qinterp/eval.hpp"
-// #include "fem/qinterp/det.hpp"
+#include "fem/qinterp/det.hpp"
 #include "fem/qinterp/grad.hpp"
 #include "fem/integ/bilininteg_mass_kernels.hpp"
 

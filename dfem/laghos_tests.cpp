@@ -266,6 +266,13 @@ const Test runs[] =
       1.8988891018276433e+00, 1.2690442177254132e+01, 1e-8
    },
    {
+      "implicit_sedov_2d_av1", "implicit midpoint, Q2-Q1, av-type 1, 2D",
+      "square01_quad.mesh",
+      "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 1 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
+      14, 3.4735878931168307e-03, 2.4999999999960013e-01, 7.5873290046513846e+00,
+      1.9166132239675209e+00, 1.2236668098815036e+01, 1e-8
+   },
+   {
       "implicit_taylor_green_3d", "implicit midpoint, Q2-Q1, no av, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
@@ -461,6 +468,8 @@ TEST_CASE("implicit_sedov_2d", "[dfem][implicit][sedov][2d]")
 
 TEST_CASE("implicit_sedov_2d_av", "[dfem][implicit][sedov][2d]")
 { LaghosTest("implicit_sedov_2d_av"); }
+TEST_CASE("implicit_sedov_2d_av1", "[dfem][implicit][sedov][2d]")
+{ LaghosTest("implicit_sedov_2d_av1"); }
 
 TEST_CASE("implicit_taylor_green_3d", "[dfem][implicit][taylor-green][3d]")
 { LaghosTest("implicit_taylor_green_3d"); }
