@@ -14,7 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#pragma once
+#ifndef MFEM_LAGHOS_ASSEMBLY
+#define MFEM_LAGHOS_ASSEMBLY
 
 #include "mfem.hpp"
 #include "linalg/tensor.hpp"
@@ -22,8 +23,67 @@
 
 #include <type_traits>
 
-namespace mfem::hydrodynamics
+namespace mfem
 {
+
+namespace hydrodynamics
+{
+
+// Container for all data needed at quadrature points.
+struct QuadratureData
+{
+   QuadratureSpace qspace;
+
+   VectorQuadratureSpace StressSpace;
+   QuadratureFunction stressp;
+
+   VectorQuadratureSpace R;
+   QuadratureFunction dt_est;
+
+public:
+   static constexpr int aux_dim = 1;
+   QuadratureData(ParMesh &mesh, const IntegrationRule &ir) :
+      qspace(mesh, ir),
+      StressSpace(qspace, mesh.Dimension()*mesh.Dimension()),
+      stressp(StressSpace),
+      R(qspace, aux_dim),
+      dt_est(R)
+   {
+      dt_est.UseDevice(true);
+      stressp.UseDevice(true);
+   }
+};
+
+// [⚠️ LEGACY ⚠️] class DensityIntegrator ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+// [⚠️ LEGACY ⚠️] class ForceIntegrator ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+// [⚠️ LEGACY ⚠️] class ForcePAOperator ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+class MassPAOperator : public Operator
+{
+   const MPI_Comm comm;
+   const int dim;
+   ParBilinearForm pabf;
+   int ess_tdofs_count;
+   Array<int> ess_tdofs;
+   OperatorPtr mass;
+
+public:
+   MassPAOperator(ParFiniteElementSpace &pfes,
+                  const IntegrationRule &ir,
+                  Coefficient &Q);
+
+   void Mult(const Vector &x, Vector &y) const override;
+
+   void FullAddMult(const Vector &x, Vector &y) const;
+
+   void SetEssentialTrueDofs(Array<int> &dofs);
+
+   void EliminateRHS(Vector &b) const;
+
+   const ParBilinearForm &GetBF() const { return pabf; }
+};
 
 using mfem::future::DifferentiableOperator;
 using mfem::future::DerivativeOperator;
@@ -179,52 +239,8 @@ public:
    }
 };
 
-struct QuadratureData
-{
-   static constexpr int aux_dim = 1;
-   QuadratureData(ParMesh &mesh, const IntegrationRule &ir) :
-      qspace(mesh, ir),
-      StressSpace(qspace, mesh.Dimension()*mesh.Dimension()),
-      stressp(StressSpace),
-      R(qspace, aux_dim),
-      dt_est(R)
-   {
-      dt_est.UseDevice(true);
-      stressp.UseDevice(true);
-   }
+} // namespace hydrodynamics
 
-   QuadratureSpace qspace;
+} // namespace mfem
 
-   VectorQuadratureSpace StressSpace;
-   QuadratureFunction stressp;
-
-   VectorQuadratureSpace R;
-   QuadratureFunction dt_est;
-};
-
-class MassPAOperator : public Operator
-{
-public:
-   MassPAOperator(ParFiniteElementSpace &pfes,
-                  const IntegrationRule &ir,
-                  Coefficient &Q);
-
-   void SetEssentialTrueDofs(Array<int> &dofs);
-
-   void EliminateRHS(Vector &b) const;
-
-   void Mult(const Vector &x, Vector &y) const override;
-
-   void FullAddMult(const Vector &x, Vector &y) const;
-
-   const ParBilinearForm &GetBF() const { return pabf; }
-
-   const MPI_Comm comm;
-   const int dim;
-   ParBilinearForm pabf;
-   int ess_tdofs_count;
-   Array<int> ess_tdofs;
-   OperatorPtr mass;
-};
-
-} // namespace mfem::hydrodynamics
+#endif // MFEM_LAGHOS_ASSEMBLY

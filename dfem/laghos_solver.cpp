@@ -81,17 +81,347 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-MFEM_HOST_DEVICE inline
-real_t taylor_source(const Vector &x)
-{
-   return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
-                               cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
-};
 
-template <typename T> MFEM_HOST_DEVICE inline
-T smoothmax(const real_t a, const T b, const real_t k = 1e-6)
+LagrangianHydroOperator::LagrangianHydroOperator(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   Array<int> &ess_tdof,
+   const IntegrationRule &ir,
+   FunctionCoefficient &rho0_coeff,
+   ParGridFunction &x0_gf,
+   ParGridFunction &rho0_gf,
+   ParGridFunction &material_gf,
+   std::shared_ptr<DifferentiableOperator> update_qdata,
+   std::shared_ptr<DifferentiableOperator> dtest_mf,
+   std::shared_ptr<DifferentiableOperator> momentum_mf,
+   std::shared_ptr<DifferentiableOperator> momentum_pa,
+   std::shared_ptr<DifferentiableOperator> energy_conservation_mf,
+   std::shared_ptr<DifferentiableOperator> energy_conservation_pa,
+   std::shared_ptr<DifferentiableOperator> total_internal_energy_mf,
+   std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf,
+   std::shared_ptr<DifferentiableOperator> density_mf,
+   std::shared_ptr<DifferentiableOperator> taylor_source_mf,
+   std::shared_ptr<QuadratureData> qdata,
+   const bool &fd_gradient,
+   const int &dump_jacobians,
+   const int &nonlinear_maximum_iterations,
+   const real_t &nonlinear_relative_tolerance,
+   const int &krylov_maximum_iterations,
+   const int &preconditioner_lag,
+   const PRECONDITIONER_TYPE &preconditioner_type,
+   Vector& external_data) :
+   TimeDependentOperator(2*H1.GetVSize()+L2.GetVSize()),
+   H1(H1),
+   L2(L2),
+   H1c(H1.GetParMesh(), H1.FEColl(), 1),
+   ess_tdof(ess_tdof),
+   ir(ir),
+   x0(x0_gf),
+   rho0(rho0_gf),
+   material(material_gf),
+   update_qdata(update_qdata),
+   dtest_mf(dtest_mf),
+   momentum_mf(momentum_mf),
+   momentum_pa(momentum_pa),
+   energy_conservation_mf(energy_conservation_mf),
+   energy_conservation_pa(energy_conservation_pa),
+   total_internal_energy_mf(total_internal_energy_mf),
+   total_kinetic_energy_mf(total_kinetic_energy_mf),
+   density_mf(density_mf),
+   taylor_source_mf(taylor_source_mf),
+   qdata(qdata),
+   mesh_nodes(&H1),
+   rhsvc(&H1c),
+   dvc(&H1c),
+   Mv_blf(&H1),
+   Me_blf(&L2),
+   rho0_coeff(rho0_coeff),
+   RHSv(H1.GetTrueVSize()),
+   rhsv(H1.GetVSize()),
+   X(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
+   Xv(H1.GetTrueVSize()),
+   Xvc(H1c.GetTrueVSize()),
+   Xe(L2.GetTrueVSize()),
+   K(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
+   B(H1c.GetTrueVSize()),
+   RHSe(L2.GetTrueVSize()),
+   rhse(L2.GetVSize()),
+   fd_gradient(fd_gradient),
+   dump_jacobians(dump_jacobians),
+   nonlinear_maximum_iterations(nonlinear_maximum_iterations),
+   nonlinear_relative_tolerance(nonlinear_relative_tolerance),
+   krylov_maximum_iterations(krylov_maximum_iterations),
+   preconditioner_lag(preconditioner_lag),
+   preconditioner_type(preconditioner_type),
+   external_data(external_data)
 {
-   return 0.5 * (a + b + sqrt((a-b)*(a-b) + k*k));
+   Mv = new MassPAOperator(H1c, ir, rho0_coeff);
+   Array<int> empty_tdofs;
+   Mv_Jprec = new OperatorJacobiSmoother(Mv->GetBF(), empty_tdofs);
+
+   Me = new MassPAOperator(L2, ir, rho0_coeff);
+
+   // Inside the above constructors for mass, there is reordering of the mesh
+   // nodes which is performed on the host. Since the mesh nodes are a
+   // subvector, so we need to sync with the rest of the base vector (which
+   // is assumed to be in the memory space used by the mfem::Device).
+   H1.GetParMesh()->GetNodes()->ReadWrite();
+   // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
+   // we must enforce v_x/y/z = 0 for the velocity components.
+   const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
+   Array<int> ess_bdr(bdr_attr_max);
+   for (int c = 0; c < H1.GetMesh()->Dimension(); c++)
+   {
+      ess_bdr = 0;
+      ess_bdr[c] = 1;
+      H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
+      c_tdofs[c].Read();
+   }
+
+   Mv_blf.AddDomainIntegrator(new VectorMassIntegrator(rho0_coeff, &ir));
+   Mv_blf.Assemble();
+   Mv_blf.FormSystemMatrix(mfem::Array<int>(), Mv_mat);
+
+   Me_blf.AddDomainIntegrator(new MassIntegrator(rho0_coeff, &ir));
+   Me_blf.Assemble();
+   Me_blf.FormSystemMatrix(mfem::Array<int>(), Me_mat);
+
+   residual.reset(new LagrangianHydroResidualOperator(*this, X, fd_gradient,
+                                                      dump_jacobians));
+
+   preconditioner.reset(new Preconditioner(*this));
+
+   auto gmres = new GMRESSolver(MPI_COMM_WORLD);
+   gmres->SetKDim(500);
+   gmres->SetMaxIter(krylov_maximum_iterations);
+   gmres->SetRelTol(1e-12);
+   gmres->SetAbsTol(0.0);
+   gmres->SetPrintLevel(IterativeSolver::PrintLevel().None());
+   gmres->SetPreconditioner(*preconditioner);
+   krylov.reset(gmres);
+
+   newton.reset(new LineSearchNewtonSolver(MPI_COMM_WORLD, *this));
+   newton->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
+   newton->SetOperator(*residual);
+   newton->SetSolver(*krylov);
+   newton->SetMaxIter(nonlinear_maximum_iterations);
+   newton->SetRelTol(nonlinear_relative_tolerance);
+   newton->SetAbsTol(0.0);
+}
+
+LagrangianHydroOperator::~LagrangianHydroOperator()
+{
+   delete Mv;
+   delete Mv_Jprec;
+   delete Me;
+}
+
+void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
+{
+   UpdateMesh(S);
+   UpdateQuadratureData(S);
+
+   auto sptr = const_cast<Vector*>(&S);
+   const int H1vsize = H1.GetVSize();
+
+   ParGridFunction x, v, e;
+   x.MakeRef(&H1, *sptr, 0);
+   v.MakeRef(&H1, *sptr, H1vsize);
+   e.MakeRef(&L2, *sptr, 2*H1vsize);
+
+   ParGridFunction dx, dv, de;
+   dx.MakeRef(&H1, dSdt, 0);
+   dv.MakeRef(&H1, dSdt, H1vsize);
+   de.MakeRef(&L2, dSdt, 2*H1vsize);
+
+   // solve position
+   dx = v;
+
+   // solve velocity
+   {
+      dv = 0.0;
+
+      MultiVector Y{RHSv};
+      momentum_pa->Mult(MultiVector{qdata->stressp}, Y);
+      RHSv.Neg();
+      H1.GetRestrictionMatrix()->MultTranspose(RHSv, rhsv);
+
+      // solve for each velocity component
+      const int size = H1c.GetVSize();
+      const Operator *Pconf = H1c.GetProlongationMatrix();
+      for (int c = 0; c < H1.GetMesh()->Dimension(); c++)
+      {
+         dvc.MakeRef(&H1c, dSdt, H1vsize + c*size);
+         rhsvc.MakeRef(&H1c, rhsv, c*size);
+         if (Pconf)
+         {
+            Pconf->MultTranspose(rhsvc, B);
+         }
+         else
+         {
+            B = rhsvc;
+         }
+
+         CGSolver cg(H1c.GetParMesh()->GetComm());
+         cg.SetPreconditioner(*Mv_Jprec);
+         cg.SetOperator(*Mv);
+         cg.SetRelTol(1e-8);
+         cg.SetAbsTol(0.0);
+         cg.SetMaxIter(300);
+         cg.SetPrintLevel(-1);
+
+         H1c.GetRestrictionMatrix()->Mult(dvc, Xvc);
+         Mv->SetEssentialTrueDofs(c_tdofs[c]);
+         Mv->EliminateRHS(B);
+         cg.Mult(B, Xvc);
+         if (Pconf)
+         {
+            Pconf->Mult(Xvc, dvc);
+         }
+         else
+         {
+            dvc = Xvc;
+         }
+         dvc.GetMemory().SyncAlias(dSdt.GetMemory(), dvc.Size());
+      }
+   }
+
+   // solve energy
+   {
+      de = 0.0;
+
+      MultiVector Y{RHSe};
+      energy_conservation_pa->Mult(MultiVector{v, qdata->stressp}, Y);
+      L2.GetRestrictionMatrix()->MultTranspose(RHSe, rhse);
+
+      if (problem == 0 && L2.GetMesh()->Dimension() == 2)
+      {
+         LinearForm e_source(&L2);
+         e_source = 0.0;
+         L2.GetMesh()->DeleteGeometricFactors();
+
+         // MFEM_HOST_DEVICE inline
+         const auto taylor_source = [](const Vector &x)
+         {
+            return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
+                                        cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
+         };
+         FunctionCoefficient coeff(taylor_source);
+         DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
+         e_source.AddDomainIntegrator(d);
+         e_source.UseFastAssembly(true);
+         e_source.Assemble();
+
+         rhse += e_source;
+      }
+
+      CGSolver cg(L2.GetParMesh()->GetComm());
+      cg.SetOperator(*Me);
+      cg.iterative_mode = false;
+      cg.SetRelTol(1e-8);
+      cg.SetAbsTol(0.0);
+      cg.SetMaxIter(300);
+      cg.SetPrintLevel(-1);
+      cg.Mult(rhse, de);
+      de.GetMemory().SyncAlias(dSdt.GetMemory(), de.Size());
+   }
+
+   qdata_is_current = false;
+}
+
+void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
+{
+   Vector* sptr = const_cast<Vector*>(&S);
+   mesh_nodes.MakeRef(&H1, *sptr, 0);
+   H1.GetParMesh()->NewNodes(mesh_nodes, false);
+}
+
+real_t LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S)
+{
+   MFEM_VERIFY(dtest_mf, "dt estimate operator (dtest_mf) is null");
+   MFEM_VERIFY(qdata, "quadrature data (qdata) is null");
+
+   UpdateMesh(S);
+   UpdateQuadratureData(S);
+
+   real_t dt_est_local = LocalTimeStepEstimate(S);
+   if (stage_dt_estimate) { dt_est_local = fmin(dt_est_local, dt_est_stages); }
+
+   real_t dt_est_global;
+   MPI_Allreduce(&dt_est_local, &dt_est_global, 1, MPITypeMap<real_t>::mpi_type,
+                 MPI_MIN,
+                 L2.GetComm());
+
+   return dt_est_global;
+}
+
+void LagrangianHydroOperator::ResetTimeStepEstimate() const
+{
+   external_data[EXT_DATA_IDX::DT_ESTIMATE] =
+      std::numeric_limits<double>::infinity();
+   dt_est_stages = std::numeric_limits<real_t>::infinity();
+}
+
+void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
+{
+   rho.SetSpace(&L2);
+
+   ParGridFunction rhs_l(&L2);
+
+   Vector rho0_t(L2.GetTrueVSize()),
+          rho_t(L2.GetTrueVSize()),
+          rhs(L2.GetTrueVSize());
+
+   const int l2dofs_cnt = L2.GetFE(0)->GetDof();
+   DenseMatrix Mrho(l2dofs_cnt);
+   DenseMatrixInverse inv(&Mrho);
+   Vector rhs_e(l2dofs_cnt), rho_z(l2dofs_cnt);
+   Array<int> dofs(l2dofs_cnt);
+   MassIntegrator mi(&ir);
+
+   L2.GetProlongationMatrix()->MultTranspose(rho0, rho0_t);
+   MultiVector Y{rhs};
+   density_mf->Mult(MultiVector{rho0_t, x0}, Y);
+   L2.GetProlongationMatrix()->Mult(rhs, rhs_l);
+
+   for (int e = 0; e < L2.GetParMesh()->GetNE(); e++)
+   {
+      const FiniteElement &fe = *L2.GetFE(e);
+      ElementTransformation &eltr = *L2.GetElementTransformation(e);
+      L2.GetElementDofs(e, dofs);
+      mi.AssembleElementMatrix(fe, eltr, Mrho);
+      inv.Factor();
+      rhs_l.GetElementDofValues(e, rhs_e);
+      inv.Mult(rhs_e, rho_z);
+      rho.SetSubVector(dofs, rho_z);
+   }
+}
+
+real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e) const
+{
+   const auto mt = Device::GetDeviceMemoryType();
+   Vector E(L2.GetTrueVSize(), mt), Y(L2.GetTrueVSize(), mt);
+   L2.GetRestrictionMatrix()->Mult(e, E);
+   MultiVector MY{Y};
+   total_internal_energy_mf->Mult(MultiVector{E, rho0, x0}, MY);
+   const real_t ie_local = Y.Sum();
+   real_t ie_global = 0.0;
+   MPI_Allreduce(&ie_local, &ie_global, 1, MPI_DOUBLE, MPI_SUM,
+                 L2.GetParMesh()->GetComm());
+   return ie_global;
+}
+
+real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v) const
+{
+   const auto mt = Device::GetDeviceMemoryType();
+   Vector Y(L2.GetTrueVSize(), mt);
+   MultiVector MY{Y};
+   total_kinetic_energy_mf->Mult(MultiVector{v, rho0, x0}, MY);
+   const real_t ke_local = Y.Sum();
+   real_t ke_global = 0.0;
+   MPI_Allreduce(&ke_local, &ke_global, 1, MPI_DOUBLE, MPI_SUM,
+                 H1.GetParMesh()->GetComm());
+   return ke_global;
 }
 
 // Smooth transition between 0 and 1 for x in [-eps, eps].
@@ -102,6 +432,27 @@ T smooth_step_01(const T x, const real_t eps)
    if (y < 0.0) { return T{0.0}; }
    if (y > 1.0) { return T{1.0}; }
    return (3.0 - 2.0 * y) * y * y;
+}
+
+void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
+{
+   if (qdata_is_current) { return; }
+   qdata_is_current = true;
+
+   auto sptr = const_cast<Vector*>(&S);
+   const int H1vsize = H1.GetVSize();
+   ParGridFunction x, v, e;
+   x.MakeRef(&H1, *sptr, 0);
+   v.MakeRef(&H1, *sptr, H1vsize);
+   e.MakeRef(&L2, *sptr, 2*H1vsize);
+   MultiVector Y{qdata->stressp};
+   update_qdata->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
+
+   // As stock Laghos: the estimate is the min over all the updates
+   if (stage_dt_estimate)
+   {
+      dt_est_stages = fmin(dt_est_stages, LocalTimeStepEstimate(S));
+   }
 }
 
 template <typename T> MFEM_HOST_DEVICE inline
@@ -247,6 +598,10 @@ matd_t<DIM, T> qdata_setup(
    const T rho = rho0 * det(J0) / detJ;
    // The stock Laghos viscosity (type 1) also uses the stock clamp of E
    const bool stock_av = use_viscosity && viscosity_type == 1;
+   const auto smoothmax = [](const real_t a, const T b, const real_t k = 1e-6)
+   {
+      return 0.5 * (a + b + sqrt((a-b)*(a-b) + k*k));
+   };
    const T Ez = stock_av ? fmax(0.0, E) : smoothmax(0.0, E, 1e-6);
    T dt_visc_coeff{0.0};
 
@@ -931,240 +1286,6 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
    }
 }
 
-LagrangianHydroOperator::LagrangianHydroOperator(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   Array<int> &ess_tdof,
-   const IntegrationRule &ir,
-   FunctionCoefficient &rho0_coeff,
-   ParGridFunction &x0_gf,
-   ParGridFunction &rho0_gf,
-   ParGridFunction &material_gf,
-   std::shared_ptr<DifferentiableOperator> update_qdata,
-   std::shared_ptr<DifferentiableOperator> dtest_mf,
-   std::shared_ptr<DifferentiableOperator> momentum_mf,
-   std::shared_ptr<DifferentiableOperator> momentum_pa,
-   std::shared_ptr<DifferentiableOperator> energy_conservation_mf,
-   std::shared_ptr<DifferentiableOperator> energy_conservation_pa,
-   std::shared_ptr<DifferentiableOperator> total_internal_energy_mf,
-   std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf,
-   std::shared_ptr<DifferentiableOperator> density_mf,
-   std::shared_ptr<DifferentiableOperator> taylor_source_mf,
-   std::shared_ptr<QuadratureData> qdata,
-   const bool &fd_gradient,
-   const int &dump_jacobians,
-   const int &nonlinear_maximum_iterations,
-   const real_t &nonlinear_relative_tolerance,
-   const int &krylov_maximum_iterations,
-   const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type,
-   Vector& external_data) :
-   TimeDependentOperator(2*H1.GetVSize()+L2.GetVSize()),
-   H1(H1),
-   L2(L2),
-   H1c(H1.GetParMesh(), H1.FEColl(), 1),
-   ess_tdof(ess_tdof),
-   ir(ir),
-   x0(x0_gf),
-   rho0(rho0_gf),
-   material(material_gf),
-   update_qdata(update_qdata),
-   dtest_mf(dtest_mf),
-   momentum_mf(momentum_mf),
-   momentum_pa(momentum_pa),
-   energy_conservation_mf(energy_conservation_mf),
-   energy_conservation_pa(energy_conservation_pa),
-   total_internal_energy_mf(total_internal_energy_mf),
-   total_kinetic_energy_mf(total_kinetic_energy_mf),
-   density_mf(density_mf),
-   taylor_source_mf(taylor_source_mf),
-   qdata(qdata),
-   mesh_nodes(&H1),
-   rhsvc(&H1c),
-   dvc(&H1c),
-   Mv_blf(&H1),
-   Me_blf(&L2),
-   rho0_coeff(rho0_coeff),
-   RHSv(H1.GetTrueVSize()),
-   rhsv(H1.GetVSize()),
-   X(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
-   Xv(H1.GetTrueVSize()),
-   Xvc(H1c.GetTrueVSize()),
-   Xe(L2.GetTrueVSize()),
-   K(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
-   B(H1c.GetTrueVSize()),
-   RHSe(L2.GetTrueVSize()),
-   rhse(L2.GetVSize()),
-   fd_gradient(fd_gradient),
-   dump_jacobians(dump_jacobians),
-   nonlinear_maximum_iterations(nonlinear_maximum_iterations),
-   nonlinear_relative_tolerance(nonlinear_relative_tolerance),
-   krylov_maximum_iterations(krylov_maximum_iterations),
-   preconditioner_lag(preconditioner_lag),
-   preconditioner_type(preconditioner_type),
-   external_data(external_data)
-{
-   Mv = new MassPAOperator(H1c, ir, rho0_coeff);
-   Array<int> empty_tdofs;
-   Mv_Jprec = new OperatorJacobiSmoother(Mv->GetBF(), empty_tdofs);
-
-   Me = new MassPAOperator(L2, ir, rho0_coeff);
-
-   // Inside the above constructors for mass, there is reordering of the mesh
-   // nodes which is performed on the host. Since the mesh nodes are a
-   // subvector, so we need to sync with the rest of the base vector (which
-   // is assumed to be in the memory space used by the mfem::Device).
-   H1.GetParMesh()->GetNodes()->ReadWrite();
-   // Attributes 1/2/3 correspond to fixed-x/y/z boundaries, i.e.,
-   // we must enforce v_x/y/z = 0 for the velocity components.
-   const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
-   Array<int> ess_bdr(bdr_attr_max);
-   for (int c = 0; c < H1.GetMesh()->Dimension(); c++)
-   {
-      ess_bdr = 0;
-      ess_bdr[c] = 1;
-      H1c.GetEssentialTrueDofs(ess_bdr, c_tdofs[c]);
-      c_tdofs[c].Read();
-   }
-
-   Mv_blf.AddDomainIntegrator(new VectorMassIntegrator(rho0_coeff, &ir));
-   Mv_blf.Assemble();
-   Mv_blf.FormSystemMatrix(mfem::Array<int>(), Mv_mat);
-
-   Me_blf.AddDomainIntegrator(new MassIntegrator(rho0_coeff, &ir));
-   Me_blf.Assemble();
-   Me_blf.FormSystemMatrix(mfem::Array<int>(), Me_mat);
-
-   residual.reset(new LagrangianHydroResidualOperator(*this, X, fd_gradient,
-                                                      dump_jacobians));
-
-   preconditioner.reset(new Preconditioner(*this));
-
-   auto gmres = new GMRESSolver(MPI_COMM_WORLD);
-   gmres->SetKDim(500);
-   gmres->SetMaxIter(krylov_maximum_iterations);
-   gmres->SetRelTol(1e-12);
-   gmres->SetAbsTol(0.0);
-   gmres->SetPrintLevel(IterativeSolver::PrintLevel().None());
-   gmres->SetPreconditioner(*preconditioner);
-   krylov.reset(gmres);
-
-   newton.reset(new LineSearchNewtonSolver(MPI_COMM_WORLD, *this));
-   newton->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
-   newton->SetOperator(*residual);
-   newton->SetSolver(*krylov);
-   newton->SetMaxIter(nonlinear_maximum_iterations);
-   newton->SetRelTol(nonlinear_relative_tolerance);
-   newton->SetAbsTol(0.0);
-}
-
-void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
-{
-   UpdateMesh(S);
-   UpdateQuadratureData(S);
-
-   auto sptr = const_cast<Vector*>(&S);
-   const int H1vsize = H1.GetVSize();
-
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1vsize);
-   e.MakeRef(&L2, *sptr, 2*H1vsize);
-
-   ParGridFunction dx, dv, de;
-   dx.MakeRef(&H1, dSdt, 0);
-   dv.MakeRef(&H1, dSdt, H1vsize);
-   de.MakeRef(&L2, dSdt, 2*H1vsize);
-
-   // solve position
-   dx = v;
-
-   // solve velocity
-   {
-      dv = 0.0;
-
-      MultiVector Y{RHSv};
-      momentum_pa->Mult(MultiVector{qdata->stressp}, Y);
-      RHSv.Neg();
-      H1.GetRestrictionMatrix()->MultTranspose(RHSv, rhsv);
-
-      // solve for each velocity component
-      const int size = H1c.GetVSize();
-      const Operator *Pconf = H1c.GetProlongationMatrix();
-      for (int c = 0; c < H1.GetMesh()->Dimension(); c++)
-      {
-         dvc.MakeRef(&H1c, dSdt, H1vsize + c*size);
-         rhsvc.MakeRef(&H1c, rhsv, c*size);
-         if (Pconf)
-         {
-            Pconf->MultTranspose(rhsvc, B);
-         }
-         else
-         {
-            B = rhsvc;
-         }
-
-         CGSolver cg(H1c.GetParMesh()->GetComm());
-         cg.SetPreconditioner(*Mv_Jprec);
-         cg.SetOperator(*Mv);
-         cg.SetRelTol(1e-8);
-         cg.SetAbsTol(0.0);
-         cg.SetMaxIter(300);
-         cg.SetPrintLevel(-1);
-
-         H1c.GetRestrictionMatrix()->Mult(dvc, Xvc);
-         Mv->SetEssentialTrueDofs(c_tdofs[c]);
-         Mv->EliminateRHS(B);
-         cg.Mult(B, Xvc);
-         if (Pconf)
-         {
-            Pconf->Mult(Xvc, dvc);
-         }
-         else
-         {
-            dvc = Xvc;
-         }
-         dvc.GetMemory().SyncAlias(dSdt.GetMemory(), dvc.Size());
-      }
-   }
-
-   // solve energy
-   {
-      de = 0.0;
-
-      MultiVector Y{RHSe};
-      energy_conservation_pa->Mult(MultiVector{v, qdata->stressp}, Y);
-      L2.GetRestrictionMatrix()->MultTranspose(RHSe, rhse);
-
-      if (problem == 0 && L2.GetMesh()->Dimension() == 2)
-      {
-         LinearForm e_source(&L2);
-         e_source = 0.0;
-         L2.GetMesh()->DeleteGeometricFactors();
-
-         FunctionCoefficient coeff(taylor_source);
-         DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
-         e_source.AddDomainIntegrator(d);
-         e_source.UseFastAssembly(true);
-         e_source.Assemble();
-
-         rhse += e_source;
-      }
-
-      CGSolver cg(L2.GetParMesh()->GetComm());
-      cg.SetOperator(*Me);
-      cg.iterative_mode = false;
-      cg.SetRelTol(1e-8);
-      cg.SetAbsTol(0.0);
-      cg.SetMaxIter(300);
-      cg.SetPrintLevel(-1);
-      cg.Mult(rhse, de);
-      de.GetMemory().SyncAlias(dSdt.GetMemory(), de.Size());
-   }
-
-   qdata_is_current = false;
-}
-
 void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
                                             Vector &k)
 {
@@ -1223,20 +1344,6 @@ void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
    L2.GetProlongationMatrix()->Mult(Ke, ke);
 }
 
-void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
-{
-   Vector* sptr = const_cast<Vector*>(&S);
-   mesh_nodes.MakeRef(&H1, *sptr, 0);
-   H1.GetParMesh()->NewNodes(mesh_nodes, false);
-}
-
-void LagrangianHydroOperator::ResetTimeStepEstimate() const
-{
-   external_data[EXT_DATA_IDX::DT_ESTIMATE] =
-      std::numeric_limits<double>::infinity();
-   dt_est_stages = std::numeric_limits<real_t>::infinity();
-}
-
 void LagrangianHydroOperator::ResetQuadratureData() const
 {
    qdata_is_current = false;
@@ -1246,87 +1353,6 @@ void LagrangianHydroOperator::ResetNewtonInfo()
 {
    newton_converged = true;
    newton_max_iter = -1;
-}
-
-real_t LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S)
-{
-   MFEM_VERIFY(dtest_mf, "dt estimate operator (dtest_mf) is null");
-   MFEM_VERIFY(qdata, "quadrature data (qdata) is null");
-
-   UpdateMesh(S);
-   UpdateQuadratureData(S);
-
-   real_t dt_est_local = LocalTimeStepEstimate(S);
-   if (stage_dt_estimate) { dt_est_local = fmin(dt_est_local, dt_est_stages); }
-
-   real_t dt_est_global;
-   MPI_Allreduce(&dt_est_local, &dt_est_global, 1, MPITypeMap<real_t>::mpi_type,
-                 MPI_MIN,
-                 L2.GetComm());
-
-   return dt_est_global;
-}
-
-real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e) const
-{
-   const auto mt = Device::GetDeviceMemoryType();
-   Vector E(L2.GetTrueVSize(), mt), Y(L2.GetTrueVSize(), mt);
-   L2.GetRestrictionMatrix()->Mult(e, E);
-   MultiVector MY{Y};
-   total_internal_energy_mf->Mult(MultiVector{E, rho0, x0}, MY);
-   const real_t ie_local = Y.Sum();
-   real_t ie_global = 0.0;
-   MPI_Allreduce(&ie_local, &ie_global, 1, MPI_DOUBLE, MPI_SUM,
-                 L2.GetParMesh()->GetComm());
-   return ie_global;
-}
-
-real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v) const
-{
-   const auto mt = Device::GetDeviceMemoryType();
-   Vector Y(L2.GetTrueVSize(), mt);
-   MultiVector MY{Y};
-   total_kinetic_energy_mf->Mult(MultiVector{v, rho0, x0}, MY);
-   const real_t ke_local = Y.Sum();
-   real_t ke_global = 0.0;
-   MPI_Allreduce(&ke_local, &ke_global, 1, MPI_DOUBLE, MPI_SUM,
-                 H1.GetParMesh()->GetComm());
-   return ke_global;
-}
-
-void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
-{
-   rho.SetSpace(&L2);
-
-   ParGridFunction rhs_l(&L2);
-
-   Vector rho0_t(L2.GetTrueVSize()),
-          rho_t(L2.GetTrueVSize()),
-          rhs(L2.GetTrueVSize());
-
-   const int l2dofs_cnt = L2.GetFE(0)->GetDof();
-   DenseMatrix Mrho(l2dofs_cnt);
-   DenseMatrixInverse inv(&Mrho);
-   Vector rhs_e(l2dofs_cnt), rho_z(l2dofs_cnt);
-   Array<int> dofs(l2dofs_cnt);
-   MassIntegrator mi(&ir);
-
-   L2.GetProlongationMatrix()->MultTranspose(rho0, rho0_t);
-   MultiVector Y{rhs};
-   density_mf->Mult(MultiVector{rho0_t, x0}, Y);
-   L2.GetProlongationMatrix()->Mult(rhs, rhs_l);
-
-   for (int e = 0; e < L2.GetParMesh()->GetNE(); e++)
-   {
-      const FiniteElement &fe = *L2.GetFE(e);
-      ElementTransformation &eltr = *L2.GetElementTransformation(e);
-      L2.GetElementDofs(e, dofs);
-      mi.AssembleElementMatrix(fe, eltr, Mrho);
-      inv.Factor();
-      rhs_l.GetElementDofValues(e, rhs_e);
-      inv.Mult(rhs_e, rho_z);
-      rho.SetSubVector(dofs, rho_z);
-   }
 }
 
 void LagrangianHydroOperator::DensityScatter()
@@ -1384,27 +1410,6 @@ real_t LagrangianHydroOperator::ComputeMinDet(const Vector &S) const
    return min;
 }
 
-void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
-{
-   if (qdata_is_current) { return; }
-   qdata_is_current = true;
-
-   auto sptr = const_cast<Vector*>(&S);
-   const int H1vsize = H1.GetVSize();
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1vsize);
-   e.MakeRef(&L2, *sptr, 2*H1vsize);
-   MultiVector Y{qdata->stressp};
-   update_qdata->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
-
-   // As stock Laghos: the estimate is the min over all the updates
-   if (stage_dt_estimate)
-   {
-      dt_est_stages = fmin(dt_est_stages, LocalTimeStepEstimate(S));
-   }
-}
-
 real_t LagrangianHydroOperator::LocalTimeStepEstimate(const Vector &S) const
 {
    auto sptr = const_cast<Vector*>(&S);
@@ -1421,13 +1426,6 @@ real_t LagrangianHydroOperator::LocalTimeStepEstimate(const Vector &S) const
 MemoryClass LagrangianHydroOperator::GetMemoryClass() const
 {
    return Device::GetDeviceMemoryClass();
-}
-
-LagrangianHydroOperator::~LagrangianHydroOperator()
-{
-   delete Mv;
-   delete Mv_Jprec;
-   delete Me;
 }
 
 template <int DIM>
