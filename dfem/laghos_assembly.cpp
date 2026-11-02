@@ -22,10 +22,6 @@ namespace mfem
 namespace hydrodynamics
 {
 
-// [⚠️ LEGACY ⚠️] class DensityIntegrator ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-
-// [⚠️ LEGACY ⚠️] class ForceIntegrator ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-
 MassPAOperator::MassPAOperator(ParFiniteElementSpace &pfes,
                                const IntegrationRule &ir,
                                Coefficient &Q) :
@@ -74,8 +70,6 @@ void MassPAOperator::FullAddMult(const Vector &x, Vector &y) const
 {
    mass->AddMult(x, y);
 }
-
-// [⚠️ LEGACY ⚠️] class ForcePAOperator ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 
 } // namespace hydrodynamics
 

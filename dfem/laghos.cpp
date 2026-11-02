@@ -54,13 +54,10 @@
 // Sample runs: see README.md, section 'Verification of Results'.
 
 #include "laghos_solver.hpp"
+#include "laghos_hydro.hpp"
 #include "laghos_tests.hpp"
 
-using std::cout;
-using std::endl;
 using namespace mfem;
-
-static void display_banner(std::ostream&);
 
 // Choice for the problem setup.
 int problem;
@@ -70,9 +67,6 @@ int main(int argc, char *argv[])
    LaghosResults *results = laghos_results; // set by laghos_tests
    if (!Mpi::IsInitialized()) { Mpi::Init(); }
    Hypre::Init();
-
-   // Print the banner.
-   if (Mpi::Root()) { display_banner(cout); }
 
    mfem::out << std::setprecision(15);
 
@@ -782,15 +776,4 @@ int main(int argc, char *argv[])
    delete hydro;
 
    return 0;
-}
-
-static void display_banner(std::ostream &os)
-{
-   os << endl
-      << "       __                __                 " << endl
-      << "      / /   ____  ____  / /_  ____  _____   " << endl
-      << "     / /   / __ `/ __ `/ __ \\/ __ \\/ ___/ " << endl
-      << "    / /___/ /_/ / /_/ / / / / /_/ (__  )    " << endl
-      << "   /_____/\\__,_/\\__, /_/ /_/\\____/____/  " << endl
-      << "               /____/                       " << endl << endl;
 }

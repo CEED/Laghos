@@ -19,8 +19,20 @@
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
+#include <fem/dfem/doperator.hpp>
 
 #ifdef MFEM_USE_MPI
+
+using mfem::future::DifferentiableOperator;
+using mfem::future::DerivativeOperator;
+using mfem::future::FieldDescriptor;
+using mfem::future::FDJacobian;
+using mfem::future::Gradient;
+using mfem::future::Identity;
+using mfem::future::Weight;
+using mfem::future::Value;
+
+using mfem::future::tensor;
 
 namespace mfem
 {
@@ -54,18 +66,21 @@ struct TimingData
       L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
 };
 
-// [⚠️ LEGACY ⚠️] class QUpdate ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
 class LagrangianHydroOperator : public TimeDependentOperator
 {
-protected:
-
 public:
+
+   enum PRECONDITIONER_TYPE { BLOCK_DIAGONAL_AMG = 0 };
 
    class LineSearchNewtonSolver : public NewtonSolver
    {
+      real_t beta;        // Backtracking factor (how much to reduce step)
+      real_t alpha;       // Sufficient decrease parameter
+      int max_line_iter;  // Maximum line search iterations
+      mutable Vector x_new, r_new, s_new;
+      const LagrangianHydroOperator &hydro;
    public:
       LineSearchNewtonSolver(MPI_Comm comm, const LagrangianHydroOperator &hydro)
          : NewtonSolver(comm),
@@ -73,19 +88,10 @@ public:
            alpha(1e-2),  // Sufficient decrease constant (Armijo condition)
            max_line_iter(5),
            hydro(hydro) {}
-
    protected:
       void ProcessNewState(const Vector &x) const override;
-
       // Override the scaling factor computation to implement line search
       real_t ComputeScalingFactor(const Vector &x, const Vector &b) const override;
-
-   private:
-      real_t beta;        // Backtracking factor (how much to reduce step)
-      real_t alpha;       // Sufficient decrease parameter
-      int max_line_iter;  // Maximum line search iterations
-      mutable Vector x_new, r_new, s_new;
-      const LagrangianHydroOperator &hydro;
    };
 
    class LagrangianHydroJacobianOperator : public Operator
@@ -116,9 +122,7 @@ public:
          dRvdx(dRvdx), dRvdv(dRvdv), dRvde(dRvde),
          dRedx(dRedx), dRedv(dRedv), dRede(dRede),
          dTaylorSourcedx(dTaylorSourcedx) { }
-
       void Mult(const Vector &u, Vector &y) const override;
-
       virtual MemoryClass GetMemoryClass() const override;
       const real_t GetH() const { return h; }
       auto GetdRvdv() const { return dRvdv; }
@@ -136,11 +140,8 @@ public:
    public:
       Preconditioner(LagrangianHydroOperator &hydro) :
          Solver(hydro.Height()), hydro(hydro) {};
-
-      void SetRebuildFlag(bool flag);
-
+      void SetRebuildFlag(bool flag) { rebuild = flag; }
       void SetOperator(const Operator &op) override;
-
       void Mult(const Vector &x, Vector &y) const override;
    };
 
@@ -157,9 +158,8 @@ public:
       bool fd_gradient;
       int dump_jacobians;
    public:
-      LagrangianHydroResidualOperator(
-         LagrangianHydroOperator &hydro, const Vector &x,
-         const bool fd_gradient, const int dump_jacobians) :
+      LagrangianHydroResidualOperator(LagrangianHydroOperator &hydro, const Vector &x,
+                                      const bool fd_gradient, const int dump_jacobians) :
          Operator(2*hydro.H1.GetTrueVSize()+hydro.L2.GetTrueVSize()),
          hydro(hydro),
          H1tsize(hydro.H1.GetTrueVSize()),
@@ -179,8 +179,6 @@ public:
 
       Operator& GetGradient(const Vector &k) const override;
    };
-
-   enum PRECONDITIONER_TYPE { BLOCK_DIAGONAL_AMG = 0 };
 
    LagrangianHydroOperator(ParFiniteElementSpace &H1,
                            ParFiniteElementSpace &L2,
@@ -214,7 +212,8 @@ public:
    // Solve for dx_dt, dv_dt and de_dt.
    void Mult(const Vector &S, Vector &dSdt) const override;
 
-   virtual MemoryClass GetMemoryClass() const override;
+   virtual MemoryClass GetMemoryClass() const override
+   { return Device::GetDeviceMemoryClass(); }
 
    void UpdateMesh(const Vector &S) const;
 
@@ -290,35 +289,7 @@ public:
    mutable real_t dt_est_stages = std::numeric_limits<real_t>::infinity();
 };
 
-// Builds the dFEM operators and returns a new LagrangianHydroOperator
-template <int DIM>
-LagrangianHydroOperator *CreateLagrangianHydroOperator(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   Array<int> &ess_tdof,
-   FunctionCoefficient &rho0_coeff,
-   ParGridFunction &x0_gf,
-   ParGridFunction &rho0_gf,
-   ParGridFunction &material_gf,
-   Vector &external_data,
-   const IntegrationRule &ir,
-   const bool &fd_gradient,
-   const int &dump_jacobians,
-   const int &nonlinear_maximum_iterations,
-   const real_t &nonlinear_relative_tolerance,
-   const int &krylov_maximum_iterations,
-   const int &preconditioner_lag,
-   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type);
-
-// [⚠️ LEGACY ⚠️] class TaylorCoefficient ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-
-// [⚠️ LEGACY ⚠️] class RTCoefficient ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-
 } // namespace hydrodynamics
-
-// [⚠️ LEGACY ⚠️] class HydroODESolver ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-
-// [⚠️ LEGACY ⚠️] class RK2AvgSolver ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 
 } // namespace mfem
 
