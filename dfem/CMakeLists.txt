@@ -43,70 +43,56 @@ target_compile_definitions(laghos_tests PRIVATE
   LAGHOS_DATA_DIR="${PROJECT_SOURCE_DIR}/data/")
 target_link_libraries(laghos_tests PRIVATE laghos_tests_lib laghos_dfem_lib)
 
-# Devices of the ctest variants: the GPU of MFEM, if any, and the debug device,
-# ctest -L device, or ctest -LE device for the cpu tests only
-set(devices debug)
+# Name tags of the MFEM devices and of the q-function backends: cpu, dbg for
+# debug, gpu for cuda or hip, loc for local and glb for global
+set(device_cpu cpu)
+set(device_dbg debug)
+set(devices cpu)
 if (MFEM_USE_CUDA)
-  set(devices cuda debug)
+  set(device_gpu cuda)
+  list(APPEND devices gpu)
 elseif (MFEM_USE_HIP)
-  set(devices hip debug)
+  set(device_gpu hip)
+  list(APPEND devices gpu)
 endif()
+list(APPEND devices dbg)
+set(qf_loc local)
+set(qf_glb global)
 
-# One ctest per device of a test on np ranks with the qf q-function backend,
-# dfem_<name> on the cpu and dfem_<device>_<name> otherwise, with a global_
-# name prefix and label for the global q-functions, no colors: mpiexec may give
-# a pseudo-terminal
-function(laghos_test name test np label qf)
-  set(qf_labels)
-  if (qf STREQUAL global)
-    set(name global_${name})
-    set(qf_labels global)
-  endif()
-  foreach(device ${ARGN})
-    if (device STREQUAL cpu)
-      set(ctest dfem_${name})
-      set(labels ${label} ${qf_labels})
-    else()
-      set(ctest dfem_${device}_${name})
-      set(labels ${label} ${qf_labels} device ${device})
-    endif()
-    add_test(NAME ${ctest}
-      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
-              $<TARGET_FILE:laghos_tests> --device ${device} --qf ${qf} ${test})
-    set_tests_properties(${ctest} PROPERTIES ENVIRONMENT NO_COLOR=1
-      LABELS "${labels}")
-  endforeach()
+# Tests of the TEST_CASE names of laghos_tests.cpp, exp_ or imp_ prefixed
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS laghos_tests.cpp)
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/laghos_tests.cpp tests
+  REGEX "^TEST_CASE\\(\"")
+list(TRANSFORM tests REPLACE "^TEST_CASE\\(\"([^\"]+)\".*" "\\1")
+
+# One ctest dfem_<device>_<qf>_<test>_np<np>, labeled with its device, its
+# q-function backend, exp or imp, and chk for the README checks or run, no
+# colors: mpiexec may give a pseudo-terminal
+function(laghos_test device qf test np)
+  set(ctest dfem_${device}_${qf}_${test}_np${np})
+  string(SUBSTRING ${test} 0 3 run)
+  string(SUBSTRING ${test} 4 3 kind)
+  set(labels ${device} ${qf} ${run} ${kind})
+  add_test(NAME ${ctest}
+    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+            $<TARGET_FILE:laghos_tests> --device ${device_${device}}
+            --qf ${qf_${qf}} ${test})
+  set_tests_properties(${ctest} PROPERTIES ENVIRONMENT NO_COLOR=1
+    LABELS "${labels}")
 endfunction()
 
-# Runs of each q-function backend with the same references, ctest -L global,
-# or ctest -LE global for the local q-functions only
-foreach(qf local global)
-  # Explicit runs with the same references on 1, 2 and 3 ranks
-  foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
-               taylor_green_2d taylor_green_3d taylor_green_3d_av
-               readme_taylor_green_2d readme_taylor_green_3d
-               readme_sedov_2d readme_sedov_3d
-               taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
-               triple_point_3d triple_point_3d_av)
-    laghos_test(${test} ${test} 1 explicit ${qf} cpu ${devices})
-    foreach(np 2 3)
-      laghos_test(${test}_np${np} ${test} ${np} explicit ${qf} cpu ${devices})
-    endforeach()
-  endforeach()
-
-  # Implicit Newton and AMG runs with the references of the pre-dfem-dev MFEM,
-  # ctest -L implicit, or ctest -LE implicit for the explicit tests only
-  foreach(test implicit_taylor_green_2d implicit_taylor_green_2d_be
-               implicit_sedov_2d implicit_sedov_2d_av implicit_sedov_2d_av1
-               implicit_taylor_green_3d implicit_sedov_3d_av)
-    set(test_devices ${devices})
-    # Debug device fault: hypre host reads of aliases protect valid device pages
-    if (test STREQUAL implicit_sedov_3d_av)
-      list(REMOVE_ITEM test_devices debug)
-    endif()
+# Runs on 1, 2 and 3 ranks of each test on each device with each q-function
+# backend, with the same references
+foreach(qf loc glb)
+  foreach(test ${tests})
     foreach(np 1 2 3)
-      laghos_test(${test}_np${np} ${test} ${np} implicit ${qf} cpu
-                  ${test_devices})
+      foreach(device ${devices})
+        # Debug device fault: hypre host reads of aliases protect valid pages
+        if (NOT (device STREQUAL dbg AND
+                 test STREQUAL imp_run_sdv_3d_q21_mid_av7_dtn))
+          laghos_test(${device} ${qf} ${test} ${np})
+        endif()
+      endforeach()
     endforeach()
   endforeach()
 endforeach()

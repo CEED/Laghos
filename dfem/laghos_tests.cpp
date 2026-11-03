@@ -18,13 +18,14 @@
 // the Catch2 of MFEM's tests/unit/catch.hpp:
 //
 //   laghos_tests                  runs all the tests
-//   laghos_tests sedov_2d         runs one test by name, as done by CTest
-//   laghos_tests "[taylor-green]" runs the tests with a given tag
-//   laghos_tests "[explicit]"     runs the explicit tests only, ctest -L explicit
-//   laghos_tests "[implicit]"     runs the implicit tests only, ctest -L implicit
+//   laghos_tests exp_run_sdv_2d_q21_rk3_av7_dtn runs one test, as done by CTest
+//   laghos_tests "[tgv]"          runs the tests with a given tag
+//   laghos_tests "[exp]"          runs the explicit tests only, ctest -L exp
+//   laghos_tests "[imp]"          runs the implicit tests only, ctest -L imp
+//   laghos_tests "[chk]"          runs the README checks only, ctest -L chk
 //   laghos_tests -v ...           also shows the raw Laghos output
 //   laghos_tests --device cuda    runs on a Device, one test per process
-//   laghos_tests --qf global      runs with global q-functions, ctest -L global
+//   laghos_tests --qf global      runs with global q-functions, ctest -L glb
 //   laghos_tests -h               Catch2 help
 
 #include <algorithm>
@@ -98,7 +99,7 @@ struct Test
 const Test runs[] =
 {
    {
-      "sedov_2d", "explicit RK3SSP, Q2-Q1, av-type 7, 2D",
+      "exp_run_sdv_2d_q21_rk3_av7_dtn", "explicit RK3SSP, Q2-Q1, av-type 7, 2D",
       "square01_quad.mesh",
       "-p 1 -dim 2 -rs 3 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 7 -tf 0.05",
       23,
@@ -106,7 +107,7 @@ const Test runs[] =
       1.4101829631350940e+01, 4.4195254279849605e+00, 4.2208594277324963e+01
    },
    {
-      "sedov_2d_rk2", "explicit RK2, Q2-Q1, av-type 7, 2D",
+      "exp_run_sdv_2d_q21_rk2_av7_dtn", "explicit RK2, Q2-Q1, av-type 7, 2D",
       "square01_quad.mesh",
       "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 2 -cfl 0.5 -av -av-type 7 -tf 0.05",
       6,
@@ -114,7 +115,7 @@ const Test runs[] =
       7.5779033060146155e+00, 1.5104070411987085e+00, 1.4249329026179177e+01
    },
    {
-      "sedov_3d", "explicit RK3SSP, Q2-Q1, av-type 7, 3D",
+      "exp_run_sdv_3d_q21_rk3_av7_dtn", "explicit RK3SSP, Q2-Q1, av-type 7, 3D",
       "cube01_hex.mesh",
       "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 7 -tf 0.02",
       6,
@@ -122,26 +123,26 @@ const Test runs[] =
       2.7832196671533371e+01, 3.3771156618999734e+00, 5.7714521901242946e+01
    },
    // Stock-comparable Sedov: stock Laghos tensor viscosity (-av-type 1) and
-   // time step estimate (-stock-dt), same steps, dt, ΔE and |e| as
+   // time step estimate (-dt-min), same steps, dt, ΔE and |e| as
    //   laghos -dim 2 -nx 1 -ny 1 -rs 3 -p 1 -ok 2 -ot 1 -s 3 -cfl 0.5 -tf 0.05 -fa
    //   laghos -dim 3 -nx 2 -ny 2 -nz 2 -rs 1 -p 1 -ok 2 -ot 1 -s 3 -cfl 0.5 -tf 0.02 -fa
    {
-      "sedov_2d_stock", "explicit RK3SSP, Q2-Q1, stock av, 2D",
+      "exp_run_sdv_2d_q21_rk3_av1_dtm", "explicit RK3SSP, Q2-Q1, stock av, 2D",
       "square01_quad.mesh",
-      "-p 1 -dim 2 -rs 3 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.05",
+      "-p 1 -dim 2 -rs 3 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -dt-min -tf 0.05",
       22, 1.5244822594611736e-03, 2.5005546874349194e-01, 1.4102287121585931e+01,
       4.5117390396546329e+00, 4.0702975696596390e+01
    },
    {
-      "sedov_3d_stock", "explicit RK3SSP, Q2-Q1, stock av, 3D",
+      "exp_run_sdv_3d_q21_rk3_av1_dtm", "explicit RK3SSP, Q2-Q1, stock av, 3D",
       "cube01_hex.mesh",
-      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02"
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -dt-min -tf 0.02"
       " -cgt 1e-10",
       4, 4.3725299546347671e-03, 1.2503911283965757e-01, 2.7832229285175924e+01,
       3.4262677649627276e+00, 5.6552559708157922e+01
    },
    {
-      "taylor_green_2d", "explicit RK4, Q3-Q2, no av, 2D",
+      "exp_run_tgv_2d_q32_rk4_av0_dtn", "explicit RK4, Q3-Q2, no av, 2D",
       "square01_quad.mesh",
       "-p 0 -dim 2 -rs 2 -ov 3 -oe 2 -s 4 -cfl 0.5 -tf 0.05",
       3,
@@ -149,7 +150,7 @@ const Test runs[] =
       1.0847749476402059e+01, 9.1602573868358732e+00, 1.8694024191662098e+01
    },
    {
-      "taylor_green_3d", "explicit RK4, Q2-Q1, no av, 3D",
+      "exp_run_tgv_3d_q21_rk4_av0_dtn", "explicit RK4, Q2-Q1, no av, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -tf 0.05",
       7,
@@ -157,45 +158,49 @@ const Test runs[] =
       1.1859990900590070e+01, 6.2046596711615782e+00, 1.1985122282081534e+03
    },
    {
-      "taylor_green_3d_av", "explicit RK4, Q2-Q1, av-type 7, 3D",
+      "exp_run_tgv_3d_q21_rk4_av7_dtn", "explicit RK4, Q2-Q1, av-type 7, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 7 -tf 0.05",
       18,
       1.4960934056207102e-03, 1.4993325988669309e+02,
       1.1858399916887008e+01, 9.9668537477810759e-01, 1.1994457713114568e+03
    },
-   // Smaller runs of the README 'Verification of Results' cases, with stock
-   // defaults (Q2-Q1, RK4, cfl 0.5), compared with (data/ meshes, -pa)
+   // Checks: smaller runs of the README 'Verification of Results' cases, with
+   // stock defaults (Q2-Q1, RK4, cfl 0.5), compared with (data/ meshes, -pa)
    //   laghos -p 0 -m square01_quad.mesh -rs 1 -tf 0.05   (README 1)
    //   laghos -p 0 -m cube01_hex.mesh -rs 1 -tf 0.01      (README 2)
    //   laghos -p 1 -m square01_quad.mesh -rs 2 -tf 0.05   (README 3)
    //   laghos -p 1 -m cube01_hex.mesh -rs 1 -tf 0.02      (README 4, -E0 1)
    // dFEM Laghos starts from a 1x1 square, one more -rs than the 2x2 mesh
    {
-      "readme_taylor_green_2d", "README 1, explicit RK4, Q2-Q1, no av, 2D",
+      "exp_chk_tgv_2d_q21_rk4_av0_dtn",
+      "README 1, explicit RK4, Q2-Q1, no av, 2D",
       "square01_quad.mesh",
       "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 4 -cfl 0.5 -tf 0.05",
       2, 1.7273414632041139e-02, 1.7496138442784803e+00, 7.5755635427647361e+00,
       6.3210512132666858e+00, 1.2508147843915047e+01
    },
    {
-      "readme_taylor_green_3d", "README 2, explicit RK4, Q2-Q1, no av, 3D",
+      "exp_chk_tgv_3d_q21_rk4_av0_dtn",
+      "README 2, explicit RK4, Q2-Q1, no av, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 1 -ov 2 -oe 1 -s 4 -cfl 0.5 -tf 0.01",
       3, 1.8178734530672098e-03, 1.4993721050652641e+02, 2.7831009958537454e+01,
       1.4156587512698188e+01, 3.3898742905766835e+03
    },
    {
-      "readme_sedov_2d", "README 3, explicit RK4, Q2-Q1, stock av, 2D",
+      "exp_chk_sdv_2d_q21_rk4_av1_dtm",
+      "README 3, explicit RK4, Q2-Q1, stock av, 2D",
       "square01_quad.mesh",
-      "-p 1 -dim 2 -rs 3 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.05",
+      "-p 1 -dim 2 -rs 3 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -dt-min -tf 0.05",
       21, 1.8984422273346600e-03, 2.5000401709103320e-01, 1.4102285371332647e+01,
       4.5108287429679663e+00, 4.0693374548498461e+01
    },
    {
-      "readme_sedov_3d", "README 4, explicit RK4, Q2-Q1, stock av, 3D",
+      "exp_chk_sdv_3d_q21_rk4_av1_dtm",
+      "README 4, explicit RK4, Q2-Q1, stock av, 3D",
       "cube01_hex.mesh",
-      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02"
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -dt-min -tf 0.02"
       " -cgt 1e-10",
       4, 4.3725299546347671e-03, 1.2500220220201469e-01, 2.7832227632577982e+01,
       3.4200678875411525e+00, 5.6528006524777794e+01
@@ -208,35 +213,35 @@ const Test runs[] =
    //   laghos -p 0 -dim 3 -m cube01_hex.mesh -rs 0 -ok 2 -ot 1 -s 4 -iv -tf 0.05
    //   laghos -p 3 -dim 3 -m box01_hex.mesh -rs 0 -ok 2 -ot 1 -s 4 -tf 0.2
    {
-      "taylor_green_3d_q1q0", "explicit RK4, Q1-Q0, no av, 3D",
+      "exp_run_tgv_3d_q10_rk4_av0_dtn", "explicit RK4, Q1-Q0, no av, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 1 -ov 1 -oe 0 -s 4 -cfl 0.5 -tf 0.05",
       7, 6.6060646756573873e-04, 1.4990434628565481e+02, 1.1859894505936010e+01,
       5.5879520246439682e+00, 1.1985981660785569e+03
    },
    {
-      "sedov_3d_q1q0_stock", "explicit RK3SSP, Q1-Q0, stock av, 3D",
+      "exp_run_sdv_3d_q10_rk3_av1_dtm", "explicit RK3SSP, Q1-Q0, stock av, 3D",
       "cube01_hex.mesh",
-      "-p 1 -dim 3 -rs 1 -ov 1 -oe 0 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.1",
+      "-p 1 -dim 3 -rs 1 -ov 1 -oe 0 -s 3 -cfl 0.5 -av -av-type 1 -dt-min -tf 0.1",
       6, 4.5106785655475044e-03, 1.2526730824116419e-01, 1.1868845859494494e+01,
       1.9848019446683176e+00, 6.8841771094494320e+00
    },
    {
-      "taylor_green_3d_stock_av", "explicit RK4, Q2-Q1, stock av, 3D",
+      "exp_run_tgv_3d_q21_rk4_av1_dtm", "explicit RK4, Q2-Q1, stock av, 3D",
       "cube01_hex.mesh",
-      "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.05",
+      "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -dt-min -tf 0.05",
       14, 1.1438157810123699e-03, 1.4993326044731037e+02, 1.1858537217399940e+01,
       1.7347628571356015e+00, 1.1993939640687433e+03
    },
    {
-      "triple_point_3d", "explicit RK4, Q2-Q1, stock av, 3D",
+      "exp_run_tpt_3d_q21_rk4_av1_dtm", "explicit RK4, Q2-Q1, stock av, 3D",
       "box01_hex.mesh",
-      "-p 3 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.2",
+      "-p 3 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -dt-min -tf 0.2",
       5, 3.2015046545843445e-02, 3.0150228406430880e+01, 7.0909362959399473e+01,
       2.1011239969290898e+00, 1.6921507332503591e+01
    },
    {
-      "triple_point_3d_av", "explicit RK4, Q2-Q1, av-type 7, 3D",
+      "exp_run_tpt_3d_q21_rk4_av7_dtn", "explicit RK4, Q2-Q1, av-type 7, 3D",
       "box01_hex.mesh",
       "-p 3 -dim 3 -rs 0 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 7 -tf 0.2",
       10, 1.0248581728371387e-02, 3.0150198118370763e+01, 7.0902482097110010e+01,
@@ -246,49 +251,53 @@ const Test runs[] =
    // GMRES and block-diagonal AMG (-pt 0), references of the
    // pre-dfem-dev MFEM (01-dfem-laghos-dev-av 7cc9281ce8, laghos-dfem 157bcf1)
    {
-      "implicit_taylor_green_2d", "implicit midpoint, Q2-Q1, no av, 2D",
+      "imp_run_tgv_2d_q21_mid_av0_dtn", "implicit midpoint, Q2-Q1, no av, 2D",
       "square01_quad.mesh",
       "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       1, 2.5000000000000000e-01, 1.7496144709791834e+00, 7.6158393763847849e+00,
       6.1657639728600806e+00, 1.2801715728172615e+01, 1e-8
    },
    {
-      "implicit_taylor_green_2d_be", "implicit backward Euler, Q2-Q1, no av, 2D",
+      "imp_run_tgv_2d_q21_bwe_av0_dtn",
+      "implicit backward Euler, Q2-Q1, no av, 2D",
       "square01_quad.mesh",
       "-p 0 -dim 2 -rs 2 -ov 2 -oe 1 -s 11 -cfl 8 -tf 0.25 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       1, 2.5000000000000000e-01, 1.7144424302407082e+00, 7.5355450090088745e+00,
       5.5950119610093045e+00, 1.3076511553426874e+01, 1e-8
    },
    {
-      "implicit_sedov_2d", "implicit midpoint, Q2-Q1, no av, 2D",
+      "imp_run_sdv_2d_q21_mid_av0_dtn", "implicit midpoint, Q2-Q1, no av, 2D",
       "square01_quad.mesh",
       "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       2, 4.7799374999999998e-02, 2.4999999998372771e-01, 7.5895841452573265e+00,
       3.3576691897422939e+00, 1.0426342267073755e+01, 1e-8
    },
    {
-      "implicit_sedov_2d_av", "implicit midpoint, Q2-Q1, av-type 7, 2D",
+      "imp_run_sdv_2d_q21_mid_av7_dtn",
+      "implicit midpoint, Q2-Q1, av-type 7, 2D",
       "square01_quad.mesh",
       "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       10, 7.5072974222040595e-03, 2.4999999999994080e-01, 7.5866802435482432e+00,
       1.8988891018276433e+00, 1.2690442177254132e+01, 1e-8
    },
    {
-      "implicit_sedov_2d_av1", "implicit midpoint, Q2-Q1, av-type 1, 2D",
+      "imp_run_sdv_2d_q21_mid_av1_dtn",
+      "implicit midpoint, Q2-Q1, av-type 1, 2D",
       "square01_quad.mesh",
       "-p 1 -dim 2 -rs 2 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 1 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       14, 3.4735878931168307e-03, 2.4999999999960013e-01, 7.5873290046513846e+00,
       1.9166132239675209e+00, 1.2236668098815036e+01, 1e-8
    },
    {
-      "implicit_taylor_green_3d", "implicit midpoint, Q2-Q1, no av, 3D",
+      "imp_run_tgv_3d_q21_mid_av0_dtn", "implicit midpoint, Q2-Q1, no av, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       1, 1.0000000000000001e-01, 1.4993325955324906e+02, 1.1867410366035584e+01,
       6.3036438007152293e+00, 1.1986499229245242e+03, 1e-8
    },
    {
-      "implicit_sedov_3d_av", "implicit midpoint, Q2-Q1, av-type 7, 3D",
+      "imp_run_sdv_3d_q21_mid_av7_dtn",
+      "implicit midpoint, Q2-Q1, av-type 7, 3D",
       "cube01_hex.mesh",
       "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 12 -cfl 8 -av -av-type 7 -tf 0.02 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
       4, 7.6537470312500536e-04, 1.2499999999868094e-01, 2.7832191726334166e+01,
@@ -416,79 +425,100 @@ static void LaghosTest(const std::string &name)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-TEST_CASE("sedov_2d", "[dfem][explicit][sedov][2d]")
-{ LaghosTest("sedov_2d"); }
+TEST_CASE("exp_run_sdv_2d_q21_rk3_av7_dtn",
+          "[dfem][exp][run][sdv][2d][q21][dtn]")
+{ LaghosTest("exp_run_sdv_2d_q21_rk3_av7_dtn"); }
 
-TEST_CASE("sedov_2d_rk2", "[dfem][explicit][sedov][2d]")
-{ LaghosTest("sedov_2d_rk2"); }
+TEST_CASE("exp_run_sdv_2d_q21_rk2_av7_dtn",
+          "[dfem][exp][run][sdv][2d][q21][dtn]")
+{ LaghosTest("exp_run_sdv_2d_q21_rk2_av7_dtn"); }
 
-TEST_CASE("sedov_3d", "[dfem][explicit][sedov][3d]")
-{ LaghosTest("sedov_3d"); }
+TEST_CASE("exp_run_sdv_3d_q21_rk3_av7_dtn",
+          "[dfem][exp][run][sdv][3d][q21][dtn]")
+{ LaghosTest("exp_run_sdv_3d_q21_rk3_av7_dtn"); }
 
-TEST_CASE("sedov_2d_stock", "[dfem][explicit][sedov][2d][stock]")
-{ LaghosTest("sedov_2d_stock"); }
+TEST_CASE("exp_run_sdv_2d_q21_rk3_av1_dtm",
+          "[dfem][exp][run][sdv][2d][q21][dtm]")
+{ LaghosTest("exp_run_sdv_2d_q21_rk3_av1_dtm"); }
 
-TEST_CASE("sedov_3d_stock", "[dfem][explicit][sedov][3d][stock]")
-{ LaghosTest("sedov_3d_stock"); }
+TEST_CASE("exp_run_sdv_3d_q21_rk3_av1_dtm",
+          "[dfem][exp][run][sdv][3d][q21][dtm]")
+{ LaghosTest("exp_run_sdv_3d_q21_rk3_av1_dtm"); }
 
-TEST_CASE("taylor_green_2d", "[dfem][explicit][taylor-green][2d]")
-{ LaghosTest("taylor_green_2d"); }
+TEST_CASE("exp_run_tgv_2d_q32_rk4_av0_dtn",
+          "[dfem][exp][run][tgv][2d][q32][dtn]")
+{ LaghosTest("exp_run_tgv_2d_q32_rk4_av0_dtn"); }
 
-TEST_CASE("taylor_green_3d", "[dfem][explicit][taylor-green][3d]")
-{ LaghosTest("taylor_green_3d"); }
+TEST_CASE("exp_run_tgv_3d_q21_rk4_av0_dtn",
+          "[dfem][exp][run][tgv][3d][q21][dtn]")
+{ LaghosTest("exp_run_tgv_3d_q21_rk4_av0_dtn"); }
 
-TEST_CASE("taylor_green_3d_av", "[dfem][explicit][taylor-green][3d]")
-{ LaghosTest("taylor_green_3d_av"); }
+TEST_CASE("exp_run_tgv_3d_q21_rk4_av7_dtn",
+          "[dfem][exp][run][tgv][3d][q21][dtn]")
+{ LaghosTest("exp_run_tgv_3d_q21_rk4_av7_dtn"); }
 
-TEST_CASE("readme_taylor_green_2d",
-          "[dfem][explicit][readme][taylor-green][2d]")
-{ LaghosTest("readme_taylor_green_2d"); }
+TEST_CASE("exp_chk_tgv_2d_q21_rk4_av0_dtn",
+          "[dfem][exp][chk][tgv][2d][q21][dtn]")
+{ LaghosTest("exp_chk_tgv_2d_q21_rk4_av0_dtn"); }
 
-TEST_CASE("readme_taylor_green_3d",
-          "[dfem][explicit][readme][taylor-green][3d]")
-{ LaghosTest("readme_taylor_green_3d"); }
+TEST_CASE("exp_chk_tgv_3d_q21_rk4_av0_dtn",
+          "[dfem][exp][chk][tgv][3d][q21][dtn]")
+{ LaghosTest("exp_chk_tgv_3d_q21_rk4_av0_dtn"); }
 
-TEST_CASE("readme_sedov_2d", "[dfem][explicit][readme][sedov][2d]")
-{ LaghosTest("readme_sedov_2d"); }
+TEST_CASE("exp_chk_sdv_2d_q21_rk4_av1_dtm",
+          "[dfem][exp][chk][sdv][2d][q21][dtm]")
+{ LaghosTest("exp_chk_sdv_2d_q21_rk4_av1_dtm"); }
 
-TEST_CASE("readme_sedov_3d", "[dfem][explicit][readme][sedov][3d]")
-{ LaghosTest("readme_sedov_3d"); }
+TEST_CASE("exp_chk_sdv_3d_q21_rk4_av1_dtm",
+          "[dfem][exp][chk][sdv][3d][q21][dtm]")
+{ LaghosTest("exp_chk_sdv_3d_q21_rk4_av1_dtm"); }
 
-TEST_CASE("taylor_green_3d_q1q0", "[dfem][explicit][taylor-green][3d]")
-{ LaghosTest("taylor_green_3d_q1q0"); }
+TEST_CASE("exp_run_tgv_3d_q10_rk4_av0_dtn",
+          "[dfem][exp][run][tgv][3d][q10][dtn]")
+{ LaghosTest("exp_run_tgv_3d_q10_rk4_av0_dtn"); }
 
-TEST_CASE("sedov_3d_q1q0_stock", "[dfem][explicit][sedov][3d][stock]")
-{ LaghosTest("sedov_3d_q1q0_stock"); }
+TEST_CASE("exp_run_sdv_3d_q10_rk3_av1_dtm",
+          "[dfem][exp][run][sdv][3d][q10][dtm]")
+{ LaghosTest("exp_run_sdv_3d_q10_rk3_av1_dtm"); }
 
-TEST_CASE("taylor_green_3d_stock_av",
-          "[dfem][explicit][taylor-green][3d][stock]")
-{ LaghosTest("taylor_green_3d_stock_av"); }
+TEST_CASE("exp_run_tgv_3d_q21_rk4_av1_dtm",
+          "[dfem][exp][run][tgv][3d][q21][dtm]")
+{ LaghosTest("exp_run_tgv_3d_q21_rk4_av1_dtm"); }
 
-TEST_CASE("triple_point_3d", "[dfem][explicit][triple-point][3d][stock]")
-{ LaghosTest("triple_point_3d"); }
+TEST_CASE("exp_run_tpt_3d_q21_rk4_av1_dtm",
+          "[dfem][exp][run][tpt][3d][q21][dtm]")
+{ LaghosTest("exp_run_tpt_3d_q21_rk4_av1_dtm"); }
 
-TEST_CASE("triple_point_3d_av", "[dfem][explicit][triple-point][3d]")
-{ LaghosTest("triple_point_3d_av"); }
+TEST_CASE("exp_run_tpt_3d_q21_rk4_av7_dtn",
+          "[dfem][exp][run][tpt][3d][q21][dtn]")
+{ LaghosTest("exp_run_tpt_3d_q21_rk4_av7_dtn"); }
 
-TEST_CASE("implicit_taylor_green_2d", "[dfem][implicit][taylor-green][2d]")
-{ LaghosTest("implicit_taylor_green_2d"); }
+TEST_CASE("imp_run_tgv_2d_q21_mid_av0_dtn",
+          "[dfem][imp][run][tgv][2d][q21][dtn]")
+{ LaghosTest("imp_run_tgv_2d_q21_mid_av0_dtn"); }
 
-TEST_CASE("implicit_taylor_green_2d_be", "[dfem][implicit][taylor-green][2d]")
-{ LaghosTest("implicit_taylor_green_2d_be"); }
+TEST_CASE("imp_run_tgv_2d_q21_bwe_av0_dtn",
+          "[dfem][imp][run][tgv][2d][q21][dtn]")
+{ LaghosTest("imp_run_tgv_2d_q21_bwe_av0_dtn"); }
 
-TEST_CASE("implicit_sedov_2d", "[dfem][implicit][sedov][2d]")
-{ LaghosTest("implicit_sedov_2d"); }
+TEST_CASE("imp_run_sdv_2d_q21_mid_av0_dtn",
+          "[dfem][imp][run][sdv][2d][q21][dtn]")
+{ LaghosTest("imp_run_sdv_2d_q21_mid_av0_dtn"); }
 
-TEST_CASE("implicit_sedov_2d_av", "[dfem][implicit][sedov][2d]")
-{ LaghosTest("implicit_sedov_2d_av"); }
-TEST_CASE("implicit_sedov_2d_av1", "[dfem][implicit][sedov][2d]")
-{ LaghosTest("implicit_sedov_2d_av1"); }
+TEST_CASE("imp_run_sdv_2d_q21_mid_av7_dtn",
+          "[dfem][imp][run][sdv][2d][q21][dtn]")
+{ LaghosTest("imp_run_sdv_2d_q21_mid_av7_dtn"); }
+TEST_CASE("imp_run_sdv_2d_q21_mid_av1_dtn",
+          "[dfem][imp][run][sdv][2d][q21][dtn]")
+{ LaghosTest("imp_run_sdv_2d_q21_mid_av1_dtn"); }
 
-TEST_CASE("implicit_taylor_green_3d", "[dfem][implicit][taylor-green][3d]")
-{ LaghosTest("implicit_taylor_green_3d"); }
+TEST_CASE("imp_run_tgv_3d_q21_mid_av0_dtn",
+          "[dfem][imp][run][tgv][3d][q21][dtn]")
+{ LaghosTest("imp_run_tgv_3d_q21_mid_av0_dtn"); }
 
-TEST_CASE("implicit_sedov_3d_av", "[dfem][implicit][sedov][3d]")
-{ LaghosTest("implicit_sedov_3d_av"); }
+TEST_CASE("imp_run_sdv_3d_q21_mid_av7_dtn",
+          "[dfem][imp][run][sdv][3d][q21][dtn]")
+{ LaghosTest("imp_run_sdv_3d_q21_mid_av7_dtn"); }
 
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[]) try

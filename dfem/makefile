@@ -42,10 +42,11 @@ make tests
    Run the laghos_tests on 1, 2 and 3 ranks, on the cpu and on the devices,
    with the local and the global q-functions, printing each run with its time
    and a summary.
-   (TESTS selects the tests with a Catch2 test spec, e.g. TESTS=[sedov], RANKS,
-    DEVICES and QFS restrict the runs, e.g. RANKS=1 DEVICES= QFS=local. Nothing
-    is written to disk: the output of a failed run is printed after its KO
-    line. KEEP_LOGS=1 also keeps the logs of the failed runs in results/tests.)
+   (TESTS selects the tests with a Catch2 test spec, e.g. TESTS=[chk], RANKS,
+    DEVICES (cpu, dbg, gpu) and QFS (loc, glb) restrict the runs, e.g. RANKS=1
+    DEVICES=cpu QFS=loc. Nothing is written to disk: the output of a failed run
+    is printed after its KO line. KEEP_LOGS=1 also keeps the logs of the failed
+    runs in results/tests.)
 make install PREFIX=<dir>
    Install the laghos_dfem and laghos_tests executables in <dir>.
 make clean
@@ -155,16 +156,22 @@ include $(TEST_MK)
 endif
 
 # Non-regression tests: the laghos_tests of TESTS, as listed by laghos_tests
-# itself, on the RANKS, on the cpu and on the DEVICES, with the q-function
-# backends of QFS, with the ctest names
+# itself, on the RANKS, on the DEVICES, with the q-function backends of QFS,
+# with the ctest names
 TESTS =
 RANKS = 1 2 3
-QFS = local global
-DEVICES = $(strip $(if $(filter YES,$(MFEM_USE_CUDA)),cuda) $(if \
-	$(filter YES,$(MFEM_USE_HIP)),hip) debug)
+QFS = loc glb
+DEVICES = cpu $(if $(DEVICE_gpu),gpu) dbg
+# MFEM devices and q-function backends of the DEVICES and QFS name tags
+DEVICE_cpu = cpu
+DEVICE_dbg = debug
+DEVICE_gpu = $(if $(filter YES,$(MFEM_USE_CUDA)),cuda,$(if \
+	$(filter YES,$(MFEM_USE_HIP)),hip))
+QF_loc = local
+QF_glb = global
 # Debug device fault: hypre host reads of aliases protect valid device pages
-SKIP_RUNS = dfem_debug_implicit_sedov_3d_av_np% \
-	dfem_debug_global_implicit_sedov_3d_av_np%
+SKIP_RUNS = dfem_dbg_loc_imp_run_sdv_3d_q21_mid_av7_dtn_np% \
+	dfem_dbg_glb_imp_run_sdv_3d_q21_mid_av7_dtn_np%
 # KEEP_LOGS=1 keeps the logs of the failed runs in TESTS_DIR
 KEEP_LOGS =
 TESTS_KEEP = $(filter-out 0 no NO,$(KEEP_LOGS))
@@ -190,12 +197,11 @@ tests: laghos_tests
 
 tests-header:
 	@echo "laghos_tests: $(words $(RUNS)) runs$(if $(TESTS), of '$(TESTS)')," \
-	  "ranks $(RANKS), devices $(strip cpu $(DEVICES)), q-functions $(QFS)"
+	  "ranks $(RANKS), devices $(DEVICES), q-functions $(QFS)"
 	@echo "MFEM_DIR = $(patsubst %/config/config.mk,%,$(CONFIG_MK))"
 
-# 1: explicit or implicit, 2: test, 3: ranks, 4: device, 5: q-function backend
-laghos_run = dfem_$(if $(filter cpu,$(4)),,$(4)_)$(if $(filter global,\
-	$(5)),global_)$(2)$(if $(filter explicit1,$(1)$(3)),,_np$(3))
+# 1: test, 2: ranks, 3: device, 4: q-function backend
+laghos_run = dfem_$(3)_$(4)_$(1)_np$(2)
 # Lines of a failed output: its ✗ checks, or its last lines outside the MPI
 # boxes
 TESTS_LOG_LINES = awk 'length($$0) == 74 && /^-+$$/ { skip = !skip; next } \
@@ -206,7 +212,8 @@ TESTS_LOG_LINES = awk 'length($$0) == 74 && /^-+$$/ { skip = !skip; next } \
 # run and its time, and on failure its log (with KEEP_LOGS) and output lines,
 # with a single printf
 laghos_run_cmd = t0=`$(CLOCK)`; \
-	if out=$$($(RUN_MPI) $(2) ./laghos_tests --device $(3) --qf $(4) $(1) \
+	if out=$$($(RUN_MPI) $(2) ./laghos_tests --device $(DEVICE_$(3)) \
+	   --qf $(QF_$(4)) $(1) \
 	   2>&1); \
 	then s=OK c='\033[0;32m'; else s=KO c='\033[0;31m'; fi; \
 	t=`$(CLOCK) $$t0`; [ -t 1 ] || c=; \
@@ -223,19 +230,15 @@ RUNS += $(1)
 $(1): laghos_tests | tests-header
 	@$$(call laghos_run_cmd,$(2),$(3),$(4),$(5))
 endef
-# 1: explicit or implicit, 2: tests, 3: q-function backend
-laghos_runs = $(foreach t,$(2),$(foreach r,$(RANKS),\
-	$(foreach d,cpu $(DEVICES),$(if $(filter $(SKIP_RUNS),$(call laghos_run,\
-	$(1),$(t),$(r),$(d),$(3))),,$(eval $(call laghos_run_template,$(call \
-	laghos_run,$(1),$(t),$(r),$(d),$(3)),$(t),$(r),$(d),$(3)))))))
+# 1: tests, 2: q-function backend
+laghos_runs = $(foreach t,$(1),$(foreach r,$(RANKS),$(foreach d,$(DEVICES),\
+	$(if $(filter $(SKIP_RUNS),$(call laghos_run,$(t),$(r),$(d),$(2))),,\
+	$(eval $(call laghos_run_template,$(call laghos_run,$(t),$(r),$(d),$(2)),\
+	$(t),$(r),$(d),$(2)))))))
 ifneq (,$(filter tests-run,$(MAKECMDGOALS)))
-   LIST_TESTS = $(RUN_MPI) 1 ./laghos_tests --list-test-names-only
-   ALL_TESTS := $(shell $(LIST_TESTS) $(if $(TESTS),'$(TESTS)') 2> /dev/null)
-   IMPLICIT_TESTS := $(filter $(ALL_TESTS),\
-	$(shell $(LIST_TESTS) '[implicit]' 2> /dev/null))
-   EXPLICIT_TESTS := $(filter-out $(IMPLICIT_TESTS),$(ALL_TESTS))
-   $(foreach q,$(QFS),$(call laghos_runs,explicit,$(EXPLICIT_TESTS),$(q))\
-	$(call laghos_runs,implicit,$(IMPLICIT_TESTS),$(q)))
+   ALL_TESTS := $(shell $(RUN_MPI) 1 ./laghos_tests --list-test-names-only \
+	$(if $(TESTS),'$(TESTS)') 2> /dev/null)
+   $(foreach q,$(QFS),$(call laghos_runs,$(ALL_TESTS),$(q)))
 endif
 tests-run: $(RUNS)
 	@failed=`sort $(TESTS_FAILED)`; \
@@ -274,6 +277,7 @@ status info:
 	$(info LAGHOS_FLAGS = $(LAGHOS_FLAGS))
 	$(info LAGHOS_LIBS  = $(value LAGHOS_LIBS))
 	$(info DEVICES      = $(DEVICES))
+	$(info QFS          = $(QFS))
 	$(info PREFIX       = $(PREFIX))
 	@true
 

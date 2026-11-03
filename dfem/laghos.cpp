@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
    int viscosity_type = 2;
    real_t viscosity_q1 = 0.5;
    real_t viscosity_q2 = 1.0;
-   bool stock_dt = false;
+   bool dt_min = false;
    int nretry = 100;
    bool gpu_aware_mpi = false;
    int dev = 0;
@@ -149,10 +149,10 @@ int main(int argc, char *argv[])
                   "Artificial viscosity (type 7) linear coefficient.");
    args.AddOption(&viscosity_q2, "-av-q2", "--av-q2",
                   "Artificial viscosity (type 7) quadratic coefficient.");
-   args.AddOption(&stock_dt, "-stock-dt", "--stock-dt",
-                  "-no-stock-dt", "--no-stock-dt",
+   args.AddOption(&dt_min, "-dt-min", "--dt-min",
+                  "-no-dt-min", "--no-dt-min",
                   "Time step estimate as the min over all the RK stages and "
-                  "the new state, as stock Laghos (explicit only).");
+                  "the new state (explicit only).");
    args.AddOption(&hydro_options.dump_jacobians, "-dump-jacobians",
                   "--dump-jacobians", "");
    args.AddOption(&nretry, "-nretry", "--nretry", "");
@@ -415,7 +415,7 @@ int main(int argc, char *argv[])
       hydrodynamics::CreateLagrangianHydroOperator(
          H1FESpace, L2FESpace, ess_tdof, rho0_coeff, x0_gf, rho0_gf, mat_gf,
          external_data, ir, hydro_options);
-   hydro->stage_dt_estimate = stock_dt;
+   hydro->stage_dt_estimate = dt_min;
 
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)
