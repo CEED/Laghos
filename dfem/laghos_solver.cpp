@@ -14,17 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include <array>
-
 #include "laghos_solver.hpp"
-#include "laghos_hydro.hpp"
 
 extern int problem;
 
-namespace mfem
-{
-
-namespace hydrodynamics
+namespace mfem::hydrodynamics
 {
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
@@ -80,7 +74,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
    while (connection_failed);
 }
 
-void LagrangianHydroOperator::LineSearchNewtonSolver::ProcessNewState(
+void LagrangianHydroOperator::LineSearch::ProcessNewState(
    const Vector &x) const
 {
    if (problem == 0) { return; }
@@ -97,7 +91,7 @@ void LagrangianHydroOperator::LineSearchNewtonSolver::ProcessNewState(
    }
 }
 
-real_t LagrangianHydroOperator::LineSearchNewtonSolver::ComputeScalingFactor(
+real_t LagrangianHydroOperator::LineSearch::ComputeScalingFactor(
    const Vector &x, const Vector &b) const
 {
    if (problem == 0) { return 1.0; }
@@ -250,9 +244,9 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    Me_blf.Assemble();
    Me_blf.FormSystemMatrix(mfem::Array<int>(), Me_mat);
 
-   residual.reset(new LagrangianHydroResidualOperator(*this, X,
-                                                      options.fd_gradient,
-                                                      options.dump_jacobians));
+   residual.reset(new Residual(*this, X,
+                               options.fd_gradient,
+                               options.dump_jacobians));
 
    preconditioner.reset(new Preconditioner(*this));
 
@@ -265,7 +259,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    gmres->SetPreconditioner(*preconditioner);
    krylov.reset(gmres);
 
-   newton.reset(new LineSearchNewtonSolver(MPI_COMM_WORLD, *this));
+   newton.reset(new LineSearch(MPI_COMM_WORLD, *this));
    newton->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
    newton->SetOperator(*residual);
    newton->SetSolver(*krylov);
@@ -491,7 +485,7 @@ static std::unique_ptr<HypreParMatrix> AssembleMatrix(DerivativeOperator &d)
    return std::unique_ptr<HypreParMatrix>(A);
 }
 
-void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
+void LagrangianHydroOperator::Jacobian::Mult(
    const Vector &u, Vector &y) const
 {
    w = u;
@@ -560,7 +554,7 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
 }
 
 MemoryClass
-LagrangianHydroOperator::LagrangianHydroJacobianOperator::GetMemoryClass() const
+LagrangianHydroOperator::Jacobian::GetMemoryClass() const
 {
    return Device::GetDeviceMemoryClass();
 }
@@ -569,7 +563,7 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
 {
    if (!rebuild) { return; }
 
-   jacobian = dynamic_cast<const LagrangianHydroJacobianOperator*>(&op);
+   jacobian = dynamic_cast<const Jacobian*>(&op);
    MFEM_VERIFY(jacobian != nullptr, "Preconditioner error.");
    MFEM_VERIFY(hydro.options.preconditioner_type ==
                PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG,
@@ -618,7 +612,7 @@ void LagrangianHydroOperator::Preconditioner::Mult(const Vector &x,
    ye.SyncAliasMemory(y);
 }
 
-void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
+void LagrangianHydroOperator::Residual::Mult(
    const Vector &k, Vector &R) const
 {
    u = k;
@@ -681,7 +675,7 @@ void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
    Re.SyncAliasMemory(R);
 }
 
-Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
+Operator& LagrangianHydroOperator::Residual::GetGradient(
    const Vector &k) const
 {
    u = k;
@@ -708,15 +702,11 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
 
       auto dRvdx = hydro.momentum_mf->GetDerivative(COORDINATES, state);
       auto dRvdv = hydro.momentum_mf->GetDerivative(VELOCITY, state);
-      auto dRvde =
-         hydro.momentum_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, state);
-      auto dRedx =
-         hydro.energy_conservation_mf->GetDerivative(COORDINATES, state);
-      auto dRedv =
-         hydro.energy_conservation_mf->GetDerivative(VELOCITY, state);
+      auto dRvde = hydro.momentum_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, state);
+      auto dRedx = hydro.energy_conservation_mf->GetDerivative(COORDINATES, state);
+      auto dRedv = hydro.energy_conservation_mf->GetDerivative(VELOCITY, state);
       auto dRede =
-         hydro.energy_conservation_mf->GetDerivative( SPECIFIC_INTERNAL_ENERGY,
-                                                      state);
+         hydro.energy_conservation_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, state);
       std::shared_ptr<DerivativeOperator> dTaylorSourcedx;
       if (hydro.taylor_source)
       {
@@ -724,7 +714,7 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
             hydro.taylor_source_mf->GetDerivative(COORDINATES, MultiVector{ux});
       }
 
-      jacobian = std::make_shared<LagrangianHydroJacobianOperator>(
+      jacobian = std::make_shared<Jacobian>(
                     hydro, dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede, dTaylorSourcedx, dt);
 
       if (dump_jacobians > 0)
@@ -867,6 +857,4 @@ real_t LagrangianHydroOperator::LocalTimeStepEstimate(const Vector &S) const
    return qdata->dt_est.Min();
 }
 
-} // namespace hydrodynamics
-
-} // namespace mfem
+} // namespace mfem::hydrodynamics

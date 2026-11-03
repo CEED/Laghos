@@ -15,13 +15,24 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #pragma once
 
-#include "laghos_hydro.hpp"
-#include "linalg/kernels.hpp"
+#include <fem/dfem/doperator.hpp>
+#include <fem/pgridfunc.hpp>
+#include <linalg/kernels.hpp>
 
 namespace mfem::hydrodynamics
 {
 
-// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+using mfem::future::DifferentiableOperator;
+using mfem::future::DerivativeOperator;
+using mfem::future::FieldDescriptor;
+using mfem::future::FDJacobian;
+using mfem::future::Gradient;
+using mfem::future::Identity;
+using mfem::future::Weight;
+using mfem::future::Value;
+
+using mfem::future::tensor;
+
 using dscalar_t =
    std::conditional_t<mfem::UseEnzyme, real_t,
    mfem::future::dual<real_t, real_t>>;
@@ -33,26 +44,53 @@ template <int DIM, typename T = real_t>
 using matd_t = tensor<T, DIM, DIM>;
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-// Values of a matrix of dual numbers
-template <int DIM, typename T> MFEM_HOST_DEVICE inline
-matd_t<DIM> get_values(const matd_t<DIM, T> &A)
+constexpr int VELOCITY = 0;
+constexpr int DENSITY0 = 1;
+constexpr int COORDINATES0 = 2;
+constexpr int COORDINATES = 3;
+constexpr int MATERIAL = 4;
+constexpr int SPECIFIC_INTERNAL_ENERGY = 5;
+constexpr int DT_EST = 8;
+constexpr int STRESS_TENSOR = 9;
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Quadrature point arguments of the qdata_setup qfunctions
+inline auto QDataFields()
 {
-   matd_t<DIM> V;
-   for (int i = 0; i < DIM; i++)
-   {
-      for (int j = 0; j < DIM; j++) { V(i, j) = future::get_value(A(i, j)); }
-   }
-   return V;
+   return future::tuple{Gradient<VELOCITY>{}, Value<DENSITY0>{},
+                        Gradient<COORDINATES0>{}, Gradient<COORDINATES>{},
+                        Value<MATERIAL>{}, Value<SPECIFIC_INTERNAL_ENERGY>{},
+                        Weight{}};
+}
+
+// Input fields of the qdata_setup operators, also the order of their states
+inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
+                                                ParFiniteElementSpace &L2,
+                                                ParGridFunction &material_gf)
+{
+   return {{VELOCITY, &H1}, {DENSITY0, &L2}, {COORDINATES0, &H1},
+      {COORDINATES, &H1}, {MATERIAL, material_gf.ParFESpace()},
+      {SPECIFIC_INTERNAL_ENERGY, &L2}};
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-template <typename T> MFEM_HOST_DEVICE inline
-void ComputeMaterialProperties(const real_t &gamma, const T &rho,
-                               const T &E, T &p, T &cs)
+// Derivative kernels of the Jacobian blocks: matrix-free actions and the
+// assembled matrices of the AMG preconditioner
+constexpr auto JACOBIAN_KERNELS =
+   future::DerivativeKernels::Action | future::DerivativeKernels::AssembleMatrix;
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+enum EXT_DATA_IDX
 {
-   p = (gamma - 1.0) * rho * E;
-   cs = sqrt(gamma * (gamma - 1.0) * E);
-}
+   CFL = 0,
+   ORDER_VEL,
+   VISCOSITY_FLAG,
+   VISCOSITY_TYPE,
+   VISC_Q1,
+   VISC_Q2,
+   H0,
+   COUNT
+};
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 // Smooth transition between 0 and 1 for x in [-eps, eps].
@@ -171,6 +209,28 @@ T calcsv(const future::tensor<T, 3, 3> A, const int i)
    // Singular A, where the square root has no derivative
    if (chosen == 0.0) { return chosen * mult; }
    return sqrt(chosen) * mult;
+}
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Values of a matrix of dual numbers
+template <int DIM, typename T> MFEM_HOST_DEVICE inline
+matd_t<DIM> get_values(const matd_t<DIM, T> &A)
+{
+   matd_t<DIM> V;
+   for (int i = 0; i < DIM; i++)
+   {
+      for (int j = 0; j < DIM; j++) { V(i, j) = future::get_value(A(i, j)); }
+   }
+   return V;
+}
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+template <typename T> MFEM_HOST_DEVICE inline
+void ComputeMaterialProperties(const real_t &gamma, const T &rho,
+                               const T &E, T &p, T &cs)
+{
+   p = (gamma - 1.0) * rho * E;
+   cs = sqrt(gamma * (gamma - 1.0) * E);
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
@@ -346,32 +406,6 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
 
    return stress * transpose(invJ) * detJ * w;
 }
-
-// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-// Quadrature point arguments of the qdata_setup qfunctions
-inline auto QDataFields()
-{
-   return future::tuple{Gradient<VELOCITY>{}, Value<DENSITY0>{},
-                        Gradient<COORDINATES0>{}, Gradient<COORDINATES>{},
-                        Value<MATERIAL>{}, Value<SPECIFIC_INTERNAL_ENERGY>{},
-                        Weight{}};
-}
-
-// Input fields of the qdata_setup operators, also the order of their states
-inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
-                                                ParFiniteElementSpace &L2,
-                                                ParGridFunction &material_gf)
-{
-   return {{VELOCITY, &H1}, {DENSITY0, &L2}, {COORDINATES0, &H1},
-      {COORDINATES, &H1}, {MATERIAL, material_gf.ParFESpace()},
-      {SPECIFIC_INTERNAL_ENERGY, &L2}};
-}
-
-// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-// Derivative kernels of the Jacobian blocks: matrix-free actions and the
-// assembled matrices of the AMG preconditioner
-constexpr auto JACOBIAN_KERNELS = future::DerivativeKernels::Action |
-                                  future::DerivativeKernels::AssembleMatrix;
 
 // Builds the dFEM momentum operator, with its Jacobian blocks
 template <int DIM>

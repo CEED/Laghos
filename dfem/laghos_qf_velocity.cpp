@@ -14,12 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "laghos_qfunctions.hpp"
+#include "laghos_qf.hpp"
 
 namespace mfem::hydrodynamics
 {
 
-// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 template <int DIM>
 std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    ParFiniteElementSpace &H1,
@@ -64,8 +63,6 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
       all_domain_attr, derivatives);
    return momentum_mf;
 }
-
-// Explicit instantiations for the 2D and 3D meshes
 
 template std::shared_ptr<DifferentiableOperator> CreateMomentumOperator<2>(
    ParFiniteElementSpace &H1,

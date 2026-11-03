@@ -39,8 +39,8 @@ make status
 make test
    Quick run of laghos_dfem on 4 ranks.
 make tests
-   Run the laghos_tests on 1, 2 and 3 ranks, on the cpu and on the devices, as
-   ctest does, printing each run with its time and a summary.
+   Run the laghos_tests on 1, 2 and 3 ranks, on the cpu and on the devices,
+   printing each run with its time and a summary.
    (TESTS selects the tests with a Catch2 test spec, e.g. TESTS=[sedov], RANKS
     and DEVICES restrict the runs, e.g. RANKS=1 DEVICES=. Nothing is written to
     disk: the output of a failed run is printed after its KO line. KEEP_LOGS=1
@@ -92,7 +92,12 @@ CXXFLAGS = $(MFEM_CXXFLAGS)
 LAGHOS_FLAGS = $(CPPFLAGS) $(CXXFLAGS) $(MFEM_INCFLAGS)
 # Extra include dir, needed for now to include headers like "general/forall.hpp"
 EXTRA_INC_DIR = $(or $(wildcard $(MFEM_DIR)/include/mfem),$(MFEM_DIR))
-CCC = $(strip $(CXX) $(LAGHOS_FLAGS) $(if $(EXTRA_INC_DIR),-I$(EXTRA_INC_DIR)))
+# With an MFEM build directory, the source headers above find the generated
+# _config.hpp in the config directory of the build, e.g. for <fem/...> includes
+ifneq ($(MFEM_BUILD_DIR),)
+   EXTRA_INC_DIR += $(wildcard $(MFEM_BUILD_DIR)/config)
+endif
+CCC = $(strip $(CXX) $(LAGHOS_FLAGS) $(addprefix -I,$(EXTRA_INC_DIR)))
 
 LAGHOS_LIBS = $(MFEM_LIBS)
 LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
@@ -101,8 +106,8 @@ LIBS = $(strip $(LAGHOS_LIBS) $(LDFLAGS))
 CATCH_DIR ?= $(MFEM_SOURCE_DIR)/tests/unit
 
 # Assembly and solver, compiled once for laghos_dfem and laghos_tests
-LIB_SOURCE_FILES = laghos_assembly.cpp laghos_solver.cpp laghos_hydro.cpp \
-	laghos_momentum.cpp laghos_energy.cpp
+LIB_SOURCE_FILES = laghos_assembly.cpp laghos_solver.cpp laghos_qf_hydro.cpp \
+	laghos_qf_velocity.cpp laghos_qf_energy.cpp
 LIB_OBJECT_FILES = $(LIB_SOURCE_FILES:.cpp=.o)
 SOURCE_FILES = $(sort $(wildcard *.cpp))
 HEADER_FILES = $(sort $(wildcard *.hpp))
@@ -167,10 +172,10 @@ CLOCK = perl -MTime::HiRes=time -e 'printf "%.2f", time - ($$ARGV[0] || 0)'
 # Use the -j of the parent when it has a jobserver, -j $(NPROC) otherwise
 TESTS_JOBS = $(if $(findstring jobserver,$(MAKEFLAGS)),,-j $(NPROC))
 
-# Each run keeps its output in memory, and prints it when it fails. The failed
-# runs are listed in the TESTS_FAILED temporary file, removed at the end. With
-# KEEP_LOGS, TESTS_DIR is cleared (with results if empty) and holds the logs of
-# the failed runs.
+# Each run keeps its output in memory, and prints it when it fails.
+# The failed runs are listed in the TESTS_FAILED temporary file,
+# removed at the end. With KEEP_LOGS, TESTS_DIR is cleared
+# (with results if empty) and holds the logs of the failed runs.
 tests: laghos_tests
 	@$(if $(TESTS_KEEP),rm -rf $(TESTS_DIR); \
 	   rmdir $(patsubst %/,%,$(dir $(TESTS_DIR))) 2> /dev/null;) \

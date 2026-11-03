@@ -53,7 +53,7 @@
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 
-#include "laghos_hydro.hpp"
+#include "laghos_solver.hpp"
 #include "laghos_tests.hpp"
 
 using namespace mfem;

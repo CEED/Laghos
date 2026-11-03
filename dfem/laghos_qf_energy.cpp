@@ -14,12 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#include "laghos_qfunctions.hpp"
+#include "laghos_qf.hpp"
 
 namespace mfem::hydrodynamics
 {
 
-// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 template <int DIM>
 std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    ParFiniteElementSpace &H1,
@@ -73,8 +72,6 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
     energy_conservation_mf_kernel_oo, ir, all_domain_attr, derivatives);
    return energy_conservation_mf;
 }
-
-// Explicit instantiations for the 2D and 3D meshes
 
 template std::shared_ptr<DifferentiableOperator>
 CreateEnergyConservationOperator<2>(

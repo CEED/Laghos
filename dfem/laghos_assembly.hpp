@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "mfem.hpp"
+#include <mfem.hpp>
 
 namespace mfem
 {

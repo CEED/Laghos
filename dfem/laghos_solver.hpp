@@ -16,20 +16,9 @@
 
 #pragma once
 
-#include "mfem.hpp"
+#include <mfem.hpp>
 #include "laghos_assembly.hpp"
-#include <fem/dfem/doperator.hpp>
-
-using mfem::future::DifferentiableOperator;
-using mfem::future::DerivativeOperator;
-using mfem::future::FieldDescriptor;
-using mfem::future::FDJacobian;
-using mfem::future::Gradient;
-using mfem::future::Identity;
-using mfem::future::Weight;
-using mfem::future::Value;
-
-using mfem::future::tensor;
+#include "laghos_qf.hpp"
 
 namespace mfem
 {
@@ -65,7 +54,7 @@ public:
       int preconditioner_type = BLOCK_DIAGONAL_AMG;
    };
 
-   class LineSearchNewtonSolver : public NewtonSolver
+   class LineSearch : public NewtonSolver
    {
       real_t beta;        // Backtracking factor (how much to reduce step)
       real_t alpha;       // Sufficient decrease parameter
@@ -73,7 +62,7 @@ public:
       mutable Vector x_new, r_new, s_new;
       const LagrangianHydroOperator &hydro;
    public:
-      LineSearchNewtonSolver(MPI_Comm comm, const LagrangianHydroOperator &hydro)
+      LineSearch(MPI_Comm comm, const LagrangianHydroOperator &hydro)
          : NewtonSolver(comm),
            beta(0.5),    // Backtracking reduction factor
            alpha(1e-2),  // Sufficient decrease constant (Armijo condition)
@@ -85,7 +74,7 @@ public:
       real_t ComputeScalingFactor(const Vector &x, const Vector &b) const override;
    };
 
-   class LagrangianHydroJacobianOperator : public Operator
+   class Jacobian : public Operator
    {
       const real_t h;
       const int H1tsize, L2tsize;
@@ -94,16 +83,15 @@ public:
       std::shared_ptr<DerivativeOperator>
       dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede, dTaylorSourcedx;
    public:
-      LagrangianHydroJacobianOperator(
-         LagrangianHydroOperator &hydro,
-         std::shared_ptr<DerivativeOperator> dRvdx,
-         std::shared_ptr<DerivativeOperator> dRvdv,
-         std::shared_ptr<DerivativeOperator> dRvde,
-         std::shared_ptr<DerivativeOperator> dRedx,
-         std::shared_ptr<DerivativeOperator> dRedv,
-         std::shared_ptr<DerivativeOperator> dRede,
-         std::shared_ptr<DerivativeOperator> dTaylorSourcedx,
-         real_t h) :
+      Jacobian(LagrangianHydroOperator &hydro,
+               std::shared_ptr<DerivativeOperator> dRvdx,
+               std::shared_ptr<DerivativeOperator> dRvdv,
+               std::shared_ptr<DerivativeOperator> dRvde,
+               std::shared_ptr<DerivativeOperator> dRedx,
+               std::shared_ptr<DerivativeOperator> dRedv,
+               std::shared_ptr<DerivativeOperator> dRede,
+               std::shared_ptr<DerivativeOperator> dTaylorSourcedx,
+               real_t h) :
          Operator(2*hydro.H1.GetTrueVSize() + hydro.L2.GetTrueVSize()),
          h(h),
          H1tsize(hydro.H1.GetTrueVSize()), L2tsize(hydro.L2.GetTrueVSize()),
@@ -125,7 +113,7 @@ public:
       mutable Vector w;
       LagrangianHydroOperator &hydro;
       bool rebuild = true;
-      const LagrangianHydroJacobianOperator *jacobian = nullptr;
+      const Jacobian *jacobian = nullptr;
       std::shared_ptr<HypreParMatrix> vv_mat, ee_mat;
       std::shared_ptr<HypreBoomerAMG> amg_v, amg_e;
    public:
@@ -136,7 +124,7 @@ public:
       void Mult(const Vector &x, Vector &y) const override;
    };
 
-   class LagrangianHydroResidualOperator : public Operator
+   class Residual : public Operator
    {
    public:
       LagrangianHydroOperator &hydro;
@@ -145,12 +133,12 @@ public:
       const Vector &x;
       mutable Vector u, u_l, e_source_t;
       mutable std::shared_ptr<FDJacobian> fd_jacobian;
-      mutable std::shared_ptr<LagrangianHydroJacobianOperator> jacobian;
+      mutable std::shared_ptr<Jacobian> jacobian;
       bool fd_gradient;
       int dump_jacobians;
    public:
-      LagrangianHydroResidualOperator(LagrangianHydroOperator &hydro, const Vector &x,
-                                      const bool fd_gradient, const int dump_jacobians) :
+      Residual(LagrangianHydroOperator &hydro, const Vector &x,
+               const bool fd_gradient, const int dump_jacobians) :
          Operator(2*hydro.H1.GetTrueVSize()+hydro.L2.GetTrueVSize()),
          hydro(hydro),
          H1tsize(hydro.H1.GetTrueVSize()),
@@ -250,7 +238,7 @@ public:
    ParBilinearForm Mv_blf, Me_blf;
    HypreParMatrix Mv_mat, Me_mat;
 
-   std::shared_ptr<LagrangianHydroResidualOperator> residual;
+   std::shared_ptr<Residual> residual;
    std::shared_ptr<Preconditioner> preconditioner;
    std::shared_ptr<Solver> krylov;
    std::shared_ptr<NewtonSolver> newton;
@@ -269,6 +257,20 @@ public:
    bool stage_dt_estimate = false;
    mutable real_t dt_est_stages = std::numeric_limits<real_t>::infinity();
 };
+
+// Builds the dFEM operators of the mesh dimension
+// and returns a new LagrangianHydroOperator
+LagrangianHydroOperator *CreateLagrangianHydroOperator(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   Array<int> &ess_tdof,
+   FunctionCoefficient &rho0_coeff,
+   ParGridFunction &x0_gf,
+   ParGridFunction &rho0_gf,
+   ParGridFunction &material_gf,
+   Vector &external_data,
+   const IntegrationRule &ir,
+   const LagrangianHydroOperator::Options &options);
 
 } // namespace hydrodynamics
 
