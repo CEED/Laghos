@@ -40,8 +40,8 @@ make test
    Quick run of laghos_dfem on 4 ranks.
 make tests
    Run the laghos_tests on 1, 2 and 3 ranks, on the cpu and on the devices,
-   with the local q-functions, and the [global] ones with the global q-functions
-   too, printing each run with its time and a summary.
+   with the local and the global q-functions, printing each run with its time
+   and a summary.
    (TESTS selects the tests with a Catch2 test spec, e.g. TESTS=[sedov], RANKS,
     DEVICES and QFS restrict the runs, e.g. RANKS=1 DEVICES= QFS=local. Nothing
     is written to disk: the output of a failed run is printed after its KO
@@ -156,14 +156,15 @@ endif
 
 # Non-regression tests: the laghos_tests of TESTS, as listed by laghos_tests
 # itself, on the RANKS, on the cpu and on the DEVICES, with the q-function
-# backends of QFS (global for the [global] tests only), with the ctest names
+# backends of QFS, with the ctest names
 TESTS =
 RANKS = 1 2 3
 QFS = local global
 DEVICES = $(strip $(if $(filter YES,$(MFEM_USE_CUDA)),cuda) $(if \
 	$(filter YES,$(MFEM_USE_HIP)),hip) debug)
 # Debug device fault: hypre host reads of aliases protect valid device pages
-SKIP_RUNS = dfem_debug_implicit_sedov_3d_av_np%
+SKIP_RUNS = dfem_debug_implicit_sedov_3d_av_np% \
+	dfem_debug_global_implicit_sedov_3d_av_np%
 # KEEP_LOGS=1 keeps the logs of the failed runs in TESTS_DIR
 KEEP_LOGS =
 TESTS_KEEP = $(filter-out 0 no NO,$(KEEP_LOGS))
@@ -222,8 +223,8 @@ RUNS += $(1)
 $(1): laghos_tests | tests-header
 	@$$(call laghos_run_cmd,$(2),$(3),$(4),$(5))
 endef
-# 1: explicit or implicit, 2: tests, 3: q-function backend, if in QFS
-laghos_runs = $(foreach t,$(if $(filter $(3),$(QFS)),$(2)),$(foreach r,$(RANKS),\
+# 1: explicit or implicit, 2: tests, 3: q-function backend
+laghos_runs = $(foreach t,$(2),$(foreach r,$(RANKS),\
 	$(foreach d,cpu $(DEVICES),$(if $(filter $(SKIP_RUNS),$(call laghos_run,\
 	$(1),$(t),$(r),$(d),$(3))),,$(eval $(call laghos_run_template,$(call \
 	laghos_run,$(1),$(t),$(r),$(d),$(3)),$(t),$(r),$(d),$(3)))))))
@@ -233,12 +234,8 @@ ifneq (,$(filter tests-run,$(MAKECMDGOALS)))
    IMPLICIT_TESTS := $(filter $(ALL_TESTS),\
 	$(shell $(LIST_TESTS) '[implicit]' 2> /dev/null))
    EXPLICIT_TESTS := $(filter-out $(IMPLICIT_TESTS),$(ALL_TESTS))
-   GLOBAL_TESTS := $(filter $(ALL_TESTS),\
-	$(shell $(LIST_TESTS) '[global]' 2> /dev/null))
-   $(call laghos_runs,explicit,$(EXPLICIT_TESTS),local)
-   $(call laghos_runs,implicit,$(IMPLICIT_TESTS),local)
-   $(call laghos_runs,explicit,$(filter $(EXPLICIT_TESTS),$(GLOBAL_TESTS)),global)
-   $(call laghos_runs,implicit,$(filter $(IMPLICIT_TESTS),$(GLOBAL_TESTS)),global)
+   $(foreach q,$(QFS),$(call laghos_runs,explicit,$(EXPLICIT_TESTS),$(q))\
+	$(call laghos_runs,implicit,$(IMPLICIT_TESTS),$(q)))
 endif
 tests-run: $(RUNS)
 	@failed=`sort $(TESTS_FAILED)`; \

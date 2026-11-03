@@ -78,44 +78,35 @@ function(laghos_test name test np label qf)
   endforeach()
 endfunction()
 
-# Explicit runs with the same references on 1, 2 and 3 ranks
-foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
-             taylor_green_2d taylor_green_3d taylor_green_3d_av
-             readme_taylor_green_2d readme_taylor_green_3d
-             readme_sedov_2d readme_sedov_3d
-             taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
-             triple_point_3d triple_point_3d_av)
-  laghos_test(${test} ${test} 1 explicit local cpu ${devices})
-  foreach(np 2 3)
-    laghos_test(${test}_np${np} ${test} ${np} explicit local cpu ${devices})
+# Runs of each q-function backend with the same references, ctest -L global,
+# or ctest -LE global for the local q-functions only
+foreach(qf local global)
+  # Explicit runs with the same references on 1, 2 and 3 ranks
+  foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
+               taylor_green_2d taylor_green_3d taylor_green_3d_av
+               readme_taylor_green_2d readme_taylor_green_3d
+               readme_sedov_2d readme_sedov_3d
+               taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
+               triple_point_3d triple_point_3d_av)
+    laghos_test(${test} ${test} 1 explicit ${qf} cpu ${devices})
+    foreach(np 2 3)
+      laghos_test(${test}_np${np} ${test} ${np} explicit ${qf} cpu ${devices})
+    endforeach()
   endforeach()
-endforeach()
 
-# Implicit Newton and AMG runs with the references of the pre-dfem-dev MFEM,
-# ctest -L implicit, or ctest -LE implicit for the explicit tests only
-foreach(test implicit_taylor_green_2d implicit_taylor_green_2d_be
-             implicit_sedov_2d implicit_sedov_2d_av implicit_sedov_2d_av1
-             implicit_taylor_green_3d implicit_sedov_3d_av)
-  set(test_devices ${devices})
-  # Debug device fault: hypre host reads of aliases protect valid device pages
-  if (test STREQUAL implicit_sedov_3d_av)
-    list(REMOVE_ITEM test_devices debug)
-  endif()
-  foreach(np 1 2 3)
-    laghos_test(${test}_np${np} ${test} ${np} implicit local cpu
-                ${test_devices})
+  # Implicit Newton and AMG runs with the references of the pre-dfem-dev MFEM,
+  # ctest -L implicit, or ctest -LE implicit for the explicit tests only
+  foreach(test implicit_taylor_green_2d implicit_taylor_green_2d_be
+               implicit_sedov_2d implicit_sedov_2d_av implicit_sedov_2d_av1
+               implicit_taylor_green_3d implicit_sedov_3d_av)
+    set(test_devices ${devices})
+    # Debug device fault: hypre host reads of aliases protect valid device pages
+    if (test STREQUAL implicit_sedov_3d_av)
+      list(REMOVE_ITEM test_devices debug)
+    endif()
+    foreach(np 1 2 3)
+      laghos_test(${test}_np${np} ${test} ${np} implicit ${qf} cpu
+                  ${test_devices})
+    endforeach()
   endforeach()
-endforeach()
-
-# Global q-function runs of the [global] tests with the same references,
-# ctest -L global, or ctest -LE global for the local q-functions only
-foreach(test sedov_2d sedov_3d taylor_green_2d)
-  laghos_test(${test} ${test} 1 explicit global cpu ${devices})
-  foreach(np 2 3)
-    laghos_test(${test}_np${np} ${test} ${np} explicit global cpu ${devices})
-  endforeach()
-endforeach()
-foreach(np 1 2 3)
-  laghos_test(implicit_sedov_2d_av_np${np} implicit_sedov_2d_av ${np} implicit
-              global cpu ${devices})
 endforeach()

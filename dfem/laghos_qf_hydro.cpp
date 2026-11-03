@@ -132,8 +132,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
 
    // Create momentum operator
    auto momentum_mf =
-      CreateMomentumOperator<DIM, backend_t>(H1, L2, material_gf, ir,
-                                             all_domain_attr, d_external_data);
+      CreateMomentumOperator(DIM, options.qfunction_backend, H1, L2,
+                             material_gf, ir, all_domain_attr, d_external_data);
 
    std::shared_ptr<DifferentiableOperator> momentum_pa;
    {
@@ -155,9 +155,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
 
    // Create energy conservation operator
    auto energy_conservation_mf =
-      CreateEnergyConservationOperator<DIM, backend_t>(H1, L2, material_gf, ir,
-                                                       all_domain_attr,
-                                                       d_external_data);
+      CreateEnergyConservationOperator(DIM, options.qfunction_backend, H1, L2,
+                                       material_gf, ir, all_domain_attr,
+                                       d_external_data);
 
    std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
    {
@@ -398,22 +398,12 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const LagrangianHydroOperator::Options &options)
 {
    const int dim = H1.GetMesh()->Dimension();
-   MFEM_VERIFY(dim == 2 || dim == 3, "unsupported mesh dimension: " << dim);
-   const auto create = [&](auto dim_c, auto backend)
+   return Dispatch(dim, options.qfunction_backend, [&](auto DIM, auto backend)
    {
-      return CreateLagrangianHydroOperator<decltype(dim_c)::value,
-             decltype(backend)>(H1, L2, ess_tdof, rho0_coeff, x0_gf, rho0_gf,
-                                material_gf, external_data, ir, options);
-   };
-   const bool global = options.qfunction_backend ==
-                       LagrangianHydroOperator::GLOBAL_QF;
-   using Local = future::LocalQFBackend;
-   using Global = future::GlobalQFBackend;
-   using Dim2 = std::integral_constant<int, 2>;
-   using Dim3 = std::integral_constant<int, 3>;
-   return dim == 2 ?
-          (global ? create(Dim2{}, Global{}) : create(Dim2{}, Local{})) :
-          (global ? create(Dim3{}, Global{}) : create(Dim3{}, Local{}));
+      return CreateLagrangianHydroOperator<DIM, decltype(backend)>(
+                H1, L2, ess_tdof, rho0_coeff, x0_gf, rho0_gf, material_gf,
+                external_data, ir, options);
+   });
 }
 
 } // namespace mfem::hydrodynamics

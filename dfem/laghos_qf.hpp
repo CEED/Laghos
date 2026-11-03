@@ -497,9 +497,31 @@ void AddDomainIntegrator(DifferentiableOperator &op, const qfunc_t &qfunc,
    }
 }
 
+// Q-function backends of the operators
+enum QFUNCTION_BACKEND { LOCAL_QF = 0, GLOBAL_QF = 1 };
+
+// Calls f with the dimension constant and the backend of the runtime values
+template <typename F>
+auto Dispatch(const int dim, const int qf_backend, F &&f)
+{
+   MFEM_VERIFY(dim == 2 || dim == 3, "unsupported mesh dimension: " << dim);
+   MFEM_VERIFY(qf_backend == LOCAL_QF || qf_backend == GLOBAL_QF,
+               "unknown q-function backend: " << qf_backend);
+   using Dim2 = std::integral_constant<int, 2>;
+   using Dim3 = std::integral_constant<int, 3>;
+   using Local = future::LocalQFBackend;
+   using Global = future::GlobalQFBackend;
+   const bool global = qf_backend == GLOBAL_QF;
+   return dim == 2 ?
+          (global ? f(Dim2{}, Global{}) : f(Dim2{}, Local{})) :
+          (global ? f(Dim3{}, Global{}) : f(Dim3{}, Local{}));
+}
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 // Builds the dFEM momentum operator, with its Jacobian blocks
-template <int DIM, typename backend_t>
 std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
+   int dim,
+   int qf_backend,
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    ParGridFunction &material_gf,
@@ -508,8 +530,9 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    real_t *d_external_data);
 
 // Builds the dFEM energy conservation operator, with its Jacobian blocks
-template <int DIM, typename backend_t>
 std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
+   int dim,
+   int qf_backend,
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    ParGridFunction &material_gf,

@@ -37,7 +37,6 @@ class LagrangianHydroOperator : public TimeDependentOperator
 public:
 
    enum PRECONDITIONER_TYPE { BLOCK_DIAGONAL_AMG = 0 };
-   enum QFUNCTION_BACKEND { LOCAL_QF = 0, GLOBAL_QF = 1 };
 
    // Solver options, with the laghos command line defaults
    struct Options

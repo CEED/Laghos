@@ -164,8 +164,7 @@ int main(int argc, char *argv[])
    MFEM_VERIFY(global_qf || !strcmp(qf_backend, "local"),
                "unknown q-function backend: " << qf_backend);
    hydro_options.qfunction_backend =
-      global_qf ? hydrodynamics::LagrangianHydroOperator::GLOBAL_QF :
-      hydrodynamics::LagrangianHydroOperator::LOCAL_QF;
+      global_qf ? hydrodynamics::GLOBAL_QF : hydrodynamics::LOCAL_QF;
    MFEM_VERIFY(problem != 2, "1D Sod shock tube (-p 2) is not supported");
    if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 

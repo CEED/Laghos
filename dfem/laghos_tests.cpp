@@ -22,7 +22,6 @@
 //   laghos_tests "[taylor-green]" runs the tests with a given tag
 //   laghos_tests "[explicit]"     runs the explicit tests only, ctest -L explicit
 //   laghos_tests "[implicit]"     runs the implicit tests only, ctest -L implicit
-//   laghos_tests "[global]"       runs the tests with global variants
 //   laghos_tests -v ...           also shows the raw Laghos output
 //   laghos_tests --device cuda    runs on a Device, one test per process
 //   laghos_tests --qf global      runs with global q-functions, ctest -L global
@@ -417,13 +416,13 @@ static void LaghosTest(const std::string &name)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-TEST_CASE("sedov_2d", "[dfem][explicit][sedov][2d][global]")
+TEST_CASE("sedov_2d", "[dfem][explicit][sedov][2d]")
 { LaghosTest("sedov_2d"); }
 
 TEST_CASE("sedov_2d_rk2", "[dfem][explicit][sedov][2d]")
 { LaghosTest("sedov_2d_rk2"); }
 
-TEST_CASE("sedov_3d", "[dfem][explicit][sedov][3d][global]")
+TEST_CASE("sedov_3d", "[dfem][explicit][sedov][3d]")
 { LaghosTest("sedov_3d"); }
 
 TEST_CASE("sedov_2d_stock", "[dfem][explicit][sedov][2d][stock]")
@@ -432,7 +431,7 @@ TEST_CASE("sedov_2d_stock", "[dfem][explicit][sedov][2d][stock]")
 TEST_CASE("sedov_3d_stock", "[dfem][explicit][sedov][3d][stock]")
 { LaghosTest("sedov_3d_stock"); }
 
-TEST_CASE("taylor_green_2d", "[dfem][explicit][taylor-green][2d][global]")
+TEST_CASE("taylor_green_2d", "[dfem][explicit][taylor-green][2d]")
 { LaghosTest("taylor_green_2d"); }
 
 TEST_CASE("taylor_green_3d", "[dfem][explicit][taylor-green][3d]")
@@ -480,7 +479,7 @@ TEST_CASE("implicit_taylor_green_2d_be", "[dfem][implicit][taylor-green][2d]")
 TEST_CASE("implicit_sedov_2d", "[dfem][implicit][sedov][2d]")
 { LaghosTest("implicit_sedov_2d"); }
 
-TEST_CASE("implicit_sedov_2d_av", "[dfem][implicit][sedov][2d][global]")
+TEST_CASE("implicit_sedov_2d_av", "[dfem][implicit][sedov][2d]")
 { LaghosTest("implicit_sedov_2d_av"); }
 TEST_CASE("implicit_sedov_2d_av1", "[dfem][implicit][sedov][2d]")
 { LaghosTest("implicit_sedov_2d_av1"); }

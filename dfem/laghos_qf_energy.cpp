@@ -20,7 +20,7 @@ namespace mfem::hydrodynamics
 {
 
 template <int DIM, typename backend_t>
-std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
+static std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    ParGridFunction &material_gf,
@@ -72,40 +72,21 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    return energy_conservation_mf;
 }
 
-template std::shared_ptr<DifferentiableOperator>
-CreateEnergyConservationOperator<2, future::LocalQFBackend>(
+std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
+   int dim,
+   int qf_backend,
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    ParGridFunction &material_gf,
    const IntegrationRule &ir,
    const Array<int> &all_domain_attr,
-   real_t *d_external_data);
-
-template std::shared_ptr<DifferentiableOperator>
-CreateEnergyConservationOperator<2, future::GlobalQFBackend>(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   ParGridFunction &material_gf,
-   const IntegrationRule &ir,
-   const Array<int> &all_domain_attr,
-   real_t *d_external_data);
-
-template std::shared_ptr<DifferentiableOperator>
-CreateEnergyConservationOperator<3, future::LocalQFBackend>(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   ParGridFunction &material_gf,
-   const IntegrationRule &ir,
-   const Array<int> &all_domain_attr,
-   real_t *d_external_data);
-
-template std::shared_ptr<DifferentiableOperator>
-CreateEnergyConservationOperator<3, future::GlobalQFBackend>(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   ParGridFunction &material_gf,
-   const IntegrationRule &ir,
-   const Array<int> &all_domain_attr,
-   real_t *d_external_data);
+   real_t *d_external_data)
+{
+   return Dispatch(dim, qf_backend, [&](auto DIM, auto backend)
+   {
+      return CreateEnergyConservationOperator<DIM, decltype(backend)>(
+                H1, L2, material_gf, ir, all_domain_attr, d_external_data);
+   });
+}
 
 } // namespace mfem::hydrodynamics
