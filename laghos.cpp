@@ -169,7 +169,6 @@ int main(int argc, char *argv[])
    bool enable_nc = true;
 
    #ifdef LAGHOS_USE_CALIPER
-      cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
       CALI_CXX_MARK_FUNCTION;
    
       MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
