@@ -59,6 +59,45 @@ list(APPEND devices dbg)
 set(qf_loc local)
 set(qf_glb global)
 
+# Ranks of the runs on each device, 1 and 2 only on gpu
+set(ranks_cpu 1 2 3)
+set(ranks_gpu 1 2)
+set(ranks_dbg 1 2 3)
+
+# GPUs of the gpu tests, counted by nvidia-smi or rocm_agent_enumerator at
+# configure time, 1 if none: with 3 or more, the gpu runs on 1 rank use GPU 2
+# and the ones on 2 ranks GPUs 0 and 1, from LAGHOS_TESTS_GPU, see
+# laghos_tests.cpp, so that their groups run at the same time, else one group
+# at a time on all the GPUs
+if (gpu IN_LIST devices AND NOT DEFINED LAGHOS_TESTS_GPUS)
+  set(ids)
+  if (MFEM_USE_CUDA)
+    execute_process(COMMAND nvidia-smi -L OUTPUT_VARIABLE out ERROR_QUIET)
+    string(REGEX MATCHALL "GPU [0-9]+:" ids "${out}")
+  else()
+    execute_process(COMMAND rocm_agent_enumerator OUTPUT_VARIABLE out
+      ERROR_QUIET)
+    string(REGEX MATCHALL "gfx[0-9a-f]+" ids "${out}")
+    list(REMOVE_ITEM ids gfx000)
+  endif()
+  list(LENGTH ids gpus)
+  if (gpus EQUAL 0)
+    set(gpus 1)
+  endif()
+  set(LAGHOS_TESTS_GPUS ${gpus} CACHE STRING "GPUs of the gpu tests")
+endif()
+if (gpu IN_LIST devices)
+  message(STATUS "GPUs of the gpu tests: ${LAGHOS_TESTS_GPUS}")
+endif()
+set(gpu_lock_np1 gpu)
+set(gpu_lock_np2 gpu)
+if (LAGHOS_TESTS_GPUS GREATER_EQUAL 3)
+  set(gpu_first_np1 2)
+  set(gpu_first_np2 0)
+  set(gpu_lock_np1 gpu_np1)
+  set(gpu_lock_np2 gpu_np2)
+endif()
+
 # Tests of the TEST_CASE names of laghos_tests.cpp, exp_ or imp_ prefixed
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS laghos_tests.cpp)
 file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/laghos_tests.cpp tests
@@ -75,16 +114,19 @@ function(laghos_test device qf test np spec labels)
             ${MPIEXEC_PREFLAGS} $<TARGET_FILE:laghos_tests>
             ${MPIEXEC_POSTFLAGS} --device ${device_${device}}
             --qf ${qf_${qf}} ${spec})
-  set_tests_properties(${ctest} PROPERTIES ENVIRONMENT NO_COLOR=1
+  set(env NO_COLOR=1)
+  if (device STREQUAL gpu AND DEFINED gpu_first_np${np})
+    list(APPEND env LAGHOS_TESTS_GPU=${gpu_first_np${np}})
+  endif()
+  set_tests_properties(${ctest} PROPERTIES ENVIRONMENT "${env}"
     PROCESSORS ${np} LABELS "${device};${qf};${labels}")
 endfunction()
 
 # Debug device fault: hypre host reads of aliases protect valid device pages
 set(skip_dbg imp_run_sdv_3d_q21_mid_av7_dtn)
 
-# With GPU support, all the tests of cpu and dbg run in one process per
-# q-function and ranks, one ctest per test on GPUs, without GPU support or
-# when OFF
+# With GPU support, all the tests of each device run in one process per
+# q-function and ranks, or one ctest per test without GPU support or when OFF
 set(groups OFF)
 if (gpu IN_LIST devices)
   set(groups ON)
@@ -93,20 +135,28 @@ option(LAGHOS_TESTS_GROUPS "One ctest per device, q-function and ranks"
   ${groups})
 set(grouped)
 if (LAGHOS_TESTS_GROUPS)
-  set(grouped cpu dbg)
+  set(grouped ${devices})
 endif()
 
-# Runs on 1, 2 and 3 ranks on each device with each q-function backend, with
-# the same references: one dfem_<device>_<qf>_all_np<np> group, labeled group,
-# or each test, labeled exp or imp, and chk for the README checks or run
+# Runs on the ranks of each device with each q-function backend, with the
+# same references: one dfem_<device>_<qf>_all_np<np> group, labeled group,
+# the gpu groups of the same GPUs one at a time, or each test, labeled exp or
+# imp, and chk for the README checks or run
 foreach(qf loc glb)
   foreach(np 1 2 3)
     foreach(device ${grouped})
+      if (NOT np IN_LIST ranks_${device})
+        continue()
+      endif()
       set(spec "[dfem]")
       if (device STREQUAL dbg)
         string(APPEND spec "~${skip_dbg}")
       endif()
       laghos_test(${device} ${qf} all ${np} ${spec} group)
+      if (device STREQUAL gpu)
+        set_tests_properties(dfem_gpu_${qf}_all_np${np} PROPERTIES
+          RESOURCE_LOCK ${gpu_lock_np${np}})
+      endif()
     endforeach()
   endforeach()
   foreach(test ${tests})
@@ -114,8 +164,8 @@ foreach(qf loc glb)
     string(SUBSTRING ${test} 4 3 kind)
     foreach(np 1 2 3)
       foreach(device ${devices})
-        if (NOT (device IN_LIST grouped OR
-                 (device STREQUAL dbg AND test STREQUAL "${skip_dbg}")))
+        if (np IN_LIST ranks_${device} AND NOT (device IN_LIST grouped OR
+            (device STREQUAL dbg AND test STREQUAL "${skip_dbg}")))
           laghos_test(${device} ${qf} ${test} ${np} ${test} "${run};${kind}")
         endif()
       endforeach()

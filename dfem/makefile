@@ -39,11 +39,14 @@ make status
 make test
    Quick run of laghos_dfem on 4 ranks.
 make tests
-   Run the laghos_tests on 1, 2 and 3 ranks, on the cpu and on the devices,
-   with the local and the global q-functions, printing each run with its time
-   and a summary. On the GROUPED devices (cpu and dbg with GPU support), all
-   the tests run in one process, e.g. dfem_cpu_loc_all_np1, one test per run
-   on the others.
+   Run the laghos_tests on 1, 2 and 3 ranks (1 and 2 on gpu), on the cpu and
+   on the devices, with the local and the global q-functions, printing each
+   run with its time and a summary. On the GROUPED devices (all of them with
+   GPU support), all the tests run in one process, e.g. dfem_cpu_loc_all_np1,
+   one test per run on the others. These runs of all the tests are one at a
+   time on the SERIAL devices (gpu), as their processes share the GPUs, per
+   ranks with 3 GPUs or more: GPU 2 for 1 rank, GPUs 0 and 1 for 2 ranks.
+   (GPUS sets the GPU count, counted by laghos_tests by default.)
    (TESTS selects the tests with a Catch2 test spec, e.g. TESTS=[chk], RANKS,
     DEVICES (cpu, dbg, gpu) and QFS (loc, glb) restrict the runs, e.g. RANKS=1
     DEVICES=cpu QFS=loc, GROUPED= runs one test per run everywhere. Nothing is
@@ -164,6 +167,8 @@ endif
 # with the ctest names
 TESTS =
 RANKS = 1 2 3
+# Ranks of the gpu runs, among RANKS
+GPU_RANKS = 1 2
 QFS = loc glb
 DEVICES = $(strip cpu $(if $(DEVICE_gpu),gpu) dbg)
 # MFEM devices and q-function backends of the DEVICES and QFS name tags
@@ -173,8 +178,18 @@ DEVICE_gpu = $(if $(filter YES,$(MFEM_USE_CUDA)),cuda,$(if \
 	$(filter YES,$(MFEM_USE_HIP)),hip))
 QF_loc = local
 QF_glb = global
-# Devices running all their tests in one process with GPU support, not the GPUs
-GROUPED = $(if $(DEVICE_gpu),cpu dbg)
+# Devices running all their tests in one process, all with GPU support
+GROUPED = $(if $(DEVICE_gpu),cpu gpu dbg)
+# GROUPED devices running all their tests one run at a time, sharing the GPUs
+SERIAL = gpu
+# GPUs of the gpu runs, counted by laghos_tests --gpus on 1 rank if empty, 1
+# if none: with 3 or more, the runs on 1 rank use GPU 2 and the ones on 2
+# ranks GPUs 0 and 1, from LAGHOS_TESTS_GPU, see laghos_tests.cpp, with one
+# SERIAL chain per ranks
+GPUS =
+GPU_SPLIT = $(filter-out 0 1 2,$(GPUS))
+GPU_FIRST_1 = 2
+GPU_FIRST_2 = 0
 # Debug device fault: hypre host reads of aliases protect valid device pages
 SKIP_RUNS = dfem_dbg_loc_imp_run_sdv_3d_q21_mid_av7_dtn_np% \
 	dfem_dbg_glb_imp_run_sdv_3d_q21_mid_av7_dtn_np%
@@ -205,7 +220,9 @@ tests: laghos_tests
 
 tests-header:
 	@echo "laghos_tests: $(words $(RUNS)) runs$(if $(TESTS), of '$(TESTS)')," \
-	  "ranks: $(RANKS), devices: $(DEVICES), q-functions: $(QFS)"
+	  "ranks: $(RANKS)$(if $(filter gpu,$(DEVICES)), (gpu:" \
+	  "$(filter $(GPU_RANKS),$(RANKS)))), devices: $(DEVICES)," \
+	  "q-functions: $(QFS)"
 	@echo "MFEM_DIR = $(patsubst %/config/config.mk,%,$(CONFIG_MK))"
 
 # 1: test or all, 2: ranks, 3: device, 4: q-function backend
@@ -222,11 +239,15 @@ TESTS_LOG_LINES = awk 'length($$0) == 74 && /^-+$$/ { skip = !skip; next } \
 comma := ,
 empty :=
 space := $(empty) $(empty)
+# 1: ranks, 2: device, the first GPU of the gpu runs with GPU_SPLIT
+laghos_gpu_env = $(if $(and $(GPU_SPLIT),$(filter gpu,$(2))),\
+	LAGHOS_TESTS_GPU=$(GPU_FIRST_$(1)) )
 # 1: tests, 2: ranks, 3: device, 4: q-function backend, printing OK or KO, the
 # run and its time, and on failure its log (with KEEP_LOGS) and output lines,
 # with a single printf
 laghos_run_cmd = t0=`$(CLOCK)`; \
-	if out=$$($(RUN_MPI) $(2) ./laghos_tests --device $(DEVICE_$(3)) \
+	if out=$$($(call laghos_gpu_env,$(2),$(3))$(RUN_MPI) $(2) \
+	   ./laghos_tests --device $(DEVICE_$(3)) \
 	   --qf $(QF_$(4)) $(subst $(space),$(comma),$(strip $(1))) \
 	   2>&1); \
 	then s=OK c='\033[0;32m'; else s=KO c='\033[0;31m'; fi; \
@@ -238,30 +259,44 @@ laghos_run_cmd = t0=`$(CLOCK)`; \
 	   l=$$(printf '%s\n' "$$out" | $(TESTS_LOG_LINES)); \
 	   printf "$$f$(if $(TESTS_KEEP),      %s\n)%s\n" $$s $@ $$t \
 	   $(if $(TESTS_KEEP),$(TESTS_DIR)/$@.log) "$$l"; fi
-# 1: run, 2: test, 3: ranks, 4: device, 5: q-function backend
+# 1: run, 2: test, 3: ranks, 4: device, 5: q-function backend, 6: run before
 define laghos_run_template
 RUNS += $(1)
-$(1): laghos_tests | tests-header
+$(1): laghos_tests | tests-header $(6)
 	@$$(call laghos_run_cmd,$(2),$(3),$(4),$(5))
 endef
 # 1: tests, 2: ranks, 3: device, 4: q-function backend, without SKIP_RUNS
 laghos_tests_of = $(foreach t,$(1),\
 	$(if $(filter $(SKIP_RUNS),$(call laghos_run,$(t),$(2),$(3),$(4))),,$(t)))
-# 1: name, 2: ranks, 3: device, 4: q-function backend, 5: tests
+# 1: name, 2: ranks, 3: device, 4: q-function backend, 5: tests, 6: run before
 laghos_run_def = $(eval $(call laghos_run_template,\
-	$(call laghos_run,$(1),$(2),$(3),$(4)),$(5),$(2),$(3),$(4)))
+	$(call laghos_run,$(1),$(2),$(3),$(4)),$(5),$(2),$(3),$(4),$(6)))
+# 1: ranks, 2: device, the variable of the last run of its SERIAL chain, one
+# per device, and per ranks with GPU_SPLIT
+laghos_serial = SERIAL_LAST_$(2)$(if $(GPU_SPLIT),_$(1))
 # 1: ranks, 2: device, 3: q-function backend, 4: tests: one run of all the
-# tests on the GROUPED devices, one run per test on the others
-laghos_device_runs = $(if $(filter $(GROUPED),$(2)),\
-	$(if $(4),$(call laghos_run_def,all,$(1),$(2),$(3),$(4))),\
+# tests on the GROUPED devices, after the previous one of its SERIAL chain on
+# the SERIAL devices, one run per test on the others
+laghos_device_runs = $(if $(filter $(GROUPED),$(2)),$(if $(4),\
+	$(call laghos_run_def,all,$(1),$(2),$(3),$(4),\
+	$($(call laghos_serial,$(1),$(2)))) \
+	$(if $(filter $(SERIAL),$(2)),$(eval $(call laghos_serial,$(1),$(2)) := \
+	$(call laghos_run,all,$(1),$(2),$(3))))),\
 	$(foreach t,$(4),$(call laghos_run_def,$(t),$(1),$(2),$(3),$(t))))
+# 1: ranks, the DEVICES running on them, gpu only on GPU_RANKS
+laghos_devices = $(filter-out $(if $(filter $(1),$(GPU_RANKS)),,gpu),$(DEVICES))
 # 1: tests, 2: q-function backend
-laghos_runs = $(foreach r,$(RANKS),$(foreach d,$(DEVICES),\
+laghos_runs = $(foreach r,$(RANKS),$(foreach d,$(call laghos_devices,$(r)),\
 	$(call laghos_device_runs,$(r),$(d),$(2),\
 	$(call laghos_tests_of,$(1),$(r),$(d),$(2)))))
 ifneq (,$(filter tests-run,$(MAKECMDGOALS)))
    ALL_TESTS := $(shell $(RUN_MPI) 1 ./laghos_tests --list-test-names-only \
 	$(if $(TESTS),'$(TESTS)') 2> /dev/null)
+   ifeq ($(GPUS),)
+      GPUS := $(or $(if $(filter gpu,$(DEVICES)),$(lastword $(shell \
+	$(RUN_MPI) 1 ./laghos_tests --device $(DEVICE_gpu) --gpus \
+	2> /dev/null))),1)
+   endif
    $(foreach q,$(QFS),$(call laghos_runs,$(ALL_TESTS),$(q)))
 endif
 tests-run: $(RUNS)
@@ -303,6 +338,9 @@ status info:
 	$(info DEVICES      = $(DEVICES))
 	$(info QFS          = $(QFS))
 	$(info GROUPED      = $(GROUPED))
+	$(info SERIAL       = $(SERIAL))
+	$(info GPU_RANKS    = $(GPU_RANKS))
+	$(info GPUS         = $(GPUS))
 	$(info MAX_RANKS    = $(MAX_RANKS))
 	$(info PREFIX       = $(PREFIX))
 	@true

@@ -26,11 +26,14 @@
 //   laghos_tests -v ...           also shows the raw Laghos output
 //   laghos_tests --device debug   runs on a Device, created once per process
 //   laghos_tests --device cuda    runs on a GPU, one test per process in CTest
+//   LAGHOS_TESTS_GPU=2 laghos_tests --device cuda  runs from GPU 2
+//   laghos_tests --device cuda --gpus  prints the GPU count, for the makefile
 //   laghos_tests --qf global      runs with global q-functions, ctest -L glb
 //   laghos_tests -h               Catch2 help
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -52,6 +55,7 @@ using mfem::real_t;
 #endif
 
 static bool verbose = false; // -v: keep the raw Laghos output
+static bool gpus = false; // --gpus: print the GPU count only
 static std::string device = "cpu"; // --device: Device configuration string
 static std::string qf = "local"; // --qf: q-function backend, local or global
 static int device_id = 0; // GPU of the rank, see main
@@ -539,6 +543,7 @@ int main(int argc, char* argv[]) try
       {
          device = argv[++i];
       }
+      else if (!std::strcmp(argv[i], "--gpus")) { gpus = true; }
       else if (!std::strcmp(argv[i], "--qf") && i + 1 < argc)
       {
          qf = argv[++i];
@@ -546,10 +551,24 @@ int main(int argc, char* argv[]) try
       else { args.push_back(argv[i]); }
    }
 
-   // One GPU per rank of a node, round-robin over the visible ones
    const auto gpu = [](const char *backend)
    { return device.find(backend) != std::string::npos; };
-   if (gpu("cuda") || gpu("hip"))
+   const bool gpu_device = gpu("cuda") || gpu("hip");
+
+   // Only the GPU count with --gpus, 0 without a GPU device
+   if (gpus)
+   {
+      if (mfem::Mpi::Root())
+      {
+         std::cout << (gpu_device ? mfem::Device::GetDeviceCount() : 0)
+                   << std::endl;
+      }
+      return 0;
+   }
+
+   // One GPU per rank of a node, round-robin over the visible ones from the
+   // first one, LAGHOS_TESTS_GPU or 0
+   if (gpu_device)
    {
       MPI_Comm node;
       MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
@@ -557,7 +576,9 @@ int main(int argc, char* argv[]) try
       int local_rank;
       MPI_Comm_rank(node, &local_rank);
       MPI_Comm_free(&node);
-      device_id = local_rank % mfem::Device::GetDeviceCount();
+      const char *first = std::getenv("LAGHOS_TESTS_GPU");
+      device_id = ((first ? std::atoi(first) : 0) + local_rank) %
+                  mfem::Device::GetDeviceCount();
    }
 
    // One Device per process, kept by all the laghos runs of the test cases
