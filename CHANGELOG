@@ -14,7 +14,7 @@ Version 3.2
 - Added CMake build support for CPU, CUDA and HIP configurations, with optional
   RAJA support, and separate CMake and Makefile installation instructions.
 
-- Updated compatibility MFEM 4.10. CMake builds use C++17 by default and C++20
+- Updated compatibility to MFEM 4.10. CMake builds use C++17 by default and C++20
   when MFEM enables RAJA or Umpire.
 
 - Added optional user.cmake and user.mk files for local build configuration, and
