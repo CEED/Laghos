@@ -23,6 +23,7 @@
 //   laghos_tests "[explicit]"     runs the explicit tests only, ctest -L explicit
 //   laghos_tests "[implicit]"     runs the implicit tests only, ctest -L implicit
 //   laghos_tests -v ...           also shows the raw Laghos output
+//   laghos_tests --device cuda    runs on a Device, one test per process
 //   laghos_tests -h               Catch2 help
 
 #include <algorithm>
@@ -48,6 +49,8 @@ using mfem::real_t;
 #endif
 
 static bool verbose = false; // -v: keep the raw Laghos output
+static std::string device = "cpu"; // --device: Device configuration string
+static int device_id = 0; // GPU of the rank, see main
 static struct { int passed = 0, total = 0; } summary; // final report line
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -84,7 +87,7 @@ struct Test
    std::string Command() const
    {
       return std::string(binary) + " -m " + LAGHOS_DATA_DIR + mesh + " " +
-             options;
+             options + " -d " + device + " -dev " + std::to_string(device_id);
    }
 };
 
@@ -317,7 +320,11 @@ static void LaghosTest(const std::string &name)
    if (out_enabled) { mfem::out.Enable(); }
 
    const bool root = mfem::Mpi::Root();
-   if (root) { report::Header(test.name, test.desc); }
+   if (root)
+   {
+      report::Header(test.name,
+                     device == "cpu" ? test.desc : test.desc + ", " + device);
+   }
    if (root && ret != 0) { report::Row().Fail("laghos").Int("returned", ret); }
    REQUIRE(ret == 0);
 
@@ -489,7 +496,25 @@ int main(int argc, char* argv[]) try
       {
          verbose = true;
       }
+      else if (!std::strcmp(argv[i], "--device") && i + 1 < argc)
+      {
+         device = argv[++i];
+      }
       else { args.push_back(argv[i]); }
+   }
+
+   // One GPU per rank of a node, round-robin over the visible ones
+   const auto gpu = [](const char *backend)
+   { return device.find(backend) != std::string::npos; };
+   if (gpu("cuda") || gpu("hip"))
+   {
+      MPI_Comm node;
+      MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0,
+                          MPI_INFO_NULL, &node);
+      int local_rank;
+      MPI_Comm_rank(node, &local_rank);
+      MPI_Comm_free(&node);
+      device_id = local_rank % mfem::Device::GetDeviceCount();
    }
 
    // Catch2 colors follow report::UseColor (TTY and no NO_COLOR), unless set

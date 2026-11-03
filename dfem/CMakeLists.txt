@@ -43,18 +43,41 @@ target_compile_definitions(laghos_tests PRIVATE
   LAGHOS_DATA_DIR="${PROJECT_SOURCE_DIR}/data/")
 target_link_libraries(laghos_tests PRIVATE laghos_tests_lib laghos_dfem_lib)
 
-# No colors in the ctest logs: mpiexec may give the ranks a pseudo-terminal
+# Devices of the ctest variants: the GPU of MFEM, if any, and the debug device,
+# ctest -L device, or ctest -LE device for the cpu tests only
+set(devices debug)
+if (MFEM_USE_CUDA)
+  set(devices cuda debug)
+elseif (MFEM_USE_HIP)
+  set(devices hip debug)
+endif()
+
+# One ctest per device of a test on np ranks, dfem_<name> on the cpu and
+# dfem_<device>_<name> otherwise, no colors: mpiexec may give a pseudo-terminal
+function(laghos_test name test np label)
+  foreach(device ${ARGN})
+    if (device STREQUAL cpu)
+      set(ctest dfem_${name})
+      set(labels ${label})
+    else()
+      set(ctest dfem_${device}_${name})
+      set(labels ${label} device ${device})
+    endif()
+    add_test(NAME ${ctest}
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+              $<TARGET_FILE:laghos_tests> --device ${device} ${test})
+    set_tests_properties(${ctest} PROPERTIES ENVIRONMENT NO_COLOR=1
+      LABELS "${labels}")
+  endforeach()
+endfunction()
+
 foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
              taylor_green_2d taylor_green_3d taylor_green_3d_av
              readme_taylor_green_2d readme_taylor_green_3d
              readme_sedov_2d readme_sedov_3d
              taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
              triple_point_3d triple_point_3d_av)
-  add_test(NAME dfem_${test}
-    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
-            $<TARGET_FILE:laghos_tests> ${test})
-  set_tests_properties(dfem_${test} PROPERTIES ENVIRONMENT NO_COLOR=1
-    LABELS explicit)
+  laghos_test(${test} ${test} 1 explicit cpu ${devices})
 endforeach()
 
 # Same references in parallel
@@ -63,11 +86,7 @@ foreach(test sedov_2d sedov_3d sedov_2d_stock sedov_3d_stock taylor_green_2d
              readme_taylor_green_2d readme_taylor_green_3d readme_sedov_2d
              taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
              triple_point_3d triple_point_3d_av)
-  add_test(NAME dfem_${test}_np2
-    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
-            $<TARGET_FILE:laghos_tests> ${test})
-  set_tests_properties(dfem_${test}_np2 PROPERTIES ENVIRONMENT NO_COLOR=1
-    LABELS explicit)
+  laghos_test(${test}_np2 ${test} 2 explicit cpu ${devices})
 endforeach()
 
 # Same references on an odd number of ranks, readme_sedov_3d drifts by 1.5e-10
@@ -76,11 +95,7 @@ foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
              readme_taylor_green_2d readme_taylor_green_3d readme_sedov_2d
              taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
              triple_point_3d triple_point_3d_av)
-  add_test(NAME dfem_${test}_np3
-    COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 3
-            $<TARGET_FILE:laghos_tests> ${test})
-  set_tests_properties(dfem_${test}_np3 PROPERTIES ENVIRONMENT NO_COLOR=1
-    LABELS explicit)
+  laghos_test(${test}_np3 ${test} 3 explicit cpu ${devices})
 endforeach()
 
 # Implicit Newton and AMG runs with the references of the pre-dfem-dev MFEM,
@@ -88,11 +103,12 @@ endforeach()
 foreach(test implicit_taylor_green_2d implicit_taylor_green_2d_be
              implicit_sedov_2d implicit_sedov_2d_av implicit_sedov_2d_av1
              implicit_taylor_green_3d implicit_sedov_3d_av)
+  set(test_devices ${devices})
+  # Debug device fault: hypre host reads of aliases protect valid device pages
+  if (test STREQUAL implicit_sedov_3d_av)
+    list(REMOVE_ITEM test_devices debug)
+  endif()
   foreach(np 1 2 3)
-    add_test(NAME dfem_${test}_np${np}
-      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
-              $<TARGET_FILE:laghos_tests> ${test})
-    set_tests_properties(dfem_${test}_np${np} PROPERTIES ENVIRONMENT NO_COLOR=1
-      LABELS implicit)
+    laghos_test(${test}_np${np} ${test} ${np} implicit cpu ${test_devices})
   endforeach()
 endforeach()
