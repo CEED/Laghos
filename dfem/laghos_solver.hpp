@@ -14,14 +14,11 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#ifndef MFEM_LAGHOS_SOLVER
-#define MFEM_LAGHOS_SOLVER
+#pragma once
 
 #include "mfem.hpp"
 #include "laghos_assembly.hpp"
 #include <fem/dfem/doperator.hpp>
-
-#ifdef MFEM_USE_MPI
 
 using mfem::future::DifferentiableOperator;
 using mfem::future::DerivativeOperator;
@@ -47,25 +44,6 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec = false);
 
-struct TimingData
-{
-   // Total times for all major computations:
-   // CG solves (H1 and L2) / force RHS assemblies / quadrature computations.
-   StopWatch sw_cgH1, sw_cgL2, sw_force, sw_qdata;
-
-   // Store the number of dofs of the corresponding local CG
-   const HYPRE_Int L2dof;
-
-   // These accumulate the total processed dofs or quad points:
-   // #(CG iterations) for the L2 CG solve.
-   // #quads * #(RK sub steps) for the quadrature data computations.
-   HYPRE_BigInt H1iter, L2iter;
-   HYPRE_BigInt quad_tstep;
-
-   TimingData(const HYPRE_Int l2d) :
-      L2dof(l2d), H1iter(0), L2iter(0), quad_tstep(0) { }
-};
-
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
 class LagrangianHydroOperator : public TimeDependentOperator
@@ -73,6 +51,18 @@ class LagrangianHydroOperator : public TimeDependentOperator
 public:
 
    enum PRECONDITIONER_TYPE { BLOCK_DIAGONAL_AMG = 0 };
+
+   // Implicit solver options, with the laghos command line defaults
+   struct Options
+   {
+      bool fd_gradient = false;
+      int dump_jacobians = 0;
+      int nonlinear_maximum_iterations = 10;
+      real_t nonlinear_relative_tolerance = 1e-5;
+      int krylov_maximum_iterations = 10;
+      int preconditioner_lag = 0;
+      int preconditioner_type = BLOCK_DIAGONAL_AMG;
+   };
 
    class LineSearchNewtonSolver : public NewtonSolver
    {
@@ -199,13 +189,7 @@ public:
                            std::shared_ptr<DifferentiableOperator> density_mf,
                            std::shared_ptr<DifferentiableOperator> taylor_source_mf,
                            std::shared_ptr<QuadratureData> qdata,
-                           const bool &fd_gradient,
-                           const int &dump_jacobians,
-                           const int &nonlinear_maximum_iterations,
-                           const real_t &nonlinear_relative_tolerance,
-                           const int &krylov_maximum_iterations,
-                           const int &preconditioner_lag,
-                           const PRECONDITIONER_TYPE &preconditioner_type,
+                           const Options &options,
                            Vector& external_data);
    ~LagrangianHydroOperator();
 
@@ -257,6 +241,8 @@ public:
    std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf;
    std::shared_ptr<DifferentiableOperator> density_mf;
    std::shared_ptr<DifferentiableOperator> taylor_source_mf;
+   // Taylor-Green energy source, 2D only as in stock Laghos
+   const bool taylor_source;
    std::shared_ptr<QuadratureData> qdata;
    mutable ParGridFunction mesh_nodes, rhsvc, dvc;
    mutable MassPAOperator *Mv = nullptr, *Me = nullptr;
@@ -272,14 +258,8 @@ public:
 
    mutable FunctionCoefficient rho0_coeff;
    OperatorJacobiSmoother *Mv_Jprec = nullptr;
-   mutable Vector RHSv, rhsv, X, Xx, Xv, Xvc, Xe, K, Kx, Kv, Ke, B, RHSe, rhse;
-   bool fd_gradient;
-   int dump_jacobians;
-   const int nonlinear_maximum_iterations;
-   const real_t nonlinear_relative_tolerance;
-   const int krylov_maximum_iterations;
-   const int preconditioner_lag;
-   const PRECONDITIONER_TYPE preconditioner_type;
+   mutable Vector RHSv, rhsv, X, Xvc, K, B, RHSe, rhse;
+   const Options options;
    bool newton_converged = true;
    int  newton_max_iter = -1;
    Vector &external_data;
@@ -292,7 +272,3 @@ public:
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_USE_MPI
-
-#endif // MFEM_LAGHOS

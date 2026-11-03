@@ -14,6 +14,8 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
+#include <array>
+
 #include "laghos_solver.hpp"
 #include "laghos_hydro.hpp"
 
@@ -24,6 +26,13 @@ namespace mfem
 
 namespace hydrodynamics
 {
+
+// x, v, e blocks of a state vector, aliasing its memory
+static std::array<Vector, 3> XVE(const Vector &s, const int h1, const int l2)
+{
+   auto &b = const_cast<Vector&>(s);
+   return {Vector(b, 0, h1), Vector(b, h1, h1), Vector(b, 2*h1, l2)};
+}
 
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
@@ -170,13 +179,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    std::shared_ptr<DifferentiableOperator> density_mf,
    std::shared_ptr<DifferentiableOperator> taylor_source_mf,
    std::shared_ptr<QuadratureData> qdata,
-   const bool &fd_gradient,
-   const int &dump_jacobians,
-   const int &nonlinear_maximum_iterations,
-   const real_t &nonlinear_relative_tolerance,
-   const int &krylov_maximum_iterations,
-   const int &preconditioner_lag,
-   const PRECONDITIONER_TYPE &preconditioner_type,
+   const Options &options,
    Vector& external_data) :
    TimeDependentOperator(2*H1.GetVSize()+L2.GetVSize()),
    H1(H1),
@@ -197,6 +200,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    total_kinetic_energy_mf(total_kinetic_energy_mf),
    density_mf(density_mf),
    taylor_source_mf(taylor_source_mf),
+   taylor_source(problem == 0 && H1.GetMesh()->Dimension() == 2),
    qdata(qdata),
    mesh_nodes(&H1),
    rhsvc(&H1c),
@@ -207,20 +211,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    RHSv(H1.GetTrueVSize()),
    rhsv(H1.GetVSize()),
    X(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
-   Xv(H1.GetTrueVSize()),
    Xvc(H1c.GetTrueVSize()),
-   Xe(L2.GetTrueVSize()),
    K(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
    B(H1c.GetTrueVSize()),
    RHSe(L2.GetTrueVSize()),
    rhse(L2.GetVSize()),
-   fd_gradient(fd_gradient),
-   dump_jacobians(dump_jacobians),
-   nonlinear_maximum_iterations(nonlinear_maximum_iterations),
-   nonlinear_relative_tolerance(nonlinear_relative_tolerance),
-   krylov_maximum_iterations(krylov_maximum_iterations),
-   preconditioner_lag(preconditioner_lag),
-   preconditioner_type(preconditioner_type),
+   options(options),
    external_data(external_data)
 {
    Mv = new MassPAOperator(H1c, ir, rho0_coeff);
@@ -254,14 +250,15 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    Me_blf.Assemble();
    Me_blf.FormSystemMatrix(mfem::Array<int>(), Me_mat);
 
-   residual.reset(new LagrangianHydroResidualOperator(*this, X, fd_gradient,
-                                                      dump_jacobians));
+   residual.reset(new LagrangianHydroResidualOperator(*this, X,
+                                                      options.fd_gradient,
+                                                      options.dump_jacobians));
 
    preconditioner.reset(new Preconditioner(*this));
 
    auto gmres = new GMRESSolver(MPI_COMM_WORLD);
    gmres->SetKDim(500);
-   gmres->SetMaxIter(krylov_maximum_iterations);
+   gmres->SetMaxIter(options.krylov_maximum_iterations);
    gmres->SetRelTol(1e-12);
    gmres->SetAbsTol(0.0);
    gmres->SetPrintLevel(IterativeSolver::PrintLevel().None());
@@ -272,8 +269,8 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    newton->SetPrintLevel(IterativeSolver::PrintLevel().Summary());
    newton->SetOperator(*residual);
    newton->SetSolver(*krylov);
-   newton->SetMaxIter(nonlinear_maximum_iterations);
-   newton->SetRelTol(nonlinear_relative_tolerance);
+   newton->SetMaxIter(options.nonlinear_maximum_iterations);
+   newton->SetRelTol(options.nonlinear_relative_tolerance);
    newton->SetAbsTol(0.0);
 }
 
@@ -289,18 +286,9 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
    UpdateMesh(S);
    UpdateQuadratureData(S);
 
-   auto sptr = const_cast<Vector*>(&S);
    const int H1vsize = H1.GetVSize();
-
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1vsize);
-   e.MakeRef(&L2, *sptr, 2*H1vsize);
-
-   ParGridFunction dx, dv, de;
-   dx.MakeRef(&H1, dSdt, 0);
-   dv.MakeRef(&H1, dSdt, H1vsize);
-   de.MakeRef(&L2, dSdt, 2*H1vsize);
+   auto [x, v, e] = XVE(S, H1vsize, L2.GetVSize());
+   auto [dx, dv, de] = XVE(dSdt, H1vsize, L2.GetVSize());
 
    // solve position
    dx = v;
@@ -362,25 +350,13 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       energy_conservation_pa->Mult(MultiVector{v, qdata->stressp}, Y);
       L2.GetRestrictionMatrix()->MultTranspose(RHSe, rhse);
 
-      if (problem == 0 && L2.GetMesh()->Dimension() == 2)
+      if (taylor_source)
       {
-         LinearForm e_source(&L2);
-         e_source = 0.0;
-         L2.GetMesh()->DeleteGeometricFactors();
-
-         // MFEM_HOST_DEVICE inline
-         const auto taylor_source = [](const Vector &x)
-         {
-            return 3.0 / 8.0 * M_PI * ( cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
-                                        cos(M_PI*x(0))     * cos(3.0*M_PI*x(1)) );
-         };
-         FunctionCoefficient coeff(taylor_source);
-         DomainLFIntegrator *d = new DomainLFIntegrator(coeff, &ir);
-         e_source.AddDomainIntegrator(d);
-         e_source.UseFastAssembly(true);
-         e_source.Assemble();
-
-         rhse += e_source;
+         Vector xt(H1.GetTrueVSize()), es(L2.GetTrueVSize());
+         H1.GetRestrictionMatrix()->Mult(x, xt);
+         MultiVector ES{es};
+         taylor_source_mf->Mult(MultiVector{xt}, ES);
+         rhse += es;
       }
 
       CGSolver cg(L2.GetParMesh()->GetComm());
@@ -425,8 +401,6 @@ real_t LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S)
 
 void LagrangianHydroOperator::ResetTimeStepEstimate() const
 {
-   external_data[EXT_DATA_IDX::DT_ESTIMATE] =
-      std::numeric_limits<double>::infinity();
    dt_est_stages = std::numeric_limits<real_t>::infinity();
 }
 
@@ -498,12 +472,7 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    if (qdata_is_current) { return; }
    qdata_is_current = true;
 
-   auto sptr = const_cast<Vector*>(&S);
-   const int H1vsize = H1.GetVSize();
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1vsize);
-   e.MakeRef(&L2, *sptr, 2*H1vsize);
+   auto [x, v, e] = XVE(S, H1.GetVSize(), L2.GetVSize());
    MultiVector Y{qdata->stressp};
    update_qdata->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
 
@@ -526,21 +495,10 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    const Vector &u, Vector &y) const
 {
    w = u;
-   Vector wx, wv, we;
-   wx.MakeRef(w, 0, H1tsize);
-   wv.MakeRef(w, H1tsize, H1tsize);
-   we.MakeRef(w, 2*H1tsize, L2tsize);
-
-   Vector zx, zv, ze;
-   zx.MakeRef(z, 0, H1tsize);
-   zv.MakeRef(z, H1tsize, H1tsize);
-   ze.MakeRef(z, 2*H1tsize, L2tsize);
+   auto [wx, wv, we] = XVE(w, H1tsize, L2tsize);
+   auto [zx, zv, ze] = XVE(z, H1tsize, L2tsize);
    MultiVector Zv{zv}, Ze{ze};
-
-   Vector yx, yv, ye;
-   yx.MakeRef(y, 0, H1tsize);
-   yv.MakeRef(y, H1tsize, H1tsize);
-   ye.MakeRef(y, 2*H1tsize, L2tsize);
+   auto [yx, yv, ye] = XVE(y, H1tsize, L2tsize);
 
    // position
    yx = wv;
@@ -549,15 +507,9 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
 
    // velocity
    dRvdx->Mult(wx, Zv);
-   if (zv.CheckFinite() != 0)
-   {
-      future::pretty_print(zv);
-   }
-   MFEM_VERIFY(zv.CheckFinite() == 0, "err");
    zv *= h;
    yv = zv;
    dRvdv->Mult(wv, Zv);
-   MFEM_VERIFY(zv.CheckFinite() == 0, "err");
    zv *= h;
    yv += zv;
    Vector wvc, yvc;
@@ -571,7 +523,6 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    yv.SyncAliasMemory(y);
 
    dRvde->Mult(we, Zv);
-   MFEM_VERIFY(zv.CheckFinite() == 0, "err");
    zv *= h;
    yv += zv;
    yv.SetSubVector(hydro.ess_tdof, 0.0);
@@ -583,28 +534,23 @@ void LagrangianHydroOperator::LagrangianHydroJacobianOperator::Mult(
    //
 
    dRedx->Mult(wx, Ze);
-   MFEM_VERIFY(ze.CheckFinite() == 0, "err");
-   if (problem == 0)
+   if (dTaylorSourcedx)
    {
       Vector ts(L2tsize);
       MultiVector Ts{ts};
       dTaylorSourcedx->Mult(wx, Ts);
       ze += ts;
-      MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    }
    ze *= -h;
    ye = ze;
 
    dRedv->Mult(wv, Ze);
-   MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    ze *= -h;
    ye += ze;
 
    dRede->Mult(we, Ze);
-   MFEM_VERIFY(ze.CheckFinite() == 0, "err");
    ze *= -h;
    hydro.Me->FullAddMult(we, ze);
-   MFEM_VERIFY(ze.CheckFinite() == 0, "err");
 
    ye += ze;
 
@@ -625,7 +571,7 @@ void LagrangianHydroOperator::Preconditioner::SetOperator(const Operator &op)
 
    jacobian = dynamic_cast<const LagrangianHydroJacobianOperator*>(&op);
    MFEM_VERIFY(jacobian != nullptr, "Preconditioner error.");
-   MFEM_VERIFY(hydro.preconditioner_type ==
+   MFEM_VERIFY(hydro.options.preconditioner_type ==
                PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG,
                "Unknown preconditioner type.");
 
@@ -658,19 +604,18 @@ void LagrangianHydroOperator::Preconditioner::Mult(const Vector &x,
                                                    Vector &y) const
 {
    w = x;
-   Vector wx, wv, we;
-   wx.MakeRef(w, 0, hydro.H1.GetTrueVSize());
-   wv.MakeRef(w, hydro.H1.GetTrueVSize(), hydro.H1.GetTrueVSize());
-   we.MakeRef(w, 2*hydro.H1.GetTrueVSize(), hydro.L2.GetTrueVSize());
-
-   Vector yx, yv, ye;
-   yx.MakeRef(y, 0, hydro.H1.GetTrueVSize());
-   yv.MakeRef(y, hydro.H1.GetTrueVSize(), hydro.H1.GetTrueVSize());
-   ye.MakeRef(y, 2*hydro.H1.GetTrueVSize(), hydro.L2.GetTrueVSize());
+   const int H1tsize = hydro.H1.GetTrueVSize();
+   const int L2tsize = hydro.L2.GetTrueVSize();
+   auto [wx, wv, we] = XVE(w, H1tsize, L2tsize);
+   auto [yx, yv, ye] = XVE(y, H1tsize, L2tsize);
 
    yx = wx;
    amg_v->Mult(wv, yv);
    amg_e->Mult(we, ye);
+
+   yx.SyncAliasMemory(y);
+   yv.SyncAliasMemory(y);
+   ye.SyncAliasMemory(y);
 }
 
 void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
@@ -680,30 +625,17 @@ void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
    u *= dt;
    u += x;
 
-   auto kptr = const_cast<Vector*>(&k);
-   Vector kx, kv, ke;
-   kx.MakeRef(*kptr, 0, H1tsize);
-   kv.MakeRef(*kptr, H1tsize, H1tsize);
-   ke.MakeRef(*kptr, 2*H1tsize, L2tsize);
-
-   Vector ux, uv, ue;
-   ux.MakeRef(u, 0, H1tsize);
-   uv.MakeRef(u, H1tsize, H1tsize);
-   ue.MakeRef(u, 2*H1tsize, L2tsize);
-
-   Vector Rx, Rv, Re;
-   Rx.MakeRef(R, 0, H1tsize);
-   Rv.MakeRef(R, H1tsize, H1tsize);
-   Re.MakeRef(R, 2*H1tsize, L2tsize);
-
-   Vector ux_l, uv_l, ue_l;
-   ux_l.MakeRef(u_l, 0, H1vsize);
-   uv_l.MakeRef(u_l, H1vsize, H1vsize);
-   ue_l.MakeRef(u_l, 2*H1vsize, L2vsize);
+   auto [kx, kv, ke] = XVE(k, H1tsize, L2tsize);
+   auto [ux, uv, ue] = XVE(u, H1tsize, L2tsize);
+   auto [Rx, Rv, Re] = XVE(R, H1tsize, L2tsize);
+   auto [ux_l, uv_l, ue_l] = XVE(u_l, H1vsize, L2vsize);
 
    hydro.H1.GetProlongationMatrix()->Mult(ux, ux_l);
    hydro.H1.GetProlongationMatrix()->Mult(uv, uv_l);
    hydro.L2.GetProlongationMatrix()->Mult(ue, ue_l);
+   ux_l.SyncAliasMemory(u_l);
+   uv_l.SyncAliasMemory(u_l);
+   ue_l.SyncAliasMemory(u_l);
 
    hydro.UpdateMesh(ux_l);
    hydro.mesh_nodes.SyncMemory(ux_l);
@@ -735,7 +667,7 @@ void LagrangianHydroOperator::LagrangianHydroResidualOperator::Mult(
 
    Re.Neg();
 
-   if (problem == 0)
+   if (hydro.taylor_source)
    {
       MultiVector ES{e_source_t};
       hydro.taylor_source_mf->Mult(MultiVector{ux}, ES);
@@ -756,10 +688,7 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
    u *= dt;
    u += x;
 
-   Vector ux, uv, ue;
-   ux.MakeRef(u, 0, H1tsize);
-   uv.MakeRef(u, H1tsize, H1tsize);
-   ue.MakeRef(u, 2*H1tsize, L2tsize);
+   auto [ux, uv, ue] = XVE(u, H1tsize, L2tsize);
 
    if (fd_gradient)
    {
@@ -775,22 +704,25 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
       hydro.H1.GetRestrictionMatrix()->Mult(hydro.x0, x0_t);
       hydro.material.ParFESpace()->GetRestrictionMatrix()->Mult(hydro.material,
                                                                 material_t);
-      const MultiVector Rv_state{uv, rho0_t, x0_t, ux, material_t, ue};
-      const MultiVector Re_state{ue, uv, rho0_t, x0_t, ux, material_t};
+      const MultiVector state{uv, rho0_t, x0_t, ux, material_t, ue};
 
-      auto dRvdx = hydro.momentum_mf->GetDerivative(COORDINATES, Rv_state);
-      auto dRvdv = hydro.momentum_mf->GetDerivative(VELOCITY, Rv_state);
+      auto dRvdx = hydro.momentum_mf->GetDerivative(COORDINATES, state);
+      auto dRvdv = hydro.momentum_mf->GetDerivative(VELOCITY, state);
       auto dRvde =
-         hydro.momentum_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, Rv_state);
+         hydro.momentum_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, state);
       auto dRedx =
-         hydro.energy_conservation_mf->GetDerivative(COORDINATES, Re_state);
+         hydro.energy_conservation_mf->GetDerivative(COORDINATES, state);
       auto dRedv =
-         hydro.energy_conservation_mf->GetDerivative(VELOCITY, Re_state);
+         hydro.energy_conservation_mf->GetDerivative(VELOCITY, state);
       auto dRede =
          hydro.energy_conservation_mf->GetDerivative( SPECIFIC_INTERNAL_ENERGY,
-                                                      Re_state);
-      auto dTaylorSourcedx =
-         hydro.taylor_source_mf->GetDerivative( COORDINATES, MultiVector{ux});
+                                                      state);
+      std::shared_ptr<DerivativeOperator> dTaylorSourcedx;
+      if (hydro.taylor_source)
+      {
+         dTaylorSourcedx =
+            hydro.taylor_source_mf->GetDerivative(COORDINATES, MultiVector{ux});
+      }
 
       jacobian = std::make_shared<LagrangianHydroJacobianOperator>(
                     hydro, dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede, dTaylorSourcedx, dt);
@@ -821,16 +753,9 @@ Operator& LagrangianHydroOperator::LagrangianHydroResidualOperator::GetGradient(
 void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
                                             Vector &k)
 {
-   auto xptr = const_cast<Vector*>(&x);
-
-   Vector xx, xv, xe;
-   xx.MakeRef(*xptr, 0, H1.GetVSize());
-   xv.MakeRef(*xptr, H1.GetVSize(), H1.GetVSize());
-   xe.MakeRef(*xptr, 2*H1.GetVSize(), L2.GetVSize());
-
-   Xx.MakeRef(X, 0, H1.GetTrueVSize());
-   Xv.MakeRef(X, H1.GetTrueVSize(), H1.GetTrueVSize());
-   Xe.MakeRef(X, 2*H1.GetTrueVSize(), L2.GetTrueVSize());
+   const int H1tsize = H1.GetTrueVSize(), L2tsize = L2.GetTrueVSize();
+   auto [xx, xv, xe] = XVE(x, H1.GetVSize(), L2.GetVSize());
+   auto [Xx, Xv, Xe] = XVE(X, H1tsize, L2tsize);
 
    H1.GetRestrictionMatrix()->Mult(xx, Xx);
    H1.GetRestrictionMatrix()->Mult(xv, Xv);
@@ -844,7 +769,7 @@ void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
 
    Vector zero;
    K = X;
-   if (current_dt != dt || lag >= preconditioner_lag)
+   if (current_dt != dt || lag >= options.preconditioner_lag)
    {
       lag = 0;
       current_dt = dt;
@@ -862,14 +787,8 @@ void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
    }
    newton_max_iter = std::max(newton_max_iter, newton->GetNumIterations());
 
-   Kx.MakeRef(K, 0, H1.GetTrueVSize());
-   Kv.MakeRef(K, H1.GetTrueVSize(), H1.GetTrueVSize());
-   Ke.MakeRef(K, 2*H1.GetTrueVSize(), L2.GetTrueVSize());
-
-   Vector kx, kv, ke;
-   kx.MakeRef(k, 0, H1.GetVSize());
-   kv.MakeRef(k, H1.GetVSize(), H1.GetVSize());
-   ke.MakeRef(k, 2*H1.GetVSize(), L2.GetVSize());
+   auto [Kx, Kv, Ke] = XVE(K, H1tsize, L2tsize);
+   auto [kx, kv, ke] = XVE(k, H1.GetVSize(), L2.GetVSize());
 
    H1.GetProlongationMatrix()->Mult(Kx, kx);
    H1.GetProlongationMatrix()->Mult(Kv, kv);
@@ -942,12 +861,7 @@ real_t LagrangianHydroOperator::ComputeMinDet(const Vector &S) const
 
 real_t LagrangianHydroOperator::LocalTimeStepEstimate(const Vector &S) const
 {
-   auto sptr = const_cast<Vector*>(&S);
-   const int H1vsize = H1.GetVSize();
-   ParGridFunction x, v, e;
-   x.MakeRef(&H1, *sptr, 0);
-   v.MakeRef(&H1, *sptr, H1vsize);
-   e.MakeRef(&L2, *sptr, 2*H1vsize);
+   auto [x, v, e] = XVE(S, H1.GetVSize(), L2.GetVSize());
    MultiVector Y{qdata->dt_est};
    dtest_mf->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
    return qdata->dt_est.Min();

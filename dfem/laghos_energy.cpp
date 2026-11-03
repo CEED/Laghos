@@ -31,43 +31,24 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
 {
    ParMesh &mesh = *H1.GetParMesh();
 
-   future::tuple energy_conservation_mf_kernel_ao =
-   {
-      Gradient<VELOCITY>{},
-      Value<DENSITY0>{},
-      Gradient<COORDINATES0>{},
-      Gradient<COORDINATES>{},
-      Value<MATERIAL>{},
-      Value<SPECIFIC_INTERNAL_ENERGY>{},
-      Weight{}
-   };
    future::tuple energy_conservation_mf_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
    // <sigma, grad(v) * inv(J) * phi> * det(J) * w
    // <sigma(J^-T det(J) w), grad(v) * inv(J)>
-   std::vector energy_conservation_mf_inputs =
-   {
-      FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2},
-      FieldDescriptor{VELOCITY, &H1},
-      FieldDescriptor{DENSITY0, &L2},
-      FieldDescriptor{COORDINATES0, &H1},
-      FieldDescriptor{COORDINATES, &H1},
-      FieldDescriptor{MATERIAL, material_gf.ParFESpace()},
-   };
    std::vector energy_conservation_mf_outputs =
    {
       FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
    };
    auto energy_conservation_mf =
       std::make_shared<DifferentiableOperator>(
-         energy_conservation_mf_inputs, energy_conservation_mf_outputs, mesh);
+         QDataInputs(H1, L2, material_gf), energy_conservation_mf_outputs,
+         mesh);
    struct EnergyConservationQFunction
    {
       using matd = matd_t<DIM>;
       using dmatd = matd_t<DIM, dscalar_t>;
-      mutable real_t dt_est;
       const real_t *external_data;
       MFEM_HOST_DEVICE inline
-      auto operator()(
+      void operator()(
          const dmatd &dvdxi,
          const real_t &rho0,
          const matd &J0,
@@ -77,25 +58,18 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
          const real_t &w,
          dscalar_t &de) const
       {
-         auto stressJiT =
-            qdata_setup<DIM>(
-               dvdxi, rho0, J0, J, gamma, E, w,
-               external_data[EXT_DATA_IDX::H0],
-               external_data[EXT_DATA_IDX::ORDER_VEL],
-               external_data[EXT_DATA_IDX::CFL],
-               static_cast<bool>(external_data[EXT_DATA_IDX::VISCOSITY_FLAG]),
-               static_cast<int>(external_data[EXT_DATA_IDX::VISCOSITY_TYPE]),
-               external_data[EXT_DATA_IDX::VISC_Q1],
-               external_data[EXT_DATA_IDX::VISC_Q2],
-               dt_est);
+         real_t dt_est = std::numeric_limits<real_t>::infinity();
+         const auto stressJiT =
+            qdata_setup<DIM>(dvdxi, rho0, J0, J, gamma, E, w,
+                             external_data, dt_est);
          de = ddot(stressJiT, dvdxi);
       }
-   } energy_conservation_qf({std::numeric_limits<real_t>::infinity(), d_external_data});
+   } energy_conservation_qf{d_external_data};
    auto derivatives =
       std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
    energy_conservation_mf->AddDomainIntegrator<future::LocalQFBackend,
                                                JACOBIAN_KERNELS>(
-      energy_conservation_qf, energy_conservation_mf_kernel_ao,
+      energy_conservation_qf, QDataFields(),
       energy_conservation_mf_kernel_oo, ir, all_domain_attr, derivatives);
    return energy_conservation_mf;
 }

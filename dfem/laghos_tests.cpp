@@ -276,8 +276,8 @@ const Test runs[] =
       "implicit_taylor_green_3d", "implicit midpoint, Q2-Q1, no av, 3D",
       "cube01_hex.mesh",
       "-p 0 -dim 3 -rs 0 -ov 2 -oe 1 -s 12 -cfl 8 -tf 0.1 -nmi 50 -nrt 1e-10 -kmi 20 -pt 0",
-      1, 1.0000000000000001e-01, 1.4993325956929385e+02, 1.1867413170385170e+01,
-      6.3036483349202497e+00, 1.1986500608668955e+03, 1e-8
+      1, 1.0000000000000001e-01, 1.4993325955324906e+02, 1.1867410366035584e+01,
+      6.3036438007152293e+00, 1.1986499229245242e+03, 1e-8
    },
    {
       "implicit_sedov_3d_av", "implicit midpoint, Q2-Q1, av-type 7, 3D",

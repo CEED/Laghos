@@ -21,7 +21,7 @@ namespace mfem::hydrodynamics
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 template <int DIM>
-LagrangianHydroOperator *CreateLagrangianHydroOperator(
+static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    Array<int> &ess_tdof,
@@ -31,13 +31,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParGridFunction &material_gf,
    Vector &external_data,
    const IntegrationRule &ir,
-   const bool &fd_gradient,
-   const int &dump_jacobians,
-   const int &nonlinear_maximum_iterations,
-   const real_t &nonlinear_relative_tolerance,
-   const int &krylov_maximum_iterations,
-   const int &preconditioner_lag,
-   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type)
+   const LagrangianHydroOperator::Options &options)
 {
    using matd = matd_t<DIM>;
    ParMesh &mesh = *H1.GetParMesh();
@@ -56,7 +50,6 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    real_t &h0 = external_data[EXT_DATA_IDX::H0];
    switch (mesh.GetElementBaseGeometry(0))
    {
-      case Geometry::SEGMENT: h0 = vol_global / ne_global; break;
       case Geometry::SQUARE: h0 = sqrt(vol_global / ne_global); break;
       case Geometry::TRIANGLE: h0 = sqrt(2.0 * vol_global / ne_global); break;
       case Geometry::CUBE: h0 = pow(vol_global / ne_global, 1./3.); break;
@@ -76,32 +69,13 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Output on a quadrature space
    std::shared_ptr<DifferentiableOperator> dt_est_mf;
    {
-      future::tuple dt_est_kernel_ao =
-      {
-         Gradient<VELOCITY>{},
-         Value<DENSITY0>{},
-         Gradient<COORDINATES0>{},
-         Gradient<COORDINATES>{},
-         Value<MATERIAL>{},
-         Value<SPECIFIC_INTERNAL_ENERGY>{},
-         Weight{}
-      };
       future::tuple dt_est_kernel_oo = {Identity<DT_EST>{}};
-      std::vector dt_est_inputs =
-      {
-         FieldDescriptor{VELOCITY, &H1},
-         FieldDescriptor{DENSITY0, &L2},
-         FieldDescriptor{COORDINATES0, &H1},
-         FieldDescriptor{COORDINATES, &H1},
-         FieldDescriptor{MATERIAL, material_gf.ParFESpace()},
-         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2},
-      };
       std::vector dt_est_outputs =
       {
          FieldDescriptor{DT_EST, &qdata->R}
       };
       dt_est_mf = std::make_shared<DifferentiableOperator>(
-                     dt_est_inputs, dt_est_outputs, mesh);
+                     QDataInputs(H1, L2, material_gf), dt_est_outputs, mesh);
       dt_est_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
       struct TimeStepEstimateQFunction
       {
@@ -114,20 +88,12 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
          {
             dt_est = std::numeric_limits<real_t>::infinity();
             // Reuse qdata_setup() for the dt estimate logic; ignore its stress output.
-            (void)qdata_setup<DIM>(
-               dvdxi, rho0, J0, J, gamma, E, w,
-               external_data[EXT_DATA_IDX::H0],
-               external_data[EXT_DATA_IDX::ORDER_VEL],
-               external_data[EXT_DATA_IDX::CFL],
-               static_cast<bool>(external_data[EXT_DATA_IDX::VISCOSITY_FLAG]),
-               static_cast<int>(external_data[EXT_DATA_IDX::VISCOSITY_TYPE]),
-               external_data[EXT_DATA_IDX::VISC_Q1],
-               external_data[EXT_DATA_IDX::VISC_Q2],
-               dt_est);
+            (void)qdata_setup<DIM>(dvdxi, rho0, J0, J, gamma, E, w,
+                                   external_data, dt_est);
          }
 
-      } dt_est_qf({d_external_data});
-      dt_est_mf->AddDomainIntegrator(dt_est_qf, dt_est_kernel_ao,
+      } dt_est_qf{d_external_data};
+      dt_est_mf->AddDomainIntegrator(dt_est_qf, QDataFields(),
                                      dt_est_kernel_oo,
                                      ir,
                                      all_domain_attr);
@@ -136,32 +102,14 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Output on a quadrature space
    std::shared_ptr<DifferentiableOperator> update_qdata;
    {
-      future::tuple update_qdata_kernel_ao =
-      {
-         Gradient<VELOCITY>{},
-         Value<DENSITY0>{},
-         Gradient<COORDINATES0>{},
-         Gradient<COORDINATES>{},
-         Value<MATERIAL>{},
-         Value<SPECIFIC_INTERNAL_ENERGY>{},
-         Weight{}
-      };
       future::tuple update_qdata_kernel_oo = {Identity<STRESS_TENSOR>{}};
-      std::vector<FieldDescriptor> update_qdata_inputs =
-      {
-         {VELOCITY, &H1},
-         {DENSITY0, &L2},
-         {COORDINATES0, &H1},
-         {COORDINATES, &H1},
-         {MATERIAL, material_gf.ParFESpace()},
-         {SPECIFIC_INTERNAL_ENERGY, &L2},
-      };
       std::vector<FieldDescriptor> update_qdata_outputs =
       {
          {STRESS_TENSOR, &qdata->StressSpace}
       };
       update_qdata = std::make_shared<DifferentiableOperator>(
-                        update_qdata_inputs, update_qdata_outputs, mesh);
+                        QDataInputs(H1, L2, material_gf), update_qdata_outputs,
+                        mesh);
       update_qdata->SetMultLevel(DifferentiableOperator::LVECTOR);
       struct UpdateQuadratureDataQFunction
       {
@@ -175,19 +123,11 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
             // through a proper reduction over quadrature points.
             real_t dt_est_dummy = std::numeric_limits<real_t>::infinity();
             stressJiT =
-               qdata_setup<DIM>(
-                  dvdxi, rho0, J0, J, gamma, E, w,
-                  external_data[EXT_DATA_IDX::H0],
-                  external_data[EXT_DATA_IDX::ORDER_VEL],
-                  external_data[EXT_DATA_IDX::CFL],
-                  static_cast<bool>(external_data[EXT_DATA_IDX::VISCOSITY_FLAG]),
-                  static_cast<int>(external_data[EXT_DATA_IDX::VISCOSITY_TYPE]),
-                  external_data[EXT_DATA_IDX::VISC_Q1],
-                  external_data[EXT_DATA_IDX::VISC_Q2],
-                  dt_est_dummy);
+               qdata_setup<DIM>(dvdxi, rho0, J0, J, gamma, E, w,
+                                external_data, dt_est_dummy);
          }
-      } update_qdata_qf({d_external_data});
-      update_qdata->AddDomainIntegrator(update_qdata_qf, update_qdata_kernel_ao,
+      } update_qdata_qf{d_external_data};
+      update_qdata->AddDomainIntegrator(update_qdata_qf, QDataFields(),
                                         update_qdata_kernel_oo,
                                         ir,
                                         all_domain_attr);
@@ -236,6 +176,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
       energy_conservation_pa =
          std::make_shared<DifferentiableOperator>(energy_conservation_pa_inputs,
                                                   energy_conservation_pa_outputs, mesh);
+      // LVECTOR as Mult passes the v L-vector, momentum_pa stays at TVECTOR
       energy_conservation_pa->SetMultLevel(DifferentiableOperator::LVECTOR);
       struct EnergyConservationPAQFunction
       {
@@ -436,19 +377,11 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
              density_mf,
              taylor_source_mf,
              qdata,
-             fd_gradient,
-             dump_jacobians,
-             nonlinear_maximum_iterations,
-             nonlinear_relative_tolerance,
-             krylov_maximum_iterations,
-             preconditioner_lag,
-             preconditioner_type,
+             options,
              external_data);
 }
 
-// Explicit instantiations for the 2D and 3D meshes
-
-template LagrangianHydroOperator *CreateLagrangianHydroOperator<2>(
+LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    Array<int> &ess_tdof,
@@ -458,30 +391,17 @@ template LagrangianHydroOperator *CreateLagrangianHydroOperator<2>(
    ParGridFunction &material_gf,
    Vector &external_data,
    const IntegrationRule &ir,
-   const bool &fd_gradient,
-   const int &dump_jacobians,
-   const int &nonlinear_maximum_iterations,
-   const real_t &nonlinear_relative_tolerance,
-   const int &krylov_maximum_iterations,
-   const int &preconditioner_lag,
-   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type);
-
-template LagrangianHydroOperator *CreateLagrangianHydroOperator<3>(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   Array<int> &ess_tdof,
-   FunctionCoefficient &rho0_coeff,
-   ParGridFunction &x0_gf,
-   ParGridFunction &rho0_gf,
-   ParGridFunction &material_gf,
-   Vector &external_data,
-   const IntegrationRule &ir,
-   const bool &fd_gradient,
-   const int &dump_jacobians,
-   const int &nonlinear_maximum_iterations,
-   const real_t &nonlinear_relative_tolerance,
-   const int &krylov_maximum_iterations,
-   const int &preconditioner_lag,
-   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type);
+   const LagrangianHydroOperator::Options &options)
+{
+   const int dim = H1.GetMesh()->Dimension();
+   MFEM_VERIFY(dim == 2 || dim == 3, "unsupported mesh dimension: " << dim);
+   return dim == 2 ?
+          CreateLagrangianHydroOperator<2>(H1, L2, ess_tdof, rho0_coeff, x0_gf,
+                                           rho0_gf, material_gf, external_data,
+                                           ir, options) :
+          CreateLagrangianHydroOperator<3>(H1, L2, ess_tdof, rho0_coeff, x0_gf,
+                                           rho0_gf, material_gf, external_data,
+                                           ir, options);
+}
 
 } // namespace mfem::hydrodynamics

@@ -33,6 +33,19 @@ template <int DIM, typename T = real_t>
 using matd_t = tensor<T, DIM, DIM>;
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Values of a matrix of dual numbers
+template <int DIM, typename T> MFEM_HOST_DEVICE inline
+matd_t<DIM> get_values(const matd_t<DIM, T> &A)
+{
+   matd_t<DIM> V;
+   for (int i = 0; i < DIM; i++)
+   {
+      for (int j = 0; j < DIM; j++) { V(i, j) = future::get_value(A(i, j)); }
+   }
+   return V;
+}
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 template <typename T> MFEM_HOST_DEVICE inline
 void ComputeMaterialProperties(const real_t &gamma, const T &rho,
                                const T &E, T &p, T &cs)
@@ -170,16 +183,17 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
                            const real_t &gamma,
                            const T &E,
                            const real_t &w,
-                           const real_t &h0,
-                           const real_t &order_v,
-                           const real_t &cfl,
-                           const bool &use_viscosity,
-                           const int &viscosity_type,
-                           const real_t &visc_q1,
-                           const real_t &visc_q2,
+                           const real_t *ext,
                            real_t &dt_est)
 {
    using matd = matd_t<DIM, T>;
+   const real_t h0 = ext[EXT_DATA_IDX::H0];
+   const real_t order_v = ext[EXT_DATA_IDX::ORDER_VEL];
+   const real_t cfl = ext[EXT_DATA_IDX::CFL];
+   const bool use_viscosity = ext[EXT_DATA_IDX::VISCOSITY_FLAG] != 0.0;
+   const int viscosity_type = static_cast<int>(ext[EXT_DATA_IDX::VISCOSITY_TYPE]);
+   const real_t visc_q1 = ext[EXT_DATA_IDX::VISC_Q1];
+   const real_t visc_q2 = ext[EXT_DATA_IDX::VISC_Q2];
 
    T p, cs;
    const T detJ = det(J);
@@ -188,7 +202,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
    const T rho = rho0 * det(J0) / detJ;
    // The stock Laghos viscosity (type 1) also uses the stock clamp of E
    const bool stock_av = use_viscosity && viscosity_type == 1;
-   const auto smoothmax = [](const real_t a, const T b, const real_t k = 1e-6)
+   const auto smoothmax = [](const real_t a, const T b, const real_t k)
    {
       return 0.5 * (a + b + sqrt((a-b)*(a-b) + k*k));
    };
@@ -201,6 +215,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
 
    if (use_viscosity)
    {
+      const matd dvdx = dvdxi * invJ;
       // y0 is value at x=0.
       auto softstep7 = [](const T &width, const real_t y0, const T x)
       {
@@ -221,7 +236,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
          // The symmetric velocity gradient eigenvector of the smallest
          // eigenvalue gives the direction of maximal compression, which
          // defines the length scale h from the initial one h0
-         const matd sgrad_v = sym(dvdxi * invJ);
+         const matd sgrad_v = sym(dvdx);
          real_t sgrad_v_data[DIM*DIM], eig_val[DIM], eig_vec[DIM*DIM];
          for (int j = 0; j < DIM; j++)
          {
@@ -230,12 +245,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
                sgrad_v_data[i + DIM*j] = future::get_value(sgrad_v(i, j));
             }
          }
-         if constexpr (DIM == 1)
-         {
-            eig_val[0] = sgrad_v_data[0];
-            eig_vec[0] = 1.0;
-         }
-         else { kernels::CalcEigenvalues<DIM>(sgrad_v_data, eig_val, eig_vec); }
+         kernels::CalcEigenvalues<DIM>(sgrad_v_data, eig_val, eig_vec);
          vecd_t<DIM, T> compr_dir;
          for (int k = 0; k < DIM; k++) { compr_dir(k) = eig_vec[k]; }
          // Measure of maximal compression
@@ -279,21 +289,11 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
          stress += visc_coeff * sgrad_v;
          dt_visc_coeff = visc_coeff;
       }
-      else if (viscosity_type == 2)
-      {
-         // No artificial viscosity term
-      }
-      else if (viscosity_type == 21 || viscosity_type == 22 ||
-               viscosity_type == 4)
-      {
-         MFEM_ABORT_KERNEL("works only in 2D!");
-      }
       else if (viscosity_type == 7)
       {
          // Smoother viscosity for well-defined gradients.
 
-         const auto dvdx = dvdxi * inv(J);
-         const auto h = h0 * pow(det(J) / det(J0), 1.0 / static_cast<real_t>(DIM));
+         const auto h = h0 * pow(detJ / det(J0), 1.0 / static_cast<real_t>(DIM));
          const auto delta_v = h * tr(dvdx);
 
          // Coarses mesh h for the domain.
@@ -315,12 +315,11 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
 
          dt_visc_coeff = mu;
       }
-      else { MFEM_ABORT_KERNEL("wrong viscosity option"); }
-   }
-
-   if (rho < 0.0)
-   {
-      dt_est = 0.0;
+      // Type 2 has no artificial viscosity term
+      else if (viscosity_type != 2)
+      {
+         MFEM_ABORT_KERNEL("wrong viscosity option");
+      }
    }
 
    if (detJ < 0.0)
@@ -331,7 +330,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
    else
    {
       // The dt estimate is a plain value side output
-      const real_t sv = future::get_value(calcsv(J, DIM-1));
+      const real_t sv = calcsv(get_values(J), DIM-1);
 
       const real_t hmin = sv / static_cast<real_t>(order_v);
       const real_t ihmin = 1.0 / hmin;
@@ -345,8 +344,27 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
       }
    }
 
-   matd stressJiT = stress * transpose(invJ) * detJ * w;
-   return stressJiT;
+   return stress * transpose(invJ) * detJ * w;
+}
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Quadrature point arguments of the qdata_setup qfunctions
+inline auto QDataFields()
+{
+   return future::tuple{Gradient<VELOCITY>{}, Value<DENSITY0>{},
+                        Gradient<COORDINATES0>{}, Gradient<COORDINATES>{},
+                        Value<MATERIAL>{}, Value<SPECIFIC_INTERNAL_ENERGY>{},
+                        Weight{}};
+}
+
+// Input fields of the qdata_setup operators, also the order of their states
+inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
+                                                ParFiniteElementSpace &L2,
+                                                ParGridFunction &material_gf)
+{
+   return {{VELOCITY, &H1}, {DENSITY0, &L2}, {COORDINATES0, &H1},
+           {COORDINATES, &H1}, {MATERIAL, material_gf.ParFESpace()},
+           {SPECIFIC_INTERNAL_ENERGY, &L2}};
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
@@ -354,5 +372,25 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
 // assembled matrices of the AMG preconditioner
 constexpr auto JACOBIAN_KERNELS = future::DerivativeKernels::Action |
                                   future::DerivativeKernels::AssembleMatrix;
+
+// Builds the dFEM momentum operator, with its Jacobian blocks
+template <int DIM>
+std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   real_t *d_external_data);
+
+// Builds the dFEM energy conservation operator, with its Jacobian blocks
+template <int DIM>
+std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   real_t *d_external_data);
 
 } // namespace mfem::hydrodynamics

@@ -42,7 +42,7 @@
 //    p = 1  --> Sedov blast.
 //       explicit: mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -av -av-type 7 -ov 2 -oe 1 -s  3 -cfl 0.5 -rs 3 -vs 50
 //       implicit: mpirun -np 8 laghos -p 1 -glvis -tf 0.8 -av -av-type 7 -ov 2 -oe 1 -s 12 -cfl 8   -rs 3 -vs 10 -nmi 50 -pt 0 -kmi 20
-//    p = 2  --> 1D Sod shock tube.
+//    p = 2  --> 1D Sod shock tube, not supported by the dFEM operators
 //    p = 3  --> Triple point.
 //       explicit: mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -av -av-type 7 -ov 4 -oe 3 -rs 1 -cfl 0.5 -s 2  -vs 50
 //       implicit: mpirun -np 8 laghos -p 3 -glvis -tf 5.0 -av -av-type 7 -ov 3 -oe 2 -rs 2 -cfl 32  -s 12 -vs 10 -nmi 50 -pt 0 -kmi 20
@@ -80,23 +80,11 @@ int main(int argc, char *argv[])
    int ode_solver_type = 4;
    real_t t_final = 0.6;
    real_t cfl = 0.5;
-   // double cg_tol = 1e-8;
-   // double ftz_tol = 0.0;
-   // double delta_tol = 1e-12;
-   // int cg_max_iter = 300;
-   // int max_tsteps = -1;
-   // bool p_assembly = true;
-   // bool impose_visc = false;
-   // bool visualization = false;
    int vis_steps = 5;
    const char *device = "cpu";
    real_t blast_position[] = {0.0, 0.0, 0.0};
-   bool fd_gradient = false;
+   hydrodynamics::LagrangianHydroOperator::Options hydro_options;
    bool use_viscosity = false;
-   real_t nonlinear_relative_tolerance = 1e-5;
-   int nonlinear_maximum_iterations = 10;
-   int krylov_maximum_iterations = 10;
-   int preconditioner_lag = 0;
    bool visualization = false;
    bool paraview = false;
    bool save_files = true;
@@ -104,9 +92,6 @@ int main(int argc, char *argv[])
    real_t viscosity_q1 = 0.5;
    real_t viscosity_q2 = 1.0;
    bool stock_dt = false;
-   int preconditioner_type =
-      hydrodynamics::LagrangianHydroOperator::PRECONDITIONER_TYPE::BLOCK_DIAGONAL_AMG;
-   int dump_jacobians = 0;
    int nretry = 100;
    bool gpu_aware_mpi = false;
    int dev = 0;
@@ -124,7 +109,8 @@ int main(int argc, char *argv[])
    args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&use_viscosity, "-av", "--av", "-no-av", "--no-av", "");
-   args.AddOption(&fd_gradient, "-fd", "--fd", "-no-fd", "--no-fd", "");
+   args.AddOption(&hydro_options.fd_gradient, "-fd", "--fd",
+                  "-no-fd", "--no-fd", "");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6,\n\t"
@@ -132,15 +118,15 @@ int main(int argc, char *argv[])
                   "            11 - Backward Euler"
                   "            12 - Implicit Midpoint"
                   "            13 - SDIRK33Solver");
-   args.AddOption(&nonlinear_maximum_iterations, "-nmi", "--nmi",
+   args.AddOption(&hydro_options.nonlinear_maximum_iterations, "-nmi", "--nmi",
                   "Maximum number of nonlinear iterations.");
-   args.AddOption(&nonlinear_relative_tolerance, "-nrt", "--nrt",
+   args.AddOption(&hydro_options.nonlinear_relative_tolerance, "-nrt", "--nrt",
                   "Nonlinear relative tolerance.");
-   args.AddOption(&krylov_maximum_iterations, "-kmi", "--kmi",
+   args.AddOption(&hydro_options.krylov_maximum_iterations, "-kmi", "--kmi",
                   "Maximum number of Krylov iterations.");
-   args.AddOption(&preconditioner_lag, "-pl", "--pl",
+   args.AddOption(&hydro_options.preconditioner_lag, "-pl", "--pl",
                   "Number of nonlinear solves to wait before updating the preconditioner.");
-   args.AddOption(&preconditioner_type, "-pt", "--pt",
+   args.AddOption(&hydro_options.preconditioner_type, "-pt", "--pt",
                   "Preconditioner type: 0 - Block Diagonal AMG");
    args.AddOption(&vis_steps, "-vs", "--vis-steps",
                   "Number of visualization steps.");
@@ -163,12 +149,14 @@ int main(int argc, char *argv[])
                   "-no-stock-dt", "--no-stock-dt",
                   "Time step estimate as the min over all the RK stages and "
                   "the new state, as stock Laghos (explicit only).");
-   args.AddOption(&dump_jacobians, "-dump-jacobians", "--dump-jacobians", "");
+   args.AddOption(&hydro_options.dump_jacobians, "-dump-jacobians",
+                  "--dump-jacobians", "");
    args.AddOption(&nretry, "-nretry", "--nretry", "");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.ParseCheck();
+   MFEM_VERIFY(problem != 2, "1D Sod shock tube (-p 2) is not supported");
    if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 
    // Configure the device from the command line options
@@ -206,20 +194,14 @@ int main(int argc, char *argv[])
       }
    }
 
-   if (problem == 2)
-   {
-      serial_mesh = Mesh(Mesh::MakeCartesian1D(1));
-      serial_mesh.GetBdrElement(0)->SetAttribute(1);
-      serial_mesh.GetBdrElement(1)->SetAttribute(1);
-   }
-
    for (int i = 0; i < refinements; i++)
    {
       serial_mesh.UniformRefinement();
    }
 
-   // The mesh dimension can change based on selected problem setup (e.g. -p 2).
+   // The mesh file can override -dim
    dim = serial_mesh.Dimension();
+   MFEM_VERIFY(dim == 2 || dim == 3, "only 2D and 3D meshes are supported");
    ParMesh mesh = ParMesh(MPI_COMM_WORLD, serial_mesh);
 
    // Define the parallel finite element spaces. We use:
@@ -305,7 +287,6 @@ int main(int argc, char *argv[])
             }
             break;
          case 1: v = 0.0; break;
-         case 2: v = 0.0; break;
          case 3: v = 0.0; break;
          default: MFEM_ABORT("error");
       }
@@ -330,7 +311,6 @@ int main(int argc, char *argv[])
       {
          case 0: return 1.0;
          case 1: return 1.0;
-         case 2: return (x(0) < 0.5) ? 1.0 : 0.1;
          case 3: return (dim == 2) ? x(0) > 1.0 && x(1) > 1.5 ? 0.125 : 1.0
                            : x(0) > 1.0 && ((x(1) < 1.5 && x(2) < 1.5) ||
                                             (x(1) > 1.5 && x(2) > 1.5)) ? 0.125 : 1.0;
@@ -351,7 +331,6 @@ int main(int argc, char *argv[])
       {
          case 0: return 5.0 / 3.0;
          case 1: return 1.4;
-         case 2: return 1.4;
          case 3: return (x(0) > 1.0 && x(1) <= 1.5) ? 1.4 : 1.5;
          default: MFEM_ABORT("Problem not supported yet");
       }
@@ -385,8 +364,6 @@ int main(int argc, char *argv[])
                return val/denom;
             }
             case 1: return 0.0; // This case in initialized in main().
-            case 2: return (x(0) < 0.5) ? 1.0 / rho0(x) / (gamma_func(x) - 1.0)
-                              : 0.1 / rho0(x) / (gamma_func(x) - 1.0);
             case 3: return (x(0) > 1.0) ? 0.1 / rho0(x) / (gamma_func(x) - 1.0)
                               : 1.0 / rho0(x) / (gamma_func(x) - 1.0);
             default: MFEM_ABORT("Problem not supported yet");
@@ -424,38 +401,11 @@ int main(int argc, char *argv[])
    external_data[hydrodynamics::EXT_DATA_IDX::VISCOSITY_TYPE] = viscosity_type;
    external_data[hydrodynamics::EXT_DATA_IDX::VISC_Q1] = viscosity_q1;
    external_data[hydrodynamics::EXT_DATA_IDX::VISC_Q2] = viscosity_q2;
-   external_data[hydrodynamics::EXT_DATA_IDX::DT_ESTIMATE] =
-      std::numeric_limits<real_t>::infinity();
 
-   hydrodynamics::LagrangianHydroOperator *hydro = nullptr;
-   using PRECONDITIONER_TYPE =
-      hydrodynamics::LagrangianHydroOperator::PRECONDITIONER_TYPE;
-   switch (dim)
-   {
-      case 2:
-      {
-         hydro = hydrodynamics::CreateLagrangianHydroOperator<2>(
-                    H1FESpace, L2FESpace, ess_tdof, rho0_coeff,
-                    x0_gf, rho0_gf, mat_gf, external_data, ir,
-                    fd_gradient, dump_jacobians,
-                    nonlinear_maximum_iterations, nonlinear_relative_tolerance,
-                    krylov_maximum_iterations, preconditioner_lag,
-                    (PRECONDITIONER_TYPE) preconditioner_type);
-         break;
-      }
-      case 3:
-      {
-         hydro = hydrodynamics::CreateLagrangianHydroOperator<3>(
-                    H1FESpace, L2FESpace, ess_tdof, rho0_coeff,
-                    x0_gf, rho0_gf, mat_gf, external_data, ir,
-                    fd_gradient, dump_jacobians,
-                    nonlinear_maximum_iterations, nonlinear_relative_tolerance,
-                    krylov_maximum_iterations, preconditioner_lag,
-                    (PRECONDITIONER_TYPE) preconditioner_type);
-         break;
-      }
-      default: MFEM_ABORT("unsupported mesh dimension: " << dim);
-   }
+   hydrodynamics::LagrangianHydroOperator *hydro =
+      hydrodynamics::CreateLagrangianHydroOperator(
+         H1FESpace, L2FESpace, ess_tdof, rho0_coeff, x0_gf, rho0_gf, mat_gf,
+         external_data, ir, hydro_options);
    hydro->stage_dt_estimate = stock_dt;
 
    ODESolver *ode_solver = NULL;

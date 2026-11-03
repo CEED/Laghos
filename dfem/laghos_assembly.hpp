@@ -14,8 +14,7 @@
 // software, applications, hardware, advanced system engineering and early
 // testbed platforms, in support of the nation's exascale computing imperative.
 
-#ifndef MFEM_LAGHOS_ASSEMBLY
-#define MFEM_LAGHOS_ASSEMBLY
+#pragma once
 
 #include "mfem.hpp"
 
@@ -78,5 +77,3 @@ public:
 } // namespace hydrodynamics
 
 } // namespace mfem
-
-#endif // MFEM_LAGHOS_ASSEMBLY

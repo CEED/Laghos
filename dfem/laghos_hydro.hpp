@@ -30,7 +30,6 @@ enum EXT_DATA_IDX
    VISC_Q1,
    VISC_Q2,
    H0,
-   DT_ESTIMATE,
    COUNT
 };
 
@@ -43,28 +42,8 @@ constexpr int SPECIFIC_INTERNAL_ENERGY = 5;
 constexpr int DT_EST = 8;
 constexpr int STRESS_TENSOR = 9;
 
-// Builds the dFEM momentum operator, with its Jacobian blocks
-template <int DIM>
-std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   ParGridFunction &material_gf,
-   const IntegrationRule &ir,
-   const Array<int> &all_domain_attr,
-   real_t *d_external_data);
-
-// Builds the dFEM energy conservation operator, with its Jacobian blocks
-template <int DIM>
-std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
-   ParFiniteElementSpace &H1,
-   ParFiniteElementSpace &L2,
-   ParGridFunction &material_gf,
-   const IntegrationRule &ir,
-   const Array<int> &all_domain_attr,
-   real_t *d_external_data);
-
-// Builds the dFEM operators and returns a new LagrangianHydroOperator
-template <int DIM>
+// Builds the dFEM operators of the mesh dimension and returns a new
+// LagrangianHydroOperator
 LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
@@ -75,12 +54,6 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParGridFunction &material_gf,
    Vector &external_data,
    const IntegrationRule &ir,
-   const bool &fd_gradient,
-   const int &dump_jacobians,
-   const int &nonlinear_maximum_iterations,
-   const real_t &nonlinear_relative_tolerance,
-   const int &krylov_maximum_iterations,
-   const int &preconditioner_lag,
-   const LagrangianHydroOperator::PRECONDITIONER_TYPE &preconditioner_type);
+   const LagrangianHydroOperator::Options &options);
 
 } // namespace mfem::hydrodynamics
