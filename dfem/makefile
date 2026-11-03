@@ -41,12 +41,15 @@ make test
 make tests
    Run the laghos_tests on 1, 2 and 3 ranks, on the cpu and on the devices,
    with the local and the global q-functions, printing each run with its time
-   and a summary.
+   and a summary. On the GROUPED devices (cpu and dbg), all the tests run in
+   one process, e.g. dfem_cpu_loc_all_np1, one test per run on the others.
    (TESTS selects the tests with a Catch2 test spec, e.g. TESTS=[chk], RANKS,
     DEVICES (cpu, dbg, gpu) and QFS (loc, glb) restrict the runs, e.g. RANKS=1
-    DEVICES=cpu QFS=loc. Nothing is written to disk: the output of a failed run
-    is printed after its KO line. KEEP_LOGS=1 also keeps the logs of the failed
-    runs in results/tests.)
+    DEVICES=cpu QFS=loc, GROUPED= runs one test per run everywhere. Nothing is
+    written to disk: the output of a failed run is printed after its KO line,
+    with the failed tests. KEEP_LOGS=1 also keeps the logs of the failed runs
+    in results/tests. At most MAX_RANKS ranks run at once, the core count by
+    default, whatever the -j of make.)
 make install PREFIX=<dir>
    Install the laghos_dfem and laghos_tests executables in <dir>.
 make clean
@@ -169,6 +172,9 @@ DEVICE_gpu = $(if $(filter YES,$(MFEM_USE_CUDA)),cuda,$(if \
 	$(filter YES,$(MFEM_USE_HIP)),hip))
 QF_loc = local
 QF_glb = global
+# Devices running all their tests in one process, not the GPUs where the
+# results depend on the previous tests
+GROUPED = cpu dbg
 # Debug device fault: hypre host reads of aliases protect valid device pages
 SKIP_RUNS = dfem_dbg_loc_imp_run_sdv_3d_q21_mid_av7_dtn_np% \
 	dfem_dbg_glb_imp_run_sdv_3d_q21_mid_av7_dtn_np%
@@ -180,8 +186,11 @@ TESTS_KEPT = , logs in $(TESTS_DIR)
 
 # Wall clock time in seconds, since the epoch or since the time given
 CLOCK = perl -MTime::HiRes=time -e 'printf "%.2f", time - ($$ARGV[0] || 0)'
-# Use the -j of the parent when it has a jobserver, -j $(NPROC) otherwise
-TESTS_JOBS = $(if $(findstring jobserver,$(MAKEFLAGS)),,-j $(NPROC))
+# Ranks running at once at most, the core count by default
+MAX_RANKS = $(NPROC)
+# As many runs at once as MAX_RANKS allows with the most RANKS, 1 at least
+TESTS_JOBS = -j $(shell n=1; for r in $(RANKS); do [ $$r -gt $$n ] && n=$$r; \
+	done; j=`expr $(MAX_RANKS) / $$n`; [ $$j -gt 1 ] && echo $$j || echo 1)
 
 # Each run keeps its output in memory, and prints it when it fails.
 # The failed runs are listed in the TESTS_FAILED temporary file,
@@ -202,18 +211,24 @@ tests-header:
 
 # 1: test, 2: ranks, 3: device, 4: q-function backend
 laghos_run = dfem_$(3)_$(4)_$(1)_np$(2)
-# Lines of a failed output: its ✗ checks, or its last lines outside the MPI
-# boxes
+# Lines of a failed output: its ✗ checks under their test headers, or its last
+# lines outside the MPI boxes under the last test header
 TESTS_LOG_LINES = awk 'length($$0) == 74 && /^-+$$/ { skip = !skip; next } \
-	!skip && NF { l[++n] = $$0; if (index($$0, "│ ✗")) x[++m] = $$0 } \
+	!skip && NF { l[++n] = $$0; if (index($$0, "▸ ")) { h = $$0; hn = n } \
+	if (index($$0, "│ ✗")) { if (h != p) x[++m] = p = h; x[++m] = $$0 } } \
 	END { if (m) for (i = 1; i <= m; i++) print "    " x[i]; \
-	else for (i = (n > 5 ? n - 4 : 1); i <= n; i++) print "      | " l[i] }'
-# 1: test, 2: ranks, 3: device, 4: q-function backend, printing OK or KO, the
+	else { i = n > 5 ? n - 4 : 1; if (hn && hn < i) print "    " h; \
+	for (; i <= n; i++) print "      | " l[i] } }'
+# Catch2 list of test names
+comma := ,
+empty :=
+space := $(empty) $(empty)
+# 1: tests, 2: ranks, 3: device, 4: q-function backend, printing OK or KO, the
 # run and its time, and on failure its log (with KEEP_LOGS) and output lines,
 # with a single printf
 laghos_run_cmd = t0=`$(CLOCK)`; \
 	if out=$$($(RUN_MPI) $(2) ./laghos_tests --device $(DEVICE_$(3)) \
-	   --qf $(QF_$(4)) $(1) \
+	   --qf $(QF_$(4)) $(subst $(space),$(comma),$(strip $(1))) \
 	   2>&1); \
 	then s=OK c='\033[0;32m'; else s=KO c='\033[0;31m'; fi; \
 	t=`$(CLOCK) $$t0`; [ -t 1 ] || c=; \
@@ -230,11 +245,21 @@ RUNS += $(1)
 $(1): laghos_tests | tests-header
 	@$$(call laghos_run_cmd,$(2),$(3),$(4),$(5))
 endef
+# 1: tests, 2: ranks, 3: device, 4: q-function backend, without SKIP_RUNS
+laghos_tests_of = $(foreach t,$(1),\
+	$(if $(filter $(SKIP_RUNS),$(call laghos_run,$(t),$(2),$(3),$(4))),,$(t)))
+# 1: name, 2: ranks, 3: device, 4: q-function backend, 5: tests
+laghos_run_def = $(eval $(call laghos_run_template,\
+	$(call laghos_run,$(1),$(2),$(3),$(4)),$(5),$(2),$(3),$(4)))
+# 1: ranks, 2: device, 3: q-function backend, 4: tests: one run of all the
+# tests on the GROUPED devices, one run per test on the others
+laghos_device_runs = $(if $(filter $(GROUPED),$(2)),\
+	$(if $(4),$(call laghos_run_def,all,$(1),$(2),$(3),$(4))),\
+	$(foreach t,$(4),$(call laghos_run_def,$(t),$(1),$(2),$(3),$(t))))
 # 1: tests, 2: q-function backend
-laghos_runs = $(foreach t,$(1),$(foreach r,$(RANKS),$(foreach d,$(DEVICES),\
-	$(if $(filter $(SKIP_RUNS),$(call laghos_run,$(t),$(r),$(d),$(2))),,\
-	$(eval $(call laghos_run_template,$(call laghos_run,$(t),$(r),$(d),$(2)),\
-	$(t),$(r),$(d),$(2)))))))
+laghos_runs = $(foreach r,$(RANKS),$(foreach d,$(DEVICES),\
+	$(call laghos_device_runs,$(r),$(d),$(2),\
+	$(call laghos_tests_of,$(1),$(r),$(d),$(2)))))
 ifneq (,$(filter tests-run,$(MAKECMDGOALS)))
    ALL_TESTS := $(shell $(RUN_MPI) 1 ./laghos_tests --list-test-names-only \
 	$(if $(TESTS),'$(TESTS)') 2> /dev/null)
@@ -278,6 +303,8 @@ status info:
 	$(info LAGHOS_LIBS  = $(value LAGHOS_LIBS))
 	$(info DEVICES      = $(DEVICES))
 	$(info QFS          = $(QFS))
+	$(info GROUPED      = $(GROUPED))
+	$(info MAX_RANKS    = $(MAX_RANKS))
 	$(info PREFIX       = $(PREFIX))
 	@true
 

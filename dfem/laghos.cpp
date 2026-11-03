@@ -53,6 +53,8 @@
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 
+#include <optional>
+
 #include "laghos_solver.hpp"
 #include "laghos_tests.hpp"
 
@@ -168,11 +170,15 @@ int main(int argc, char *argv[])
    MFEM_VERIFY(problem != 2, "1D Sod shock tube (-p 2) is not supported");
    if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 
-   // Configure the device from the command line options
-   Device backend;
-   backend.Configure(device, dev);
-   backend.SetGPUAwareMPI(gpu_aware_mpi);
-   if (Mpi::Root()) { backend.Print(); }
+   // Configure the device from the command line options, unless already done
+   std::optional<Device> backend;
+   if (!Device::IsConfigured())
+   {
+      backend.emplace();
+      backend->Configure(device, dev);
+      backend->SetGPUAwareMPI(gpu_aware_mpi);
+      if (Mpi::Root()) { backend->Print(); }
+   }
 
    real_t blast_energy = (dim == 2) ? 0.25 : 0.125;
 

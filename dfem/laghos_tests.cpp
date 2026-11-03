@@ -24,7 +24,8 @@
 //   laghos_tests "[imp]"          runs the implicit tests only, ctest -L imp
 //   laghos_tests "[chk]"          runs the README checks only, ctest -L chk
 //   laghos_tests -v ...           also shows the raw Laghos output
-//   laghos_tests --device cuda    runs on a Device, one test per process
+//   laghos_tests --device debug   runs on a Device, created once per process
+//   laghos_tests --device cuda    runs on a GPU, one test per process in CTest
 //   laghos_tests --qf global      runs with global q-functions, ctest -L glb
 //   laghos_tests -h               Catch2 help
 
@@ -324,6 +325,15 @@ static void LaghosTest(const std::string &name)
    for (auto &token : tokens) { args.push_back(&token[0]); }
    args.push_back(nullptr);
 
+   // Header before the run, naming the test case of a crash
+   const bool root = mfem::Mpi::Root();
+   if (root)
+   {
+      report::Header(test.name, test.desc +
+                     (qf == "local" ? "" : ", " + qf) +
+                     (device == "cpu" ? "" : ", " + device));
+   }
+
    // Quiet Laghos run, unless -v
    LaghosResults res;
    const bool out_enabled = mfem::out.IsEnabled();
@@ -333,13 +343,6 @@ static void LaghosTest(const std::string &name)
    laghos_results = nullptr;
    if (out_enabled) { mfem::out.Enable(); }
 
-   const bool root = mfem::Mpi::Root();
-   if (root)
-   {
-      report::Header(test.name, test.desc +
-                     (qf == "local" ? "" : ", " + qf) +
-                     (device == "cpu" ? "" : ", " + device));
-   }
    if (root && ret != 0) { report::Row().Fail("laghos").Int("returned", ret); }
    REQUIRE(ret == 0);
 
@@ -556,6 +559,9 @@ int main(int argc, char* argv[]) try
       MPI_Comm_free(&node);
       device_id = local_rank % mfem::Device::GetDeviceCount();
    }
+
+   // One Device per process, kept by all the laghos runs of the test cases
+   mfem::Device backend(device, device_id);
 
    // Catch2 colors follow report::UseColor (TTY and no NO_COLOR), unless set
    static char colour_flag[] = "--use-colour", yes[] = "yes", no[] = "no";

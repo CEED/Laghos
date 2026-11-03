@@ -286,6 +286,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
 
    // solve position
    dx = v;
+   dx.GetMemory().SyncAlias(dSdt.GetMemory(), dx.Size());
 
    // solve velocity
    {
@@ -320,7 +321,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
          cg.SetMaxIter(300);
          cg.SetPrintLevel(-1);
 
-         H1c.GetRestrictionMatrix()->Mult(dvc, Xvc);
+         Xvc = 0.0;
          Mv->SetEssentialTrueDofs(c_tdofs[c]);
          Mv->EliminateRHS(B);
          cg.Mult(B, Xvc);

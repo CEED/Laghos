@@ -65,32 +65,52 @@ file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/laghos_tests.cpp tests
   REGEX "^TEST_CASE\\(\"")
 list(TRANSFORM tests REPLACE "^TEST_CASE\\(\"([^\"]+)\".*" "\\1")
 
-# One ctest dfem_<device>_<qf>_<test>_np<np>, labeled with its device, its
-# q-function backend, exp or imp, and chk for the README checks or run, no
-# colors: mpiexec may give a pseudo-terminal
-function(laghos_test device qf test np)
+# One ctest dfem_<device>_<qf>_<test>_np<np> of the Catch2 test spec <spec>,
+# labeled <labels> with its device and its q-function backend, no colors:
+# mpiexec may give a pseudo-terminal
+function(laghos_test device qf test np spec labels)
   set(ctest dfem_${device}_${qf}_${test}_np${np})
-  string(SUBSTRING ${test} 0 3 run)
-  string(SUBSTRING ${test} 4 3 kind)
-  set(labels ${device} ${qf} ${run} ${kind})
   add_test(NAME ${ctest}
     COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
-            $<TARGET_FILE:laghos_tests> --device ${device_${device}}
-            --qf ${qf_${qf}} ${test})
+            ${MPIEXEC_PREFLAGS} $<TARGET_FILE:laghos_tests>
+            ${MPIEXEC_POSTFLAGS} --device ${device_${device}}
+            --qf ${qf_${qf}} ${spec})
   set_tests_properties(${ctest} PROPERTIES ENVIRONMENT NO_COLOR=1
-    LABELS "${labels}")
+    PROCESSORS ${np} LABELS "${device};${qf};${labels}")
 endfunction()
 
-# Runs on 1, 2 and 3 ranks of each test on each device with each q-function
-# backend, with the same references
+# Debug device fault: hypre host reads of aliases protect valid pages
+set(skip_dbg imp_run_sdv_3d_q21_mid_av7_dtn)
+
+# Groups of all the tests in one process on cpu and dbg, not on GPUs where the
+# results depend on the previous tests, or one ctest per test when OFF
+option(LAGHOS_TESTS_GROUPS "One ctest per device, q-function and ranks" ON)
+set(grouped)
+if (LAGHOS_TESTS_GROUPS)
+  set(grouped cpu dbg)
+endif()
+
+# Runs on 1, 2 and 3 ranks on each device with each q-function backend, with
+# the same references: one dfem_<device>_<qf>_all_np<np> group, labeled group,
+# or each test, labeled exp or imp, and chk for the README checks or run
 foreach(qf loc glb)
+  foreach(np 1 2 3)
+    foreach(device ${grouped})
+      set(spec "[dfem]")
+      if (device STREQUAL dbg)
+        string(APPEND spec "~${skip_dbg}")
+      endif()
+      laghos_test(${device} ${qf} all ${np} ${spec} group)
+    endforeach()
+  endforeach()
   foreach(test ${tests})
+    string(SUBSTRING ${test} 0 3 run)
+    string(SUBSTRING ${test} 4 3 kind)
     foreach(np 1 2 3)
       foreach(device ${devices})
-        # Debug device fault: hypre host reads of aliases protect valid pages
-        if (NOT (device STREQUAL dbg AND
-                 test STREQUAL imp_run_sdv_3d_q21_mid_av7_dtn))
-          laghos_test(${device} ${qf} ${test} ${np})
+        if (NOT (device IN_LIST grouped OR
+                 (device STREQUAL dbg AND test STREQUAL "${skip_dbg}")))
+          laghos_test(${device} ${qf} ${test} ${np} ${test} "${run};${kind}")
         endif()
       endforeach()
     endforeach()
