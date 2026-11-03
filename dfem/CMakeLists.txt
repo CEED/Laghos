@@ -79,12 +79,18 @@ function(laghos_test device qf test np spec labels)
     PROCESSORS ${np} LABELS "${device};${qf};${labels}")
 endfunction()
 
-# Debug device fault: hypre host reads of aliases protect valid pages
+# Debug device fault: hypre host reads of aliases protect valid device pages
 set(skip_dbg imp_run_sdv_3d_q21_mid_av7_dtn)
 
-# Groups of all the tests in one process on cpu and dbg, not on GPUs where the
-# results depend on the previous tests, or one ctest per test when OFF
-option(LAGHOS_TESTS_GROUPS "One ctest per device, q-function and ranks" ON)
+# With GPU support, all the tests of cpu and dbg run in one process per
+# q-function and ranks, one ctest per test on GPUs, without GPU support or
+# when OFF
+set(groups OFF)
+if (gpu IN_LIST devices)
+  set(groups ON)
+endif()
+option(LAGHOS_TESTS_GROUPS "One ctest per device, q-function and ranks"
+  ${groups})
 set(grouped)
 if (LAGHOS_TESTS_GROUPS)
   set(grouped cpu dbg)

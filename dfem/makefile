@@ -41,8 +41,9 @@ make test
 make tests
    Run the laghos_tests on 1, 2 and 3 ranks, on the cpu and on the devices,
    with the local and the global q-functions, printing each run with its time
-   and a summary. On the GROUPED devices (cpu and dbg), all the tests run in
-   one process, e.g. dfem_cpu_loc_all_np1, one test per run on the others.
+   and a summary. On the GROUPED devices (cpu and dbg with GPU support), all
+   the tests run in one process, e.g. dfem_cpu_loc_all_np1, one test per run
+   on the others.
    (TESTS selects the tests with a Catch2 test spec, e.g. TESTS=[chk], RANKS,
     DEVICES (cpu, dbg, gpu) and QFS (loc, glb) restrict the runs, e.g. RANKS=1
     DEVICES=cpu QFS=loc, GROUPED= runs one test per run everywhere. Nothing is
@@ -164,7 +165,7 @@ endif
 TESTS =
 RANKS = 1 2 3
 QFS = loc glb
-DEVICES = cpu $(if $(DEVICE_gpu),gpu) dbg
+DEVICES = $(strip cpu $(if $(DEVICE_gpu),gpu) dbg)
 # MFEM devices and q-function backends of the DEVICES and QFS name tags
 DEVICE_cpu = cpu
 DEVICE_dbg = debug
@@ -172,9 +173,8 @@ DEVICE_gpu = $(if $(filter YES,$(MFEM_USE_CUDA)),cuda,$(if \
 	$(filter YES,$(MFEM_USE_HIP)),hip))
 QF_loc = local
 QF_glb = global
-# Devices running all their tests in one process, not the GPUs where the
-# results depend on the previous tests
-GROUPED = cpu dbg
+# Devices running all their tests in one process with GPU support, not the GPUs
+GROUPED = $(if $(DEVICE_gpu),cpu dbg)
 # Debug device fault: hypre host reads of aliases protect valid device pages
 SKIP_RUNS = dfem_dbg_loc_imp_run_sdv_3d_q21_mid_av7_dtn_np% \
 	dfem_dbg_glb_imp_run_sdv_3d_q21_mid_av7_dtn_np%
@@ -192,10 +192,9 @@ MAX_RANKS = $(NPROC)
 TESTS_JOBS = -j $(shell n=1; for r in $(RANKS); do [ $$r -gt $$n ] && n=$$r; \
 	done; j=`expr $(MAX_RANKS) / $$n`; [ $$j -gt 1 ] && echo $$j || echo 1)
 
-# Each run keeps its output in memory, and prints it when it fails.
-# The failed runs are listed in the TESTS_FAILED temporary file,
-# removed at the end. With KEEP_LOGS, TESTS_DIR is cleared
-# (with results if empty) and holds the logs of the failed runs.
+# Each run keeps its output in memory and prints it when it fails, listing
+# itself in the TESTS_FAILED temporary file removed at the end; with KEEP_LOGS,
+# TESTS_DIR is cleared (with results if empty) and holds the failed logs
 tests: laghos_tests
 	@$(if $(TESTS_KEEP),rm -rf $(TESTS_DIR); \
 	   rmdir $(patsubst %/,%,$(dir $(TESTS_DIR))) 2> /dev/null;) \
@@ -206,10 +205,10 @@ tests: laghos_tests
 
 tests-header:
 	@echo "laghos_tests: $(words $(RUNS)) runs$(if $(TESTS), of '$(TESTS)')," \
-	  "ranks $(RANKS), devices $(DEVICES), q-functions $(QFS)"
+	  "ranks: $(RANKS), devices: $(DEVICES), q-functions: $(QFS)"
 	@echo "MFEM_DIR = $(patsubst %/config/config.mk,%,$(CONFIG_MK))"
 
-# 1: test, 2: ranks, 3: device, 4: q-function backend
+# 1: test or all, 2: ranks, 3: device, 4: q-function backend
 laghos_run = dfem_$(3)_$(4)_$(1)_np$(2)
 # Lines of a failed output: its ✗ checks under their test headers, or its last
 # lines outside the MPI boxes under the last test header
@@ -219,7 +218,7 @@ TESTS_LOG_LINES = awk 'length($$0) == 74 && /^-+$$/ { skip = !skip; next } \
 	END { if (m) for (i = 1; i <= m; i++) print "    " x[i]; \
 	else { i = n > 5 ? n - 4 : 1; if (hn && hn < i) print "    " h; \
 	for (; i <= n; i++) print "      | " l[i] } }'
-# Catch2 list of test names
+# Comma and space, for the Catch2 list of test names
 comma := ,
 empty :=
 space := $(empty) $(empty)
