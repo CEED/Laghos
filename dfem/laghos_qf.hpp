@@ -18,6 +18,7 @@
 #include <fem/dfem/doperator.hpp>
 #include <fem/pgridfunc.hpp>
 #include <linalg/kernels.hpp>
+#include <linalg/tensor_arrays.hpp>
 
 namespace mfem::hydrodynamics
 {
@@ -407,8 +408,97 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
    return stress * transpose(invJ) * detJ * w;
 }
 
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Quadrature point array of a pointwise argument, const for the inputs
+template <typename T, bool input>
+struct QPArray
+{
+   using type = future::tensor_array<std::conditional_t<input, const T, T>>;
+};
+
+template <typename T, int... n, bool input>
+struct QPArray<tensor<T, n...>, input>
+{
+   using type = future::tensor_array<std::conditional_t<input, const T, T>, n...>;
+};
+
+template <typename arg_t>
+using qp_array_t = typename QPArray<std::decay_t<arg_t>,
+      std::is_const_v<std::remove_reference_t<arg_t>>>::type;
+
+// Global q-function of a pointwise one, the forall over all the points
+template <typename qfunc_t, typename = typename
+          future::get_function_signature<qfunc_t>::type::parameter_ts>
+struct GlobalQF;
+
+template <typename qfunc_t, typename... args_t>
+struct GlobalQF<qfunc_t, future::tuple<args_t...>>
+{
+   qfunc_t qfunc;
+
+   template <typename arg_t, typename array_t> MFEM_HOST_DEVICE static
+   std::decay_t<arg_t> Load(const array_t &a, const int q)
+   {
+      if constexpr (std::is_const_v<std::remove_reference_t<arg_t>>)
+      {
+         return a(q);
+      }
+      else { return std::decay_t<arg_t> {}; }
+   }
+
+   template <typename arg_t, typename array_t, typename value_t>
+   MFEM_HOST_DEVICE static
+   void Store(const array_t &a, const value_t &v, const int q)
+   {
+      if constexpr (!std::is_const_v<std::remove_reference_t<arg_t>>)
+      {
+         a(q) = v;
+      }
+   }
+
+   template <std::size_t... i> MFEM_HOST_DEVICE static
+   void Point(const qfunc_t &f, const int q, std::index_sequence<i...>,
+              const qp_array_t<args_t> &...a)
+   {
+      future::tuple<std::decay_t<args_t>...> x{Load<args_t>(a, q)...};
+      f(future::get<i>(x)...);
+      (Store<args_t>(a, future::get<i>(x), q), ...);
+   }
+
+   void operator()(qp_array_t<args_t> &...a) const
+   {
+      const qfunc_t f = qfunc;
+      const int nq = static_cast<int>((a.size(), ...));
+      mfem::forall<UseEnzyme>(nq, [=] MFEM_HOST_DEVICE (int q)
+      {
+         Point(f, q, std::index_sequence_for<args_t...> {}, a...);
+      });
+   }
+};
+
+// Adds a pointwise q-function as is or as a global one, from the backend
+template <typename backend_t,
+          future::DerivativeKernels kernels = future::DerivativeKernels::All,
+          typename qfunc_t, typename... args_t>
+void AddDomainIntegrator(DifferentiableOperator &op, const qfunc_t &qfunc,
+                         args_t &&...args)
+{
+   if constexpr (std::is_same_v<backend_t, future::GlobalQFBackend>)
+   {
+      GlobalQF<qfunc_t> global_qfunc{qfunc};
+      op.AddDomainIntegrator<backend_t, kernels>(global_qfunc,
+                                                 std::forward<args_t>(args)...);
+   }
+   else
+   {
+      qfunc_t local_qfunc = qfunc;
+      op.AddDomainIntegrator<backend_t, kernels>(local_qfunc,
+                                                 std::forward<args_t>(args)...);
+   }
+}
+
 // Builds the dFEM momentum operator, with its Jacobian blocks
-template <int DIM>
+template <int DIM, typename backend_t>
 std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
@@ -418,7 +508,7 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    real_t *d_external_data);
 
 // Builds the dFEM energy conservation operator, with its Jacobian blocks
-template <int DIM>
+template <int DIM, typename backend_t>
 std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,

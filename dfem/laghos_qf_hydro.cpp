@@ -20,7 +20,7 @@
 namespace mfem::hydrodynamics
 {
 
-template <int DIM>
+template <int DIM, typename backend_t>
 static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
@@ -93,10 +93,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          }
 
       } dt_est_qf{d_external_data};
-      dt_est_mf->AddDomainIntegrator(dt_est_qf, QDataFields(),
-                                     dt_est_kernel_oo,
-                                     ir,
-                                     all_domain_attr);
+      AddDomainIntegrator<backend_t>(*dt_est_mf, dt_est_qf, QDataFields(),
+                                     dt_est_kernel_oo, ir, all_domain_attr);
    }
 
    // Output on a quadrature space
@@ -127,16 +125,15 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
                                 external_data, dt_est_dummy);
          }
       } update_qdata_qf{d_external_data};
-      update_qdata->AddDomainIntegrator(update_qdata_qf, QDataFields(),
-                                        update_qdata_kernel_oo,
-                                        ir,
-                                        all_domain_attr);
+      AddDomainIntegrator<backend_t>(*update_qdata, update_qdata_qf,
+                                     QDataFields(), update_qdata_kernel_oo,
+                                     ir, all_domain_attr);
    }
 
    // Create momentum operator
-   auto momentum_mf = CreateMomentumOperator<DIM>(H1, L2, material_gf, ir,
-                                                  all_domain_attr,
-                                                  d_external_data);
+   auto momentum_mf =
+      CreateMomentumOperator<DIM, backend_t>(H1, L2, material_gf, ir,
+                                             all_domain_attr, d_external_data);
 
    std::shared_ptr<DifferentiableOperator> momentum_pa;
    {
@@ -151,14 +148,16 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          MFEM_HOST_DEVICE inline
          void operator()(const matd &stressJiT, matd &f) const { f = stressJiT; }
       } momentum_pa_qf;
-      momentum_pa->AddDomainIntegrator(momentum_pa_qf, momentum_pa_kernel_ao,
-                                       momentum_pa_kernel_oo, ir, all_domain_attr);
+      AddDomainIntegrator<backend_t>(*momentum_pa, momentum_pa_qf,
+                                     momentum_pa_kernel_ao,
+                                     momentum_pa_kernel_oo, ir, all_domain_attr);
    }
 
    // Create energy conservation operator
    auto energy_conservation_mf =
-      CreateEnergyConservationOperator<DIM>(H1, L2, material_gf, ir,
-                                            all_domain_attr, d_external_data);
+      CreateEnergyConservationOperator<DIM, backend_t>(H1, L2, material_gf, ir,
+                                                       all_domain_attr,
+                                                       d_external_data);
 
    std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
    {
@@ -186,9 +185,11 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             f = ddot(stressJiT, dvdxi);
          }
       } energy_conservation_pa_qf;
-      energy_conservation_pa->AddDomainIntegrator(
-         energy_conservation_pa_qf, energy_conservation_pa_kernel_ao,
-         energy_conservation_pa_kernel_oo, ir, all_domain_attr);
+      AddDomainIntegrator<backend_t>(*energy_conservation_pa,
+                                     energy_conservation_pa_qf,
+                                     energy_conservation_pa_kernel_ao,
+                                     energy_conservation_pa_kernel_oo,
+                                     ir, all_domain_attr);
    }
 
    // Create total internal energy operator
@@ -230,9 +231,11 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             ie = rho0 * E * det(J0) * w;
          }
       } total_internal_energy_qf;
-      total_internal_energy_mf->AddDomainIntegrator(
-         total_internal_energy_qf, total_internal_energy_kernel_ao,
-         total_internal_energy_kernel_oo, ir, all_domain_attr);
+      AddDomainIntegrator<backend_t>(*total_internal_energy_mf,
+                                     total_internal_energy_qf,
+                                     total_internal_energy_kernel_ao,
+                                     total_internal_energy_kernel_oo,
+                                     ir, all_domain_attr);
    }
 
    // Create total kinetic energy operator
@@ -274,9 +277,11 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             ke = rho0 * 0.5 * v * v * det(J0) * w;
          }
       } total_kinetic_energy_qf;
-      total_kinetic_energy_mf->AddDomainIntegrator(
-         total_kinetic_energy_qf, total_kinetic_energy_kernel_ao,
-         total_kinetic_energy_kernel_oo, ir, all_domain_attr);
+      AddDomainIntegrator<backend_t>(*total_kinetic_energy_mf,
+                                     total_kinetic_energy_qf,
+                                     total_kinetic_energy_kernel_ao,
+                                     total_kinetic_energy_kernel_oo,
+                                     ir, all_domain_attr);
    }
 
    // Create density operator
@@ -312,8 +317,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             m = rho0 * det(J0) * w;
          }
       } density_qf;
-      density_mf->AddDomainIntegrator(density_qf, density_kernel_ao,
-                                      density_kernel_oo, ir, all_domain_attr);
+      AddDomainIntegrator<backend_t>(*density_mf, density_qf, density_kernel_ao,
+                                     density_kernel_oo, ir, all_domain_attr);
    }
 
    // Create taylor source operator
@@ -351,10 +356,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       } taylor_source_qf;
       auto derivatives = std::integer_sequence<size_t, COORDINATES> {};
       // Only the matrix-free action of dTaylorSourcedx is used
-      taylor_source_mf->AddDomainIntegrator
-      <future::LocalQFBackend, future::DerivativeKernels::Action>
-      (taylor_source_qf, taylor_source_kernel_ao, taylor_source_kernel_oo,
-       ir, all_domain_attr, derivatives);
+      AddDomainIntegrator<backend_t, future::DerivativeKernels::Action>
+      (*taylor_source_mf, taylor_source_qf, taylor_source_kernel_ao,
+       taylor_source_kernel_oo, ir, all_domain_attr, derivatives);
    }
 
    return new LagrangianHydroOperator(
@@ -395,13 +399,21 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
 {
    const int dim = H1.GetMesh()->Dimension();
    MFEM_VERIFY(dim == 2 || dim == 3, "unsupported mesh dimension: " << dim);
+   const auto create = [&](auto dim_c, auto backend)
+   {
+      return CreateLagrangianHydroOperator<decltype(dim_c)::value,
+             decltype(backend)>(H1, L2, ess_tdof, rho0_coeff, x0_gf, rho0_gf,
+                                material_gf, external_data, ir, options);
+   };
+   const bool global = options.qfunction_backend ==
+                       LagrangianHydroOperator::GLOBAL_QF;
+   using Local = future::LocalQFBackend;
+   using Global = future::GlobalQFBackend;
+   using Dim2 = std::integral_constant<int, 2>;
+   using Dim3 = std::integral_constant<int, 3>;
    return dim == 2 ?
-          CreateLagrangianHydroOperator<2>(H1, L2, ess_tdof, rho0_coeff, x0_gf,
-                                           rho0_gf, material_gf, external_data,
-                                           ir, options) :
-          CreateLagrangianHydroOperator<3>(H1, L2, ess_tdof, rho0_coeff, x0_gf,
-                                           rho0_gf, material_gf, external_data,
-                                           ir, options);
+          (global ? create(Dim2{}, Global{}) : create(Dim2{}, Local{})) :
+          (global ? create(Dim3{}, Global{}) : create(Dim3{}, Local{}));
 }
 
 } // namespace mfem::hydrodynamics

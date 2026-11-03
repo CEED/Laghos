@@ -52,20 +52,27 @@ elseif (MFEM_USE_HIP)
   set(devices hip debug)
 endif()
 
-# One ctest per device of a test on np ranks, dfem_<name> on the cpu and
-# dfem_<device>_<name> otherwise, no colors: mpiexec may give a pseudo-terminal
-function(laghos_test name test np label)
+# One ctest per device of a test on np ranks with the qf q-function backend,
+# dfem_<name> on the cpu and dfem_<device>_<name> otherwise, with a global_
+# name prefix and label for the global q-functions, no colors: mpiexec may give
+# a pseudo-terminal
+function(laghos_test name test np label qf)
+  set(qf_labels)
+  if (qf STREQUAL global)
+    set(name global_${name})
+    set(qf_labels global)
+  endif()
   foreach(device ${ARGN})
     if (device STREQUAL cpu)
       set(ctest dfem_${name})
-      set(labels ${label})
+      set(labels ${label} ${qf_labels})
     else()
       set(ctest dfem_${device}_${name})
-      set(labels ${label} device ${device})
+      set(labels ${label} ${qf_labels} device ${device})
     endif()
     add_test(NAME ${ctest}
       COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
-              $<TARGET_FILE:laghos_tests> --device ${device} ${test})
+              $<TARGET_FILE:laghos_tests> --device ${device} --qf ${qf} ${test})
     set_tests_properties(${ctest} PROPERTIES ENVIRONMENT NO_COLOR=1
       LABELS "${labels}")
   endforeach()
@@ -78,9 +85,9 @@ foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
              readme_sedov_2d readme_sedov_3d
              taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
              triple_point_3d triple_point_3d_av)
-  laghos_test(${test} ${test} 1 explicit cpu ${devices})
+  laghos_test(${test} ${test} 1 explicit local cpu ${devices})
   foreach(np 2 3)
-    laghos_test(${test}_np${np} ${test} ${np} explicit cpu ${devices})
+    laghos_test(${test}_np${np} ${test} ${np} explicit local cpu ${devices})
   endforeach()
 endforeach()
 
@@ -95,6 +102,20 @@ foreach(test implicit_taylor_green_2d implicit_taylor_green_2d_be
     list(REMOVE_ITEM test_devices debug)
   endif()
   foreach(np 1 2 3)
-    laghos_test(${test}_np${np} ${test} ${np} implicit cpu ${test_devices})
+    laghos_test(${test}_np${np} ${test} ${np} implicit local cpu
+                ${test_devices})
   endforeach()
+endforeach()
+
+# Global q-function runs of the [global] tests with the same references,
+# ctest -L global, or ctest -LE global for the local q-functions only
+foreach(test sedov_2d sedov_3d taylor_green_2d)
+  laghos_test(${test} ${test} 1 explicit global cpu ${devices})
+  foreach(np 2 3)
+    laghos_test(${test}_np${np} ${test} ${np} explicit global cpu ${devices})
+  endforeach()
+endforeach()
+foreach(np 1 2 3)
+  laghos_test(implicit_sedov_2d_av_np${np} implicit_sedov_2d_av ${np} implicit
+              global cpu ${devices})
 endforeach()

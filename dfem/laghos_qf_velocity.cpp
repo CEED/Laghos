@@ -19,7 +19,7 @@
 namespace mfem::hydrodynamics
 {
 
-template <int DIM>
+template <int DIM, typename backend_t>
 std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
@@ -58,13 +58,14 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    } momentum_qf{d_external_data};
    auto derivatives =
       std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
-   momentum_mf->AddDomainIntegrator<future::LocalQFBackend, JACOBIAN_KERNELS>(
-      momentum_qf, QDataFields(), momentum_mf_kernel_oo, ir,
+   AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>(
+      *momentum_mf, momentum_qf, QDataFields(), momentum_mf_kernel_oo, ir,
       all_domain_attr, derivatives);
    return momentum_mf;
 }
 
-template std::shared_ptr<DifferentiableOperator> CreateMomentumOperator<2>(
+template std::shared_ptr<DifferentiableOperator>
+CreateMomentumOperator<2, future::LocalQFBackend>(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    ParGridFunction &material_gf,
@@ -72,7 +73,26 @@ template std::shared_ptr<DifferentiableOperator> CreateMomentumOperator<2>(
    const Array<int> &all_domain_attr,
    real_t *d_external_data);
 
-template std::shared_ptr<DifferentiableOperator> CreateMomentumOperator<3>(
+template std::shared_ptr<DifferentiableOperator>
+CreateMomentumOperator<2, future::GlobalQFBackend>(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   real_t *d_external_data);
+
+template std::shared_ptr<DifferentiableOperator>
+CreateMomentumOperator<3, future::LocalQFBackend>(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   real_t *d_external_data);
+
+template std::shared_ptr<DifferentiableOperator>
+CreateMomentumOperator<3, future::GlobalQFBackend>(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    ParGridFunction &material_gf,

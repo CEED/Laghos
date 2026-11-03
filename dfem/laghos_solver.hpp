@@ -20,10 +20,7 @@
 #include "laghos_assembly.hpp"
 #include "laghos_qf.hpp"
 
-namespace mfem
-{
-
-namespace hydrodynamics
+namespace mfem::hydrodynamics
 {
 
 // Visualize the given parallel grid function, using a GLVis server on the
@@ -40,6 +37,7 @@ class LagrangianHydroOperator : public TimeDependentOperator
 public:
 
    enum PRECONDITIONER_TYPE { BLOCK_DIAGONAL_AMG = 0 };
+   enum QFUNCTION_BACKEND { LOCAL_QF = 0, GLOBAL_QF = 1 };
 
    // Solver options, with the laghos command line defaults
    struct Options
@@ -52,6 +50,7 @@ public:
       int krylov_maximum_iterations = 10;
       int preconditioner_lag = 0;
       int preconditioner_type = BLOCK_DIAGONAL_AMG;
+      int qfunction_backend = LOCAL_QF;
    };
 
    class LineSearch : public NewtonSolver
@@ -272,6 +271,4 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const IntegrationRule &ir,
    const LagrangianHydroOperator::Options &options);
 
-} // namespace hydrodynamics
-
-} // namespace mfem
+} // namespace mfem::hydrodynamics

@@ -18,10 +18,7 @@
 
 #include <mfem.hpp>
 
-namespace mfem
-{
-
-namespace hydrodynamics
+namespace mfem::hydrodynamics
 {
 
 // Container for all data needed at quadrature points.
@@ -74,6 +71,4 @@ public:
    const ParBilinearForm &GetBF() const { return pabf; }
 };
 
-} // namespace hydrodynamics
-
-} // namespace mfem
+} // namespace mfem::hydrodynamics

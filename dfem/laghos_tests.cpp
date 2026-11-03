@@ -22,8 +22,10 @@
 //   laghos_tests "[taylor-green]" runs the tests with a given tag
 //   laghos_tests "[explicit]"     runs the explicit tests only, ctest -L explicit
 //   laghos_tests "[implicit]"     runs the implicit tests only, ctest -L implicit
+//   laghos_tests "[global]"       runs the tests with global variants
 //   laghos_tests -v ...           also shows the raw Laghos output
 //   laghos_tests --device cuda    runs on a Device, one test per process
+//   laghos_tests --qf global      runs with global q-functions, ctest -L global
 //   laghos_tests -h               Catch2 help
 
 #include <algorithm>
@@ -50,6 +52,7 @@ using mfem::real_t;
 
 static bool verbose = false; // -v: keep the raw Laghos output
 static std::string device = "cpu"; // --device: Device configuration string
+static std::string qf = "local"; // --qf: q-function backend, local or global
 static int device_id = 0; // GPU of the rank, see main
 static struct { int passed = 0, total = 0; } summary; // final report line
 
@@ -87,7 +90,8 @@ struct Test
    std::string Command() const
    {
       return std::string(binary) + " -m " + LAGHOS_DATA_DIR + mesh + " " +
-             options + " -d " + device + " -dev " + std::to_string(device_id);
+             options + " -d " + device + " -dev " + std::to_string(device_id) +
+             " -qf " + qf;
    }
 };
 
@@ -324,8 +328,9 @@ static void LaghosTest(const std::string &name)
    const bool root = mfem::Mpi::Root();
    if (root)
    {
-      report::Header(test.name,
-                     device == "cpu" ? test.desc : test.desc + ", " + device);
+      report::Header(test.name, test.desc +
+                     (qf == "local" ? "" : ", " + qf) +
+                     (device == "cpu" ? "" : ", " + device));
    }
    if (root && ret != 0) { report::Row().Fail("laghos").Int("returned", ret); }
    REQUIRE(ret == 0);
@@ -412,13 +417,13 @@ static void LaghosTest(const std::string &name)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-TEST_CASE("sedov_2d", "[dfem][explicit][sedov][2d]")
+TEST_CASE("sedov_2d", "[dfem][explicit][sedov][2d][global]")
 { LaghosTest("sedov_2d"); }
 
 TEST_CASE("sedov_2d_rk2", "[dfem][explicit][sedov][2d]")
 { LaghosTest("sedov_2d_rk2"); }
 
-TEST_CASE("sedov_3d", "[dfem][explicit][sedov][3d]")
+TEST_CASE("sedov_3d", "[dfem][explicit][sedov][3d][global]")
 { LaghosTest("sedov_3d"); }
 
 TEST_CASE("sedov_2d_stock", "[dfem][explicit][sedov][2d][stock]")
@@ -427,7 +432,7 @@ TEST_CASE("sedov_2d_stock", "[dfem][explicit][sedov][2d][stock]")
 TEST_CASE("sedov_3d_stock", "[dfem][explicit][sedov][3d][stock]")
 { LaghosTest("sedov_3d_stock"); }
 
-TEST_CASE("taylor_green_2d", "[dfem][explicit][taylor-green][2d]")
+TEST_CASE("taylor_green_2d", "[dfem][explicit][taylor-green][2d][global]")
 { LaghosTest("taylor_green_2d"); }
 
 TEST_CASE("taylor_green_3d", "[dfem][explicit][taylor-green][3d]")
@@ -475,7 +480,7 @@ TEST_CASE("implicit_taylor_green_2d_be", "[dfem][implicit][taylor-green][2d]")
 TEST_CASE("implicit_sedov_2d", "[dfem][implicit][sedov][2d]")
 { LaghosTest("implicit_sedov_2d"); }
 
-TEST_CASE("implicit_sedov_2d_av", "[dfem][implicit][sedov][2d]")
+TEST_CASE("implicit_sedov_2d_av", "[dfem][implicit][sedov][2d][global]")
 { LaghosTest("implicit_sedov_2d_av"); }
 TEST_CASE("implicit_sedov_2d_av1", "[dfem][implicit][sedov][2d]")
 { LaghosTest("implicit_sedov_2d_av1"); }
@@ -501,6 +506,10 @@ int main(int argc, char* argv[]) try
       else if (!std::strcmp(argv[i], "--device") && i + 1 < argc)
       {
          device = argv[++i];
+      }
+      else if (!std::strcmp(argv[i], "--qf") && i + 1 < argc)
+      {
+         qf = argv[++i];
       }
       else { args.push_back(argv[i]); }
    }

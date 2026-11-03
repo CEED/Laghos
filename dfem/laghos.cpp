@@ -80,6 +80,7 @@ int main(int argc, char *argv[])
    real_t t_final = 0.6;
    real_t cfl = 0.5;
    int vis_steps = 5;
+   const char *qf_backend = "local";
    const char *device = "cpu";
    real_t blast_position[] = {0.0, 0.0, 0.0};
    hydrodynamics::LagrangianHydroOperator::Options hydro_options;
@@ -129,6 +130,8 @@ int main(int argc, char *argv[])
                   "Number of nonlinear solves to wait before updating the preconditioner.");
    args.AddOption(&hydro_options.preconditioner_type, "-pt", "--pt",
                   "Preconditioner type: 0 - Block Diagonal AMG");
+   args.AddOption(&qf_backend, "-qf", "--qf-backend",
+                  "Q-function backend: local or global.");
    args.AddOption(&vis_steps, "-vs", "--vis-steps",
                   "Number of visualization steps.");
    args.AddOption(&visualization, "-glvis", "--glvis", "-no-glvis", "--no-glvis",
@@ -157,6 +160,12 @@ int main(int argc, char *argv[])
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.ParseCheck();
+   const bool global_qf = !strcmp(qf_backend, "global");
+   MFEM_VERIFY(global_qf || !strcmp(qf_backend, "local"),
+               "unknown q-function backend: " << qf_backend);
+   hydro_options.qfunction_backend =
+      global_qf ? hydrodynamics::LagrangianHydroOperator::GLOBAL_QF :
+      hydrodynamics::LagrangianHydroOperator::LOCAL_QF;
    MFEM_VERIFY(problem != 2, "1D Sod shock tube (-p 2) is not supported");
    if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 
