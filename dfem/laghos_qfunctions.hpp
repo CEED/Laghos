@@ -363,8 +363,8 @@ inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
                                                 ParGridFunction &material_gf)
 {
    return {{VELOCITY, &H1}, {DENSITY0, &L2}, {COORDINATES0, &H1},
-           {COORDINATES, &H1}, {MATERIAL, material_gf.ParFESpace()},
-           {SPECIFIC_INTERNAL_ENERGY, &L2}};
+      {COORDINATES, &H1}, {MATERIAL, material_gf.ParFESpace()},
+      {SPECIFIC_INTERNAL_ENERGY, &L2}};
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯

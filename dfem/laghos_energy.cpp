@@ -67,10 +67,10 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    } energy_conservation_qf{d_external_data};
    auto derivatives =
       std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
-   energy_conservation_mf->AddDomainIntegrator<future::LocalQFBackend,
-                                               JACOBIAN_KERNELS>(
-      energy_conservation_qf, QDataFields(),
-      energy_conservation_mf_kernel_oo, ir, all_domain_attr, derivatives);
+   energy_conservation_mf->AddDomainIntegrator
+   <future::LocalQFBackend, JACOBIAN_KERNELS>
+   (energy_conservation_qf, QDataFields(),
+    energy_conservation_mf_kernel_oo, ir, all_domain_attr, derivatives);
    return energy_conservation_mf;
 }
 

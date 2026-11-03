@@ -351,10 +351,10 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       } taylor_source_qf;
       auto derivatives = std::integer_sequence<size_t, COORDINATES> {};
       // Only the matrix-free action of dTaylorSourcedx is used
-      taylor_source_mf->AddDomainIntegrator<future::LocalQFBackend,
-                                            future::DerivativeKernels::Action>(
-         taylor_source_qf, taylor_source_kernel_ao, taylor_source_kernel_oo,
-         ir, all_domain_attr, derivatives);
+      taylor_source_mf->AddDomainIntegrator
+      <future::LocalQFBackend, future::DerivativeKernels::Action>
+      (taylor_source_qf, taylor_source_kernel_ao, taylor_source_kernel_oo,
+       ir, all_domain_attr, derivatives);
    }
 
    return new LagrangianHydroOperator(

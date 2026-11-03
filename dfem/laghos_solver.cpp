@@ -27,13 +27,6 @@ namespace mfem
 namespace hydrodynamics
 {
 
-// x, v, e blocks of a state vector, aliasing its memory
-static std::array<Vector, 3> XVE(const Vector &s, const int h1, const int l2)
-{
-   auto &b = const_cast<Vector&>(s);
-   return {Vector(b, 0, h1), Vector(b, h1, h1), Vector(b, 2*h1, l2)};
-}
-
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec)
@@ -157,6 +150,13 @@ real_t LagrangianHydroOperator::LineSearchNewtonSolver::ComputeScalingFactor(
 
    if (Mpi::Root()) { out << ">>> linesearch didn't converge\n"; }
    return 0.0;
+}
+
+// x, v, e blocks of a state vector, aliasing its memory
+static std::array<Vector, 3> XVE(const Vector &s, const int h1, const int l2)
+{
+   auto &b = const_cast<Vector&>(s);
+   return {Vector(b, 0, h1), Vector(b, h1, h1), Vector(b, 2*h1, l2)};
 }
 
 LagrangianHydroOperator::LagrangianHydroOperator(
