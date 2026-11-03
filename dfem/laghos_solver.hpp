@@ -52,9 +52,10 @@ public:
 
    enum PRECONDITIONER_TYPE { BLOCK_DIAGONAL_AMG = 0 };
 
-   // Implicit solver options, with the laghos command line defaults
+   // Solver options, with the laghos command line defaults
    struct Options
    {
+      real_t cg_relative_tolerance = 1e-8;
       bool fd_gradient = false;
       int dump_jacobians = 0;
       int nonlinear_maximum_iterations = 10;

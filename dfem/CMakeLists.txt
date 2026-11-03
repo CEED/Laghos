@@ -84,15 +84,17 @@ endforeach()
 foreach(test sedov_2d sedov_3d sedov_2d_stock sedov_3d_stock taylor_green_2d
              taylor_green_3d taylor_green_3d_av
              readme_taylor_green_2d readme_taylor_green_3d readme_sedov_2d
+             readme_sedov_3d
              taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
              triple_point_3d triple_point_3d_av)
   laghos_test(${test}_np2 ${test} 2 explicit cpu ${devices})
 endforeach()
 
-# Same references on an odd number of ranks, readme_sedov_3d drifts by 1.5e-10
+# Same references on an odd number of ranks
 foreach(test sedov_2d sedov_2d_rk2 sedov_3d sedov_2d_stock sedov_3d_stock
              taylor_green_2d taylor_green_3d taylor_green_3d_av
              readme_taylor_green_2d readme_taylor_green_3d readme_sedov_2d
+             readme_sedov_3d
              taylor_green_3d_q1q0 sedov_3d_q1q0_stock taylor_green_3d_stock_av
              triple_point_3d triple_point_3d_av)
   laghos_test(${test}_np3 ${test} 3 explicit cpu ${devices})

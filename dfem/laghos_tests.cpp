@@ -132,9 +132,10 @@ const Test runs[] =
    {
       "sedov_3d_stock", "explicit RK3SSP, Q2-Q1, stock av, 3D",
       "cube01_hex.mesh",
-      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02",
-      4, 4.3725299546347671e-03, 1.2503911284057320e-01, 2.7832229285175657e+01,
-      3.4262677669332566e+00, 5.6552559708003621e+01
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 3 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02"
+      " -cgt 1e-10",
+      4, 4.3725299546347671e-03, 1.2503911283965757e-01, 2.7832229285175924e+01,
+      3.4262677649627276e+00, 5.6552559708157922e+01
    },
    {
       "taylor_green_2d", "explicit RK4, Q3-Q2, no av, 2D",
@@ -191,9 +192,10 @@ const Test runs[] =
    {
       "readme_sedov_3d", "README 4, explicit RK4, Q2-Q1, stock av, 3D",
       "cube01_hex.mesh",
-      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02",
-      4, 4.3725299546347671e-03, 1.2500220220066449e-01, 2.7832227632579837e+01,
-      3.4200678868617302e+00, 5.6528006524554613e+01
+      "-p 1 -dim 3 -rs 1 -ov 2 -oe 1 -s 4 -cfl 0.5 -av -av-type 1 -stock-dt -tf 0.02"
+      " -cgt 1e-10",
+      4, 4.3725299546347671e-03, 1.2500220220201469e-01, 2.7832227632577982e+01,
+      3.4200678875411525e+00, 5.6528006524777794e+01
    },
    // More 3D: lowest order Q1-Q0, stock av on a smooth flow, and the triple
    // point, the only problem reading its -m mesh (box with two materials),

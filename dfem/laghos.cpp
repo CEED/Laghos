@@ -53,7 +53,6 @@
 //
 // Sample runs: see README.md, section 'Verification of Results'.
 
-#include "laghos_solver.hpp"
 #include "laghos_hydro.hpp"
 #include "laghos_tests.hpp"
 
@@ -106,6 +105,8 @@ int main(int argc, char *argv[])
    args.AddOption(&t_final, "-tf", "--tf", "");
    args.AddOption(&problem, "-p", "--p", "");
    args.AddOption(&cfl, "-cfl", "--cfl", "");
+   args.AddOption(&hydro_options.cg_relative_tolerance, "-cgt", "--cg-tol",
+                  "Relative CG tolerance (velocity linear solve).");
    args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&use_viscosity, "-av", "--av", "-no-av", "--no-av", "");

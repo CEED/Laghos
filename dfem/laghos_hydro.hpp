@@ -42,8 +42,8 @@ constexpr int SPECIFIC_INTERNAL_ENERGY = 5;
 constexpr int DT_EST = 8;
 constexpr int STRESS_TENSOR = 9;
 
-// Builds the dFEM operators of the mesh dimension and returns a new
-// LagrangianHydroOperator
+// Builds the dFEM operators of the mesh dimension
+// and returns a new LagrangianHydroOperator
 LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,

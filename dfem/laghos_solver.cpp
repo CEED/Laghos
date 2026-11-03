@@ -321,7 +321,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
          CGSolver cg(H1c.GetParMesh()->GetComm());
          cg.SetPreconditioner(*Mv_Jprec);
          cg.SetOperator(*Mv);
-         cg.SetRelTol(1e-8);
+         cg.SetRelTol(options.cg_relative_tolerance);
          cg.SetAbsTol(0.0);
          cg.SetMaxIter(300);
          cg.SetPrintLevel(-1);
@@ -362,7 +362,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       CGSolver cg(L2.GetParMesh()->GetComm());
       cg.SetOperator(*Me);
       cg.iterative_mode = false;
-      cg.SetRelTol(1e-8);
+      cg.SetRelTol(options.cg_relative_tolerance);
       cg.SetAbsTol(0.0);
       cg.SetMaxIter(300);
       cg.SetPrintLevel(-1);
