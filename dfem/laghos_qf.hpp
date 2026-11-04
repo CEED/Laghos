@@ -77,16 +77,16 @@ inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 // Derivative kernels of the Jacobian blocks: matrix-free actions and the
 // assembled matrices of the AMG preconditioner
-constexpr auto JACOBIAN_KERNELS =
-   future::DerivativeKernels::Action | future::DerivativeKernels::AssembleMatrix;
+constexpr auto JACOBIAN_KERNELS = future::DerivativeKernels::Action |
+                                  future::DerivativeKernels::AssembleMatrix;
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 // Constants of the q-functions, copied by value in the kernels
 struct QConstants
 {
-   real_t cfl, order_v, h0, visc_q1, visc_q2;
-   int viscosity_type;
-   bool use_viscosity;
+   const real_t cfl, order_v, h0, visc_q1, visc_q2;
+   const int viscosity_type;
+   const bool use_viscosity;
 };
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯

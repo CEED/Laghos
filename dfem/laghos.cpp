@@ -408,8 +408,10 @@ int main(int argc, char *argv[])
       out << "num qp: " << ir.GetNPoints() << "\n";
    }
 
-   // Constants of the q-functions, h0 is set from the mesh by the operator
-   const hydrodynamics::QConstants qc{cfl, static_cast<real_t>(order_v), 0.0,
+   // Constants of the q-functions
+   const real_t h0 =
+      hydrodynamics::InitialMeshSize(mesh, H1FESpace.GetOrder(0));
+   const hydrodynamics::QConstants qc{cfl, static_cast<real_t>(order_v), h0,
                                       viscosity_q1, viscosity_q2,
                                       viscosity_type, use_viscosity};
 

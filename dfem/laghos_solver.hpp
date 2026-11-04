@@ -252,6 +252,9 @@ public:
    mutable real_t dt_est_stages = std::numeric_limits<real_t>::infinity();
 };
 
+// Initial zone size of the mesh, over the order of the velocity space
+real_t InitialMeshSize(ParMesh &mesh, const int order);
+
 // Builds the dFEM operators of the mesh dimension
 // and returns a new LagrangianHydroOperator
 LagrangianHydroOperator *CreateLagrangianHydroOperator(

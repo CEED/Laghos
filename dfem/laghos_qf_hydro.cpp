@@ -21,7 +21,7 @@ namespace mfem::hydrodynamics
 {
 
 // Initial zone size of the mesh, over the order of the velocity space
-static real_t InitialMeshSize(ParMesh &mesh, const int order)
+real_t InitialMeshSize(ParMesh &mesh, const int order)
 {
    int ne_loc = mesh.GetNE(), ne_global = 0;
    real_t vol_loc = 0.0, vol_global = 0.0;
@@ -55,7 +55,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParGridFunction &x0_gf,
    ParGridFunction &rho0_gf,
    ParGridFunction &material_gf,
-   QConstants qc,
+   const QConstants &qc,
    const IntegrationRule &ir,
    const LagrangianHydroOperator::Options &options)
 {
@@ -63,8 +63,6 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParMesh &mesh = *H1.GetParMesh();
 
    auto qdata = std::make_shared<QuadratureData>(mesh, ir);
-
-   qc.h0 = InitialMeshSize(mesh, H1.GetOrder(0));
 
    qdata->dt_est = std::numeric_limits<real_t>::infinity();
 
