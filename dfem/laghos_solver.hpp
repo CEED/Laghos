@@ -176,8 +176,7 @@ public:
                            std::shared_ptr<DifferentiableOperator> density_mf,
                            std::shared_ptr<DifferentiableOperator> taylor_source_mf,
                            std::shared_ptr<QuadratureData> qdata,
-                           const Options &options,
-                           Vector& external_data);
+                           const Options &options);
    ~LagrangianHydroOperator();
 
    // Solve for dx_dt, dv_dt and de_dt.
@@ -249,7 +248,6 @@ public:
    const Options options;
    bool newton_converged = true;
    int  newton_max_iter = -1;
-   Vector &external_data;
    mutable bool qdata_is_current = false;
    // Laghos time step estimate, min over all the RK stages
    bool stage_dt_estimate = false;
@@ -266,7 +264,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParGridFunction &x0_gf,
    ParGridFunction &rho0_gf,
    ParGridFunction &material_gf,
-   Vector &external_data,
+   const QConstants &qc,
    const IntegrationRule &ir,
    const LagrangianHydroOperator::Options &options);
 

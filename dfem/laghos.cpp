@@ -408,19 +408,15 @@ int main(int argc, char *argv[])
       out << "num qp: " << ir.GetNPoints() << "\n";
    }
 
-   // Create external data vector.
-   Vector external_data(hydrodynamics::EXT_DATA_IDX::COUNT);
-   external_data[hydrodynamics::EXT_DATA_IDX::CFL] = cfl;
-   external_data[hydrodynamics::EXT_DATA_IDX::ORDER_VEL] = order_v;
-   external_data[hydrodynamics::EXT_DATA_IDX::VISCOSITY_FLAG] = use_viscosity;
-   external_data[hydrodynamics::EXT_DATA_IDX::VISCOSITY_TYPE] = viscosity_type;
-   external_data[hydrodynamics::EXT_DATA_IDX::VISC_Q1] = viscosity_q1;
-   external_data[hydrodynamics::EXT_DATA_IDX::VISC_Q2] = viscosity_q2;
+   // Constants of the q-functions, h0 is set from the mesh by the operator
+   const hydrodynamics::QConstants qc{cfl, static_cast<real_t>(order_v), 0.0,
+                                      viscosity_q1, viscosity_q2,
+                                      viscosity_type, use_viscosity};
 
    hydrodynamics::LagrangianHydroOperator *hydro =
       hydrodynamics::CreateLagrangianHydroOperator(
          H1FESpace, L2FESpace, ess_tdof, rho0_coeff, x0_gf, rho0_gf, mat_gf,
-         external_data, ir, hydro_options);
+         qc, ir, hydro_options);
    hydro->stage_dt_estimate = dt_min;
 
    ODESolver *ode_solver = NULL;

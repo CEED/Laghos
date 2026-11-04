@@ -81,16 +81,12 @@ constexpr auto JACOBIAN_KERNELS =
    future::DerivativeKernels::Action | future::DerivativeKernels::AssembleMatrix;
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-enum EXT_DATA_IDX
+// Constants of the q-functions, copied by value in the kernels
+struct QConstants
 {
-   CFL = 0,
-   ORDER_VEL,
-   VISCOSITY_FLAG,
-   VISCOSITY_TYPE,
-   VISC_Q1,
-   VISC_Q2,
-   H0,
-   COUNT
+   real_t cfl, order_v, h0, visc_q1, visc_q2;
+   int viscosity_type;
+   bool use_viscosity;
 };
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
@@ -237,32 +233,24 @@ void ComputeMaterialProperties(const real_t &gamma, const T &rho,
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 template <int DIM, typename T>
 MFEM_HOST_DEVICE inline
-matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
+matd_t<DIM, T> qdata_setup(const QConstants &qc,
+                           const matd_t<DIM, T> &dvdxi,
                            const real_t &rho0,
                            const matd_t<DIM> &J0,
                            const matd_t<DIM, T> &J,
                            const real_t &gamma,
                            const T &E,
                            const real_t &w,
-                           const real_t *ext,
                            real_t &dt_est)
 {
    using matd = matd_t<DIM, T>;
-   const real_t h0 = ext[EXT_DATA_IDX::H0];
-   const real_t order_v = ext[EXT_DATA_IDX::ORDER_VEL];
-   const real_t cfl = ext[EXT_DATA_IDX::CFL];
-   const bool use_viscosity = ext[EXT_DATA_IDX::VISCOSITY_FLAG] != 0.0;
-   const int viscosity_type = static_cast<int>(ext[EXT_DATA_IDX::VISCOSITY_TYPE]);
-   const real_t visc_q1 = ext[EXT_DATA_IDX::VISC_Q1];
-   const real_t visc_q2 = ext[EXT_DATA_IDX::VISC_Q2];
-
    T p, cs;
    const T detJ = det(J);
    const matd invJ = inv(J);
    matd stress{};
    const T rho = rho0 * det(J0) / detJ;
    // The stock Laghos viscosity (type 1) also uses the stock clamp of E
-   const bool stock_av = use_viscosity && viscosity_type == 1;
+   const bool stock_av = qc.use_viscosity && qc.viscosity_type == 1;
    const auto smoothmax = [](const real_t a, const T b, const real_t k)
    {
       return 0.5 * (a + b + sqrt((a-b)*(a-b) + k*k));
@@ -274,7 +262,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
 
    for (int d = 0; d < DIM; d++) { stress(d, d) = -p; }
 
-   if (use_viscosity)
+   if (qc.use_viscosity)
    {
       const matd dvdx = dvdxi * invJ;
       // y0 is value at x=0.
@@ -290,7 +278,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
          return hypot(x, eps);
       };
 
-      if (viscosity_type == 1)
+      if (qc.viscosity_type == 1)
       {
          // Stock Laghos tensor viscosity, see QUpdateBody in laghos_solver.cpp
          // (without the vorticity scaling, as for the stock Sedov problem)
@@ -341,7 +329,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
             }
          }
          const vecd_t<DIM, T> ph_dir = (J * inv(J0)) * compr_dir;
-         const T h = h0 * norm(ph_dir) / norm(compr_dir);
+         const T h = qc.h0 * norm(ph_dir) / norm(compr_dir);
          // Quadratic term, then a smooth "if (mu < 0) += 0.5 rho h cs"
          constexpr real_t eps = 1e-12;
          T visc_coeff = 2.0 * rho * h * h * fabs(mu);
@@ -350,11 +338,12 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
          stress += visc_coeff * sgrad_v;
          dt_visc_coeff = visc_coeff;
       }
-      else if (viscosity_type == 7)
+      else if (qc.viscosity_type == 7)
       {
          // Smoother viscosity for well-defined gradients.
 
-         const auto h = h0 * pow(detJ / det(J0), 1.0 / static_cast<real_t>(DIM));
+         const auto h =
+            qc.h0 * pow(detJ / det(J0), 1.0 / static_cast<real_t>(DIM));
          const auto delta_v = h * tr(dvdx);
 
          // Coarses mesh h for the domain.
@@ -371,13 +360,14 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
          // The smoothing becomes active when |delta_v| approaches dv_scale.
          const auto abs_delta_v = softabs(dv_scale, delta_v);
 
-         const auto mu = rho * h * (visc_q2 * abs_delta_v + psi * visc_q1 * cs);
+         const auto mu =
+            rho * h * (qc.visc_q2 * abs_delta_v + psi * qc.visc_q1 * cs);
          stress += mu * sym(dvdx);
 
          dt_visc_coeff = mu;
       }
       // Type 2 has no artificial viscosity term
-      else if (viscosity_type != 2)
+      else if (qc.viscosity_type != 2)
       {
          MFEM_ABORT_KERNEL("wrong viscosity option");
       }
@@ -393,7 +383,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
       // The dt estimate is a plain value side output
       const real_t sv = calcsv(get_values(J), DIM-1);
 
-      const real_t hmin = sv / static_cast<real_t>(order_v);
+      const real_t hmin = sv / qc.order_v;
       const real_t ihmin = 1.0 / hmin;
       const real_t irhoihminsq = ihmin * ihmin / future::get_value(rho);
       const real_t idt = future::get_value(cs) / hmin +
@@ -401,7 +391,7 @@ matd_t<DIM, T> qdata_setup(const matd_t<DIM, T> &dvdxi,
 
       if (idt > 0.0)
       {
-         dt_est = fmin(dt_est, cfl / idt);
+         dt_est = fmin(dt_est, qc.cfl / idt);
       }
    }
 
@@ -527,7 +517,7 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    ParGridFunction &material_gf,
    const IntegrationRule &ir,
    const Array<int> &all_domain_attr,
-   real_t *d_external_data);
+   const QConstants &qc);
 
 // Builds the dFEM energy conservation operator, with its Jacobian blocks
 std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
@@ -538,6 +528,6 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    ParGridFunction &material_gf,
    const IntegrationRule &ir,
    const Array<int> &all_domain_attr,
-   real_t *d_external_data);
+   const QConstants &qc);
 
 } // namespace mfem::hydrodynamics

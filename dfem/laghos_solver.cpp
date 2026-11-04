@@ -173,8 +173,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    std::shared_ptr<DifferentiableOperator> density_mf,
    std::shared_ptr<DifferentiableOperator> taylor_source_mf,
    std::shared_ptr<QuadratureData> qdata,
-   const Options &options,
-   Vector& external_data) :
+   const Options &options) :
    TimeDependentOperator(2*H1.GetVSize()+L2.GetVSize()),
    H1(H1),
    L2(L2),
@@ -210,8 +209,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    B(H1c.GetTrueVSize()),
    RHSe(L2.GetTrueVSize()),
    rhse(L2.GetVSize()),
-   options(options),
-   external_data(external_data)
+   options(options)
 {
    Mv = new MassPAOperator(H1c, ir, rho0_coeff);
    Array<int> empty_tdofs;

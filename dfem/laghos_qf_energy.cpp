@@ -26,7 +26,7 @@ static std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    ParGridFunction &material_gf,
    const IntegrationRule &ir,
    const Array<int> &all_domain_attr,
-   real_t *d_external_data)
+   const QConstants &qc)
 {
    ParMesh &mesh = *H1.GetParMesh();
 
@@ -45,7 +45,7 @@ static std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    {
       using matd = matd_t<DIM>;
       using dmatd = matd_t<DIM, dscalar_t>;
-      const real_t *external_data;
+      QConstants c;
       MFEM_HOST_DEVICE inline
       void operator()(
          const dmatd &dvdxi,
@@ -59,11 +59,10 @@ static std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
       {
          real_t dt_est = std::numeric_limits<real_t>::infinity();
          const auto stressJiT =
-            qdata_setup<DIM>(dvdxi, rho0, J0, J, gamma, E, w,
-                             external_data, dt_est);
+            qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w, dt_est);
          de = ddot(stressJiT, dvdxi);
       }
-   } energy_conservation_qf{d_external_data};
+   } energy_conservation_qf{qc};
    auto derivatives =
       std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
    AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>
@@ -80,12 +79,12 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
    ParGridFunction &material_gf,
    const IntegrationRule &ir,
    const Array<int> &all_domain_attr,
-   real_t *d_external_data)
+   const QConstants &qc)
 {
    return Dispatch(dim, qf_backend, [&](auto DIM, auto backend)
    {
       return CreateEnergyConservationOperator<DIM, decltype(backend)>(
-                H1, L2, material_gf, ir, all_domain_attr, d_external_data);
+                H1, L2, material_gf, ir, all_domain_attr, qc);
    });
 }
 

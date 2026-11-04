@@ -29,7 +29,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParGridFunction &x0_gf,
    ParGridFunction &rho0_gf,
    ParGridFunction &material_gf,
-   Vector &external_data,
+   QConstants qc,
    const IntegrationRule &ir,
    const LagrangianHydroOperator::Options &options)
 {
@@ -47,7 +47,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    MPI_Allreduce(&vol_loc, &vol_global, 1, MPI_DOUBLE, MPI_SUM, mesh.GetComm());
    MPI_Allreduce(&ne_loc, &ne_global, 1, MPI_INT, MPI_SUM, mesh.GetComm());
 
-   real_t &h0 = external_data[EXT_DATA_IDX::H0];
+   real_t &h0 = qc.h0;
    switch (mesh.GetElementBaseGeometry(0))
    {
       case Geometry::SQUARE: h0 = sqrt(vol_global / ne_global); break;
@@ -60,8 +60,6 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    h0 /= (double) H1.GetOrder(0);
 
    qdata->dt_est = std::numeric_limits<real_t>::infinity();
-
-   auto d_external_data = external_data.ReadWrite();
 
    Array<int> all_domain_attr(mesh.attributes.Max());
    all_domain_attr = 1;
@@ -79,7 +77,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       dt_est_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
       struct TimeStepEstimateQFunction
       {
-         real_t *external_data;
+         QConstants c;
 
          MFEM_HOST_DEVICE inline
          void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
@@ -88,11 +86,10 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          {
             dt_est = std::numeric_limits<real_t>::infinity();
             // Reuse qdata_setup() for the dt estimate logic; ignore its stress output.
-            (void)qdata_setup<DIM>(dvdxi, rho0, J0, J, gamma, E, w,
-                                   external_data, dt_est);
+            (void)qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w, dt_est);
          }
 
-      } dt_est_qf{d_external_data};
+      } dt_est_qf{qc};
       AddDomainIntegrator<backend_t>(*dt_est_mf, dt_est_qf, QDataFields(),
                                      dt_est_kernel_oo, ir, all_domain_attr);
    }
@@ -111,7 +108,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       update_qdata->SetMultLevel(DifferentiableOperator::LVECTOR);
       struct UpdateQuadratureDataQFunction
       {
-         real_t *external_data;
+         QConstants c;
          MFEM_HOST_DEVICE inline
          void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
                          const matd &J, const real_t &gamma, const real_t &E,
@@ -121,10 +118,10 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             // through a proper reduction over quadrature points.
             real_t dt_est_dummy = std::numeric_limits<real_t>::infinity();
             stressJiT =
-               qdata_setup<DIM>(dvdxi, rho0, J0, J, gamma, E, w,
-                                external_data, dt_est_dummy);
+               qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w,
+                                dt_est_dummy);
          }
-      } update_qdata_qf{d_external_data};
+      } update_qdata_qf{qc};
       AddDomainIntegrator<backend_t>(*update_qdata, update_qdata_qf,
                                      QDataFields(), update_qdata_kernel_oo,
                                      ir, all_domain_attr);
@@ -133,7 +130,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create momentum operator
    auto momentum_mf =
       CreateMomentumOperator(DIM, options.qfunction_backend, H1, L2,
-                             material_gf, ir, all_domain_attr, d_external_data);
+                             material_gf, ir, all_domain_attr, qc);
 
    std::shared_ptr<DifferentiableOperator> momentum_pa;
    {
@@ -156,8 +153,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    // Create energy conservation operator
    auto energy_conservation_mf =
       CreateEnergyConservationOperator(DIM, options.qfunction_backend, H1, L2,
-                                       material_gf, ir, all_domain_attr,
-                                       d_external_data);
+                                       material_gf, ir, all_domain_attr, qc);
 
    std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
    {
@@ -381,8 +377,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
              density_mf,
              taylor_source_mf,
              qdata,
-             options,
-             external_data);
+             options);
 }
 
 LagrangianHydroOperator *CreateLagrangianHydroOperator(
@@ -393,7 +388,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParGridFunction &x0_gf,
    ParGridFunction &rho0_gf,
    ParGridFunction &material_gf,
-   Vector &external_data,
+   const QConstants &qc,
    const IntegrationRule &ir,
    const LagrangianHydroOperator::Options &options)
 {
@@ -402,7 +397,7 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    {
       return CreateLagrangianHydroOperator<DIM, decltype(backend)>(
                 H1, L2, ess_tdof, rho0_coeff, x0_gf, rho0_gf, material_gf,
-                external_data, ir, options);
+                qc, ir, options);
    });
 }
 

@@ -26,7 +26,7 @@ static std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    ParGridFunction &material_gf,
    const IntegrationRule &ir,
    const Array<int> &all_domain_attr,
-   real_t *d_external_data)
+   const QConstants &qc)
 {
    using matd = matd_t<DIM>;
    ParMesh &mesh = *H1.GetParMesh();
@@ -44,7 +44,7 @@ static std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    struct MomentumQFunction
    {
       using dmatd = matd_t<DIM, dscalar_t>;
-      real_t *external_data;
+      QConstants c;
       MFEM_HOST_DEVICE inline
       void operator()(const dmatd &dvdxi, const real_t &rho0, const matd &J0,
                       const dmatd &J, const real_t &gamma, const dscalar_t &E,
@@ -52,10 +52,9 @@ static std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
       {
          real_t dt_est = std::numeric_limits<real_t>::infinity();
          stressJiT =
-            qdata_setup<DIM>(dvdxi, rho0, J0, J, gamma, E, w,
-                             external_data, dt_est);
+            qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w, dt_est);
       }
-   } momentum_qf{d_external_data};
+   } momentum_qf{qc};
    auto derivatives =
       std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
    AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>(
@@ -72,12 +71,12 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    ParGridFunction &material_gf,
    const IntegrationRule &ir,
    const Array<int> &all_domain_attr,
-   real_t *d_external_data)
+   const QConstants &qc)
 {
    return Dispatch(dim, qf_backend, [&](auto DIM, auto backend)
    {
       return CreateMomentumOperator<DIM, decltype(backend)>(
-                H1, L2, material_gf, ir, all_domain_attr, d_external_data);
+                H1, L2, material_gf, ir, all_domain_attr, qc);
    });
 }
 
