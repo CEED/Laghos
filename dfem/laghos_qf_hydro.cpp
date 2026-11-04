@@ -84,9 +84,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
                          const matd &J, const real_t &gamma, const real_t &E,
                          const real_t &w, real_t &dt_est) const
          {
-            dt_est = std::numeric_limits<real_t>::infinity();
-            // Reuse qdata_setup() for the dt estimate logic; ignore its stress output.
-            (void)qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w, dt_est);
+            const auto [stressJiT, visc_coeff, cs, rho] =
+               StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+            dt_est = TimeStepEstimate<DIM>(c, J, rho, cs, visc_coeff);
          }
 
       } dt_est_qf{qc};
@@ -114,12 +114,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
                          const matd &J, const real_t &gamma, const real_t &E,
                          const real_t &w, matd &stressJiT) const
          {
-            // Do not update the global dt estimate here; that will be computed
-            // through a proper reduction over quadrature points.
-            real_t dt_est_dummy = std::numeric_limits<real_t>::infinity();
-            stressJiT =
-               qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w,
-                                dt_est_dummy);
+            const auto setup =
+               StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+            stressJiT = future::get<0>(setup);
          }
       } update_qdata_qf{qc};
       AddDomainIntegrator<backend_t>(*update_qdata, update_qdata_qf,

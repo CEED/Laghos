@@ -57,10 +57,9 @@ static std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
          const real_t &w,
          dscalar_t &de) const
       {
-         real_t dt_est = std::numeric_limits<real_t>::infinity();
-         const auto stressJiT =
-            qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w, dt_est);
-         de = ddot(stressJiT, dvdxi);
+         const auto setup =
+            StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+         de = ddot(future::get<0>(setup), dvdxi);
       }
    } energy_conservation_qf{qc};
    auto derivatives =

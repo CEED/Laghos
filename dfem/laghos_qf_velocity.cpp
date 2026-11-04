@@ -50,9 +50,9 @@ static std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
                       const dmatd &J, const real_t &gamma, const dscalar_t &E,
                       const real_t &w, dmatd &stressJiT) const
       {
-         real_t dt_est = std::numeric_limits<real_t>::infinity();
-         stressJiT =
-            qdata_setup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w, dt_est);
+         const auto setup =
+            StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+         stressJiT = future::get<0>(setup);
       }
    } momentum_qf{qc};
    auto derivatives =

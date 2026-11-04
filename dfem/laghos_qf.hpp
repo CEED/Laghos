@@ -55,7 +55,7 @@ constexpr int DT_EST = 8;
 constexpr int STRESS_TENSOR = 9;
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-// Quadrature point arguments of the qdata_setup qfunctions
+// Quadrature point arguments of the StressSetup q-functions
 inline auto QDataFields()
 {
    return future::tuple{Gradient<VELOCITY>{}, Value<DENSITY0>{},
@@ -64,7 +64,7 @@ inline auto QDataFields()
                         Weight{}};
 }
 
-// Input fields of the qdata_setup operators, also the order of their states
+// Input fields of the StressSetup operators, also the order of their states
 inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
                                                 ParFiniteElementSpace &L2,
                                                 ParGridFunction &material_gf)
@@ -231,17 +231,18 @@ void ComputeMaterialProperties(const real_t &gamma, const T &rho,
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Stress times J^-T det(J) w, with the viscosity coefficient, the sound speed
+// and the density of the time step estimate
 template <int DIM, typename T>
 MFEM_HOST_DEVICE inline
-matd_t<DIM, T> qdata_setup(const QConstants &qc,
-                           const matd_t<DIM, T> &dvdxi,
-                           const real_t &rho0,
-                           const matd_t<DIM> &J0,
-                           const matd_t<DIM, T> &J,
-                           const real_t &gamma,
-                           const T &E,
-                           const real_t &w,
-                           real_t &dt_est)
+future::tuple<matd_t<DIM, T>, T, T, T> StressSetup(const QConstants &qc,
+                                                   const matd_t<DIM, T> &dvdxi,
+                                                   const real_t &rho0,
+                                                   const matd_t<DIM> &J0,
+                                                   const matd_t<DIM, T> &J,
+                                                   const real_t &gamma,
+                                                   const T &E,
+                                                   const real_t &w)
 {
    using matd = matd_t<DIM, T>;
    T p, cs;
@@ -373,29 +374,27 @@ matd_t<DIM, T> qdata_setup(const QConstants &qc,
       }
    }
 
-   if (detJ < 0.0)
-   {
-      // This will force repetition of the step with smaller dt.
-      dt_est = 0.0;
-   }
-   else
-   {
-      // The dt estimate is a plain value side output
-      const real_t sv = calcsv(get_values(J), DIM-1);
+   return {stress * transpose(invJ) * detJ * w, dt_visc_coeff, cs, rho};
+}
 
-      const real_t hmin = sv / qc.order_v;
-      const real_t ihmin = 1.0 / hmin;
-      const real_t irhoihminsq = ihmin * ihmin / future::get_value(rho);
-      const real_t idt = future::get_value(cs) / hmin +
-                         2.5 * future::get_value(dt_visc_coeff) * irhoihminsq;
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Time step estimate of a quadrature point, from the outputs of StressSetup
+template <int DIM>
+MFEM_HOST_DEVICE inline
+real_t TimeStepEstimate(const QConstants &qc, const matd_t<DIM> &J,
+                        const real_t rho, const real_t cs,
+                        const real_t visc_coeff)
+{
+   // This will force repetition of the step with smaller dt
+   if (det(J) < 0.0) { return 0.0; }
 
-      if (idt > 0.0)
-      {
-         dt_est = fmin(dt_est, qc.cfl / idt);
-      }
-   }
-
-   return stress * transpose(invJ) * detJ * w;
+   const real_t sv = calcsv(J, DIM-1);
+   const real_t hmin = sv / qc.order_v;
+   const real_t ihmin = 1.0 / hmin;
+   const real_t irhoihminsq = ihmin * ihmin / rho;
+   const real_t idt = cs / hmin + 2.5 * visc_coeff * irhoihminsq;
+   if (idt > 0.0) { return qc.cfl / idt; }
+   return std::numeric_limits<real_t>::infinity();
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
