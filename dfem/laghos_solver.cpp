@@ -437,8 +437,8 @@ real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e) const
    total_internal_energy_mf->Mult(MultiVector{E, rho0, x0}, MY);
    const real_t ie_local = Y.Sum();
    real_t ie_global = 0.0;
-   MPI_Allreduce(&ie_local, &ie_global, 1, MPI_DOUBLE, MPI_SUM,
-                 L2.GetParMesh()->GetComm());
+   MPI_Allreduce(&ie_local, &ie_global, 1, MPITypeMap<real_t>::mpi_type,
+                 MPI_SUM, L2.GetParMesh()->GetComm());
    return ie_global;
 }
 
@@ -450,8 +450,8 @@ real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v) const
    total_kinetic_energy_mf->Mult(MultiVector{v, rho0, x0}, MY);
    const real_t ke_local = Y.Sum();
    real_t ke_global = 0.0;
-   MPI_Allreduce(&ke_local, &ke_global, 1, MPI_DOUBLE, MPI_SUM,
-                 H1.GetParMesh()->GetComm());
+   MPI_Allreduce(&ke_local, &ke_global, 1, MPITypeMap<real_t>::mpi_type,
+                 MPI_SUM, H1.GetParMesh()->GetComm());
    return ke_global;
 }
 

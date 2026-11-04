@@ -20,6 +20,32 @@
 namespace mfem::hydrodynamics
 {
 
+// Initial zone size of the mesh, over the order of the velocity space
+static real_t InitialMeshSize(ParMesh &mesh, const int order)
+{
+   int ne_loc = mesh.GetNE(), ne_global = 0;
+   real_t vol_loc = 0.0, vol_global = 0.0;
+   for (int e = 0; e < mesh.GetNE(); e++)
+   {
+      vol_loc += mesh.GetElementVolume(e);
+   }
+   MPI_Allreduce(&vol_loc, &vol_global, 1, MPITypeMap<real_t>::mpi_type,
+                 MPI_SUM, mesh.GetComm());
+   MPI_Allreduce(&ne_loc, &ne_global, 1, MPI_INT, MPI_SUM, mesh.GetComm());
+
+   real_t h = 0.0;
+   switch (mesh.GetElementBaseGeometry(0))
+   {
+      case Geometry::SQUARE: h = sqrt(vol_global / ne_global); break;
+      case Geometry::TRIANGLE: h = sqrt(2.0 * vol_global / ne_global); break;
+      case Geometry::CUBE: h = pow(vol_global / ne_global, 1./3.); break;
+      case Geometry::TETRAHEDRON:
+         h = pow(6.0 * vol_global / ne_global, 1./3.); break;
+      default: MFEM_ABORT("Unknown zone type!");
+   }
+   return h / order;
+}
+
 template <int DIM, typename backend_t>
 static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParFiniteElementSpace &H1,
@@ -38,26 +64,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
 
    auto qdata = std::make_shared<QuadratureData>(mesh, ir);
 
-   int ne_loc = mesh.GetNE(), ne_global = 0;
-   real_t vol_loc = 0.0, vol_global = 0.0;
-   for (int e = 0; e < mesh.GetNE(); e++)
-   {
-      vol_loc += mesh.GetElementVolume(e);
-   }
-   MPI_Allreduce(&vol_loc, &vol_global, 1, MPI_DOUBLE, MPI_SUM, mesh.GetComm());
-   MPI_Allreduce(&ne_loc, &ne_global, 1, MPI_INT, MPI_SUM, mesh.GetComm());
-
-   real_t &h0 = qc.h0;
-   switch (mesh.GetElementBaseGeometry(0))
-   {
-      case Geometry::SQUARE: h0 = sqrt(vol_global / ne_global); break;
-      case Geometry::TRIANGLE: h0 = sqrt(2.0 * vol_global / ne_global); break;
-      case Geometry::CUBE: h0 = pow(vol_global / ne_global, 1./3.); break;
-      case Geometry::TETRAHEDRON: h0 = pow(6.0 * vol_global / ne_global,
-                                              1./3.); break;
-      default: MFEM_ABORT("Unknown zone type!");
-   }
-   h0 /= (double) H1.GetOrder(0);
+   qc.h0 = InitialMeshSize(mesh, H1.GetOrder(0));
 
    qdata->dt_est = std::numeric_limits<real_t>::infinity();
 
