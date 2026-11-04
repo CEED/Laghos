@@ -163,7 +163,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    ParGridFunction &rho0_gf,
    ParGridFunction &material_gf,
    std::shared_ptr<DifferentiableOperator> update_qdata,
-   std::shared_ptr<DifferentiableOperator> dtest_mf,
    std::shared_ptr<DifferentiableOperator> momentum_mf,
    std::shared_ptr<DifferentiableOperator> momentum_pa,
    std::shared_ptr<DifferentiableOperator> energy_conservation_mf,
@@ -184,7 +183,6 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    rho0(rho0_gf),
    material(material_gf),
    update_qdata(update_qdata),
-   dtest_mf(dtest_mf),
    momentum_mf(momentum_mf),
    momentum_pa(momentum_pa),
    energy_conservation_mf(energy_conservation_mf),
@@ -375,11 +373,9 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 
 real_t LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S)
 {
-   MFEM_VERIFY(dtest_mf, "dt estimate operator (dtest_mf) is null");
    MFEM_VERIFY(qdata, "quadrature data (qdata) is null");
 
    UpdateMesh(S);
-   UpdateQuadratureData(S);
 
    real_t dt_est_local = LocalTimeStepEstimate(S);
    if (stage_dt_estimate) { dt_est_local = fmin(dt_est_local, dt_est_stages); }
@@ -466,13 +462,13 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    qdata_is_current = true;
 
    auto [x, v, e] = XVE(S, H1.GetVSize(), L2.GetVSize());
-   MultiVector Y{qdata->stressp};
+   MultiVector Y{qdata->stressp, qdata->dt_est};
    update_qdata->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
 
    // As stock Laghos: the estimate is the min over all the updates
    if (stage_dt_estimate)
    {
-      dt_est_stages = fmin(dt_est_stages, LocalTimeStepEstimate(S));
+      dt_est_stages = fmin(dt_est_stages, qdata->dt_est.Min());
    }
 }
 
@@ -850,9 +846,9 @@ real_t LagrangianHydroOperator::ComputeMinDet(const Vector &S) const
 
 real_t LagrangianHydroOperator::LocalTimeStepEstimate(const Vector &S) const
 {
-   auto [x, v, e] = XVE(S, H1.GetVSize(), L2.GetVSize());
-   MultiVector Y{qdata->dt_est};
-   dtest_mf->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
+   // Update at S, the current quadrature data can be of another state
+   qdata_is_current = false;
+   UpdateQuadratureData(S);
    return qdata->dt_est.Min();
 }
 

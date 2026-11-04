@@ -64,43 +64,15 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    Array<int> all_domain_attr(mesh.attributes.Max());
    all_domain_attr = 1;
 
-   // Output on a quadrature space
-   std::shared_ptr<DifferentiableOperator> dt_est_mf;
-   {
-      future::tuple dt_est_kernel_oo = {Identity<DT_EST>{}};
-      std::vector dt_est_outputs =
-      {
-         FieldDescriptor{DT_EST, &qdata->R}
-      };
-      dt_est_mf = std::make_shared<DifferentiableOperator>(
-                     QDataInputs(H1, L2, material_gf), dt_est_outputs, mesh);
-      dt_est_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
-      struct TimeStepEstimateQFunction
-      {
-         QConstants c;
-
-         MFEM_HOST_DEVICE inline
-         void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
-                         const matd &J, const real_t &gamma, const real_t &E,
-                         const real_t &w, real_t &dt_est) const
-         {
-            const auto [stressJiT, visc_coeff, cs, rho] =
-               StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
-            dt_est = TimeStepEstimate<DIM>(c, J, rho, cs, visc_coeff);
-         }
-
-      } dt_est_qf{qc};
-      AddDomainIntegrator<backend_t>(*dt_est_mf, dt_est_qf, QDataFields(),
-                                     dt_est_kernel_oo, ir, all_domain_attr);
-   }
-
-   // Output on a quadrature space
+   // Stress and time step estimate, outputs on quadrature spaces
    std::shared_ptr<DifferentiableOperator> update_qdata;
    {
-      future::tuple update_qdata_kernel_oo = {Identity<STRESS_TENSOR>{}};
+      future::tuple update_qdata_kernel_oo = {Identity<STRESS_TENSOR>{},
+                                              Identity<DT_EST>{}
+                                             };
       std::vector<FieldDescriptor> update_qdata_outputs =
       {
-         {STRESS_TENSOR, &qdata->StressSpace}
+         {STRESS_TENSOR, &qdata->StressSpace}, {DT_EST, &qdata->R}
       };
       update_qdata = std::make_shared<DifferentiableOperator>(
                         QDataInputs(H1, L2, material_gf), update_qdata_outputs,
@@ -112,11 +84,13 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          MFEM_HOST_DEVICE inline
          void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
                          const matd &J, const real_t &gamma, const real_t &E,
-                         const real_t &w, matd &stressJiT) const
+                         const real_t &w, matd &stressJiT,
+                         real_t &dt_est) const
          {
-            const auto setup =
+            const auto [stress, visc_coeff, cs, rho] =
                StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
-            stressJiT = future::get<0>(setup);
+            stressJiT = stress;
+            dt_est = TimeStepEstimate<DIM>(c, J, rho, cs, visc_coeff);
          }
       } update_qdata_qf{qc};
       AddDomainIntegrator<backend_t>(*update_qdata, update_qdata_qf,
@@ -364,7 +338,6 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
              rho0_gf,
              material_gf,
              update_qdata,
-             dt_est_mf,
              momentum_mf,
              momentum_pa,
              energy_conservation_mf,

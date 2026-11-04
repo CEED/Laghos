@@ -166,7 +166,6 @@ public:
                            ParGridFunction &rho0_gf,
                            ParGridFunction &material_gf,
                            std::shared_ptr<DifferentiableOperator> update_qdata,
-                           std::shared_ptr<DifferentiableOperator> dtest_mf,
                            std::shared_ptr<DifferentiableOperator> momentum_mf,
                            std::shared_ptr<DifferentiableOperator> momentum_pa,
                            std::shared_ptr<DifferentiableOperator> energy_conservation_mf,
@@ -218,7 +217,6 @@ public:
    const IntegrationRule &ir;
    ParGridFunction &x0, &rho0, &material;
    std::shared_ptr<DifferentiableOperator> update_qdata;
-   std::shared_ptr<DifferentiableOperator> dtest_mf;
    std::shared_ptr<DifferentiableOperator> momentum_mf;
    std::shared_ptr<DifferentiableOperator> momentum_pa;
    std::shared_ptr<DifferentiableOperator> energy_conservation_mf;
