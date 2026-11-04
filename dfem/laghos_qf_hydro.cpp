@@ -98,9 +98,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             dt_est = TimeStepEstimate<DIM>(c, J, rho, cs, visc_coeff);
          }
       } update_qdata_qf{qc};
-      AddDomainIntegrator<backend_t>(*update_qdata, update_qdata_qf,
-                                     QDataFields(), update_qdata_kernel_oo,
-                                     ir, all_domain_attr);
+      update_qdata->AddDomainIntegrator<backend_t>(
+         update_qdata_qf, QDataFields(), update_qdata_kernel_oo, ir,
+         all_domain_attr);
    }
 
    // Create momentum operator
@@ -121,9 +121,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          MFEM_HOST_DEVICE inline
          void operator()(const matd &stressJiT, matd &f) const { f = stressJiT; }
       } momentum_pa_qf;
-      AddDomainIntegrator<backend_t>(*momentum_pa, momentum_pa_qf,
-                                     momentum_pa_kernel_ao,
-                                     momentum_pa_kernel_oo, ir, all_domain_attr);
+      momentum_pa->AddDomainIntegrator<backend_t>(
+         momentum_pa_qf, momentum_pa_kernel_ao, momentum_pa_kernel_oo, ir,
+         all_domain_attr);
    }
 
    // Create energy conservation operator
@@ -157,11 +157,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             f = ddot(stressJiT, dvdxi);
          }
       } energy_conservation_pa_qf;
-      AddDomainIntegrator<backend_t>(*energy_conservation_pa,
-                                     energy_conservation_pa_qf,
-                                     energy_conservation_pa_kernel_ao,
-                                     energy_conservation_pa_kernel_oo,
-                                     ir, all_domain_attr);
+      energy_conservation_pa->AddDomainIntegrator<backend_t>(
+         energy_conservation_pa_qf, energy_conservation_pa_kernel_ao,
+         energy_conservation_pa_kernel_oo, ir, all_domain_attr);
    }
 
    // Create total internal energy operator
@@ -203,11 +201,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             ie = rho0 * E * det(J0) * w;
          }
       } total_internal_energy_qf;
-      AddDomainIntegrator<backend_t>(*total_internal_energy_mf,
-                                     total_internal_energy_qf,
-                                     total_internal_energy_kernel_ao,
-                                     total_internal_energy_kernel_oo,
-                                     ir, all_domain_attr);
+      total_internal_energy_mf->AddDomainIntegrator<backend_t>(
+         total_internal_energy_qf, total_internal_energy_kernel_ao,
+         total_internal_energy_kernel_oo, ir, all_domain_attr);
    }
 
    // Create total kinetic energy operator
@@ -249,11 +245,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             ke = rho0 * 0.5 * v * v * det(J0) * w;
          }
       } total_kinetic_energy_qf;
-      AddDomainIntegrator<backend_t>(*total_kinetic_energy_mf,
-                                     total_kinetic_energy_qf,
-                                     total_kinetic_energy_kernel_ao,
-                                     total_kinetic_energy_kernel_oo,
-                                     ir, all_domain_attr);
+      total_kinetic_energy_mf->AddDomainIntegrator<backend_t>(
+         total_kinetic_energy_qf, total_kinetic_energy_kernel_ao,
+         total_kinetic_energy_kernel_oo, ir, all_domain_attr);
    }
 
    // Create density operator
@@ -289,8 +283,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             m = rho0 * det(J0) * w;
          }
       } density_qf;
-      AddDomainIntegrator<backend_t>(*density_mf, density_qf, density_kernel_ao,
-                                     density_kernel_oo, ir, all_domain_attr);
+      density_mf->AddDomainIntegrator<backend_t>(
+         density_qf, density_kernel_ao, density_kernel_oo, ir, all_domain_attr);
    }
 
    // Create taylor source operator
@@ -328,9 +322,11 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       } taylor_source_qf;
       auto derivatives = std::integer_sequence<size_t, COORDINATES> {};
       // Only the matrix-free action of dTaylorSourcedx is used
-      AddDomainIntegrator<backend_t, future::DerivativeKernels::Action>
-      (*taylor_source_mf, taylor_source_qf, taylor_source_kernel_ao,
-       taylor_source_kernel_oo, ir, all_domain_attr, derivatives);
+      taylor_source_mf->AddDomainIntegrator<backend_t,
+                       future::DerivativeKernels::Action>(
+                          taylor_source_qf, taylor_source_kernel_ao,
+                          taylor_source_kernel_oo, ir, all_domain_attr,
+                          derivatives);
    }
 
    return new LagrangianHydroOperator(

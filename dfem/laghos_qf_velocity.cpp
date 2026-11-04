@@ -57,9 +57,9 @@ static std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    } momentum_qf{qc};
    auto derivatives =
       std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
-   AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>(
-      *momentum_mf, momentum_qf, QDataFields(), momentum_mf_kernel_oo, ir,
-      all_domain_attr, derivatives);
+   momentum_mf->AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>(
+      momentum_qf, QDataFields(), momentum_mf_kernel_oo, ir, all_domain_attr,
+      derivatives);
    return momentum_mf;
 }
 
