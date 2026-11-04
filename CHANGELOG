@@ -8,7 +8,7 @@
         High-order Lagrangian Hydrodynamics Miniapp
 
 
-Version 3.2
+Version 3.2, released on November x, 2026
 =============================
 
 - Added CMake build support for CPU, CUDA and HIP configurations, with optional
@@ -38,7 +38,7 @@ Version 3.2
 - Added configurable Sedov blast energy (-E0, default 1) and delta-function
   projection tolerance (-dtol). Scale the deposited energy by 1/2^dim to account
   for the simulated portion of the symmetric blast, and detect non-finite
-  initial conditions.
+  initial conditions. Use `-E0 2` to reproduce previous energy settings.
 
 - Added optional Caliper profiling annotations and Adiak metadata for run
   configuration, timings, figures of merit and device memory usage.
@@ -61,6 +61,8 @@ Version 3.2
 - Updated regression tests and checks for mesh generation and Sedov energy
   changes, made test result extraction more robust, and updated GitHub CI to use
   shared MFEM actions.
+
+- Added tracking of GPU memory usage.
 
 
 Version 3.1, released on Apr 9, 2021
