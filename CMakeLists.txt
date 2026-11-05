@@ -128,3 +128,6 @@ target_link_libraries(sedov
   PUBLIC MPI::MPI_CXX
   PUBLIC HYPRE::HYPRE
 )
+
+enable_testing()
+add_subdirectory(dfem)
