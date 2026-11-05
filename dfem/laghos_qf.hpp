@@ -419,6 +419,30 @@ auto Dispatch(const int dim, const int qf_backend, F &&f)
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+// Builds a QData-input dFEM operator with Jacobian kernels
+template <int DIM, typename backend_t, typename kernel_oo_t, typename qf_t>
+std::shared_ptr<DifferentiableOperator> CreateQDataOperator(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   FieldDescriptor output,
+   kernel_oo_t kernel_oo,
+   qf_t &qf)
+{
+   ParMesh &mesh = *H1.GetParMesh();
+   std::vector outputs{output};
+   auto op = std::make_shared<DifferentiableOperator>(
+                QDataInputs(H1, L2, material_gf), outputs, mesh);
+   auto derivatives =
+      std::integer_sequence<size_t, VELOCITY, COORDINATES, INTERNAL_ENERGY> {};
+   op->AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>(
+      qf, QDataFields(), kernel_oo, ir, all_domain_attr, derivatives);
+   return op;
+}
+
+// ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
 // Builds the dFEM momentum operator, with its Jacobian blocks
 std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    int dim,
