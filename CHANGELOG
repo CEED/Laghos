@@ -8,6 +8,63 @@
         High-order Lagrangian Hydrodynamics Miniapp
 
 
+Version 3.2, released on November x, 2026
+=============================
+
+- Added CMake build support for CPU, CUDA and HIP configurations, with optional
+  RAJA support, and separate CMake and Makefile installation instructions.
+
+- Updated compatibility to MFEM 4.10. CMake builds use C++17 by default and C++20
+  when MFEM enables RAJA or Umpire.
+
+- Added optional user.cmake and user.mk files for local build configuration, and
+  improved Makefile support for externally built or installed MFEM libraries.
+
+- Added configurable Cartesian mesh resolutions (-nx, -ny, -nz) and domain
+  sizes (-Sx, -Sy, -Sz).
+
+- Replaced the Cartesian partitioning options (-c and -pt) with mesh generation
+  based on the number of elements per MPI task (-epm). Nonzero -epm is mutually
+  exclusive with explicit mesh resolution and refinement options. METIS is
+  optional when using generated meshes.
+
+- Added support for selecting non-conforming meshes (-nc, enabled by default
+  in 2D and 3D) or conforming meshes (-no-nc).
+
+- Added an analytical Sedov blast solution in sedov/, a standalone sedov
+  executable, and comparison of the simulated density against the exact
+  solution (-err).
+
+- Added configurable Sedov blast energy (-E0, default 1) and delta-function
+  projection tolerance (-dtol). Scale the deposited energy by 1/2^dim to account
+  for the simulated portion of the symmetric blast, and detect non-finite
+  initial conditions. Use `-E0 2` to reproduce previous energy settings.
+
+- Added optional Caliper profiling annotations and Adiak metadata for run
+  configuration, timings, figures of merit and device memory usage.
+
+- Added a shared Umpire device memory pool for hypre and MFEM, with configurable
+  initial size (-pool), pool warm-up and high-water mark diagnostics.
+
+- Added partial assembly kernels for linear kinematic and constant energy
+  spaces (-ok 1 -ot 0) in 2D and 3D, and fifth-order kinematic and fourth-order
+  energy spaces (-ok 5 -ot 4) in 2D. Added missing MFEM quadrature interpolation
+  and mass integrator specializations.
+
+- Fixed internal and kinetic energy evaluation on simplex meshes and MPI ranks
+  with empty local meshes, and geometric factor handling for 2D Taylor-Green.
+
+- Fixed GPU benchmark timing by synchronizing device computations, integer
+  overflow in global mesh sizes and timing counters, and reporting of GPU-aware
+  MPI configuration.
+
+- Updated regression tests and checks for mesh generation and Sedov energy
+  changes, made test result extraction more robust, and updated GitHub CI to use
+  shared MFEM actions.
+
+- Added tracking of GPU memory usage.
+
+
 Version 3.1, released on Apr 9, 2021
 ====================================
 

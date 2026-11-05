@@ -9,8 +9,8 @@ on:
       - master
 
 env:
-  HYPRE_ARCHIVE: v2.11.2.tar.gz
-  HYPRE_TOP_DIR: hypre-2.11.2
+  HYPRE_ARCHIVE: v2.19.0.tar.gz
+  HYPRE_TOP_DIR: hypre-2.19.0
   METIS_ARCHIVE: metis-4.0.3.tar.gz
   METIS_TOP_DIR: metis-4.0.3
   MFEM_TOP_DIR: mfem
@@ -24,7 +24,7 @@ jobs:
     # Checkout Laghos in "laghos" subdirectory. Final path: /home/runner/work/ceed/laghos/laghos
     # Note: it must be done now to access "install-hypre", "install-metis" and "install-mfem" actions.
     - name: checkout Laghos
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         path: laghos
 
@@ -37,14 +37,14 @@ jobs:
     # Install will only run on cache miss.
     - name: cache Hypre
       id: hypre-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.HYPRE_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.HYPRE_TOP_DIR }}-v2
 
     - name: build Hypre
       if: steps.hypre-cache.outputs.cache-hit != 'true'
-      uses: mfem/github-actions/build-hypre@v2.4
+      uses: mfem/github-actions/build-hypre@v2.9
       with:
         archive: ${{ env.HYPRE_ARCHIVE }}
         dir: ${{ env.HYPRE_TOP_DIR }}
@@ -53,14 +53,14 @@ jobs:
     # Install will only run on cache miss.
     - name: cache Metis
       id: metis-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.METIS_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.METIS_TOP_DIR }}-v2
 
     - name: build Metis
       if: steps.metis-cache.outputs.cache-hit != 'true'
-      uses: mfem/github-actions/build-metis@v2.4
+      uses: mfem/github-actions/build-metis@v2.9
       with:
         archive: ${{ env.METIS_ARCHIVE }}
         dir: ${{ env.METIS_TOP_DIR }}
@@ -82,14 +82,14 @@ jobs:
     # Install will only run on cache miss.
     - name: cache MFEM
       id: mfem-cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.MFEM_TOP_DIR }}
         key: ${{ runner.os }}-build-${{ env.MFEM_TOP_DIR }}-${{ env.MFEM_COMMIT }}-v3
 
     - name: build MFEM
       if: steps.mfem-cache.outputs.cache-hit != 'true'
-      uses: mfem/github-actions/build-mfem@v2.4
+      uses: mfem/github-actions/build-mfem@v2.9
       with:
         os: ${{ runner.os }}
         hypre-dir: ${{ env.HYPRE_TOP_DIR }}
