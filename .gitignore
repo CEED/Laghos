@@ -3,5 +3,13 @@
 /laghos
 user.cmake
 .DS_Store
-/build
+/build*
 
+/*.out
+/*.gf
+/*.mesh
+
+/dfem/laghos_dfem
+/dfem/laghos_tests
+/dfem/results
+/dfem/*.o.tmp
