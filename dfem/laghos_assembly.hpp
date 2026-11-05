@@ -25,24 +25,17 @@ namespace mfem::hydrodynamics
 struct QuadratureData
 {
    QuadratureSpace qspace;
+   VectorQuadratureSpace StressSpace, R;
+   QuadratureFunction stressp, dt_est;
 
-   VectorQuadratureSpace StressSpace;
-   QuadratureFunction stressp;
-
-   VectorQuadratureSpace R;
-   QuadratureFunction dt_est;
-
-public:
-   static constexpr int aux_dim = 1;
    QuadratureData(ParMesh &mesh, const IntegrationRule &ir) :
       qspace(mesh, ir),
       StressSpace(qspace, mesh.Dimension()*mesh.Dimension()),
+      R(qspace, 1),
       stressp(StressSpace),
-      R(qspace, aux_dim),
       dt_est(R)
    {
-      dt_est.UseDevice(true);
-      stressp.UseDevice(true);
+      dt_est.UseDevice(true), stressp.UseDevice(true);
    }
 };
 
@@ -56,18 +49,11 @@ class MassPAOperator : public Operator
    OperatorPtr mass;
 
 public:
-   MassPAOperator(ParFiniteElementSpace &pfes,
-                  const IntegrationRule &ir,
-                  Coefficient &Q);
-
+   MassPAOperator(ParFiniteElementSpace&, const IntegrationRule&, Coefficient&);
    void Mult(const Vector &x, Vector &y) const override;
-
    void FullAddMult(const Vector &x, Vector &y) const;
-
-   void SetEssentialTrueDofs(Array<int> &dofs);
-
-   void EliminateRHS(Vector &b) const;
-
+   void SetEssentialTrueDofs(Array<int>&);
+   void EliminateRHS(Vector&) const;
    const ParBilinearForm &GetBF() const { return pabf; }
 };
 

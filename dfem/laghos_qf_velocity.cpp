@@ -34,13 +34,11 @@ static std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    future::tuple momentum_mf_kernel_oo = {Gradient<VELOCITY>{}};
    // <sigma, grad(w) * J^-T> * det(J) * weights
    // <sigma(J^-T det(J) weights), grad(w)>
-   std::vector momentum_mf_outputs =
-   {
-      FieldDescriptor{VELOCITY, &H1}
-   };
-   auto momentum_mf = std::make_shared<DifferentiableOperator>(
-                         QDataInputs(H1, L2, material_gf), momentum_mf_outputs,
-                         mesh);
+   std::vector momentum_mf_outputs = { FieldDescriptor{VELOCITY, &H1} };
+   auto momentum_mf =
+      std::make_shared<DifferentiableOperator>(QDataInputs(H1, L2, material_gf),
+                                               momentum_mf_outputs,
+                                               mesh);
    struct MomentumQFunction
    {
       using dmatd = matd_t<DIM, dscalar_t>;
@@ -50,13 +48,12 @@ static std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
                       const dmatd &J, const real_t &gamma, const dscalar_t &E,
                       const real_t &w, dmatd &stressJiT) const
       {
-         const auto setup =
-            StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+         auto setup = StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
          stressJiT = future::get<0>(setup);
       }
    } momentum_qf{qc};
    auto derivatives =
-      std::integer_sequence<size_t, VELOCITY, COORDINATES, SPECIFIC_INTERNAL_ENERGY> {};
+      std::integer_sequence<size_t, VELOCITY, COORDINATES, INTERNAL_ENERGY> {};
    momentum_mf->AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>(
       momentum_qf, QDataFields(), momentum_mf_kernel_oo, ir, all_domain_attr,
       derivatives);

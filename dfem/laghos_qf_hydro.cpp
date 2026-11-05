@@ -63,7 +63,6 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    ParMesh &mesh = *H1.GetParMesh();
 
    auto qdata = std::make_shared<QuadratureData>(mesh, ir);
-
    qdata->dt_est = std::numeric_limits<real_t>::infinity();
 
    Array<int> all_domain_attr(mesh.attributes.Max());
@@ -128,13 +127,13 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
 
    // Create energy conservation operator
    auto energy_conservation_mf =
-      CreateEnergyConservationOperator(DIM, options.qfunction_backend, H1, L2,
-                                       material_gf, ir, all_domain_attr, qc);
+      CreateEnergyOperator(DIM, options.qfunction_backend, H1, L2,
+                           material_gf, ir, all_domain_attr, qc);
 
    std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
    {
       future::tuple energy_conservation_pa_kernel_ao = {Gradient<VELOCITY>{}, Identity<STRESS_TENSOR>{}};
-      future::tuple energy_conservation_pa_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
+      future::tuple energy_conservation_pa_kernel_oo = {Value<INTERNAL_ENERGY>{}};
       std::vector<FieldDescriptor> energy_conservation_pa_inputs =
       {
          {VELOCITY, &H1},
@@ -142,7 +141,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       };
       std::vector<FieldDescriptor> energy_conservation_pa_outputs =
       {
-         {SPECIFIC_INTERNAL_ENERGY, &L2}
+         {INTERNAL_ENERGY, &L2}
       };
       energy_conservation_pa =
          std::make_shared<DifferentiableOperator>(energy_conservation_pa_inputs,
@@ -167,21 +166,21 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    {
       future::tuple total_internal_energy_kernel_ao =
       {
-         Value<SPECIFIC_INTERNAL_ENERGY>{},
+         Value<INTERNAL_ENERGY>{},
          Value<DENSITY0>{},
          Gradient<COORDINATES0>{},
          Weight{}
       };
-      future::tuple total_internal_energy_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
+      future::tuple total_internal_energy_kernel_oo = {Value<INTERNAL_ENERGY>{}};
       std::vector total_internal_energy_inputs =
       {
-         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2},
+         FieldDescriptor{INTERNAL_ENERGY, &L2},
          FieldDescriptor{DENSITY0, &L2},
          FieldDescriptor{COORDINATES0, &H1}
       };
       std::vector total_internal_energy_outputs =
       {
-         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
+         FieldDescriptor{INTERNAL_ENERGY, &L2}
       };
       total_internal_energy_mf =
          std::make_shared<DifferentiableOperator>(
@@ -278,10 +277,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          void operator()(const real_t &rho0,
                          const matd &J0,
                          const real_t &w,
-                         real_t &m) const
-         {
-            m = rho0 * det(J0) * w;
-         }
+                         real_t &m) const { m = rho0 * det(J0) * w; }
       } density_qf;
       density_mf->AddDomainIntegrator<backend_t>(
          density_qf, density_kernel_ao, density_kernel_oo, ir, all_domain_attr);
@@ -296,11 +292,11 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Gradient<COORDINATES>{},
          Weight{}
       };
-      future::tuple taylor_source_kernel_oo = {Value<SPECIFIC_INTERNAL_ENERGY>{}};
+      future::tuple taylor_source_kernel_oo = {Value<INTERNAL_ENERGY>{}};
       std::vector taylor_source_inputs = { FieldDescriptor{COORDINATES, &H1} };
       std::vector taylor_source_outputs =
       {
-         FieldDescriptor{SPECIFIC_INTERNAL_ENERGY, &L2}
+         FieldDescriptor{INTERNAL_ENERGY, &L2}
       };
       taylor_source_mf = std::make_shared<DifferentiableOperator>(
                             taylor_source_inputs, taylor_source_outputs, mesh);
@@ -329,26 +325,15 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
                           derivatives);
    }
 
-   return new LagrangianHydroOperator(
-             H1,
-             L2,
-             ess_tdof,
-             ir,
-             rho0_coeff,
-             x0_gf,
-             rho0_gf,
-             material_gf,
-             update_qdata,
-             momentum_mf,
-             momentum_pa,
-             energy_conservation_mf,
-             energy_conservation_pa,
-             total_internal_energy_mf,
-             total_kinetic_energy_mf,
-             density_mf,
-             taylor_source_mf,
-             qdata,
-             options);
+   return new LagrangianHydroOperator(H1, L2, ess_tdof, ir,
+                                      rho0_coeff, x0_gf, rho0_gf, material_gf,
+                                      update_qdata, momentum_mf, momentum_pa,
+                                      energy_conservation_mf,
+                                      energy_conservation_pa,
+                                      total_internal_energy_mf,
+                                      total_kinetic_energy_mf,
+                                      density_mf, taylor_source_mf,
+                                      qdata, options);
 }
 
 LagrangianHydroOperator *CreateLagrangianHydroOperator(

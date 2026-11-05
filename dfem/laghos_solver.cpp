@@ -185,10 +185,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    update_qdata(update_qdata),
    momentum_mf(momentum_mf),
    momentum_pa(momentum_pa),
-   energy_conservation_mf(energy_conservation_mf),
-   energy_conservation_pa(energy_conservation_pa),
-   total_internal_energy_mf(total_internal_energy_mf),
-   total_kinetic_energy_mf(total_kinetic_energy_mf),
+   energy_mf(energy_conservation_mf),
+   energy_pa(energy_conservation_pa),
+   internal_energy_mf(total_internal_energy_mf),
+   kinetic_energy_mf(total_kinetic_energy_mf),
    density_mf(density_mf),
    taylor_source_mf(taylor_source_mf),
    taylor_source(problem == 0 && H1.GetMesh()->Dimension() == 2),
@@ -210,10 +210,10 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    options(options)
 {
    Mv = new MassPAOperator(H1c, ir, rho0_coeff);
+   Me = new MassPAOperator(L2, ir, rho0_coeff);
+
    Array<int> empty_tdofs;
    Mv_Jprec = new OperatorJacobiSmoother(Mv->GetBF(), empty_tdofs);
-
-   Me = new MassPAOperator(L2, ir, rho0_coeff);
 
    // Inside the above constructors for mass, there is reordering of the mesh
    // nodes which is performed on the host. Since the mesh nodes are a
@@ -273,6 +273,9 @@ LagrangianHydroOperator::~LagrangianHydroOperator()
 
 void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
 {
+   // Make sure that the mesh positions correspond to the ones in S. This is
+   // needed only because some mfem time integrators don't update the solution
+   // vector at every intermediate stage (hence they don't change the mesh).
    UpdateMesh(S);
    UpdateQuadratureData(S);
 
@@ -289,7 +292,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       dv = 0.0;
 
       MultiVector Y{RHSv};
-      momentum_pa->Mult(MultiVector{qdata->stressp}, Y);
+      momentum_pa->Mult(MultiVector{qdata->stressp}, Y); // SolveVelocity-Force(PA)
       RHSv.Neg();
       H1.GetRestrictionMatrix()->MultTranspose(RHSv, rhsv);
 
@@ -300,14 +303,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       {
          dvc.MakeRef(&H1c, dSdt, H1vsize + c*size);
          rhsvc.MakeRef(&H1c, rhsv, c*size);
-         if (Pconf)
-         {
-            Pconf->MultTranspose(rhsvc, B);
-         }
-         else
-         {
-            B = rhsvc;
-         }
+         if (Pconf) { Pconf->MultTranspose(rhsvc, B); }
+         else { B = rhsvc; }
 
          CGSolver cg(H1c.GetParMesh()->GetComm());
          cg.SetPreconditioner(*Mv_Jprec);
@@ -320,7 +317,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
          Xvc = 0.0;
          Mv->SetEssentialTrueDofs(c_tdofs[c]);
          Mv->EliminateRHS(B);
-         cg.Mult(B, Xvc);
+         cg.Mult(B, Xvc); // SolveVelocity-CGVMass
          if (Pconf)
          {
             Pconf->Mult(Xvc, dvc);
@@ -338,7 +335,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       de = 0.0;
 
       MultiVector Y{RHSe};
-      energy_conservation_pa->Mult(MultiVector{v, qdata->stressp}, Y);
+      energy_pa->Mult(MultiVector{v, qdata->stressp}, Y); // SolveEnergy-ForcePA
       L2.GetRestrictionMatrix()->MultTranspose(RHSe, rhse);
 
       if (taylor_source)
@@ -357,7 +354,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       cg.SetAbsTol(0.0);
       cg.SetMaxIter(300);
       cg.SetPrintLevel(-1);
-      cg.Mult(rhse, de);
+      cg.Mult(rhse, de); // SolveEnergy-CGEMass
       de.GetMemory().SyncAlias(dSdt.GetMemory(), de.Size());
    }
 
@@ -374,17 +371,12 @@ void LagrangianHydroOperator::UpdateMesh(const Vector &S) const
 real_t LagrangianHydroOperator::GetTimeStepEstimate(const Vector &S)
 {
    MFEM_VERIFY(qdata, "quadrature data (qdata) is null");
-
    UpdateMesh(S);
-
    real_t dt_est_local = LocalTimeStepEstimate(S);
    if (stage_dt_estimate) { dt_est_local = fmin(dt_est_local, dt_est_stages); }
-
    real_t dt_est_global;
    MPI_Allreduce(&dt_est_local, &dt_est_global, 1, MPITypeMap<real_t>::mpi_type,
-                 MPI_MIN,
-                 L2.GetComm());
-
+                 MPI_MIN, L2.GetComm());
    return dt_est_global;
 }
 
@@ -396,25 +388,20 @@ void LagrangianHydroOperator::ResetTimeStepEstimate() const
 void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
 {
    rho.SetSpace(&L2);
-
    ParGridFunction rhs_l(&L2);
-
    Vector rho0_t(L2.GetTrueVSize()),
           rho_t(L2.GetTrueVSize()),
           rhs(L2.GetTrueVSize());
-
    const int l2dofs_cnt = L2.GetFE(0)->GetDof();
    DenseMatrix Mrho(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    Vector rhs_e(l2dofs_cnt), rho_z(l2dofs_cnt);
    Array<int> dofs(l2dofs_cnt);
    MassIntegrator mi(&ir);
-
    L2.GetProlongationMatrix()->MultTranspose(rho0, rho0_t);
    MultiVector Y{rhs};
    density_mf->Mult(MultiVector{rho0_t, x0}, Y);
    L2.GetProlongationMatrix()->Mult(rhs, rhs_l);
-
    for (int e = 0; e < L2.GetParMesh()->GetNE(); e++)
    {
       const FiniteElement &fe = *L2.GetFE(e);
@@ -434,7 +421,7 @@ real_t LagrangianHydroOperator::InternalEnergy(ParGridFunction &e) const
    Vector E(L2.GetTrueVSize(), mt), Y(L2.GetTrueVSize(), mt);
    L2.GetRestrictionMatrix()->Mult(e, E);
    MultiVector MY{Y};
-   total_internal_energy_mf->Mult(MultiVector{E, rho0, x0}, MY);
+   internal_energy_mf->Mult(MultiVector{E, rho0, x0}, MY);
    const real_t ie_local = Y.Sum();
    real_t ie_global = 0.0;
    MPI_Allreduce(&ie_local, &ie_global, 1, MPITypeMap<real_t>::mpi_type,
@@ -447,7 +434,7 @@ real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v) const
    const auto mt = Device::GetDeviceMemoryType();
    Vector Y(L2.GetTrueVSize(), mt);
    MultiVector MY{Y};
-   total_kinetic_energy_mf->Mult(MultiVector{v, rho0, x0}, MY);
+   kinetic_energy_mf->Mult(MultiVector{v, rho0, x0}, MY);
    const real_t ke_local = Y.Sum();
    real_t ke_global = 0.0;
    MPI_Allreduce(&ke_local, &ke_global, 1, MPITypeMap<real_t>::mpi_type,
@@ -455,17 +442,14 @@ real_t LagrangianHydroOperator::KineticEnergy(ParGridFunction &v) const
    return ke_global;
 }
 
-
 void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
 {
    if (qdata_is_current) { return; }
    qdata_is_current = true;
-
    auto [x, v, e] = XVE(S, H1.GetVSize(), L2.GetVSize());
    MultiVector Y{qdata->stressp, qdata->dt_est};
    update_qdata->Mult(MultiVector{v, rho0, x0, x, material, e}, Y);
-
-   // As stock Laghos: the estimate is the min over all the updates
+   // the estimate is the min over all the updates
    if (stage_dt_estimate)
    {
       dt_est_stages = fmin(dt_est_stages, qdata->dt_est.Min());
@@ -480,8 +464,7 @@ static std::unique_ptr<HypreParMatrix> AssembleMatrix(DerivativeOperator &d)
    return std::unique_ptr<HypreParMatrix>(A);
 }
 
-void LagrangianHydroOperator::Jacobian::Mult(
-   const Vector &u, Vector &y) const
+void LagrangianHydroOperator::Jacobian::Mult(const Vector &u, Vector &y) const
 {
    w = u;
    auto [wx, wv, we] = XVE(w, H1tsize, L2tsize);
@@ -548,8 +531,7 @@ void LagrangianHydroOperator::Jacobian::Mult(
    ye.SyncAliasMemory(y);
 }
 
-MemoryClass
-LagrangianHydroOperator::Jacobian::GetMemoryClass() const
+MemoryClass LagrangianHydroOperator::Jacobian::GetMemoryClass() const
 {
    return Device::GetDeviceMemoryClass();
 }
@@ -607,8 +589,7 @@ void LagrangianHydroOperator::Preconditioner::Mult(const Vector &x,
    ye.SyncAliasMemory(y);
 }
 
-void LagrangianHydroOperator::Residual::Mult(
-   const Vector &k, Vector &R) const
+void LagrangianHydroOperator::Residual::Mult(const Vector &k, Vector &R) const
 {
    u = k;
    u *= dt;
@@ -651,8 +632,7 @@ void LagrangianHydroOperator::Residual::Mult(
    Rv.SetSubVector(hydro.ess_tdof, 0.0);
 
    MultiVector RE{Re};
-   hydro.energy_conservation_pa->Mult(MultiVector{uv_l, hydro.qdata->stressp},
-                                      RE);
+   hydro.energy_pa->Mult(MultiVector{uv_l, hydro.qdata->stressp}, RE);
 
    Re.Neg();
 
@@ -670,8 +650,7 @@ void LagrangianHydroOperator::Residual::Mult(
    Re.SyncAliasMemory(R);
 }
 
-Operator& LagrangianHydroOperator::Residual::GetGradient(
-   const Vector &k) const
+Operator& LagrangianHydroOperator::Residual::GetGradient(const Vector &k) const
 {
    u = k;
    u *= dt;
@@ -697,11 +676,11 @@ Operator& LagrangianHydroOperator::Residual::GetGradient(
 
       auto dRvdx = hydro.momentum_mf->GetDerivative(COORDINATES, state);
       auto dRvdv = hydro.momentum_mf->GetDerivative(VELOCITY, state);
-      auto dRvde = hydro.momentum_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, state);
-      auto dRedx = hydro.energy_conservation_mf->GetDerivative(COORDINATES, state);
-      auto dRedv = hydro.energy_conservation_mf->GetDerivative(VELOCITY, state);
+      auto dRvde = hydro.momentum_mf->GetDerivative(INTERNAL_ENERGY, state);
+      auto dRedx = hydro.energy_mf->GetDerivative(COORDINATES, state);
+      auto dRedv = hydro.energy_mf->GetDerivative(VELOCITY, state);
       auto dRede =
-         hydro.energy_conservation_mf->GetDerivative(SPECIFIC_INTERNAL_ENERGY, state);
+         hydro.energy_mf->GetDerivative(INTERNAL_ENERGY, state);
       std::shared_ptr<DerivativeOperator> dTaylorSourcedx;
       if (hydro.taylor_source)
       {
@@ -766,15 +745,11 @@ void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
 
    // If some SDIRK stage didn't converge, keep it at false.
    // (these are reset after every time step).
-   if (newton_converged)
-   {
-      newton_converged = newton->GetConverged();
-   }
+   if (newton_converged) { newton_converged = newton->GetConverged(); }
    newton_max_iter = std::max(newton_max_iter, newton->GetNumIterations());
 
    auto [Kx, Kv, Ke] = XVE(K, H1tsize, L2tsize);
    auto [kx, kv, ke] = XVE(k, H1.GetVSize(), L2.GetVSize());
-
    H1.GetProlongationMatrix()->Mult(Kx, kx);
    H1.GetProlongationMatrix()->Mult(Kv, kv);
    L2.GetProlongationMatrix()->Mult(Ke, ke);
@@ -808,7 +783,6 @@ void LagrangianHydroOperator::DensityScatter()
    for (int e = 0; e < NE; e++)
    {
       ElementTransformation &Tr = *m0.GetElementTransformation(e);
-
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
@@ -823,7 +797,6 @@ void LagrangianHydroOperator::DensityScatter()
          fstream_rho << r << " " << rho << "\n";
       }
    }
-
    fstream_rho.close();
 }
 

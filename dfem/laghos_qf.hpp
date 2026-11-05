@@ -50,7 +50,7 @@ constexpr int DENSITY0 = 1;
 constexpr int COORDINATES0 = 2;
 constexpr int COORDINATES = 3;
 constexpr int MATERIAL = 4;
-constexpr int SPECIFIC_INTERNAL_ENERGY = 5;
+constexpr int INTERNAL_ENERGY = 5;
 constexpr int DT_EST = 8;
 constexpr int STRESS_TENSOR = 9;
 
@@ -60,7 +60,7 @@ inline auto QDataFields()
 {
    return future::tuple{Gradient<VELOCITY>{}, Value<DENSITY0>{},
                         Gradient<COORDINATES0>{}, Gradient<COORDINATES>{},
-                        Value<MATERIAL>{}, Value<SPECIFIC_INTERNAL_ENERGY>{},
+                        Value<MATERIAL>{}, Value<INTERNAL_ENERGY>{},
                         Weight{}};
 }
 
@@ -71,7 +71,7 @@ inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
 {
    return {{VELOCITY, &H1}, {DENSITY0, &L2}, {COORDINATES0, &H1},
       {COORDINATES, &H1}, {MATERIAL, material_gf.ParFESpace()},
-      {SPECIFIC_INTERNAL_ENERGY, &L2}};
+      {INTERNAL_ENERGY, &L2}};
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
@@ -414,7 +414,7 @@ auto Dispatch(const int dim, const int qf_backend, F &&f)
    using Global = future::GlobalQFBackend;
    const bool global = qf_backend == GLOBAL_QF;
    return dim == 2 ?
-          (global ? f(Dim2{}, Global{}) : f(Dim2{}, Local{})) :
+          (global ? f(Dim2{}, Global{}) : f(Dim2{}, Local{})):
           (global ? f(Dim3{}, Global{}) : f(Dim3{}, Local{}));
 }
 
@@ -431,7 +431,7 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    const QConstants &qc);
 
 // Builds the dFEM energy conservation operator, with its Jacobian blocks
-std::shared_ptr<DifferentiableOperator> CreateEnergyConservationOperator(
+std::shared_ptr<DifferentiableOperator> CreateEnergyOperator(
    int dim,
    int qf_backend,
    ParFiniteElementSpace &H1,

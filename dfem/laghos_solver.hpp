@@ -55,16 +55,13 @@ public:
    class LineSearch : public NewtonSolver
    {
       real_t beta;        // Backtracking factor (how much to reduce step)
-      real_t alpha;       // Sufficient decrease parameter
+      real_t alpha;       // Sufficient decrease parameter (Armijo condition)
       int max_line_iter;  // Maximum line search iterations
       mutable Vector x_new, r_new, s_new;
       const LagrangianHydroOperator &hydro;
    public:
       LineSearch(MPI_Comm comm, const LagrangianHydroOperator &hydro)
-         : NewtonSolver(comm),
-           beta(0.5),    // Backtracking reduction factor
-           alpha(1e-2),  // Sufficient decrease constant (Armijo condition)
-           max_line_iter(5),
+         : NewtonSolver(comm), beta(0.5), alpha(1e-2), max_line_iter(5),
            hydro(hydro) {}
    protected:
       void ProcessNewState(const Vector &x) const override;
@@ -78,8 +75,8 @@ public:
       const int H1tsize, L2tsize;
       mutable Vector w, z;
       LagrangianHydroOperator &hydro;
-      std::shared_ptr<DerivativeOperator>
-      dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede, dTaylorSourcedx;
+      std::shared_ptr<DerivativeOperator> dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede,
+          dTaylorSourcedx;
    public:
       Jacobian(LagrangianHydroOperator &hydro,
                std::shared_ptr<DerivativeOperator> dRvdx,
@@ -93,8 +90,7 @@ public:
          Operator(2*hydro.H1.GetTrueVSize() + hydro.L2.GetTrueVSize()),
          h(h),
          H1tsize(hydro.H1.GetTrueVSize()), L2tsize(hydro.L2.GetTrueVSize()),
-         w(height),
-         z(height),
+         w(height), z(height),
          hydro(hydro),
          dRvdx(dRvdx), dRvdv(dRvdv), dRvde(dRvde),
          dRedx(dRedx), dRedv(dRedv), dRede(dRede),
@@ -122,9 +118,8 @@ public:
       void Mult(const Vector &x, Vector &y) const override;
    };
 
-   class Residual : public Operator
+   struct Residual : public Operator
    {
-   public:
       LagrangianHydroOperator &hydro;
       real_t dt;
       const int H1tsize, H1vsize, L2tsize, L2vsize;
@@ -134,7 +129,7 @@ public:
       mutable std::shared_ptr<Jacobian> jacobian;
       bool fd_gradient;
       int dump_jacobians;
-   public:
+
       Residual(LagrangianHydroOperator &hydro, const Vector &x,
                const bool fd_gradient, const int dump_jacobians) :
          Operator(2*hydro.H1.GetTrueVSize()+hydro.L2.GetTrueVSize()),
@@ -219,10 +214,10 @@ public:
    std::shared_ptr<DifferentiableOperator> update_qdata;
    std::shared_ptr<DifferentiableOperator> momentum_mf;
    std::shared_ptr<DifferentiableOperator> momentum_pa;
-   std::shared_ptr<DifferentiableOperator> energy_conservation_mf;
-   std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
-   std::shared_ptr<DifferentiableOperator> total_internal_energy_mf;
-   std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf;
+   std::shared_ptr<DifferentiableOperator> energy_mf;
+   std::shared_ptr<DifferentiableOperator> energy_pa;
+   std::shared_ptr<DifferentiableOperator> internal_energy_mf;
+   std::shared_ptr<DifferentiableOperator> kinetic_energy_mf;
    std::shared_ptr<DifferentiableOperator> density_mf;
    std::shared_ptr<DifferentiableOperator> taylor_source_mf;
    // Taylor-Green energy source, 2D only as in stock Laghos
