@@ -604,11 +604,9 @@ int main(int argc, char *argv[])
 
             if (!hydro->newton_converged)
             {
-               if (nretry == 1)
-               {
-                  hydro->residual->dump_jacobians = 1;
-               }
-               else if (nretry == 0)
+               // Dumping is requested with -dump-jacobians. nretry == 1 used
+               // to set it, and GetGradient then called std::exit(0).
+               if (nretry == 0)
                {
                   if (Mpi::Root()) { out << "no retry planned, exit\n"; }
                   return 1;

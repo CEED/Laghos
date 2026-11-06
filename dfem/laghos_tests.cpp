@@ -684,6 +684,23 @@ TEST_CASE("imp_tgv_newton_fail", "[dfem][imp][newton]")
    REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) != 0);
 }
 
+// The last planned retry must return the Newton failure. Dumping is only
+// for -dump-jacobians; tying it to nretry calls std::exit(0).
+TEST_CASE("nretry_does_not_dump", "[dfem][imp][newton]")
+{
+   if (device == "debug") { return; }
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   std::vector<std::string> args = {
+      "laghos", "-p", "0", "-dim", "2", "-rs", "1", "-s", "12", "-tf", "0.01",
+      "-nmi", "1", "-nrt", "1e-30", "-nretry", "1", "-m", mesh,
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) != 0);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[]) try
 {
