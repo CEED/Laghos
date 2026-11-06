@@ -167,6 +167,7 @@ int main(int argc, char *argv[])
                "unknown q-function backend: " << qf_backend);
    hydro_options.qfunction_backend =
       global_qf ? hydrodynamics::GLOBAL_QF : hydrodynamics::LOCAL_QF;
+   hydro_options.taylor_green = (problem == 0);
    // 0 Taylor-Green, 1 Sedov, 3 triple point. Sod, Gresho and the rest abort
    // later inside a coefficient, so reject them before any mesh work.
    if (problem != 0 && problem != 1 && problem != 3)

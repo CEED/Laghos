@@ -16,8 +16,6 @@
 
 #include "laghos_solver.hpp"
 
-extern int problem;
-
 namespace mfem::hydrodynamics
 {
 
@@ -77,7 +75,7 @@ void VisualizeField(socketstream &sock, const char *vishost, int visport,
 void LagrangianHydroOperator::LineSearch::ProcessNewState(
    const Vector &x) const
 {
-   if (problem == 0) { return; }
+   if (hydro.options.taylor_green) { return; }
 
    s_new.SetSize(x.Size());
    s_new = x;
@@ -94,7 +92,7 @@ void LagrangianHydroOperator::LineSearch::ProcessNewState(
 real_t LagrangianHydroOperator::LineSearch::ComputeScalingFactor(
    const Vector &x, const Vector &b) const
 {
-   if (problem == 0) { return 1.0; }
+   if (hydro.options.taylor_green) { return 1.0; }
 
    const bool have_b = (b.Size() == Height());
    real_t lambda = 1.0;  // Initial step length
@@ -191,7 +189,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    kinetic_energy_mf(total_kinetic_energy_mf),
    density_mf(density_mf),
    taylor_source_mf(taylor_source_mf),
-   taylor_source(problem == 0 && H1.GetMesh()->Dimension() == 2),
+   taylor_source(options.taylor_green && H1.GetMesh()->Dimension() == 2),
    qdata(qdata),
    mesh_nodes(&H1),
    rhsvc(&H1c),

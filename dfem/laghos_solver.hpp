@@ -43,6 +43,7 @@ public:
    {
       real_t cg_relative_tolerance = 1e-8;
       bool fd_gradient = false;
+      bool taylor_green = false;
       int dump_jacobians = 0;
       int nonlinear_maximum_iterations = 10;
       real_t nonlinear_relative_tolerance = 1e-5;
