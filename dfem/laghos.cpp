@@ -63,7 +63,7 @@ using namespace mfem;
 // Choice for the problem setup.
 int problem;
 
-int main(int argc, char *argv[])
+int laghos(int argc, char *argv[])
 {
    LaghosResults *results = laghos_results; // set by laghos_tests
    if (!Mpi::IsInitialized()) { Mpi::Init(); }
@@ -767,3 +767,11 @@ int main(int argc, char *argv[])
 
    return 0;
 }
+
+// The tests compile this file without a second main.
+#ifndef LAGHOS_NO_MAIN
+int main(int argc, char *argv[])
+{
+   return laghos(argc, argv);
+}
+#endif

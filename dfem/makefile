@@ -136,9 +136,9 @@ all: laghos_dfem laghos_tests
 laghos_dfem: laghos.o $(LIB_OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ laghos.o $(LIB_OBJECT_FILES) $(LIBS)
 
-# laghos.cpp again, with its main as laghos(), called by the tests
+# laghos.cpp again, without the executable's main, called by the tests
 laghos_main.o: laghos.cpp
-	$(CCC) -Dmain=laghos -c laghos.cpp -o $@
+	$(CCC) -DLAGHOS_NO_MAIN -c laghos.cpp -o $@
 
 laghos_tests.o: laghos_tests.cpp
 	$(CCC) -isystem $(CATCH_DIR) -c laghos_tests.cpp

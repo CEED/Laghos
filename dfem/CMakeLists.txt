@@ -47,9 +47,9 @@ if (NOT CATCH_INCLUDE_DIR)
 endif()
 message(STATUS "Catch2 for laghos_tests: ${CATCH_INCLUDE_DIR}/catch.hpp")
 
-# laghos.cpp again, with its main as laghos(), called by the tests
+# laghos.cpp again, without the executable's main, called by the tests
 add_library(laghos_tests_lib OBJECT laghos.cpp)
-target_compile_definitions(laghos_tests_lib PRIVATE main=laghos)
+target_compile_definitions(laghos_tests_lib PRIVATE LAGHOS_NO_MAIN)
 target_link_libraries(laghos_tests_lib PUBLIC laghos_dfem_lib)
 
 add_executable(laghos_tests laghos_tests.cpp)
