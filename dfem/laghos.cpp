@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
    bool visualization = false;
    bool paraview = false;
    bool save_files = true;
-   int viscosity_type = 2;
+   int viscosity_type = 7;
    real_t viscosity_q1 = 0.5;
    real_t viscosity_q2 = 1.0;
    bool dt_min = false;
@@ -145,8 +145,8 @@ int main(int argc, char *argv[])
                   "-no-save", "--no-save-files",
                   "Save the final mesh and fields (and rho.out) files.");
    args.AddOption(&viscosity_type, "-av-type", "--av-type",
-                  "Artificial viscosity type: 1 stock Laghos tensor viscosity"
-                  " (explicit only), 7 smooth viscosity.");
+                  "Artificial viscosity type: 1 stock tensor viscosity, "
+                  "2 none, 7 smooth (default).");
    args.AddOption(&viscosity_q1, "-av-q1", "--av-q1",
                   "Artificial viscosity (type 7) linear coefficient.");
    args.AddOption(&viscosity_q2, "-av-q2", "--av-q2",

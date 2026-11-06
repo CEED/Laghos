@@ -527,6 +527,29 @@ TEST_CASE("imp_run_sdv_3d_q21_mid_av7_dtn",
           "[dfem][imp][run][sdv][3d][q21][dtn]")
 { LaghosTest("imp_run_sdv_3d_q21_mid_av7_dtn"); }
 
+// -av alone must change a Sedov step. Type 2 adds no viscous stress.
+TEST_CASE("av_default_is_viscous", "[dfem][av]")
+{
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   const auto energy = [&](const char *av)
+   {
+      std::vector<std::string> args = {
+         "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
+         "-m", mesh, av, "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+      };
+      std::vector<char *> argv;
+      for (auto &a : args) { argv.push_back(&a[0]); }
+      argv.push_back(nullptr);
+      LaghosResults res;
+      laghos_results = &res;
+      const int ret = laghos(static_cast<int>(argv.size()) - 1, argv.data());
+      laghos_results = nullptr;
+      REQUIRE(ret == 0);
+      return res.energy_final;
+   };
+   REQUIRE(!AlmostEq(energy("-av"), energy("-no-av"), 1e-6));
+}
+
 // Taylor-Green must reject a Newton step that does not converge.
 // The debug device faults while destroying a Newton solve that returned
 // early, the same class of host read as the existing debug skip.
