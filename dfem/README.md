@@ -130,8 +130,8 @@ Useful options include:
   Internally these are `LOCAL_QF=0` and `GLOBAL_QF=1`.
 - `-d cpu` (default), `-d debug`, `-d cuda` or `-d hip`: select an MFEM
   device supported by the build. `-dev` selects the GPU device number.
-- `-s 2`, `-s 3`, `-s 4`, `-s 11`, `-s 12`: RK2 SSP, RK3 SSP, RK4,
-  backward Euler and implicit midpoint, respectively. RK4 is the default.
+- `-s 2`, `-s 3`, `-s 4`, `-s 11`, `-s 12`, `-s 14`: RK2 SSP, RK3 SSP,
+  RK4, backward Euler, implicit midpoint and SDIRK34. RK4 is the default.
 - `-av -av-type 1`: stock Laghos tensor viscosity; `-av -av-type 7`:
   smooth viscosity. `-no-av` disables viscosity (the default).
 - `-dt-min`: use the minimum time step estimate over the RK stages and the

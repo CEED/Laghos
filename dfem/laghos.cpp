@@ -117,11 +117,11 @@ int main(int argc, char *argv[])
                   "-no-fd", "--no-fd", "");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
-                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6,\n\t"
-                  "            7 - RK2Avg."
-                  "            11 - Backward Euler"
-                  "            12 - Implicit Midpoint"
-                  "            13 - SDIRK33Solver");
+                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4,\n\t"
+                  "            6 - RK6,\n\t"
+                  "            11 - Backward Euler,\n\t"
+                  "            12 - Implicit midpoint,\n\t"
+                  "            13 - SDIRK33, 14 - SDIRK34.");
    args.AddOption(&hydro_options.nonlinear_maximum_iterations, "-nmi", "--nmi",
                   "Maximum number of nonlinear iterations.");
    args.AddOption(&hydro_options.nonlinear_relative_tolerance, "-nrt", "--nrt",
