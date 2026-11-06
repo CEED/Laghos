@@ -47,7 +47,7 @@ For more details about Laghos and the CEED software suite, see the
 
 The ∂FEM version requires MPI, hypre and an MFEM build from the `dfem-dev`
 branch, which provides the required support and the `local` and `global`
-q-function backends.
+q-function backends. Another branch fails at compile time on those names.
 See the top-level [building instructions](../README.md#building) for the
 other dependencies and **CPU** and **GPU** (CUDA or HIP) configurations.
 
