@@ -8,7 +8,7 @@
         High-order Lagrangian Hydrodynamics Miniapp
 
 
-Version 3.2, released on November x, 2026
+Version 3.2, released on November 5, 2026
 =============================
 
 - Added CMake build support for CPU, CUDA and HIP configurations, with optional
