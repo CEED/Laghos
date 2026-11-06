@@ -130,4 +130,8 @@ target_link_libraries(sedov
 )
 
 enable_testing()
+# -epm must build a mesh and take a short step. Two ranks, one element each.
+add_test(NAME laghos_epm_np2
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+          $<TARGET_FILE:laghos> -p 1 -dim 2 -tf 0.01 -epm 1)
 add_subdirectory(dfem)

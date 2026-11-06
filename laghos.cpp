@@ -395,7 +395,6 @@ int main(int argc, char *argv[])
    {
       if (elem_per_mpi)
       {
-         MFEM_ABORT("PartitionMPI is not supported yet.");
          mesh = PartitionMPI(dim, Mpi::WorldSize(), elem_per_mpi, myid == 0,
                              rp_levels, mpi_partitioning);
          // scale mesh by Sx, Sy, Sz
