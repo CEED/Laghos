@@ -527,6 +527,21 @@ TEST_CASE("imp_run_sdv_3d_q21_mid_av7_dtn",
           "[dfem][imp][run][sdv][3d][q21][dtn]")
 { LaghosTest("imp_run_sdv_3d_q21_mid_av7_dtn"); }
 
+// Taylor-Green must reject a Newton step that does not converge.
+TEST_CASE("imp_tgv_newton_fail", "[dfem][imp][newton]")
+{
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   std::vector<std::string> args = {
+      "laghos", "-p", "0", "-dim", "2", "-rs", "1", "-s", "12", "-tf", "0.01",
+      "-nmi", "1", "-nrt", "1e-30", "-nretry", "0", "-m", mesh,
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) != 0);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[]) try
 {

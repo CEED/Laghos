@@ -556,50 +556,53 @@ int main(int argc, char *argv[])
 
       if (ode_solver_type > 10) // implicit.
       {
-         // Don't repeat for TGreen.
-         if (problem != 0)
+         // Repeat a failed Newton step, including Taylor-Green, or a step
+         // that took 4 or more iterations. The cut is the iteration count,
+         // not dt_est.
+         if (hydro->newton_converged == false || hydro->newton_max_iter >= 4)
          {
-            // Repeat.
-            if (hydro->newton_converged == false || hydro->newton_max_iter >= 4)
+            dt *= 0.85;
+            t = t_old;
+            S = S_old;
+            hydro->ResetQuadratureData();
+            last_step = false;
+            if (Mpi::Root())
             {
-               dt *= 0.85;
-               t = t_old;
-               S = S_old;
-               hydro->ResetQuadratureData();
-               last_step = false;
-               if (Mpi::Root())
-               {
-                  out << "Repeating step " << ti << " with dt: " << dt << "." << std::endl;
-                  if (!hydro->newton_converged)
-                  {
-                     out << "Newton did not converge in "
-                         << hydro->newton_max_iter << " iterations.\n";
-                  }
-                  else { out << "Estimated dt lower than taken dt.\n"; }
-               }
-
+               out << "Repeating step " << ti << " with dt: " << dt << "."
+                   << std::endl;
                if (!hydro->newton_converged)
                {
-                  if (nretry == 1)
-                  {
-                     hydro->residual->dump_jacobians = 1;
-                  }
-                  else if (nretry == 0)
-                  {
-                     if (Mpi::Root()) { out << "no retry planned, exit\n"; }
-                     exit(1);
-                  }
-                  nretry--;
+                  out << "Newton did not converge in "
+                      << hydro->newton_max_iter << " iterations.\n";
                }
+               else
+               {
+                  out << "Newton took " << hydro->newton_max_iter
+                      << " iterations.\n";
+               }
+            }
 
-               if (results) { results->repeats++; }
-               ti--; continue;
-            }
-            else if (hydro->newton_max_iter <= 1)
+            if (!hydro->newton_converged)
             {
-               dt *= 1.05;
-               if (Mpi::Root()) { out << "Increasing dt: " << dt << std::endl; }
+               if (nretry == 1)
+               {
+                  hydro->residual->dump_jacobians = 1;
+               }
+               else if (nretry == 0)
+               {
+                  if (Mpi::Root()) { out << "no retry planned, exit\n"; }
+                  return 1;
+               }
+               nretry--;
             }
+
+            if (results) { results->repeats++; }
+            ti--; continue;
+         }
+         else if (hydro->newton_max_iter <= 1)
+         {
+            dt *= 1.05;
+            if (Mpi::Root()) { out << "Increasing dt: " << dt << std::endl; }
          }
       }
       else if (dt_est < dt) // explicit.
