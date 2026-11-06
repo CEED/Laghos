@@ -285,6 +285,8 @@ the following versions of Laghos have been developed
 - **SERIAL** version in the [serial/](./serial/README.md) directory.
 - **AMR** version in the [amr/](./amr/README.md) directory.
   This version supports dynamic adaptive mesh refinement.
+- **∂FEM** version in the [dfem/](./dfem/README.md) directory.
+  This version supports **explicit** and **implicit** time integration.
 
 ## Contact
 

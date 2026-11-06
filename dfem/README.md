@@ -7,47 +7,54 @@
 
         High-order Lagrangian Hydrodynamics Miniapp
 
-                      dFEM version
+                      ∂FEM version
 
 ## Overview
-
-This directory contains the dFEM version of **Laghos** (LAGrangian High-Order
-Solver), with explicit and implicit time integration, local and global
-q-functions, CPU and GPU execution, and a test suite covering the Sedov,
-Taylor-Green and triple-point problems.
+This directory contains the ∂FEM version of **Laghos** (**LAG**rangian
+**H**igh-**O**rder **S**olver):
+- [**Explicit**](https://doi.org/10.1137/120864672) and
+  [**implicit**](https://arxiv.org/abs/2609.16424) time integration
+- Local and global q-functions
+- **CPU** and **GPU** execution
+- A test suite covering the Sedov, Taylor-Green and triple-point problems
 
 For more details about Laghos and the CEED software suite, see the
 [README file](../README.md) in the top-level directory.
 
 ## Differences from the official benchmark version
-
 1. The hydrodynamics operators use MFEM's differentiable finite element
-   (dFEM) framework, including Jacobian kernels for implicit integration.
+   (∂FEM) framework, including Jacobian kernels for implicit integration.
 2. Local and global q-function backends are selected at runtime with `-qf`.
-3. Explicit and implicit ODE solvers are available, including RK2 SSP,
+3. **Explicit** and **implicit** ODE solvers are available, including RK2 SSP,
    RK3 SSP, RK4, backward Euler and implicit midpoint.
 4. The executable is named `laghos_dfem`. Its command-line options differ
    from the top-level version: use `-ov` and `-oe` for the velocity and
    internal energy orders, and `-glvis` for GLVis visualization.
 
 ## Limitations
-
-- Only 2D and 3D meshes are supported. The 1D Sod shock tube (`-p 2`) is not
-  supported by the dFEM operators.
+- Supported problems, in 2D and 3D:
+  - `-p 0`: Taylor-Green vortex
+  - `-p 1`: Sedov blast
+  - `-p 3`: triple point
+- Unsupported problems:
+  - `-p 2`: 1D Sod shock tube
+  - `-p 4`: Gresho vortex
+  - `-p 5`: 2D Riemann problem, config. 12
+  - `-p 6`: 2D Riemann problem, config. 6
+  - `-p 7`: 2D Rayleigh-Taylor instability
 
 ## Building
 
-The dFEM version requires MPI, hypre and a dFEM-enabled MFEM build providing
-`fem/dfem/doperator.hpp` and the local and global q-function backends.
+The ∂FEM version requires MPI, hypre and an MFEM build from the `dfem-dev`
+branch, which provides the required support and the `local` and `global`
+q-function backends.
 See the top-level [building instructions](../README.md#building) for the
-other dependencies and CPU, CUDA and HIP configurations.
-
-<!-- TODO: Pin a compatible dFEM-enabled MFEM branch or revision. -->
+other dependencies and **CPU** and **GPU** (CUDA or HIP) configurations.
 
 ### Makefile
 
-From this directory, point `MFEM_DIR` to the MFEM source, build or installation
-directory:
+From this directory, point `MFEM_DIR` to an MFEM source, build or
+installation directory built from the `dfem-dev` branch:
 
 ```sh
   make -j 4 MFEM_DIR=/path/to/mfem
@@ -62,7 +69,8 @@ See `make help` for configuration, testing and installation options.
 ### CMake
 
 Configure from the top-level directory, not from `dfem/`. For an installed
-MFEM and hypre, with the MFEM source tree available for the test header:
+MFEM from the `dfem-dev` branch and hypre, with the MFEM source tree
+available for the test header:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
@@ -85,7 +93,7 @@ The mesh file must be readable even for problems that generate their mesh.
 
 ### Sedov blast
 
-Explicit RK3 SSP in 2D, with smooth artificial viscosity:
+**Explicit** RK3 SSP in 2D, with smooth artificial viscosity:
 
 ```sh
 mpirun -np 2 ./laghos_dfem -m ../data/square01_quad.mesh \
@@ -93,7 +101,7 @@ mpirun -np 2 ./laghos_dfem -m ../data/square01_quad.mesh \
   -av -av-type 7 -tf 0.05 -no-save
 ```
 
-Implicit midpoint in 2D:
+**Implicit** midpoint in 2D:
 
 ```sh
 mpirun -np 2 ./laghos_dfem -m ../data/square01_quad.mesh \
@@ -135,8 +143,9 @@ Useful options include:
 ## Verification of Results
 
 The reference values and tolerances are stored in `laghos_tests.cpp`.
-Both `chk` and `run` cases check the accepted step count, final time step,
-total energy, and position, velocity and internal energy norms.
+Both `chk` and `run` cases, **explicit** and **implicit**, check the
+accepted step count, final time step, total energy, and position,
+velocity and internal energy norms against those hardcoded values.
 The `chk` cases correspond to comparisons with the top-level README runs;
 they are not a substitute for running the full suite.
 
@@ -158,20 +167,8 @@ The name is a single line. Problem tags are `sdv`, `tgv` and `tpt`; `q21`,
 for example, means Q2-Q1. Stepper tags include `rk2`, `rk3`, `rk4`, `mid`
 and `bwe`. `av0` denotes no viscosity, `av1` and `av7` select viscosity
 variants, and `dtm`/`dtn` denote `-dt-min` enabled/disabled.
-CPU and debug tests run on one, two and three ranks; GPU tests run on one
-and two ranks, using both q-function backends and the same references.
-
-`LAGHOS_TESTS_GROUPS` defaults to ON with CUDA- or HIP-enabled MFEM, otherwise
-OFF. When ON, tests are grouped by device, backend and rank count as
-`dfem_<device>_<qf>_all_np<N>`. Individual tests have device, backend,
-`exp`/`imp` and `chk`/`run` labels; grouped tests have device, backend and
-`group` labels.
-
-`LAGHOS_TESTS_GPUS` sets the GPU count, detected at configure time with a
-fallback of one. With at least three GPUs, one-rank groups use GPU 2 and
-two-rank groups use GPUs 0 and 1, allowing these groups to run side by side.
-Otherwise GPU groups share a resource lock. CTest accounts for each test's
-MPI rank count through its `PROCESSORS` property when scheduling `-j` jobs.
+**CPU** and debug tests run on one, two and three ranks; **GPU** tests run
+on one and two ranks, using both q-function backends and the same references.
 
 The Makefile also provides a full suite and a restricted check run:
 
@@ -180,8 +177,20 @@ make tests MFEM_DIR=/path/to/mfem
 make tests MFEM_DIR=/path/to/mfem TESTS='[chk]' RANKS=1 DEVICES=cpu QFS=loc
 ```
 
-Use `MAX_RANKS` to limit concurrent MPI ranks, `GPUS` to override GPU
-count, and `GROUPED=` to disable grouping in the Makefile driver.
+## References
+
+The **explicit** discretization follows the original Laghos method:
+
+> V. Dobrev, Tz. Kolev and R. Rieben <br>
+> [High-order curvilinear finite element methods for Lagrangian hydrodynamics](https://doi.org/10.1137/120864672) <br>
+> *SIAM Journal on Scientific Computing*, (34) 2012, pp. B606–B641.
+
+The **implicit** solvers follow the recent extension:
+
+> J. Andrej, J. Camier, V. Dobrev, Tz. Kolev, B. Lazarov, K. Mittal,
+> R. Rieben, B. Talamini and V. Z. Tomov <br>
+> [Implicit Lagrangian Hydrodynamics with High-Order Finite Elements](https://arxiv.org/abs/2609.16424) <br>
+> arXiv:2609.16424, 2026.
 
 ## Contact
 
