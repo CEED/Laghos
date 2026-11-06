@@ -543,6 +543,32 @@ TEST_CASE("generated_mesh_skips_file", "[dfem][mesh]")
    REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
 }
 
+// An accepted explicit step records the dt that advanced time.
+TEST_CASE("explicit_history_stores_taken_dt", "[dfem][dt]")
+{
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   std::vector<std::string> args = {
+      "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
+      "-av", "-m", mesh,
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   LaghosResults res;
+   laghos_results = &res;
+   const int ret = laghos(static_cast<int>(argv.size()) - 1, argv.data());
+   laghos_results = nullptr;
+   REQUIRE(ret == 0);
+   REQUIRE(!res.history.empty());
+   real_t t_prev = 0.0;
+   for (const auto &h : res.history)
+   {
+      REQUIRE(AlmostEq(h.dt, h.t - t_prev, 1e-12));
+      t_prev = h.t;
+   }
+}
+
 // A positive -oq must change the quadrature used by a Sedov step.
 TEST_CASE("order_q_changes_step", "[dfem][quad]")
 {

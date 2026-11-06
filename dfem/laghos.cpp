@@ -631,7 +631,10 @@ int main(int argc, char *argv[])
          if (results) { results->repeats++; }
          ti--; continue;
       }
-      else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+
+      // Record the dt that advanced t. A larger estimate grows the next step.
+      const real_t dt_taken = dt;
+      if (ode_solver_type <= 10 && dt_est > 1.25 * dt_taken) { dt *= 1.02; }
 
       // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
       // data in S. This operation simply updates the Memory validity flags of
@@ -653,7 +656,7 @@ int main(int argc, char *argv[])
       if (results)
       {
          results->steps = ti;
-         results->history.push_back({ti, t, dt});
+         results->history.push_back({ti, t, dt_taken});
       }
 
       if (ti % vis_steps == 0 || last_step)
@@ -664,7 +667,7 @@ int main(int argc, char *argv[])
          {
             out << "step " << std::setw(5) << ti
                 << ",\tt = " << std::setw(5) << t
-                << ",\tdt = " << std::setw(5) << dt;
+                << ",\tdt = " << std::setw(5) << dt_taken;
             out << std::endl;
          }
       }
