@@ -34,6 +34,9 @@ using mfem::future::Value;
 
 using mfem::future::tensor;
 
+// Enzyme keeps a plain real_t. Otherwise this is a dual number, and the
+// type-1 eigen tangent is compiled only for that dual. The references do
+// not record which mode produced them.
 using dscalar_t =
    std::conditional_t<mfem::UseEnzyme, real_t,
    mfem::future::dual<real_t, real_t>>;
