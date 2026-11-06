@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 
    problem = 1;
    int dim = 3;
-   const char *mesh_file = "./rectangle01_quad.mesh";
+   const char *mesh_file = "data/rectangle01_quad.mesh";
    int refinements = 0;
    int order_v = 2;
    int order_e = 1;
@@ -182,7 +182,14 @@ int main(int argc, char *argv[])
 
    real_t blast_energy = (dim == 2) ? 0.25 : 0.125;
 
-   Mesh serial_mesh = Mesh(mesh_file, true, true);
+   // Problems 0 and 1 replace the file with a Cartesian mesh. Do not open it.
+   const bool cartesian = (problem == 0 || problem == 1) &&
+                          (dim == 2 || dim == 3);
+   Mesh serial_mesh;
+   if (!cartesian)
+   {
+      serial_mesh = Mesh(mesh_file, true, true);
+   }
 
    if ((dim == 2) && (problem == 0 || problem == 1))
    {

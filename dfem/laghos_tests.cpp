@@ -527,6 +527,20 @@ TEST_CASE("imp_run_sdv_3d_q21_mid_av7_dtn",
           "[dfem][imp][run][sdv][3d][q21][dtn]")
 { LaghosTest("imp_run_sdv_3d_q21_mid_av7_dtn"); }
 
+// Problems 0 and 1 build a Cartesian mesh and must not open -m first.
+TEST_CASE("generated_mesh_skips_file", "[dfem][mesh]")
+{
+   std::vector<std::string> args = {
+      "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-tf", "1e-4",
+      "-m", "no-such-rectangle.mesh",
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
+}
+
 // -av alone must change a Sedov step. Type 2 adds no viscous stress.
 TEST_CASE("av_default_is_viscous", "[dfem][av]")
 {
