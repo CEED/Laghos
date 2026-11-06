@@ -541,6 +541,35 @@ TEST_CASE("generated_mesh_skips_file", "[dfem][mesh]")
    REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
 }
 
+// A positive -oq must change the quadrature used by a Sedov step.
+TEST_CASE("order_q_changes_energy", "[dfem][quad]")
+{
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   const auto energy = [&](bool coarse)
+   {
+      std::vector<std::string> args = {
+         "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
+         "-av", "-m", mesh,
+         "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+      };
+      if (coarse)
+      {
+         args.push_back("-oq");
+         args.push_back("1");
+      }
+      std::vector<char *> argv;
+      for (auto &a : args) { argv.push_back(&a[0]); }
+      argv.push_back(nullptr);
+      LaghosResults res;
+      laghos_results = &res;
+      const int ret = laghos(static_cast<int>(argv.size()) - 1, argv.data());
+      laghos_results = nullptr;
+      REQUIRE(ret == 0);
+      return res.energy_final;
+   };
+   REQUIRE(!AlmostEq(energy(true), energy(false), 1e-6));
+}
+
 // -av alone must change a Sedov step. Type 2 adds no viscous stress.
 TEST_CASE("av_default_is_viscous", "[dfem][av]")
 {

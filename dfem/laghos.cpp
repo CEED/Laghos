@@ -409,8 +409,10 @@ int main(int argc, char *argv[])
 
    const FiniteElement &h1 = *H1FESpace.GetTypicalFE();
    const FiniteElement &l2 = *L2FESpace.GetTypicalFE();
-   IntegrationRule ir = IntRules.Get(mesh.GetTypicalElementGeometry(),
-                                     3 * h1.GetOrder() + l2.GetOrder() - 1);
+   const int qorder = (order_q > 0)
+                      ? order_q
+                      : 3 * h1.GetOrder() + l2.GetOrder() - 1;
+   IntegrationRule ir = IntRules.Get(mesh.GetTypicalElementGeometry(), qorder);
 
    if (Mpi::Root())
    {
