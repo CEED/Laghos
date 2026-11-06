@@ -172,6 +172,9 @@ and `bwe`. `av0` denotes no viscosity, `av1` and `av7` select viscosity
 variants, and `dtm`/`dtn` denote `-dt-min` enabled/disabled.
 **CPU** and debug tests run on one, two and three ranks; **GPU** tests run
 on one and two ranks, using both q-function backends and the same references.
+The debug device skips `imp_run_sdv_3d_q21_mid_av7_dtn`: a hypre host
+read of an alias faults on a valid device page. CMake and the makefile
+both list that skip.
 
 The Makefile also provides a full suite and a restricted check run:
 
