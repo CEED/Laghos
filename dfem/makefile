@@ -213,7 +213,7 @@ TESTS_JOBS = -j $(shell n=1; for r in $(RANKS); do [ $$r -gt $$n ] && n=$$r; \
 tests: laghos_tests
 	@$(if $(TESTS_KEEP),rm -rf $(TESTS_DIR); \
 	   rmdir $(patsubst %/,%,$(dir $(TESTS_DIR))) 2> /dev/null;) \
-	 fl=`mktemp /tmp/laghos_tests.XXXXXX` || exit 1; \
+	 fl=`mktemp "$${TMPDIR:-/tmp}/laghos_tests.XXXXXX"` || exit 1; \
 	 trap 'rm -f $$fl' 0; trap 'exit 130' 1 2 15; \
 	 $(MAKE) --no-print-directory $(TESTS_JOBS) tests-run \
 	   CONFIG_MK=$(CONFIG_MK) TESTS_T0=`$(CLOCK)` TESTS_FAILED=$$fl
