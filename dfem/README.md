@@ -146,8 +146,10 @@ The reference values and tolerances are stored in `laghos_tests.cpp`.
 Both `chk` and `run` cases, **explicit** and **implicit**, check the
 accepted step count, final time step, total energy, and position,
 velocity and internal energy norms against those hardcoded values.
-The `chk` cases correspond to comparisons with the top-level README runs;
-they are not a substitute for running the full suite.
+The `chk` cases are short dFEM runs of the Taylor-Green and Sedov
+problems in the top-level README (entries 1-4). Their final times are
+0.05, 0.01, 0.05 and 0.02, and the 3D Sedov check does not use `-E0 2`.
+They are not a substitute for running the full suite.
 
 From the top-level directory after a CMake build:
 
