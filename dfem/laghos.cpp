@@ -556,10 +556,12 @@ int main(int argc, char *argv[])
 
       if (ode_solver_type > 10) // implicit.
       {
-         // Repeat a failed Newton step, including Taylor-Green, or a step
-         // that took 4 or more iterations. The cut is the iteration count,
-         // not dt_est.
-         if (hydro->newton_converged == false || hydro->newton_max_iter >= 4)
+         // Repeat a failed Newton step, including Taylor-Green. Other problems
+         // also repeat a converged step that took 4 or more iterations. That
+         // cut is the iteration count, not dt_est.
+         const bool failed = hydro->newton_converged == false;
+         const bool slow = problem != 0 && hydro->newton_max_iter >= 4;
+         if (failed || slow)
          {
             dt *= 0.85;
             t = t_old;
