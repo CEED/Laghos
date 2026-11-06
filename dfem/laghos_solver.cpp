@@ -768,33 +768,43 @@ void LagrangianHydroOperator::ResetNewtonInfo()
 
 void LagrangianHydroOperator::DensityScatter()
 {
-   Mesh m0 = H1.GetParMesh()->GetSerialMesh(0);
-   GridFunction r0 = rho0.GetSerialGridFunction(0, m0);
+   Mesh current = H1.GetParMesh()->GetSerialMesh(0);
+   GridFunction r0 = rho0.GetSerialGridFunction(0, current);
+   GridFunction x0_s = x0.GetSerialGridFunction(0, current);
 
    if (Mpi::WorldRank() != 0) { return; }
 
-   std::ofstream fstream_rho;
-   fstream_rho.open("rho.out");
+   // det(J0) is the initial element, not 1/NE of a uniform mesh.
+   Mesh initial(current);
+   const bool nodes = initial.GetNodes() &&
+                      initial.GetNodes()->Size() == x0_s.Size();
+   MFEM_VERIFY(nodes, "initial positions do not match the gathered mesh");
+   *initial.GetNodes() = x0_s;
+
+   std::ofstream fstream_rho("rho.out");
    fstream_rho.precision(8);
 
    const int nqp = ir.GetNPoints();
-   Vector pos(2);
-   const int NE = m0.GetNE();
-   for (int e = 0; e < NE; e++)
+   const int dim = current.Dimension();
+   Vector pos(dim);
+   for (int e = 0; e < current.GetNE(); e++)
    {
-      ElementTransformation &Tr = *m0.GetElementTransformation(e);
+      ElementTransformation &Tr = *current.GetElementTransformation(e);
+      ElementTransformation &Tr0 = *initial.GetElementTransformation(e);
       for (int q = 0; q < nqp; q++)
       {
          const IntegrationPoint &ip = ir.IntPoint(q);
          Tr.SetIntPoint(&ip);
+         Tr0.SetIntPoint(&ip);
          Tr.Transform(ip, pos);
 
-         double detJ = Tr.Weight();
+         const double detJ = Tr.Weight();
+         const double detJ0 = Tr0.Weight();
          // rho0 * detJ0 / detJ.
-         double rho = r0.GetValue(Tr, ip)  * (1.0 / NE) / detJ;
-         double r = sqrt(pos(0) * pos(0) + pos(1) * pos(1));
-
-         fstream_rho << r << " " << rho << "\n";
+         const double rho = r0.GetValue(Tr, ip) * detJ0 / detJ;
+         double r2 = 0.0;
+         for (int d = 0; d < dim; d++) { r2 += pos(d) * pos(d); }
+         fstream_rho << std::sqrt(r2) << " " << rho << "\n";
       }
    }
    fstream_rho.close();

@@ -34,7 +34,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -568,6 +570,34 @@ TEST_CASE("order_q_changes_step", "[dfem][quad]")
       return res.dt_init;
    };
    REQUIRE(!AlmostEq(estimate(true), estimate(false), 1e-6));
+}
+
+// A 3D Sedov sample past the unit-cube xy radius includes z.
+TEST_CASE("rho_out_3d_radius", "[dfem][rho]")
+{
+   std::vector<std::string> args = {
+      "laghos", "-p", "1", "-dim", "3", "-rs", "0", "-tf", "1e-6",
+      "-no-glvis", "-no-paraview", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
+   // Rank 0 writes rho.out after the other ranks have left the scatter.
+   MPI_Barrier(MPI_COMM_WORLD);
+   std::ifstream in("rho.out");
+   REQUIRE(in.good());
+   double r = 0.0, rho = 0.0, max_r = 0.0;
+   while (in >> r >> rho) { max_r = std::max(max_r, r); }
+   in.close();
+   MPI_Barrier(MPI_COMM_WORLD);
+   if (mfem::Mpi::Root())
+   {
+      std::remove("rho.out");
+      std::remove("sedov.mesh");
+      std::remove("sedov.gf");
+   }
+   REQUIRE(max_r > 1.5);
 }
 
 // -av alone must change a Sedov step. Type 2 adds no viscous stress.
