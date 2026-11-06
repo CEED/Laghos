@@ -347,7 +347,8 @@ future::tuple<matd_t<DIM, T>, T, T, T> StressSetup(const QConstants &qc,
             qc.h0 * pow(detJ / det(J0), 1.0 / static_cast<real_t>(DIM));
          const auto delta_v = h * tr(dvdx);
 
-         // Coarses mesh h for the domain.
+         // Length of the unit Sedov and Taylor-Green domains.
+         // box01_hex.mesh is larger, so the author chooses the length.
          const real_t h_coarse = 1.0;
          const T dv_scale = 2.0 * h / h_coarse * cs;
 
