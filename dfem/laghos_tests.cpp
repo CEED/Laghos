@@ -543,6 +543,23 @@ TEST_CASE("generated_mesh_skips_file", "[dfem][mesh]")
    REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
 }
 
+// Problems other than Taylor-Green, Sedov and the triple point stop
+// before building a mesh.
+TEST_CASE("unsupported_problem_returns", "[dfem][problem]")
+{
+   for (const char *p : {"2", "4", "5"})
+   {
+      std::vector<std::string> args = {
+         "laghos", "-p", p, "-dim", "2", "-rs", "0", "-tf", "1e-4",
+         "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+      };
+      std::vector<char *> argv;
+      for (auto &a : args) { argv.push_back(&a[0]); }
+      argv.push_back(nullptr);
+      REQUIRE(laghos(static_cast<int>(argv.size()) - 1, argv.data()) != 0);
+   }
+}
+
 // An accepted explicit step records the dt that advanced time.
 TEST_CASE("explicit_history_stores_taken_dt", "[dfem][dt]")
 {

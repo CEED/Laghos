@@ -167,7 +167,16 @@ int main(int argc, char *argv[])
                "unknown q-function backend: " << qf_backend);
    hydro_options.qfunction_backend =
       global_qf ? hydrodynamics::GLOBAL_QF : hydrodynamics::LOCAL_QF;
-   MFEM_VERIFY(problem != 2, "1D Sod shock tube (-p 2) is not supported");
+   // 0 Taylor-Green, 1 Sedov, 3 triple point. Sod, Gresho and the rest abort
+   // later inside a coefficient, so reject them before any mesh work.
+   if (problem != 0 && problem != 1 && problem != 3)
+   {
+      if (Mpi::Root())
+      {
+         out << "Problem " << problem << " is not supported.\n";
+      }
+      return 1;
+   }
    if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 
    // Configure the device from the command line options, unless already done
