@@ -229,6 +229,7 @@ template <typename T> MFEM_HOST_DEVICE inline
 void ComputeMaterialProperties(const real_t &gamma, const T &rho,
                                const T &E, T &p, T &cs)
 {
+   using std::sqrt;
    p = (gamma - 1.0) * rho * E;
    cs = sqrt(gamma * (gamma - 1.0) * E);
 }
@@ -247,6 +248,8 @@ future::tuple<matd_t<DIM, T>, T, T, T> StressSetup(const QConstants &qc,
                                                    const T &E,
                                                    const real_t &w)
 {
+   using std::atanh, std::fabs, std::fmax, std::hypot, std::pow, std::sqrt,
+         std::tanh;
    using matd = matd_t<DIM, T>;
    T p, cs;
    const T detJ = det(J);
