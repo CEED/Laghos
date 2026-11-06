@@ -392,7 +392,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    Vector rho0_t(L2.GetTrueVSize()),
           rho_t(L2.GetTrueVSize()),
           rhs(L2.GetTrueVSize());
-   const int l2dofs_cnt = L2.GetFE(0)->GetDof();
+   const int l2dofs_cnt = L2.GetTypicalFE()->GetDof();
    DenseMatrix Mrho(l2dofs_cnt);
    DenseMatrixInverse inv(&Mrho);
    Vector rhs_e(l2dofs_cnt), rho_z(l2dofs_cnt);

@@ -34,7 +34,7 @@ real_t InitialMeshSize(ParMesh &mesh, const int order)
    MPI_Allreduce(&ne_loc, &ne_global, 1, MPI_INT, MPI_SUM, mesh.GetComm());
 
    real_t h = 0.0;
-   switch (mesh.GetElementBaseGeometry(0))
+   switch (mesh.GetTypicalElementGeometry())
    {
       case Geometry::SQUARE: h = sqrt(vol_global / ne_global); break;
       case Geometry::TRIANGLE: h = sqrt(2.0 * vol_global / ne_global); break;

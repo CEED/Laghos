@@ -400,8 +400,10 @@ int main(int argc, char *argv[])
    FunctionCoefficient mat_coeff(gamma_func);
    mat_gf.ProjectCoefficient(mat_coeff);
 
-   IntegrationRule ir = IntRules.Get(mesh.GetElementBaseGeometry(0),
-                                     3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1);
+   const FiniteElement &h1 = *H1FESpace.GetTypicalFE();
+   const FiniteElement &l2 = *L2FESpace.GetTypicalFE();
+   IntegrationRule ir = IntRules.Get(mesh.GetTypicalElementGeometry(),
+                                     3 * h1.GetOrder() + l2.GetOrder() - 1);
 
    if (Mpi::Root())
    {
@@ -410,7 +412,7 @@ int main(int argc, char *argv[])
 
    // Constants of the q-functions
    const real_t h0 =
-      hydrodynamics::InitialMeshSize(mesh, H1FESpace.GetOrder(0));
+      hydrodynamics::InitialMeshSize(mesh, h1.GetOrder());
    const hydrodynamics::QConstants qc{cfl, static_cast<real_t>(order_v), h0,
                                       viscosity_q1, viscosity_q2,
                                       viscosity_type, use_viscosity};
