@@ -101,20 +101,26 @@ int laghos(int argc, char *argv[])
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
-   args.AddOption(&refinements, "-rs", "--ref", "");
-   args.AddOption(&order_v, "-ov", "--ov", "");
-   args.AddOption(&order_e, "-oe", "--oe", "");
-   args.AddOption(&order_q, "-oq", "--oq", "");
-   args.AddOption(&t_final, "-tf", "--tf", "");
-   args.AddOption(&problem, "-p", "--p", "");
-   args.AddOption(&cfl, "-cfl", "--cfl", "");
+   args.AddOption(&refinements, "-rs", "--ref",
+                  "Number of uniform mesh refinements.");
+   args.AddOption(&order_v, "-ov", "--ov",
+                  "Order of the kinematic (H1) space.");
+   args.AddOption(&order_e, "-oe", "--oe",
+                  "Order of the thermodynamic (L2) space.");
+   args.AddOption(&order_q, "-oq", "--oq",
+                  "Quadrature order (non-positive: 3*ov + oe - 1).");
+   args.AddOption(&t_final, "-tf", "--tf", "Final time.");
+   args.AddOption(&problem, "-p", "--p",
+                  "Problem: 0 Taylor-Green, 1 Sedov, 3 triple point.");
+   args.AddOption(&cfl, "-cfl", "--cfl", "CFL number.");
    args.AddOption(&hydro_options.cg_relative_tolerance, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
    args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
-   args.AddOption(&use_viscosity, "-av", "--av", "-no-av", "--no-av", "");
+   args.AddOption(&use_viscosity, "-av", "--av", "-no-av", "--no-av",
+                  "Enable artificial viscosity.");
    args.AddOption(&hydro_options.fd_gradient, "-fd", "--fd",
-                  "-no-fd", "--no-fd", "");
+                  "-no-fd", "--no-fd", "Finite-difference Jacobian.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4,\n\t"
@@ -137,7 +143,7 @@ int laghos(int argc, char *argv[])
    args.AddOption(&vis_steps, "-vs", "--vis-steps",
                   "Number of visualization steps.");
    args.AddOption(&visualization, "-glvis", "--glvis", "-no-glvis", "--no-glvis",
-                  "");
+                  "Enable GLVis visualization.");
    args.AddOption(&paraview, "-paraview", "--paraview",
                   "-no-paraview", "--no-paraview",
                   "Enable ParaView output (VTK files; can be expensive).");
@@ -156,8 +162,10 @@ int laghos(int argc, char *argv[])
                   "Time step estimate as the min over all the RK stages and "
                   "the new state (explicit only).");
    args.AddOption(&hydro_options.dump_jacobians, "-dump-jacobians",
-                  "--dump-jacobians", "");
-   args.AddOption(&nretry, "-nretry", "--nretry", "");
+                  "--dump-jacobians",
+                  "Dump the Jacobian; 1 exits after the first dump.");
+   args.AddOption(&nretry, "-nretry", "--nretry",
+                  "Newton retries after a failed step.");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
