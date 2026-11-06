@@ -127,7 +127,8 @@ mpirun -np 2 ./laghos_dfem -m ../data/box01_hex.mesh \
 Useful options include:
 
 - `-qf local` (default) or `-qf global`: select the q-function backend.
-  Internally these are `LOCAL_QF=0` and `GLOBAL_QF=1`.
+  Internally these are `LOCAL_QF=0` and `GLOBAL_QF=1`. The tests check
+  both backends against the same references.
 - `-d cpu` (default), `-d debug`, `-d cuda` or `-d hip`: select an MFEM
   device supported by the build. `-dev` selects the GPU device number.
 - `-s 2`, `-s 3`, `-s 4`, `-s 11`, `-s 12`, `-s 14`: RK2 SSP, RK3 SSP,
