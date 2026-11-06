@@ -155,7 +155,7 @@ MFEM_TESTS = laghos_dfem
 RUN_MPI = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP)
 test: laghos_dfem
 	@$(call mfem-test,$<, $(RUN_MPI) 4, Laghos dFEM miniapp,\
-	-p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.1,SKIP-NO-VIS)
+	-p 0 -dim 2 -m ../data/square01_quad.mesh -rs 3 -tf 0.1,SKIP-NO-VIS)
 # Testing: "test" target and mfem-test* variables are defined in MFEM's
 # config/test.mk
 ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
