@@ -7,6 +7,9 @@ if (MFEM_USE_CUDA OR MFEM_USE_HIP)
   set(_dfem_lang CXX)
   if (MFEM_USE_CUDA)
     set(_dfem_lang CUDA)
+    # MFEM tensor helpers call constexpr functions in device code
+    target_compile_options(laghos_dfem_lib PUBLIC
+      $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:--expt-relaxed-constexpr>)
   endif()
   if (MFEM_USE_HIP)
     set(_dfem_lang HIP)
