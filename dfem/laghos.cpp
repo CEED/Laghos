@@ -63,7 +63,7 @@ using namespace mfem;
 // Choice for the problem setup.
 int problem;
 
-int main(int argc, char *argv[])
+int laghos(int argc, char *argv[])
 {
    LaghosResults *results = laghos_results; // set by laghos_tests
    if (!Mpi::IsInitialized()) { Mpi::Init(); }
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 
    problem = 1;
    int dim = 3;
-   const char *mesh_file = "./rectangle01_quad.mesh";
+   const char *mesh_file = "data/rectangle01_quad.mesh";
    int refinements = 0;
    int order_v = 2;
    int order_e = 1;
@@ -90,7 +90,8 @@ int main(int argc, char *argv[])
    bool visualization = false;
    bool paraview = false;
    bool save_files = true;
-   int viscosity_type = 2;
+   bool fom = false;
+   int viscosity_type = 7;
    real_t viscosity_q1 = 0.5;
    real_t viscosity_q2 = 1.0;
    bool dt_min = false;
@@ -101,27 +102,33 @@ int main(int argc, char *argv[])
    OptionsParser args(argc, argv);
    args.AddOption(&dim, "-dim", "--dimension", "Dimension of the problem.");
    args.AddOption(&mesh_file, "-m", "--mesh", "Mesh file to use.");
-   args.AddOption(&refinements, "-rs", "--ref", "");
-   args.AddOption(&order_v, "-ov", "--ov", "");
-   args.AddOption(&order_e, "-oe", "--oe", "");
-   args.AddOption(&order_q, "-oq", "--oq", "");
-   args.AddOption(&t_final, "-tf", "--tf", "");
-   args.AddOption(&problem, "-p", "--p", "");
-   args.AddOption(&cfl, "-cfl", "--cfl", "");
+   args.AddOption(&refinements, "-rs", "--ref",
+                  "Number of uniform mesh refinements.");
+   args.AddOption(&order_v, "-ov", "--ov",
+                  "Order of the kinematic (H1) space.");
+   args.AddOption(&order_e, "-oe", "--oe",
+                  "Order of the thermodynamic (L2) space.");
+   args.AddOption(&order_q, "-oq", "--oq",
+                  "Quadrature order (non-positive: 3*ov + oe - 1).");
+   args.AddOption(&t_final, "-tf", "--tf", "Final time.");
+   args.AddOption(&problem, "-p", "--p",
+                  "Problem: 0 Taylor-Green, 1 Sedov, 3 triple point.");
+   args.AddOption(&cfl, "-cfl", "--cfl", "CFL number.");
    args.AddOption(&hydro_options.cg_relative_tolerance, "-cgt", "--cg-tol",
                   "Relative CG tolerance (velocity linear solve).");
    args.AddOption(&device, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
-   args.AddOption(&use_viscosity, "-av", "--av", "-no-av", "--no-av", "");
+   args.AddOption(&use_viscosity, "-av", "--av", "-no-av", "--no-av",
+                  "Enable artificial viscosity.");
    args.AddOption(&hydro_options.fd_gradient, "-fd", "--fd",
-                  "-no-fd", "--no-fd", "");
+                  "-no-fd", "--no-fd", "Finite-difference Jacobian.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
-                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6,\n\t"
-                  "            7 - RK2Avg."
-                  "            11 - Backward Euler"
-                  "            12 - Implicit Midpoint"
-                  "            13 - SDIRK33Solver");
+                  "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4,\n\t"
+                  "            6 - RK6,\n\t"
+                  "            11 - Backward Euler,\n\t"
+                  "            12 - Implicit midpoint,\n\t"
+                  "            13 - SDIRK33, 14 - SDIRK34.");
    args.AddOption(&hydro_options.nonlinear_maximum_iterations, "-nmi", "--nmi",
                   "Maximum number of nonlinear iterations.");
    args.AddOption(&hydro_options.nonlinear_relative_tolerance, "-nrt", "--nrt",
@@ -137,7 +144,7 @@ int main(int argc, char *argv[])
    args.AddOption(&vis_steps, "-vs", "--vis-steps",
                   "Number of visualization steps.");
    args.AddOption(&visualization, "-glvis", "--glvis", "-no-glvis", "--no-glvis",
-                  "");
+                  "Enable GLVis visualization.");
    args.AddOption(&paraview, "-paraview", "--paraview",
                   "-no-paraview", "--no-paraview",
                   "Enable ParaView output (VTK files; can be expensive).");
@@ -145,8 +152,8 @@ int main(int argc, char *argv[])
                   "-no-save", "--no-save-files",
                   "Save the final mesh and fields (and rho.out) files.");
    args.AddOption(&viscosity_type, "-av-type", "--av-type",
-                  "Artificial viscosity type: 1 stock Laghos tensor viscosity"
-                  " (explicit only), 7 smooth viscosity.");
+                  "Artificial viscosity type: 1 stock tensor viscosity, "
+                  "2 none, 7 smooth (default).");
    args.AddOption(&viscosity_q1, "-av-q1", "--av-q1",
                   "Artificial viscosity (type 7) linear coefficient.");
    args.AddOption(&viscosity_q2, "-av-q2", "--av-q2",
@@ -156,19 +163,41 @@ int main(int argc, char *argv[])
                   "Time step estimate as the min over all the RK stages and "
                   "the new state (explicit only).");
    args.AddOption(&hydro_options.dump_jacobians, "-dump-jacobians",
-                  "--dump-jacobians", "");
-   args.AddOption(&nretry, "-nretry", "--nretry", "");
+                  "--dump-jacobians",
+                  "Dump the Jacobian; 1 exits after the first dump.");
+   args.AddOption(&nretry, "-nretry", "--nretry",
+                  "Newton retries after a failed step.");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
-   args.ParseCheck();
+   args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
+                  "Print the stock-compatible figures of merit table.");
+   args.Parse();
+   if (!args.Good())
+   {
+      if (Mpi::Root()) { args.PrintUsage(mfem::out); }
+      return 1;
+   }
+#ifndef LAGHOS_NO_MAIN
+   hydro_options.timings = true;
+   if (Mpi::Root()) { args.PrintOptions(mfem::out); }
+#endif
    const bool global_qf = !strcmp(qf_backend, "global");
    MFEM_VERIFY(global_qf || !strcmp(qf_backend, "local"),
                "unknown q-function backend: " << qf_backend);
    hydro_options.qfunction_backend =
       global_qf ? hydrodynamics::GLOBAL_QF : hydrodynamics::LOCAL_QF;
-   MFEM_VERIFY(problem != 2, "1D Sod shock tube (-p 2) is not supported");
-   if (Mpi::Root()) { args.PrintOptions(mfem::out); }
+   hydro_options.taylor_green = (problem == 0);
+   // 0 Taylor-Green, 1 Sedov, 3 triple point. Sod, Gresho and the rest abort
+   // later inside a coefficient, so reject them before any mesh work.
+   if (problem != 0 && problem != 1 && problem != 3)
+   {
+      if (Mpi::Root())
+      {
+         out << "Problem " << problem << " is not supported.\n";
+      }
+      return 1;
+   }
 
    // Configure the device from the command line options, unless already done
    std::optional<Device> backend;
@@ -182,7 +211,14 @@ int main(int argc, char *argv[])
 
    real_t blast_energy = (dim == 2) ? 0.25 : 0.125;
 
-   Mesh serial_mesh = Mesh(mesh_file, true, true);
+   // Problems 0 and 1 replace the file with a Cartesian mesh. Do not open it.
+   const bool cartesian = (problem == 0 || problem == 1) &&
+                          (dim == 2 || dim == 3);
+   Mesh serial_mesh;
+   if (!cartesian)
+   {
+      serial_mesh = Mesh(mesh_file, true, true);
+   }
 
    if ((dim == 2) && (problem == 0 || problem == 1))
    {
@@ -400,8 +436,12 @@ int main(int argc, char *argv[])
    FunctionCoefficient mat_coeff(gamma_func);
    mat_gf.ProjectCoefficient(mat_coeff);
 
-   IntegrationRule ir = IntRules.Get(mesh.GetElementBaseGeometry(0),
-                                     3 * H1FESpace.GetOrder(0) + L2FESpace.GetOrder(0) - 1);
+   const int h1_order = H1FESpace.GetTypicalFE()->GetOrder();
+   const FiniteElement &l2 = *L2FESpace.GetTypicalFE();
+   const int qorder = (order_q > 0)
+                      ? order_q
+                      : 3 * h1_order + l2.GetOrder() - 1;
+   IntegrationRule ir = IntRules.Get(mesh.GetTypicalElementGeometry(), qorder);
 
    if (Mpi::Root())
    {
@@ -410,7 +450,7 @@ int main(int argc, char *argv[])
 
    // Constants of the q-functions
    const real_t h0 =
-      hydrodynamics::InitialMeshSize(mesh, H1FESpace.GetOrder(0));
+      hydrodynamics::InitialMeshSize(mesh, h1_order);
    const hydrodynamics::QConstants qc{cfl, static_cast<real_t>(order_v), h0,
                                       viscosity_q1, viscosity_q2,
                                       viscosity_type, use_viscosity};
@@ -531,6 +571,8 @@ int main(int argc, char *argv[])
       paraview_save(0, 0.0);
    }
 
+   hydrodynamics::HydroTimings::Scope solve_timer(
+      hydro->timing, hydrodynamics::HydroTimings::SOLVE);
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -554,50 +596,53 @@ int main(int argc, char *argv[])
 
       if (ode_solver_type > 10) // implicit.
       {
-         // Don't repeat for TGreen.
-         if (problem != 0)
+         // Repeat a failed Newton step, including Taylor-Green. Other problems
+         // also repeat a converged step that took 4 or more iterations. That
+         // cut is the iteration count, not dt_est.
+         const bool failed = hydro->newton_converged == false;
+         const bool slow = problem != 0 && hydro->newton_max_iter >= 4;
+         if (failed || slow)
          {
-            // Repeat.
-            if (hydro->newton_converged == false || hydro->newton_max_iter >= 4)
+            dt *= 0.85;
+            t = t_old;
+            S = S_old;
+            hydro->ResetQuadratureData();
+            last_step = false;
+            if (Mpi::Root())
             {
-               dt *= 0.85;
-               t = t_old;
-               S = S_old;
-               hydro->ResetQuadratureData();
-               last_step = false;
-               if (Mpi::Root())
-               {
-                  out << "Repeating step " << ti << " with dt: " << dt << "." << std::endl;
-                  if (!hydro->newton_converged)
-                  {
-                     out << "Newton did not converge in "
-                         << hydro->newton_max_iter << " iterations.\n";
-                  }
-                  else { out << "Estimated dt lower than taken dt.\n"; }
-               }
-
+               out << "Repeating step " << ti << " with dt: " << dt << "."
+                   << std::endl;
                if (!hydro->newton_converged)
                {
-                  if (nretry == 1)
-                  {
-                     hydro->residual->dump_jacobians = 1;
-                  }
-                  else if (nretry == 0)
-                  {
-                     if (Mpi::Root()) { out << "no retry planned, exit\n"; }
-                     exit(1);
-                  }
-                  nretry--;
+                  out << "Newton did not converge in "
+                      << hydro->newton_max_iter << " iterations.\n";
                }
+               else
+               {
+                  out << "Newton took " << hydro->newton_max_iter
+                      << " iterations.\n";
+               }
+            }
 
-               if (results) { results->repeats++; }
-               ti--; continue;
-            }
-            else if (hydro->newton_max_iter <= 1)
+            if (!hydro->newton_converged)
             {
-               dt *= 1.05;
-               if (Mpi::Root()) { out << "Increasing dt: " << dt << std::endl; }
+               // Dumping is requested with -dump-jacobians. nretry == 1 used
+               // to set it, and GetGradient then called std::exit(0).
+               if (nretry == 0)
+               {
+                  if (Mpi::Root()) { out << "no retry planned, exit\n"; }
+                  return 1;
+               }
+               nretry--;
             }
+
+            if (results) { results->repeats++; }
+            ti--; continue;
+         }
+         else if (hydro->newton_max_iter <= 1)
+         {
+            dt *= 1.05;
+            if (Mpi::Root()) { out << "Increasing dt: " << dt << std::endl; }
          }
       }
       else if (dt_est < dt) // explicit.
@@ -615,7 +660,10 @@ int main(int argc, char *argv[])
          if (results) { results->repeats++; }
          ti--; continue;
       }
-      else if (dt_est > 1.25 * dt) { dt *= 1.02; }
+
+      // Record the dt that advanced t. A larger estimate grows the next step.
+      const real_t dt_taken = dt;
+      if (ode_solver_type <= 10 && dt_est > 1.25 * dt_taken) { dt *= 1.02; }
 
       // Ensure the sub-vectors x_gf, v_gf, and e_gf know the location of the
       // data in S. This operation simply updates the Memory validity flags of
@@ -637,7 +685,7 @@ int main(int argc, char *argv[])
       if (results)
       {
          results->steps = ti;
-         results->history.push_back({ti, t, dt});
+         results->history.push_back({ti, t, dt_taken});
       }
 
       if (ti % vis_steps == 0 || last_step)
@@ -648,7 +696,7 @@ int main(int argc, char *argv[])
          {
             out << "step " << std::setw(5) << ti
                 << ",\tt = " << std::setw(5) << t
-                << ",\tdt = " << std::setw(5) << dt;
+                << ",\tdt = " << std::setw(5) << dt_taken;
             out << std::endl;
          }
       }
@@ -673,6 +721,8 @@ int main(int argc, char *argv[])
          Wx += offx;
       }
    }
+
+   solve_timer.Stop();
 
    const real_t energy_final = hydro->InternalEnergy(e_gf)
                                + hydro->KineticEnergy(v_gf);
@@ -736,7 +786,16 @@ int main(int argc, char *argv[])
       }
    }
 
+   hydro->PrintTimingData(fom);
    delete hydro;
 
    return 0;
 }
+
+// The tests compile this file without a second main.
+#ifndef LAGHOS_NO_MAIN
+int main(int argc, char *argv[])
+{
+   return laghos(argc, argv);
+}
+#endif

@@ -19,6 +19,24 @@
 namespace mfem::hydrodynamics
 {
 
+template <int DIM>
+struct EnergyQFunction
+{
+   using matd = matd_t<DIM>;
+   using dmatd = matd_t<DIM, dscalar_t>;
+
+   QConstants c;
+   MFEM_HOST_DEVICE inline
+   void operator()(const dmatd &dvdxi, const real_t &rho0,
+                   const matd &J0, const dmatd &J,
+                   const real_t &gamma, const dscalar_t &E,
+                   const real_t &w, dscalar_t &de) const
+   {
+      auto setup = StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+      de = ddot(future::get<0>(setup), dvdxi);
+   }
+};
+
 std::shared_ptr<DifferentiableOperator> CreateEnergyOperator(
    int dim,
    int qf_backend,
@@ -32,26 +50,12 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyOperator(
    return Dispatch(dim, qf_backend, [&](auto DIM, auto backend)
    {
       constexpr int dim_v = decltype(DIM)::value;
-      using matd = matd_t<dim_v>;
-      using dmatd = matd_t<dim_v, dscalar_t>;
       using backend_t = decltype(backend);
       // <sigma, grad(v) * inv(J) * phi> * det(J) * w
       // <sigma(J^-T det(J) w), grad(v) * inv(J)>
       future::tuple kernel_oo = {Value<INTERNAL_ENERGY>{}};
       FieldDescriptor output{INTERNAL_ENERGY, &L2};
-      struct EnergyQFunction
-      {
-         QConstants c;
-         MFEM_HOST_DEVICE inline
-         void operator()(const dmatd &dvdxi, const real_t &rho0,
-                         const matd &J0, const dmatd &J,
-                         const real_t &gamma, const dscalar_t &E,
-                         const real_t &w, dscalar_t &de) const
-         {
-            auto setup = StressSetup<dim_v>(c, dvdxi, rho0, J0, J, gamma, E, w);
-            de = ddot(future::get<0>(setup), dvdxi);
-         }
-      } energy_qf{qc};
+      EnergyQFunction<dim_v> energy_qf{qc};
       return CreateQDataOperator<dim_v, backend_t>(
                 H1, L2, material_gf, ir, all_domain_attr, output, kernel_oo,
                 energy_qf);

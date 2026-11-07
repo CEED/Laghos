@@ -15,6 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #pragma once
 
+#include <limits>
+
 #include <fem/dfem/doperator.hpp>
 #include <fem/pgridfunc.hpp>
 #include <linalg/kernels.hpp>
@@ -34,6 +36,9 @@ using mfem::future::Value;
 
 using mfem::future::tensor;
 
+// Enzyme keeps a plain real_t. Otherwise this is a dual number, and the
+// type-1 eigen tangent is compiled only for that dual. The references do
+// not record which mode produced them.
 using dscalar_t =
    std::conditional_t<mfem::UseEnzyme, real_t,
    mfem::future::dual<real_t, real_t>>;
@@ -226,6 +231,7 @@ template <typename T> MFEM_HOST_DEVICE inline
 void ComputeMaterialProperties(const real_t &gamma, const T &rho,
                                const T &E, T &p, T &cs)
 {
+   using std::sqrt;
    p = (gamma - 1.0) * rho * E;
    cs = sqrt(gamma * (gamma - 1.0) * E);
 }
@@ -244,6 +250,8 @@ future::tuple<matd_t<DIM, T>, T, T, T> StressSetup(const QConstants &qc,
                                                    const T &E,
                                                    const real_t &w)
 {
+   using std::atanh, std::fabs, std::fmax, std::hypot, std::pow, std::sqrt,
+         std::tanh;
    using matd = matd_t<DIM, T>;
    T p, cs;
    const T detJ = det(J);
@@ -347,7 +355,8 @@ future::tuple<matd_t<DIM, T>, T, T, T> StressSetup(const QConstants &qc,
             qc.h0 * pow(detJ / det(J0), 1.0 / static_cast<real_t>(DIM));
          const auto delta_v = h * tr(dvdx);
 
-         // Coarses mesh h for the domain.
+         // Length of the unit Sedov and Taylor-Green domains.
+         // box01_hex.mesh is larger, so the author chooses the length.
          const real_t h_coarse = 1.0;
          const T dv_scale = 2.0 * h / h_coarse * cs;
 
@@ -378,6 +387,9 @@ future::tuple<matd_t<DIM, T>, T, T, T> StressSetup(const QConstants &qc,
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+inline constexpr real_t infinite_time_step =
+   std::numeric_limits<real_t>::infinity();
+
 // Time step estimate of a quadrature point, from the outputs of StressSetup
 template <int DIM>
 MFEM_HOST_DEVICE inline
@@ -394,7 +406,7 @@ real_t TimeStepEstimate(const QConstants &qc, const matd_t<DIM> &J,
    const real_t irhoihminsq = ihmin * ihmin / rho;
    const real_t idt = cs / hmin + 2.5 * visc_coeff * irhoihminsq;
    if (idt > 0.0) { return qc.cfl / idt; }
-   return std::numeric_limits<real_t>::infinity();
+   return infinite_time_step;
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯

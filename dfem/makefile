@@ -136,9 +136,9 @@ all: laghos_dfem laghos_tests
 laghos_dfem: laghos.o $(LIB_OBJECT_FILES) $(CONFIG_MK) $(MFEM_LIB_FILE)
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) -o $@ laghos.o $(LIB_OBJECT_FILES) $(LIBS)
 
-# laghos.cpp again, with its main as laghos(), called by the tests
+# laghos.cpp again, without the executable's main, called by the tests
 laghos_main.o: laghos.cpp
-	$(CCC) -Dmain=laghos -c laghos.cpp -o $@
+	$(CCC) -DLAGHOS_NO_MAIN -c laghos.cpp -o $@
 
 laghos_tests.o: laghos_tests.cpp
 	$(CCC) -isystem $(CATCH_DIR) -c laghos_tests.cpp
@@ -155,7 +155,7 @@ MFEM_TESTS = laghos_dfem
 RUN_MPI = $(MFEM_MPIEXEC) $(MFEM_MPIEXEC_NP)
 test: laghos_dfem
 	@$(call mfem-test,$<, $(RUN_MPI) 4, Laghos dFEM miniapp,\
-	-p 0 -m ../data/square01_quad.mesh -rs 3 -tf 0.1,SKIP-NO-VIS)
+	-p 0 -dim 2 -m ../data/square01_quad.mesh -rs 3 -tf 0.1,SKIP-NO-VIS)
 # Testing: "test" target and mfem-test* variables are defined in MFEM's
 # config/test.mk
 ifeq (,$(filter $(GOALS),$(MAKECMDGOALS)))
@@ -213,7 +213,7 @@ TESTS_JOBS = -j $(shell n=1; for r in $(RANKS); do [ $$r -gt $$n ] && n=$$r; \
 tests: laghos_tests
 	@$(if $(TESTS_KEEP),rm -rf $(TESTS_DIR); \
 	   rmdir $(patsubst %/,%,$(dir $(TESTS_DIR))) 2> /dev/null;) \
-	 fl=`mktemp /tmp/laghos_tests.XXXXXX` || exit 1; \
+	 fl=`mktemp "$${TMPDIR:-/tmp}/laghos_tests.XXXXXX"` || exit 1; \
 	 trap 'rm -f $$fl' 0; trap 'exit 130' 1 2 15; \
 	 $(MAKE) --no-print-directory $(TESTS_JOBS) tests-run \
 	   CONFIG_MK=$(CONFIG_MK) TESTS_T0=`$(CLOCK)` TESTS_FAILED=$$fl

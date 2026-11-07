@@ -47,7 +47,7 @@ For more details about Laghos and the CEED software suite, see the
 
 The ∂FEM version requires MPI, hypre and an MFEM build from the `dfem-dev`
 branch, which provides the required support and the `local` and `global`
-q-function backends.
+q-function backends. Another branch fails at compile time on those names.
 See the top-level [building instructions](../README.md#building) for the
 other dependencies and **CPU** and **GPU** (CUDA or HIP) configurations.
 
@@ -127,11 +127,12 @@ mpirun -np 2 ./laghos_dfem -m ../data/box01_hex.mesh \
 Useful options include:
 
 - `-qf local` (default) or `-qf global`: select the q-function backend.
-  Internally these are `LOCAL_QF=0` and `GLOBAL_QF=1`.
+  Internally these are `LOCAL_QF=0` and `GLOBAL_QF=1`. The tests check
+  both backends against the same references.
 - `-d cpu` (default), `-d debug`, `-d cuda` or `-d hip`: select an MFEM
   device supported by the build. `-dev` selects the GPU device number.
-- `-s 2`, `-s 3`, `-s 4`, `-s 11`, `-s 12`: RK2 SSP, RK3 SSP, RK4,
-  backward Euler and implicit midpoint, respectively. RK4 is the default.
+- `-s 2`, `-s 3`, `-s 4`, `-s 11`, `-s 12`, `-s 14`: RK2 SSP, RK3 SSP,
+  RK4, backward Euler, implicit midpoint and SDIRK34. RK4 is the default.
 - `-av -av-type 1`: stock Laghos tensor viscosity; `-av -av-type 7`:
   smooth viscosity. `-no-av` disables viscosity (the default).
 - `-dt-min`: use the minimum time step estimate over the RK stages and the
@@ -146,8 +147,10 @@ The reference values and tolerances are stored in `laghos_tests.cpp`.
 Both `chk` and `run` cases, **explicit** and **implicit**, check the
 accepted step count, final time step, total energy, and position,
 velocity and internal energy norms against those hardcoded values.
-The `chk` cases correspond to comparisons with the top-level README runs;
-they are not a substitute for running the full suite.
+The `chk` cases are short dFEM runs of the Taylor-Green and Sedov
+problems in the top-level README (entries 1-4). Their final times are
+0.05, 0.01, 0.05 and 0.02, and the 3D Sedov check does not use `-E0 2`.
+They are not a substitute for running the full suite.
 
 From the top-level directory after a CMake build:
 
@@ -169,6 +172,9 @@ and `bwe`. `av0` denotes no viscosity, `av1` and `av7` select viscosity
 variants, and `dtm`/`dtn` denote `-dt-min` enabled/disabled.
 **CPU** and debug tests run on one, two and three ranks; **GPU** tests run
 on one and two ranks, using both q-function backends and the same references.
+The debug device skips `imp_run_sdv_3d_q21_mid_av7_dtn`: a hypre host
+read of an alias faults on a valid device page. CMake and the makefile
+both list that skip.
 
 The Makefile also provides a full suite and a restricted check run:
 

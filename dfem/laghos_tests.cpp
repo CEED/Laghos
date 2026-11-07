@@ -34,7 +34,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -60,6 +62,18 @@ static std::string device = "cpu"; // --device: Device configuration string
 static std::string qf = "local"; // --qf: q-function backend, local or global
 static int device_id = 0; // GPU of the rank, see main
 static struct { int passed = 0, total = 0; } summary; // final report line
+
+// Quiet all solver calls without suppressing the formatted test report
+static int RunLaghos(int argc, char *argv[])
+{
+   struct OutputScope
+   {
+      const bool enabled = mfem::out.IsEnabled();
+      OutputScope() { if (!verbose) { mfem::out.Disable(); } }
+      ~OutputScope() { if (enabled) { mfem::out.Enable(); } }
+   } output;
+   return laghos(argc, argv);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 template <class T>
@@ -338,14 +352,10 @@ static void LaghosTest(const std::string &name)
                      (device == "cpu" ? "" : ", " + device));
    }
 
-   // Quiet Laghos run, unless -v
    LaghosResults res;
-   const bool out_enabled = mfem::out.IsEnabled();
-   if (!verbose) { mfem::out.Disable(); }
    laghos_results = &res;
-   const int ret = laghos(static_cast<int>(args.size()) - 1, args.data());
+   const int ret = RunLaghos(static_cast<int>(args.size()) - 1, args.data());
    laghos_results = nullptr;
-   if (out_enabled) { mfem::out.Enable(); }
 
    if (root && ret != 0) { report::Row().Fail("laghos").Int("returned", ret); }
    REQUIRE(ret == 0);
@@ -527,6 +537,178 @@ TEST_CASE("imp_run_sdv_3d_q21_mid_av7_dtn",
           "[dfem][imp][run][sdv][3d][q21][dtn]")
 { LaghosTest("imp_run_sdv_3d_q21_mid_av7_dtn"); }
 
+// Problems 0 and 1 build a Cartesian mesh and must not open -m first.
+TEST_CASE("generated_mesh_skips_file", "[dfem][mesh]")
+{
+   std::vector<std::string> args = {
+      "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-tf", "1e-4",
+      "-m", "no-such-rectangle.mesh",
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
+}
+
+// Problems other than Taylor-Green, Sedov and the triple point stop
+// before building a mesh.
+TEST_CASE("unsupported_problem_returns", "[dfem][problem]")
+{
+   for (const char *p : {"2", "4", "5"})
+   {
+      std::vector<std::string> args = {
+         "laghos", "-p", p, "-dim", "2", "-rs", "0", "-tf", "1e-4",
+         "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+      };
+      std::vector<char *> argv;
+      for (auto &a : args) { argv.push_back(&a[0]); }
+      argv.push_back(nullptr);
+      REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) != 0);
+   }
+}
+
+// An accepted explicit step records the dt that advanced time.
+TEST_CASE("explicit_history_stores_taken_dt", "[dfem][dt]")
+{
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   std::vector<std::string> args = {
+      "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
+      "-av", "-m", mesh,
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   LaghosResults res;
+   laghos_results = &res;
+   const int ret = RunLaghos(static_cast<int>(argv.size()) - 1, argv.data());
+   laghos_results = nullptr;
+   REQUIRE(ret == 0);
+   REQUIRE(!res.history.empty());
+   real_t t_prev = 0.0;
+   for (const auto &h : res.history)
+   {
+      REQUIRE(AlmostEq(h.dt, h.t - t_prev, 1e-12));
+      t_prev = h.t;
+   }
+}
+
+// A positive -oq must change the quadrature used by a Sedov step.
+TEST_CASE("order_q_changes_step", "[dfem][quad]")
+{
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   const auto estimate = [&](bool coarse)
+   {
+      std::vector<std::string> args = {
+         "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
+         "-av", "-m", mesh,
+         "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+      };
+      if (coarse)
+      {
+         args.push_back("-oq");
+         args.push_back("4");
+      }
+      std::vector<char *> argv;
+      for (auto &a : args) { argv.push_back(&a[0]); }
+      argv.push_back(nullptr);
+      LaghosResults res;
+      laghos_results = &res;
+      const int ret = RunLaghos(static_cast<int>(argv.size()) - 1, argv.data());
+      laghos_results = nullptr;
+      REQUIRE(ret == 0);
+      return res.dt_init;
+   };
+   REQUIRE(!AlmostEq(estimate(true), estimate(false), 1e-6));
+}
+
+// A 3D Sedov sample past the unit-cube xy radius includes z.
+TEST_CASE("rho_out_3d_radius", "[dfem][rho]")
+{
+   std::vector<std::string> args = {
+      "laghos", "-p", "1", "-dim", "3", "-rs", "0", "-tf", "1e-6",
+      "-no-glvis", "-no-paraview", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
+   // Rank 0 writes rho.out after the other ranks have left the scatter.
+   MPI_Barrier(MPI_COMM_WORLD);
+   std::ifstream in("rho.out");
+   REQUIRE(in.good());
+   double r = 0.0, rho = 0.0, max_r = 0.0;
+   while (in >> r >> rho) { max_r = std::max(max_r, r); }
+   in.close();
+   MPI_Barrier(MPI_COMM_WORLD);
+   if (mfem::Mpi::Root())
+   {
+      std::remove("rho.out");
+      std::remove("sedov.mesh");
+      std::remove("sedov.gf");
+   }
+   REQUIRE(max_r > 1.5);
+}
+
+// -av alone must change a Sedov step. Type 2 adds no viscous stress.
+TEST_CASE("av_default_is_viscous", "[dfem][av]")
+{
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   const auto energy = [&](const char *av)
+   {
+      std::vector<std::string> args = {
+         "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
+         "-m", mesh, av, "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+      };
+      std::vector<char *> argv;
+      for (auto &a : args) { argv.push_back(&a[0]); }
+      argv.push_back(nullptr);
+      LaghosResults res;
+      laghos_results = &res;
+      const int ret = RunLaghos(static_cast<int>(argv.size()) - 1, argv.data());
+      laghos_results = nullptr;
+      REQUIRE(ret == 0);
+      return res.energy_final;
+   };
+   REQUIRE(!AlmostEq(energy("-av"), energy("-no-av"), 1e-6));
+}
+
+// Taylor-Green must reject a Newton step that does not converge.
+// The debug device faults while destroying a Newton solve that returned
+// early, the same class of host read as the existing debug skip.
+TEST_CASE("imp_tgv_newton_fail", "[dfem][imp][newton]")
+{
+   if (device == "debug") { return; }
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   std::vector<std::string> args = {
+      "laghos", "-p", "0", "-dim", "2", "-rs", "1", "-s", "12", "-tf", "0.01",
+      "-nmi", "1", "-nrt", "1e-30", "-nretry", "0", "-m", mesh,
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) != 0);
+}
+
+// The last planned retry must return the Newton failure. Dumping is only
+// for -dump-jacobians; tying it to nretry calls std::exit(0).
+TEST_CASE("nretry_does_not_dump", "[dfem][imp][newton]")
+{
+   if (device == "debug") { return; }
+   const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
+   std::vector<std::string> args = {
+      "laghos", "-p", "0", "-dim", "2", "-rs", "1", "-s", "12", "-tf", "0.01",
+      "-nmi", "1", "-nrt", "1e-30", "-nretry", "1", "-m", mesh,
+      "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) != 0);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[]) try
 {
@@ -550,6 +732,8 @@ int main(int argc, char* argv[]) try
       }
       else { args.push_back(argv[i]); }
    }
+
+   if (!verbose) { mfem::KernelReporter::Disable(); }
 
    const auto gpu = [](const char *backend)
    { return device.find(backend) != std::string::npos; };

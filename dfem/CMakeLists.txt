@@ -2,6 +2,24 @@
 add_library(laghos_dfem_lib OBJECT laghos_assembly.cpp laghos_solver.cpp
             laghos_qf_hydro.cpp laghos_qf_velocity.cpp laghos_qf_energy.cpp)
 
+# Device kernels are emitted only from CUDA or HIP translation units.
+if (MFEM_USE_CUDA OR MFEM_USE_HIP)
+  set(_dfem_lang CXX)
+  if (MFEM_USE_CUDA)
+    set(_dfem_lang CUDA)
+    # MFEM tensor helpers call constexpr functions in device code
+    target_compile_options(laghos_dfem_lib PUBLIC
+      $<$<COMPILE_LANG_AND_ID:CUDA,NVIDIA>:--expt-relaxed-constexpr>)
+  endif()
+  if (MFEM_USE_HIP)
+    set(_dfem_lang HIP)
+  endif()
+  set_source_files_properties(
+    laghos_assembly.cpp laghos_solver.cpp laghos_qf_hydro.cpp
+    laghos_qf_velocity.cpp laghos_qf_energy.cpp laghos.cpp
+    PROPERTIES LANGUAGE ${_dfem_lang})
+endif()
+
 target_include_directories(laghos_dfem_lib PUBLIC "${MFEM_DIR}/../../../include/mfem")
 
 target_link_libraries(laghos_dfem_lib
@@ -32,9 +50,9 @@ if (NOT CATCH_INCLUDE_DIR)
 endif()
 message(STATUS "Catch2 for laghos_tests: ${CATCH_INCLUDE_DIR}/catch.hpp")
 
-# laghos.cpp again, with its main as laghos(), called by the tests
+# laghos.cpp again, without the executable's main, called by the tests
 add_library(laghos_tests_lib OBJECT laghos.cpp)
-target_compile_definitions(laghos_tests_lib PRIVATE main=laghos)
+target_compile_definitions(laghos_tests_lib PRIVATE LAGHOS_NO_MAIN)
 target_link_libraries(laghos_tests_lib PUBLIC laghos_dfem_lib)
 
 add_executable(laghos_tests laghos_tests.cpp)

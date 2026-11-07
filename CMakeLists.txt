@@ -48,7 +48,20 @@ if (MFEM_USE_CUDA)
     message(FATAL_ERROR " *** MFEM_USE_HIP cannot be combined with MFEM_USE_CUDA.")
   endif()
   if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES 70)
+    if(MFEM_CUDA_ARCHITECTURES)
+      set(CMAKE_CUDA_ARCHITECTURES ${MFEM_CUDA_ARCHITECTURES})
+    elseif(MFEM_CUDA_ARCH MATCHES "^(sm_|compute_)?([0-9]+)$")
+      set(CMAKE_CUDA_ARCHITECTURES ${CMAKE_MATCH_2})
+    else()
+      get_target_property(CMAKE_CUDA_ARCHITECTURES mfem CUDA_ARCHITECTURES)
+    endif()
+    if(NOT CMAKE_CUDA_ARCHITECTURES)
+      message(FATAL_ERROR
+        "MFEM does not export CUDA architectures. Set "
+        "-DCMAKE_CUDA_ARCHITECTURES for the target GPU (90 for H100).")
+    endif()
+    set(CMAKE_CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}" CACHE STRING
+      "CUDA architectures for the target GPU")
   endif()
   # Use ${CMAKE_CXX_COMPILER} as the cuda host compiler.
   if (NOT CMAKE_CUDA_HOST_COMPILER)
@@ -130,4 +143,8 @@ target_link_libraries(sedov
 )
 
 enable_testing()
+# -epm must build a mesh and take a short step. Two ranks, one element each.
+add_test(NAME laghos_epm_np2
+  COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+          $<TARGET_FILE:laghos> -p 1 -dim 2 -tf 0.01 -epm 1)
 add_subdirectory(dfem)
