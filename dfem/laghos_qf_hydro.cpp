@@ -20,6 +20,95 @@
 namespace mfem::hydrodynamics
 {
 
+template <int DIM>
+struct HydroQFunctions
+{
+   using matd = matd_t<DIM>;
+
+   struct UpdateQuadratureDataQFunction
+   {
+      QConstants c;
+      MFEM_HOST_DEVICE inline
+      void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
+                      const matd &J, const real_t &gamma, const real_t &E,
+                      const real_t &w, matd &stressJiT,
+                      real_t &dt_est) const
+      {
+         const auto [stress, visc_coeff, cs, rho] =
+            StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+         stressJiT = stress;
+         dt_est = TimeStepEstimate<DIM>(c, J, rho, cs, visc_coeff);
+      }
+   };
+
+   struct MomentumPAQFunction
+   {
+      MFEM_HOST_DEVICE inline
+      void operator()(const matd &stressJiT, matd &f) const { f = stressJiT; }
+   };
+
+   struct EnergyConservationPAQFunction
+   {
+      MFEM_HOST_DEVICE inline
+      void operator()(const matd &dvdxi, const matd &stressJiT, real_t &f) const
+      {
+         f = ddot(stressJiT, dvdxi);
+      }
+   };
+
+   struct TotalInternalEnergyQFunction
+   {
+      MFEM_HOST_DEVICE inline
+      void operator()(const real_t &E,
+                      const real_t &rho0,
+                      const matd &J0,
+                      const real_t &w,
+                      real_t &ie) const
+      {
+         ie = rho0 * E * det(J0) * w;
+      }
+   };
+
+   struct TotalKineticEnergyQFunction
+   {
+      MFEM_HOST_DEVICE inline
+      void operator()(const vecd_t<DIM> &v,
+                      const real_t &rho0,
+                      const matd &J0,
+                      const real_t &w,
+                      real_t &ke) const
+      {
+         ke = rho0 * 0.5 * v * v * det(J0) * w;
+      }
+   };
+
+   struct DensityQFunction
+   {
+      MFEM_HOST_DEVICE inline
+      void operator()(const real_t &rho0,
+                      const matd &J0,
+                      const real_t &w,
+                      real_t &m) const { m = rho0 * det(J0) * w; }
+   };
+
+   struct TaylorSourceQFunction
+   {
+      using vecd = vecd_t<DIM, dscalar_t>;
+      using matd = matd_t<DIM, dscalar_t>;
+
+      MFEM_HOST_DEVICE inline
+      void operator()(const vecd &x, const matd &J, const real_t &w,
+                      dscalar_t &s) const
+      {
+         const auto f = 3.0 / 8.0 * M_PI *
+                        (cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
+                         cos(M_PI*x(0)) * cos(3.0*M_PI*x(1)));
+
+         s = f * det(J) * w;
+      }
+   };
+};
+
 // Initial zone size of the mesh, over the order of the velocity space
 real_t InitialMeshSize(ParMesh &mesh, const int order)
 {
@@ -59,7 +148,6 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const IntegrationRule &ir,
    const LagrangianHydroOperator::Options &options)
 {
-   using matd = matd_t<DIM>;
    ParMesh &mesh = *H1.GetParMesh();
 
    auto qdata = std::make_shared<QuadratureData>(mesh, ir);
@@ -82,21 +170,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
                         QDataInputs(H1, L2, material_gf), update_qdata_outputs,
                         mesh);
       update_qdata->SetMultLevel(DifferentiableOperator::LVECTOR);
-      struct UpdateQuadratureDataQFunction
-      {
-         QConstants c;
-         MFEM_HOST_DEVICE inline
-         void operator()(const matd &dvdxi, const real_t &rho0, const matd &J0,
-                         const matd &J, const real_t &gamma, const real_t &E,
-                         const real_t &w, matd &stressJiT,
-                         real_t &dt_est) const
-         {
-            const auto [stress, visc_coeff, cs, rho] =
-               StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
-            stressJiT = stress;
-            dt_est = TimeStepEstimate<DIM>(c, J, rho, cs, visc_coeff);
-         }
-      } update_qdata_qf{qc};
+      typename HydroQFunctions<DIM>::UpdateQuadratureDataQFunction
+         update_qdata_qf{qc};
       update_qdata->AddDomainIntegrator<backend_t>(
          update_qdata_qf, QDataFields(), update_qdata_kernel_oo, ir,
          all_domain_attr);
@@ -111,15 +186,15 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    {
       future::tuple momentum_pa_kernel_ao = {Identity<STRESS_TENSOR>{}};
       future::tuple momentum_pa_kernel_oo = {Gradient<VELOCITY>{}};
-      std::vector<FieldDescriptor> momentum_pa_inputs = {{STRESS_TENSOR, &qdata->StressSpace}};
-      std::vector<FieldDescriptor> momentum_pa_outputs = {{VELOCITY, &H1}};
-      momentum_pa = std::make_shared<DifferentiableOperator>(momentum_pa_inputs,
-                                                             momentum_pa_outputs, mesh);
-      struct MomentumPAQFunction
+      std::vector<FieldDescriptor> momentum_pa_inputs =
       {
-         MFEM_HOST_DEVICE inline
-         void operator()(const matd &stressJiT, matd &f) const { f = stressJiT; }
-      } momentum_pa_qf;
+         {STRESS_TENSOR, &qdata->StressSpace}
+      };
+      std::vector<FieldDescriptor> momentum_pa_outputs = {{VELOCITY, &H1}};
+      momentum_pa = std::make_shared<DifferentiableOperator>(
+                       momentum_pa_inputs, momentum_pa_outputs, mesh);
+      typename HydroQFunctions<DIM>::MomentumPAQFunction
+         momentum_pa_qf;
       momentum_pa->AddDomainIntegrator<backend_t>(
          momentum_pa_qf, momentum_pa_kernel_ao, momentum_pa_kernel_oo, ir,
          all_domain_attr);
@@ -132,8 +207,14 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
 
    std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
    {
-      future::tuple energy_conservation_pa_kernel_ao = {Gradient<VELOCITY>{}, Identity<STRESS_TENSOR>{}};
-      future::tuple energy_conservation_pa_kernel_oo = {Value<INTERNAL_ENERGY>{}};
+      future::tuple energy_conservation_pa_kernel_ao =
+      {
+         Gradient<VELOCITY>{}, Identity<STRESS_TENSOR>{}
+      };
+      future::tuple energy_conservation_pa_kernel_oo =
+      {
+         Value<INTERNAL_ENERGY>{}
+      };
       std::vector<FieldDescriptor> energy_conservation_pa_inputs =
       {
          {VELOCITY, &H1},
@@ -144,18 +225,13 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          {INTERNAL_ENERGY, &L2}
       };
       energy_conservation_pa =
-         std::make_shared<DifferentiableOperator>(energy_conservation_pa_inputs,
-                                                  energy_conservation_pa_outputs, mesh);
+         std::make_shared<DifferentiableOperator>(
+            energy_conservation_pa_inputs, energy_conservation_pa_outputs,
+            mesh);
       // LVECTOR as Mult passes the v L-vector, momentum_pa stays at TVECTOR
       energy_conservation_pa->SetMultLevel(DifferentiableOperator::LVECTOR);
-      struct EnergyConservationPAQFunction
-      {
-         MFEM_HOST_DEVICE inline
-         void operator()(const matd &dvdxi, const matd &stressJiT, real_t &f) const
-         {
-            f = ddot(stressJiT, dvdxi);
-         }
-      } energy_conservation_pa_qf;
+      typename HydroQFunctions<DIM>::EnergyConservationPAQFunction
+         energy_conservation_pa_qf;
       energy_conservation_pa->AddDomainIntegrator<backend_t>(
          energy_conservation_pa_qf, energy_conservation_pa_kernel_ao,
          energy_conservation_pa_kernel_oo, ir, all_domain_attr);
@@ -171,7 +247,10 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
          Gradient<COORDINATES0>{},
          Weight{}
       };
-      future::tuple total_internal_energy_kernel_oo = {Value<INTERNAL_ENERGY>{}};
+      future::tuple total_internal_energy_kernel_oo =
+      {
+         Value<INTERNAL_ENERGY>{}
+      };
       std::vector total_internal_energy_inputs =
       {
          FieldDescriptor{INTERNAL_ENERGY, &L2},
@@ -188,18 +267,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             total_internal_energy_outputs,
             mesh);
       total_internal_energy_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
-      struct TotalInternalEnergyQFunction
-      {
-         MFEM_HOST_DEVICE inline
-         void operator()(const real_t &E,
-                         const real_t &rho0,
-                         const matd &J0,
-                         const real_t &w,
-                         real_t &ie) const
-         {
-            ie = rho0 * E * det(J0) * w;
-         }
-      } total_internal_energy_qf;
+      typename HydroQFunctions<DIM>::TotalInternalEnergyQFunction
+         total_internal_energy_qf;
       total_internal_energy_mf->AddDomainIntegrator<backend_t>(
          total_internal_energy_qf, total_internal_energy_kernel_ao,
          total_internal_energy_kernel_oo, ir, all_domain_attr);
@@ -232,18 +301,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             total_kinetic_energy_inputs,
             total_kinetic_energy_outputs, mesh);
       total_kinetic_energy_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
-      struct TotalKineticEnergyQFunction
-      {
-         MFEM_HOST_DEVICE inline
-         void operator()(const vecd_t<DIM> &v,
-                         const real_t &rho0,
-                         const matd &J0,
-                         const real_t &w,
-                         real_t &ke) const
-         {
-            ke = rho0 * 0.5 * v * v * det(J0) * w;
-         }
-      } total_kinetic_energy_qf;
+      typename HydroQFunctions<DIM>::TotalKineticEnergyQFunction
+         total_kinetic_energy_qf;
       total_kinetic_energy_mf->AddDomainIntegrator<backend_t>(
          total_kinetic_energy_qf, total_kinetic_energy_kernel_ao,
          total_kinetic_energy_kernel_oo, ir, all_domain_attr);
@@ -271,14 +330,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       density_mf = std::make_shared<DifferentiableOperator>(
                       density_inputs, density_outputs, mesh);
       density_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
-      struct DensityQFunction
-      {
-         MFEM_HOST_DEVICE inline
-         void operator()(const real_t &rho0,
-                         const matd &J0,
-                         const real_t &w,
-                         real_t &m) const { m = rho0 * det(J0) * w; }
-      } density_qf;
+      typename HydroQFunctions<DIM>::DensityQFunction
+         density_qf;
       density_mf->AddDomainIntegrator<backend_t>(
          density_qf, density_kernel_ao, density_kernel_oo, ir, all_domain_attr);
    }
@@ -300,22 +353,8 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       };
       taylor_source_mf = std::make_shared<DifferentiableOperator>(
                             taylor_source_inputs, taylor_source_outputs, mesh);
-      struct TaylorSourceQFunction
-      {
-         using vecd = vecd_t<DIM, dscalar_t>;
-         using matd = matd_t<DIM, dscalar_t>;
-
-         MFEM_HOST_DEVICE inline
-         void operator()(const vecd &x, const matd &J, const real_t &w,
-                         dscalar_t &s) const
-         {
-            const auto f = 3.0 / 8.0 * M_PI *
-                           (cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
-                            cos(M_PI*x(0)) * cos(3.0*M_PI*x(1)));
-
-            s = f * det(J) * w;
-         }
-      } taylor_source_qf;
+      typename HydroQFunctions<DIM>::TaylorSourceQFunction
+         taylor_source_qf;
       auto derivatives = std::integer_sequence<size_t, COORDINATES> {};
       // Only the matrix-free action of dTaylorSourcedx is used
       taylor_source_mf->AddDomainIntegrator<backend_t,

@@ -15,6 +15,8 @@
 // testbed platforms, in support of the nation's exascale computing imperative.
 #pragma once
 
+#include <limits>
+
 #include <fem/dfem/doperator.hpp>
 #include <fem/pgridfunc.hpp>
 #include <linalg/kernels.hpp>
@@ -385,6 +387,9 @@ future::tuple<matd_t<DIM, T>, T, T, T> StressSetup(const QConstants &qc,
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+inline constexpr real_t infinite_time_step =
+   std::numeric_limits<real_t>::infinity();
+
 // Time step estimate of a quadrature point, from the outputs of StressSetup
 template <int DIM>
 MFEM_HOST_DEVICE inline
@@ -401,7 +406,7 @@ real_t TimeStepEstimate(const QConstants &qc, const matd_t<DIM> &J,
    const real_t irhoihminsq = ihmin * ihmin / rho;
    const real_t idt = cs / hmin + 2.5 * visc_coeff * irhoihminsq;
    if (idt > 0.0) { return qc.cfl / idt; }
-   return std::numeric_limits<real_t>::infinity();
+   return infinite_time_step;
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯

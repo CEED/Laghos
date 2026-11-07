@@ -19,6 +19,24 @@
 namespace mfem::hydrodynamics
 {
 
+template <int DIM>
+struct MomentumQFunction
+{
+   using matd = matd_t<DIM>;
+   using dmatd = matd_t<DIM, dscalar_t>;
+
+   QConstants c;
+   MFEM_HOST_DEVICE inline
+   void operator()(const dmatd &dvdxi, const real_t &rho0,
+                   const matd &J0, const dmatd &J, const real_t &gamma,
+                   const dscalar_t &E, const real_t &w,
+                   dmatd &stressJiT) const
+   {
+      auto setup = StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+      stressJiT = future::get<0>(setup);
+   }
+};
+
 std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    int dim,
    int qf_backend,
@@ -32,26 +50,12 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
    return Dispatch(dim, qf_backend, [&](auto DIM, auto backend)
    {
       constexpr int dim_v = decltype(DIM)::value;
-      using matd = matd_t<dim_v>;
-      using dmatd = matd_t<dim_v, dscalar_t>;
       using backend_t = decltype(backend);
       // <sigma, grad(w) * J^-T> * det(J) * weights
       // <sigma(J^-T det(J) weights), grad(w)>
       future::tuple kernel_oo = {Gradient<VELOCITY>{}};
       FieldDescriptor output{VELOCITY, &H1};
-      struct MomentumQFunction
-      {
-         QConstants c;
-         MFEM_HOST_DEVICE inline
-         void operator()(const dmatd &dvdxi, const real_t &rho0,
-                         const matd &J0, const dmatd &J, const real_t &gamma,
-                         const dscalar_t &E, const real_t &w,
-                         dmatd &stressJiT) const
-         {
-            auto setup = StressSetup<dim_v>(c, dvdxi, rho0, J0, J, gamma, E, w);
-            stressJiT = future::get<0>(setup);
-         }
-      } momentum_qf{qc};
+      MomentumQFunction<dim_v> momentum_qf{qc};
       return CreateQDataOperator<dim_v, backend_t>(
                 H1, L2, material_gf, ir, all_domain_attr, output, kernel_oo,
                 momentum_qf);
