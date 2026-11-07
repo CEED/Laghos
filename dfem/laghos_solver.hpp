@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <array>
 #include <mfem.hpp>
 #include "laghos_assembly.hpp"
 #include "laghos_qf.hpp"
@@ -29,6 +30,62 @@ namespace mfem::hydrodynamics
 void VisualizeField(socketstream &sock, const char *vishost, int visport,
                     ParGridFunction &gf, const char *title,
                     int x, int y, int w, int h, bool vec = false);
+
+struct HydroTimings
+{
+   enum Section
+   {
+      CG_H1, CG_L2, FORCE, QDATA, JACOBIAN_SETUP, JACOBIAN_ACTION,
+      AMG_SETUP, AMG_APPLY, NEWTON, SOLVE, COMMUNICATION, COUNT
+   };
+   struct Entry
+   {
+      StopWatch watch;
+      HYPRE_BigInt calls = 0, iterations = 0;
+   };
+   const bool enabled;
+   std::array<Entry, COUNT> entries;
+   HYPRE_BigInt h1_work = 0, l2_work = 0, force_work = 0, quad_work = 0;
+
+   explicit HydroTimings(bool enabled) : enabled(enabled) {}
+
+   class Scope
+   {
+      Entry *entry;
+      static void Synchronize()
+      {
+         if (Device::Allows(Backend::CUDA_MASK | Backend::HIP_MASK))
+         {
+            MFEM_DEVICE_SYNC;
+         }
+      }
+   public:
+      Scope(HydroTimings &timing, Section section, bool count = true) :
+         entry(timing.enabled ? &timing.entries[section] : nullptr)
+      {
+         if (!entry) { return; }
+         Synchronize();
+         entry->watch.Start();
+         entry->calls += count;
+      }
+      Scope(const Scope &) = delete;
+      Scope &operator=(const Scope &) = delete;
+      void Stop()
+      {
+         if (!entry) { return; }
+         Synchronize();
+         entry->watch.Stop();
+         entry = nullptr;
+      }
+      ~Scope() { Stop(); }
+   };
+};
+
+struct OperatorVectors
+{
+   MultiVector input, output;
+   OperatorVectors(int inputs, int outputs) : input(inputs), output(outputs) {}
+};
 
 // Given a solutions state (x, v, e), this class performs all necessary
 // computations to evaluate the new slopes (dx_dt, dv_dt, de_dt).
@@ -44,6 +101,7 @@ public:
       real_t cg_relative_tolerance = 1e-8;
       bool fd_gradient = false;
       bool taylor_green = false;
+      bool timings = false;
       int dump_jacobians = 0;
       int nonlinear_maximum_iterations = 10;
       real_t nonlinear_relative_tolerance = 1e-5;
@@ -74,7 +132,8 @@ public:
    {
       const real_t h;
       const int H1tsize, L2tsize;
-      mutable Vector w, z;
+      mutable Vector w, z, source;
+      mutable MultiVector zv_output{1}, ze_output{1}, source_output{1};
       LagrangianHydroOperator &hydro;
       std::shared_ptr<DerivativeOperator> dRvdx, dRvdv, dRvde, dRedx, dRedv, dRede,
           dTaylorSourcedx;
@@ -92,6 +151,7 @@ public:
          h(h),
          H1tsize(hydro.H1.GetTrueVSize()), L2tsize(hydro.L2.GetTrueVSize()),
          w(height), z(height),
+         source(hydro.taylor_source ? L2tsize : 0),
          hydro(hydro),
          dRvdx(dRvdx), dRvdv(dRvdv), dRvde(dRvde),
          dRedx(dRedx), dRedv(dRedv), dRede(dRede),
@@ -108,6 +168,7 @@ public:
       mutable Vector w;
       LagrangianHydroOperator &hydro;
       bool rebuild = true;
+      mutable bool setup_pending = false;
       const Jacobian *jacobian = nullptr;
       std::shared_ptr<HypreParMatrix> vv_mat, ee_mat;
       std::shared_ptr<HypreBoomerAMG> amg_v, amg_e;
@@ -125,7 +186,8 @@ public:
       real_t dt;
       const int H1tsize, H1vsize, L2tsize, L2vsize;
       const Vector &x;
-      mutable Vector u, u_l, e_source_t;
+      mutable Vector u, u_l, e_source_t, rho0_t, x0_t, material_t;
+      mutable MultiVector state{6};
       mutable std::shared_ptr<FDJacobian> fd_jacobian;
       mutable std::shared_ptr<Jacobian> jacobian;
       bool fd_gradient;
@@ -142,7 +204,9 @@ public:
          x(x),
          u(x.Size()),
          u_l(2*H1vsize + L2vsize),
-         e_source_t(hydro.L2.GetTrueVSize()),
+         e_source_t(hydro.taylor_source ? L2tsize : 0),
+         rho0_t(L2tsize), x0_t(H1tsize),
+         material_t(hydro.material.ParFESpace()->GetTrueVSize()),
          fd_gradient(fd_gradient),
          dump_jacobians(dump_jacobians) {}
 
@@ -181,6 +245,8 @@ public:
    { return Device::GetDeviceMemoryClass(); }
 
    void UpdateMesh(const Vector &S) const;
+   void ApplyMomentum(Vector &force) const;
+   void ApplyEnergy(const Vector &velocity, Vector &force) const;
 
    // Calls UpdateQuadratureData to compute the new qdata.dt_estimate.
    real_t GetTimeStepEstimate(const Vector &S);
@@ -196,6 +262,7 @@ public:
    void ImplicitSolve(const real_t dt, const Vector &x, Vector &k) override;
 
    void ResetNewtonInfo();
+   void PrintTimingData(bool fom) const;
 
    void DensityScatter();
 
@@ -239,7 +306,19 @@ public:
    mutable FunctionCoefficient rho0_coeff;
    OperatorJacobiSmoother *Mv_Jprec = nullptr;
    mutable Vector RHSv, rhsv, X, Xvc, K, B, RHSe, rhse;
+   mutable CGSolver cg_v, cg_e;
+   mutable Vector source_x, source_e, energy_state, energy_values;
+   mutable ParGridFunction density_rhs;
+   mutable Vector density_rho0, density_rhs_t, density_rhs_e, density_values;
+   mutable DenseMatrix density_mass;
+   mutable DenseMatrixInverse density_inverse;
+   mutable Array<int> density_dofs;
+   mutable MassIntegrator density_integrator;
+   mutable OperatorVectors momentum_vectors{1, 1}, energy_vectors{2, 1};
+   mutable OperatorVectors qdata_vectors{6, 2}, source_vectors{1, 1};
+   mutable OperatorVectors diagnostic_vectors{3, 1};
    const Options options;
+   mutable HydroTimings timing;
    bool newton_converged = true;
    int  newton_max_iter = -1;
    mutable bool qdata_is_current = false;

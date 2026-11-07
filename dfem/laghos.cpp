@@ -90,6 +90,7 @@ int laghos(int argc, char *argv[])
    bool visualization = false;
    bool paraview = false;
    bool save_files = true;
+   bool fom = false;
    int viscosity_type = 7;
    real_t viscosity_q1 = 0.5;
    real_t viscosity_q2 = 1.0;
@@ -169,6 +170,8 @@ int laghos(int argc, char *argv[])
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
+   args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
+                  "Print the stock-compatible figures of merit table.");
    args.Parse();
    if (!args.Good())
    {
@@ -176,6 +179,7 @@ int laghos(int argc, char *argv[])
       return 1;
    }
 #ifndef LAGHOS_NO_MAIN
+   hydro_options.timings = true;
    if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 #endif
    const bool global_qf = !strcmp(qf_backend, "global");
@@ -567,6 +571,8 @@ int laghos(int argc, char *argv[])
       paraview_save(0, 0.0);
    }
 
+   hydrodynamics::HydroTimings::Scope solve_timer(
+      hydro->timing, hydrodynamics::HydroTimings::SOLVE);
    for (int ti = 1; !last_step; ti++)
    {
       if (t + dt >= t_final)
@@ -716,6 +722,8 @@ int laghos(int argc, char *argv[])
       }
    }
 
+   solve_timer.Stop();
+
    const real_t energy_final = hydro->InternalEnergy(e_gf)
                                + hydro->KineticEnergy(v_gf);
 
@@ -778,6 +786,7 @@ int laghos(int argc, char *argv[])
       }
    }
 
+   hydro->PrintTimingData(fom);
    delete hydro;
 
    return 0;
