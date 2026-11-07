@@ -436,11 +436,11 @@ int laghos(int argc, char *argv[])
    FunctionCoefficient mat_coeff(gamma_func);
    mat_gf.ProjectCoefficient(mat_coeff);
 
-   const FiniteElement &h1 = *H1FESpace.GetTypicalFE();
+   const int h1_order = H1FESpace.GetTypicalFE()->GetOrder();
    const FiniteElement &l2 = *L2FESpace.GetTypicalFE();
    const int qorder = (order_q > 0)
                       ? order_q
-                      : 3 * h1.GetOrder() + l2.GetOrder() - 1;
+                      : 3 * h1_order + l2.GetOrder() - 1;
    IntegrationRule ir = IntRules.Get(mesh.GetTypicalElementGeometry(), qorder);
 
    if (Mpi::Root())
@@ -450,7 +450,7 @@ int laghos(int argc, char *argv[])
 
    // Constants of the q-functions
    const real_t h0 =
-      hydrodynamics::InitialMeshSize(mesh, h1.GetOrder());
+      hydrodynamics::InitialMeshSize(mesh, h1_order);
    const hydrodynamics::QConstants qc{cfl, static_cast<real_t>(order_v), h0,
                                       viscosity_q1, viscosity_q2,
                                       viscosity_type, use_viscosity};

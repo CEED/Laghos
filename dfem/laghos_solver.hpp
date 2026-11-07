@@ -131,7 +131,6 @@ public:
    class Jacobian : public Operator
    {
       const real_t h;
-      const int H1tsize, L2tsize;
       mutable Vector w, z, source;
       mutable MultiVector zv_output{1}, ze_output{1}, source_output{1};
       LagrangianHydroOperator &hydro;
@@ -147,11 +146,10 @@ public:
                std::shared_ptr<DerivativeOperator> dRede,
                std::shared_ptr<DerivativeOperator> dTaylorSourcedx,
                real_t h) :
-         Operator(2*hydro.H1.GetTrueVSize() + hydro.L2.GetTrueVSize()),
+         Operator(2*hydro.H1tsize + hydro.L2tsize),
          h(h),
-         H1tsize(hydro.H1.GetTrueVSize()), L2tsize(hydro.L2.GetTrueVSize()),
          w(height), z(height),
-         source(hydro.taylor_source ? L2tsize : 0),
+         source(hydro.taylor_source ? hydro.L2tsize : 0),
          hydro(hydro),
          dRvdx(dRvdx), dRvdv(dRvdv), dRvde(dRvde),
          dRedx(dRedx), dRedv(dRedv), dRede(dRede),
@@ -184,7 +182,6 @@ public:
    {
       LagrangianHydroOperator &hydro;
       real_t dt;
-      const int H1tsize, H1vsize, L2tsize, L2vsize;
       const Vector &x;
       mutable Vector u, u_l, e_source_t, rho0_t, x0_t, material_t;
       mutable MultiVector state{6};
@@ -195,17 +192,13 @@ public:
 
       Residual(LagrangianHydroOperator &hydro, const Vector &x,
                const bool fd_gradient, const int dump_jacobians) :
-         Operator(2*hydro.H1.GetTrueVSize()+hydro.L2.GetTrueVSize()),
+         Operator(2*hydro.H1tsize+hydro.L2tsize),
          hydro(hydro),
-         H1tsize(hydro.H1.GetTrueVSize()),
-         H1vsize(hydro.H1.GetVSize()),
-         L2tsize(hydro.L2.GetTrueVSize()),
-         L2vsize(hydro.L2.GetVSize()),
          x(x),
          u(x.Size()),
-         u_l(2*H1vsize + L2vsize),
-         e_source_t(hydro.taylor_source ? L2tsize : 0),
-         rho0_t(L2tsize), x0_t(H1tsize),
+         u_l(2*hydro.H1vsize + hydro.L2vsize),
+         e_source_t(hydro.taylor_source ? hydro.L2tsize : 0),
+         rho0_t(hydro.L2tsize), x0_t(hydro.H1tsize),
          material_t(hydro.material.ParFESpace()->GetTrueVSize()),
          fd_gradient(fd_gradient),
          dump_jacobians(dump_jacobians) {}
@@ -275,9 +268,13 @@ public:
 
    ParFiniteElementSpace &H1, &L2;
    mutable ParFiniteElementSpace H1c;
+   // Spaces stay fixed; UpdateMesh only moves nodes
+   const int H1vsize, L2vsize, H1tsize, L2tsize, H1ctsize;
+   const int L2dofs, dim, ne;
    Array<int> &ess_tdof;
    mutable Array<int> c_tdofs[3];
    const IntegrationRule &ir;
+   const int nqp;
    ParGridFunction &x0, &rho0, &material;
    std::shared_ptr<DifferentiableOperator> update_qdata;
    std::shared_ptr<DifferentiableOperator> momentum_mf;

@@ -114,7 +114,7 @@ real_t InitialMeshSize(ParMesh &mesh, const int order)
 {
    int ne_loc = mesh.GetNE(), ne_global = 0;
    real_t vol_loc = 0.0, vol_global = 0.0;
-   for (int e = 0; e < mesh.GetNE(); e++)
+   for (int e = 0; e < ne_loc; e++)
    {
       vol_loc += mesh.GetElementVolume(e);
    }

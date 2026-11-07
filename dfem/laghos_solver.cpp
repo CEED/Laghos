@@ -175,8 +175,12 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    H1(H1),
    L2(L2),
    H1c(H1.GetParMesh(), H1.FEColl(), 1),
+   H1vsize(H1.GetVSize()), L2vsize(L2.GetVSize()),
+   H1tsize(H1.GetTrueVSize()), L2tsize(L2.GetTrueVSize()),
+   H1ctsize(H1c.GetTrueVSize()), L2dofs(L2.GetTypicalFE()->GetDof()),
+   dim(H1.GetMesh()->Dimension()), ne(L2.GetParMesh()->GetNE()),
    ess_tdof(ess_tdof),
-   ir(ir),
+   ir(ir), nqp(ir.GetNPoints()),
    x0(x0_gf),
    rho0(rho0_gf),
    material(material_gf),
@@ -189,7 +193,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    kinetic_energy_mf(total_kinetic_energy_mf),
    density_mf(density_mf),
    taylor_source_mf(taylor_source_mf),
-   taylor_source(options.taylor_green && H1.GetMesh()->Dimension() == 2),
+   taylor_source(options.taylor_green && dim == 2),
    qdata(qdata),
    mesh_nodes(&H1),
    rhsvc(&H1c),
@@ -197,26 +201,26 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    Mv_blf(&H1),
    Me_blf(&L2),
    rho0_coeff(rho0_coeff),
-   RHSv(H1.GetTrueVSize()),
-   rhsv(H1.GetVSize()),
-   X(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
-   Xvc(H1c.GetTrueVSize()),
-   K(2*H1.GetTrueVSize()+L2.GetTrueVSize()),
-   B(H1c.GetTrueVSize()),
-   RHSe(L2.GetTrueVSize()),
-   rhse(L2.GetVSize()),
+   RHSv(H1tsize),
+   rhsv(H1vsize),
+   X(2*H1tsize+L2tsize),
+   Xvc(H1ctsize),
+   K(2*H1tsize+L2tsize),
+   B(H1ctsize),
+   RHSe(L2tsize),
+   rhse(L2vsize),
    cg_v(H1.GetComm()), cg_e(L2.GetComm()),
-   source_x(taylor_source ? H1.GetTrueVSize() : 0),
-   source_e(taylor_source ? L2.GetTrueVSize() : 0),
-   energy_state(L2.GetTrueVSize(), Device::GetDeviceMemoryType()),
-   energy_values(L2.GetTrueVSize(), Device::GetDeviceMemoryType()),
-   density_rhs(&L2), density_rho0(L2.GetTrueVSize()),
-   density_rhs_t(L2.GetTrueVSize()),
-   density_rhs_e(L2.GetTypicalFE()->GetDof()),
-   density_values(L2.GetTypicalFE()->GetDof()),
-   density_mass(L2.GetTypicalFE()->GetDof()),
+   source_x(taylor_source ? H1tsize : 0),
+   source_e(taylor_source ? L2tsize : 0),
+   energy_state(L2tsize, Device::GetDeviceMemoryType()),
+   energy_values(L2tsize, Device::GetDeviceMemoryType()),
+   density_rhs(&L2), density_rho0(L2tsize),
+   density_rhs_t(L2tsize),
+   density_rhs_e(L2dofs),
+   density_values(L2dofs),
+   density_mass(L2dofs),
    density_inverse(&density_mass),
-   density_dofs(L2.GetTypicalFE()->GetDof()), density_integrator(&ir),
+   density_dofs(L2dofs), density_integrator(&ir),
    options(options), timing(options.timings)
 {
    Mv = new MassPAOperator(H1c, ir, rho0_coeff);
@@ -245,7 +249,7 @@ LagrangianHydroOperator::LagrangianHydroOperator(
    // we must enforce v_x/y/z = 0 for the velocity components.
    const int bdr_attr_max = H1.GetMesh()->bdr_attributes.Max();
    Array<int> ess_bdr(bdr_attr_max);
-   for (int c = 0; c < H1.GetMesh()->Dimension(); c++)
+   for (int c = 0; c < dim; c++)
    {
       ess_bdr = 0;
       ess_bdr[c] = 1;
@@ -300,9 +304,8 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
    UpdateMesh(S);
    UpdateQuadratureData(S);
 
-   const int H1vsize = H1.GetVSize();
-   auto [x, v, e] = XVE(S, H1vsize, L2.GetVSize());
-   auto [dx, dv, de] = XVE(dSdt, H1vsize, L2.GetVSize());
+   auto [x, v, e] = XVE(S, H1vsize, L2vsize);
+   auto [dx, dv, de] = XVE(dSdt, H1vsize, L2vsize);
 
    // solve position
    dx = v;
@@ -319,7 +322,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       // solve for each velocity component
       const int size = H1c.GetVSize();
       const Operator *Pconf = H1c.GetProlongationMatrix();
-      for (int c = 0; c < H1.GetMesh()->Dimension(); c++)
+      for (int c = 0; c < dim; c++)
       {
          dvc.MakeRef(&H1c, dSdt, H1vsize + c*size);
          rhsvc.MakeRef(&H1c, rhsv, c*size);
@@ -337,7 +340,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
          {
             const int iterations = cg_v.GetNumIterations();
             timing.entries[HydroTimings::CG_H1].iterations += iterations;
-            timing.h1_work += HYPRE_BigInt(H1c.GetTrueVSize()) * iterations;
+            timing.h1_work += HYPRE_BigInt(H1ctsize) * iterations;
          }
          if (Pconf)
          {
@@ -375,7 +378,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       {
          const int iterations = cg_e.GetNumIterations();
          timing.entries[HydroTimings::CG_L2].iterations += iterations;
-         timing.l2_work += HYPRE_BigInt(L2.GetTrueVSize()) * iterations;
+         timing.l2_work += HYPRE_BigInt(L2tsize) * iterations;
       }
       de.GetMemory().SyncAlias(dSdt.GetMemory(), de.Size());
    }
@@ -386,7 +389,7 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
 void LagrangianHydroOperator::ApplyMomentum(Vector &force) const
 {
    HydroTimings::Scope timer(timing, HydroTimings::FORCE);
-   if (timing.enabled) { timing.force_work += H1.GetTrueVSize(); }
+   if (timing.enabled) { timing.force_work += H1tsize; }
    momentum_vectors.input.MakeRef(qdata->stressp);
    momentum_vectors.output.MakeRef(force);
    momentum_pa->Mult(momentum_vectors.input, momentum_vectors.output);
@@ -396,7 +399,7 @@ void LagrangianHydroOperator::ApplyEnergy(const Vector &velocity,
                                           Vector &force) const
 {
    HydroTimings::Scope timer(timing, HydroTimings::FORCE);
-   if (timing.enabled) { timing.force_work += L2.GetTrueVSize(); }
+   if (timing.enabled) { timing.force_work += L2tsize; }
    energy_vectors.input.MakeRef(velocity, qdata->stressp);
    energy_vectors.output.MakeRef(force);
    energy_pa->Mult(energy_vectors.input, energy_vectors.output);
@@ -435,7 +438,7 @@ void LagrangianHydroOperator::ComputeDensity(ParGridFunction &rho) const
    diagnostic_vectors.output.MakeRef(density_rhs_t);
    density_mf->Mult(diagnostic_vectors.input, diagnostic_vectors.output);
    L2.GetProlongationMatrix()->Mult(density_rhs_t, density_rhs);
-   for (int e = 0; e < L2.GetParMesh()->GetNE(); e++)
+   for (int e = 0; e < ne; e++)
    {
       const FiniteElement &fe = *L2.GetFE(e);
       ElementTransformation &eltr = *L2.GetElementTransformation(e);
@@ -481,11 +484,10 @@ void LagrangianHydroOperator::UpdateQuadratureData(const Vector &S) const
    HydroTimings::Scope timer(timing, HydroTimings::QDATA);
    if (timing.enabled)
    {
-      timing.quad_work += HYPRE_BigInt(L2.GetParMesh()->GetNE()) *
-                          ir.GetNPoints();
+      timing.quad_work += HYPRE_BigInt(ne) * nqp;
    }
    qdata_is_current = true;
-   auto [x, v, e] = XVE(S, H1.GetVSize(), L2.GetVSize());
+   auto [x, v, e] = XVE(S, H1vsize, L2vsize);
    qdata_vectors.input.MakeRef(v, rho0, x0, x, material, e);
    qdata_vectors.output.MakeRef(qdata->stressp, qdata->dt_est);
    update_qdata->Mult(qdata_vectors.input, qdata_vectors.output);
@@ -508,11 +510,11 @@ void LagrangianHydroOperator::Jacobian::Mult(const Vector &u, Vector &y) const
 {
    HydroTimings::Scope timer(hydro.timing, HydroTimings::JACOBIAN_ACTION);
    w = u;
-   auto [wx, wv, we] = XVE(w, H1tsize, L2tsize);
-   auto [zx, zv, ze] = XVE(z, H1tsize, L2tsize);
+   auto [wx, wv, we] = XVE(w, hydro.H1tsize, hydro.L2tsize);
+   auto [zx, zv, ze] = XVE(z, hydro.H1tsize, hydro.L2tsize);
    zv_output.MakeRef(zv);
    ze_output.MakeRef(ze);
-   auto [yx, yv, ye] = XVE(y, H1tsize, L2tsize);
+   auto [yx, yv, ye] = XVE(y, hydro.H1tsize, hydro.L2tsize);
 
    // position
    yx = wv;
@@ -527,10 +529,10 @@ void LagrangianHydroOperator::Jacobian::Mult(const Vector &u, Vector &y) const
    zv *= h;
    yv += zv;
    Vector wvc, yvc;
-   for (int c = 0; c < hydro.H1.GetMesh()->Dimension(); c++)
+   for (int c = 0; c < hydro.dim; c++)
    {
-      wvc.MakeRef(wv, c*hydro.H1c.GetTrueVSize(), hydro.H1c.GetTrueVSize());
-      yvc.MakeRef(yv, c*hydro.H1c.GetTrueVSize(), hydro.H1c.GetTrueVSize());
+      wvc.MakeRef(wv, c*hydro.H1ctsize, hydro.H1ctsize);
+      yvc.MakeRef(yv, c*hydro.H1ctsize, hydro.H1ctsize);
       hydro.Mv->FullAddMult(wvc, yvc);
       yvc.SyncAliasMemory(yv);
    }
@@ -618,10 +620,8 @@ void LagrangianHydroOperator::Preconditioner::Mult(const Vector &x,
                                                    Vector &y) const
 {
    w = x;
-   const int H1tsize = hydro.H1.GetTrueVSize();
-   const int L2tsize = hydro.L2.GetTrueVSize();
-   auto [wx, wv, we] = XVE(w, H1tsize, L2tsize);
-   auto [yx, yv, ye] = XVE(y, H1tsize, L2tsize);
+   auto [wx, wv, we] = XVE(w, hydro.H1tsize, hydro.L2tsize);
+   auto [yx, yv, ye] = XVE(y, hydro.H1tsize, hydro.L2tsize);
 
    // Include hypre's deferred hierarchy construction in setup time
    if (setup_pending)
@@ -648,10 +648,10 @@ void LagrangianHydroOperator::Residual::Mult(const Vector &k, Vector &R) const
    u *= dt;
    u += x;
 
-   auto [kx, kv, ke] = XVE(k, H1tsize, L2tsize);
-   auto [ux, uv, ue] = XVE(u, H1tsize, L2tsize);
-   auto [Rx, Rv, Re] = XVE(R, H1tsize, L2tsize);
-   auto [ux_l, uv_l, ue_l] = XVE(u_l, H1vsize, L2vsize);
+   auto [kx, kv, ke] = XVE(k, hydro.H1tsize, hydro.L2tsize);
+   auto [ux, uv, ue] = XVE(u, hydro.H1tsize, hydro.L2tsize);
+   auto [Rx, Rv, Re] = XVE(R, hydro.H1tsize, hydro.L2tsize);
+   auto [ux_l, uv_l, ue_l] = XVE(u_l, hydro.H1vsize, hydro.L2vsize);
 
    hydro.H1.GetProlongationMatrix()->Mult(ux, ux_l);
    hydro.H1.GetProlongationMatrix()->Mult(uv, uv_l);
@@ -672,10 +672,10 @@ void LagrangianHydroOperator::Residual::Mult(const Vector &k, Vector &R) const
    hydro.ApplyMomentum(Rv);
 
    Vector kvc, Rvc;
-   for (int c = 0; c < hydro.H1.GetMesh()->Dimension(); c++)
+   for (int c = 0; c < hydro.dim; c++)
    {
-      kvc.MakeRef(kv, c*hydro.H1c.GetTrueVSize(), hydro.H1c.GetTrueVSize());
-      Rvc.MakeRef(Rv, c*hydro.H1c.GetTrueVSize(), hydro.H1c.GetTrueVSize());
+      kvc.MakeRef(kv, c*hydro.H1ctsize, hydro.H1ctsize);
+      Rvc.MakeRef(Rv, c*hydro.H1ctsize, hydro.H1ctsize);
       hydro.Mv->FullAddMult(kvc, Rvc);
       Rvc.SyncAliasMemory(Rv);
    }
@@ -710,7 +710,7 @@ Operator& LagrangianHydroOperator::Residual::GetGradient(const Vector &k) const
    u *= dt;
    u += x;
 
-   auto [ux, uv, ue] = XVE(u, H1tsize, L2tsize);
+   auto [ux, uv, ue] = XVE(u, hydro.H1tsize, hydro.L2tsize);
 
    if (fd_gradient)
    {
@@ -770,8 +770,7 @@ Operator& LagrangianHydroOperator::Residual::GetGradient(const Vector &k) const
 void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
                                             Vector &k)
 {
-   const int H1tsize = H1.GetTrueVSize(), L2tsize = L2.GetTrueVSize();
-   auto [xx, xv, xe] = XVE(x, H1.GetVSize(), L2.GetVSize());
+   auto [xx, xv, xe] = XVE(x, H1vsize, L2vsize);
    auto [Xx, Xv, Xe] = XVE(X, H1tsize, L2tsize);
 
    H1.GetRestrictionMatrix()->Mult(xx, Xx);
@@ -810,7 +809,7 @@ void LagrangianHydroOperator::ImplicitSolve(const real_t dt, const Vector &x,
    newton_max_iter = std::max(newton_max_iter, newton->GetNumIterations());
 
    auto [Kx, Kv, Ke] = XVE(K, H1tsize, L2tsize);
-   auto [kx, kv, ke] = XVE(k, H1.GetVSize(), L2.GetVSize());
+   auto [kx, kv, ke] = XVE(k, H1vsize, L2vsize);
    H1.GetProlongationMatrix()->Mult(Kx, kx);
    H1.GetProlongationMatrix()->Mult(Kv, kv);
    L2.GetProlongationMatrix()->Mult(Ke, ke);
@@ -852,7 +851,7 @@ void LagrangianHydroOperator::PrintTimingData(bool fom) const
               HYPRE_MPI_BIG_INT, MPI_MAX, 0, comm);
    HYPRE_BigInt local_work[] = {timing.h1_work, timing.l2_work,
                               timing.force_work, timing.quad_work,
-                              L2.GetParMesh()->GetNE()};
+                              ne};
    HYPRE_BigInt work[5]{};
    MPI_Reduce(local_work, work, 5, HYPRE_MPI_BIG_INT, MPI_SUM, 0, comm);
    const auto h1_dofs = H1.GlobalTrueVSize();
@@ -916,12 +915,12 @@ void LagrangianHydroOperator::PrintTimingData(bool fom) const
        << "work is globally summed\n";
    if (fom)
    {
-      const auto ndofs = 2*h1_dofs + l2_dofs + ir.GetNPoints()*work[4];
+      const auto ndofs = 2*h1_dofs + l2_dofs + nqp*work[4];
       out << "\n| Ranks | Zones | H1 dofs | L2 dofs | QP | N dofs"
           << " | FOM0 | FOM1 | T1 | FOM2 | T2 | FOM3 | T3 | FOM | TT |\n"
           << "| " << H1.GetNRanks() << " | " << work[4]
           << " | " << h1_dofs << " | " << l2_dofs
-          << " | " << ir.GetNPoints() << " | " << ndofs
+          << " | " << nqp << " | " << ndofs
           << " | " << fom0 << " | " << fom1 << " | " << time[T::CG_H1]
           << " | " << fom2 << " | " << time[T::FORCE]
           << " | " << fom3 << " | " << time[T::QDATA]
@@ -949,8 +948,6 @@ void LagrangianHydroOperator::DensityScatter()
    std::ofstream fstream_rho("rho.out");
    fstream_rho.precision(8);
 
-   const int nqp = ir.GetNPoints();
-   const int dim = current.Dimension();
    Vector pos(dim);
    for (int e = 0; e < current.GetNE(); e++)
    {
@@ -978,8 +975,8 @@ void LagrangianHydroOperator::DensityScatter()
 real_t LagrangianHydroOperator::ComputeMinDet(const Vector &S) const
 {
    auto sptr = const_cast<Vector*>(&S);
-   Vector x, x_loc(H1.GetVSize());
-   x.MakeRef(*sptr, 0, H1.GetTrueVSize());
+   Vector x, x_loc(H1vsize);
+   x.MakeRef(*sptr, 0, H1tsize);
    H1.GetProlongationMatrix()->Mult(x, x_loc);
    ParGridFunction xgf;
    xgf.MakeRef(&H1, x_loc, 0);
