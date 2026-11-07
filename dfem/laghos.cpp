@@ -169,7 +169,15 @@ int laghos(int argc, char *argv[])
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
-   args.ParseCheck();
+   args.Parse();
+   if (!args.Good())
+   {
+      if (Mpi::Root()) { args.PrintUsage(mfem::out); }
+      return 1;
+   }
+#ifndef LAGHOS_NO_MAIN
+   if (Mpi::Root()) { args.PrintOptions(mfem::out); }
+#endif
    const bool global_qf = !strcmp(qf_backend, "global");
    MFEM_VERIFY(global_qf || !strcmp(qf_backend, "local"),
                "unknown q-function backend: " << qf_backend);
@@ -186,7 +194,6 @@ int laghos(int argc, char *argv[])
       }
       return 1;
    }
-   if (Mpi::Root()) { args.PrintOptions(mfem::out); }
 
    // Configure the device from the command line options, unless already done
    std::optional<Device> backend;
