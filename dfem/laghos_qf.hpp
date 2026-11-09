@@ -80,9 +80,10 @@ inline std::vector<FieldDescriptor> QDataInputs(ParFiniteElementSpace &H1,
 }
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
-// Derivative kernels of the Jacobian blocks: matrix-free actions and the
-// assembled matrices of the AMG preconditioner
+// Derivative kernels of the Jacobian blocks: matrix-free forward and transpose
+// actions, and the assembled matrices of the AMG preconditioner
 constexpr auto JACOBIAN_KERNELS = future::DerivativeKernels::Action |
+                                  future::DerivativeKernels::ApplyTranspose |
                                   future::DerivativeKernels::AssembleMatrix;
 
 // ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯

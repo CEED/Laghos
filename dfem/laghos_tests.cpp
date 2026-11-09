@@ -537,10 +537,28 @@ TEST_CASE("imp_run_sdv_3d_q21_mid_av7_dtn",
           "[dfem][imp][run][sdv][3d][q21][dtn]")
 { LaghosTest("imp_run_sdv_3d_q21_mid_av7_dtn"); }
 
+// The adjoint verification is currently defined for one conforming MPI rank.
+// The makefile runs this test with both local and global q-functions.
+TEST_CASE("exp_tgv_2d_five_step_adjoint",
+          "[dfem][adj][exp][tgv][2d][q21]")
+{
+   if (mfem::Mpi::WorldSize() != 1) { return; }
+   std::vector<std::string> args =
+   {
+      "laghos", "-tga", "-rs", "1", "-ov", "2", "-oe", "1",
+      "-qf", qf, "-tga-dt", "1e-3", "-tga-fd-eps", "1e-6"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
+}
+
 // Problems 0 and 1 build a Cartesian mesh and must not open -m first.
 TEST_CASE("generated_mesh_skips_file", "[dfem][mesh]")
 {
-   std::vector<std::string> args = {
+   std::vector<std::string> args =
+   {
       "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-tf", "1e-4",
       "-m", "no-such-rectangle.mesh",
       "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
@@ -557,7 +575,8 @@ TEST_CASE("unsupported_problem_returns", "[dfem][problem]")
 {
    for (const char *p : {"2", "4", "5"})
    {
-      std::vector<std::string> args = {
+      std::vector<std::string> args =
+      {
          "laghos", "-p", p, "-dim", "2", "-rs", "0", "-tf", "1e-4",
          "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
       };
@@ -572,7 +591,8 @@ TEST_CASE("unsupported_problem_returns", "[dfem][problem]")
 TEST_CASE("explicit_history_stores_taken_dt", "[dfem][dt]")
 {
    const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
-   std::vector<std::string> args = {
+   std::vector<std::string> args =
+   {
       "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
       "-av", "-m", mesh,
       "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
@@ -600,7 +620,8 @@ TEST_CASE("order_q_changes_step", "[dfem][quad]")
    const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
    const auto estimate = [&](bool coarse)
    {
-      std::vector<std::string> args = {
+      std::vector<std::string> args =
+      {
          "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
          "-av", "-m", mesh,
          "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
@@ -626,7 +647,8 @@ TEST_CASE("order_q_changes_step", "[dfem][quad]")
 // A 3D Sedov sample past the unit-cube xy radius includes z.
 TEST_CASE("rho_out_3d_radius", "[dfem][rho]")
 {
-   std::vector<std::string> args = {
+   std::vector<std::string> args =
+   {
       "laghos", "-p", "1", "-dim", "3", "-rs", "0", "-tf", "1e-6",
       "-no-glvis", "-no-paraview", "-vs", "1000"
    };
@@ -657,7 +679,8 @@ TEST_CASE("av_default_is_viscous", "[dfem][av]")
    const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
    const auto energy = [&](const char *av)
    {
-      std::vector<std::string> args = {
+      std::vector<std::string> args =
+      {
          "laghos", "-p", "1", "-dim", "2", "-rs", "1", "-s", "3", "-tf", "0.02",
          "-m", mesh, av, "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
       };
@@ -681,7 +704,8 @@ TEST_CASE("imp_tgv_newton_fail", "[dfem][imp][newton]")
 {
    if (device == "debug") { return; }
    const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
-   std::vector<std::string> args = {
+   std::vector<std::string> args =
+   {
       "laghos", "-p", "0", "-dim", "2", "-rs", "1", "-s", "12", "-tf", "0.01",
       "-nmi", "1", "-nrt", "1e-30", "-nretry", "0", "-m", mesh,
       "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"
@@ -698,7 +722,8 @@ TEST_CASE("nretry_does_not_dump", "[dfem][imp][newton]")
 {
    if (device == "debug") { return; }
    const std::string mesh = std::string(LAGHOS_DATA_DIR) + "square01_quad.mesh";
-   std::vector<std::string> args = {
+   std::vector<std::string> args =
+   {
       "laghos", "-p", "0", "-dim", "2", "-rs", "1", "-s", "12", "-tf", "0.01",
       "-nmi", "1", "-nrt", "1e-30", "-nretry", "1", "-m", mesh,
       "-no-glvis", "-no-paraview", "-no-save", "-vs", "1000"

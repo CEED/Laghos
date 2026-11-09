@@ -116,7 +116,7 @@ CATCH_DIR ?= $(MFEM_SOURCE_DIR)/tests/unit
 
 # Assembly and solver, compiled once for laghos_dfem and laghos_tests
 LIB_SOURCE_FILES = laghos_assembly.cpp laghos_solver.cpp laghos_qf_hydro.cpp \
-	laghos_qf_velocity.cpp laghos_qf_energy.cpp
+	laghos_qf_velocity.cpp laghos_qf_energy.cpp laghos_tg_adjoint.cpp
 LIB_OBJECT_FILES = $(LIB_SOURCE_FILES:.cpp=.o)
 SOURCE_FILES = $(sort $(wildcard *.cpp))
 HEADER_FILES = $(sort $(wildcard *.hpp))

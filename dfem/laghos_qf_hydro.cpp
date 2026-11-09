@@ -72,11 +72,11 @@ struct HydroQFunctions
    struct TotalKineticEnergyQFunction
    {
       MFEM_HOST_DEVICE inline
-      void operator()(const vecd_t<DIM> &v,
+      void operator()(const vecd_t<DIM, dscalar_t> &v,
                       const real_t &rho0,
                       const matd &J0,
                       const real_t &w,
-                      real_t &ke) const
+                      dscalar_t &ke) const
       {
          ke = rho0 * 0.5 * v * v * det(J0) * w;
       }
@@ -171,7 +171,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
                         mesh);
       update_qdata->SetMultLevel(DifferentiableOperator::LVECTOR);
       typename HydroQFunctions<DIM>::UpdateQuadratureDataQFunction
-         update_qdata_qf{qc};
+      update_qdata_qf{qc};
       update_qdata->AddDomainIntegrator<backend_t>(
          update_qdata_qf, QDataFields(), update_qdata_kernel_oo, ir,
          all_domain_attr);
@@ -194,7 +194,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       momentum_pa = std::make_shared<DifferentiableOperator>(
                        momentum_pa_inputs, momentum_pa_outputs, mesh);
       typename HydroQFunctions<DIM>::MomentumPAQFunction
-         momentum_pa_qf;
+      momentum_pa_qf;
       momentum_pa->AddDomainIntegrator<backend_t>(
          momentum_pa_qf, momentum_pa_kernel_ao, momentum_pa_kernel_oo, ir,
          all_domain_attr);
@@ -231,7 +231,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       // LVECTOR as Mult passes the v L-vector, momentum_pa stays at TVECTOR
       energy_conservation_pa->SetMultLevel(DifferentiableOperator::LVECTOR);
       typename HydroQFunctions<DIM>::EnergyConservationPAQFunction
-         energy_conservation_pa_qf;
+      energy_conservation_pa_qf;
       energy_conservation_pa->AddDomainIntegrator<backend_t>(
          energy_conservation_pa_qf, energy_conservation_pa_kernel_ao,
          energy_conservation_pa_kernel_oo, ir, all_domain_attr);
@@ -268,7 +268,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             mesh);
       total_internal_energy_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
       typename HydroQFunctions<DIM>::TotalInternalEnergyQFunction
-         total_internal_energy_qf;
+      total_internal_energy_qf;
       total_internal_energy_mf->AddDomainIntegrator<backend_t>(
          total_internal_energy_qf, total_internal_energy_kernel_ao,
          total_internal_energy_kernel_oo, ir, all_domain_attr);
@@ -302,10 +302,12 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
             total_kinetic_energy_outputs, mesh);
       total_kinetic_energy_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
       typename HydroQFunctions<DIM>::TotalKineticEnergyQFunction
-         total_kinetic_energy_qf;
-      total_kinetic_energy_mf->AddDomainIntegrator<backend_t>(
+      total_kinetic_energy_qf;
+      auto derivatives = std::integer_sequence<size_t, VELOCITY> {};
+      total_kinetic_energy_mf->AddDomainIntegrator<
+      backend_t, future::DerivativeKernels::ApplyTranspose>(
          total_kinetic_energy_qf, total_kinetic_energy_kernel_ao,
-         total_kinetic_energy_kernel_oo, ir, all_domain_attr);
+         total_kinetic_energy_kernel_oo, ir, all_domain_attr, derivatives);
    }
 
    // Create density operator
@@ -331,7 +333,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
                       density_inputs, density_outputs, mesh);
       density_mf->SetMultLevel(DifferentiableOperator::LVECTOR);
       typename HydroQFunctions<DIM>::DensityQFunction
-         density_qf;
+      density_qf;
       density_mf->AddDomainIntegrator<backend_t>(
          density_qf, density_kernel_ao, density_kernel_oo, ir, all_domain_attr);
    }
@@ -354,11 +356,13 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
       taylor_source_mf = std::make_shared<DifferentiableOperator>(
                             taylor_source_inputs, taylor_source_outputs, mesh);
       typename HydroQFunctions<DIM>::TaylorSourceQFunction
-         taylor_source_qf;
+      taylor_source_qf;
       auto derivatives = std::integer_sequence<size_t, COORDINATES> {};
-      // Only the matrix-free action of dTaylorSourcedx is used
+      // The implicit solver uses the action; the explicit adjoint uses its
+      // transpose.
       taylor_source_mf->AddDomainIntegrator<backend_t,
-                       future::DerivativeKernels::Action>(
+                       future::DerivativeKernels::Action |
+                       future::DerivativeKernels::ApplyTranspose>(
                           taylor_source_qf, taylor_source_kernel_ao,
                           taylor_source_kernel_oo, ir, all_domain_attr,
                           derivatives);

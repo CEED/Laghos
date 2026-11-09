@@ -56,6 +56,7 @@
 #include <optional>
 
 #include "laghos_solver.hpp"
+#include "laghos_tg_adjoint.hpp"
 #include "laghos_tests.hpp"
 
 using namespace mfem;
@@ -97,6 +98,9 @@ int laghos(int argc, char *argv[])
    bool dt_min = false;
    int nretry = 100;
    bool gpu_aware_mpi = false;
+   bool tg_adjoint_check = false;
+   real_t tg_adjoint_dt = 1e-3;
+   real_t tg_adjoint_fd_epsilon = 1e-6;
    int dev = 0;
 
    OptionsParser args(argc, argv);
@@ -169,6 +173,14 @@ int laghos(int argc, char *argv[])
                   "Newton retries after a failed step.");
    args.AddOption(&gpu_aware_mpi, "-gam", "--gpu-aware-mpi", "-no-gam",
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
+   args.AddOption(&tg_adjoint_check, "-tga", "--tg-adjoint-check", "-no-tga",
+                  "--no-tg-adjoint-check",
+                  "Verify five fixed Forward Euler Taylor-Green adjoint steps.");
+   args.AddOption(&tg_adjoint_dt, "-tga-dt", "--tg-adjoint-dt",
+                  "Fixed time step for the Taylor-Green adjoint check.");
+   args.AddOption(&tg_adjoint_fd_epsilon, "-tga-fd-eps",
+                  "--tg-adjoint-fd-epsilon",
+                  "Centered finite-difference epsilon for the adjoint check.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
                   "Print the stock-compatible figures of merit table.");
@@ -177,6 +189,16 @@ int laghos(int argc, char *argv[])
    {
       if (Mpi::Root()) { args.PrintUsage(mfem::out); }
       return 1;
+   }
+   if (tg_adjoint_check)
+   {
+      problem = 0;
+      dim = 2;
+      ode_solver_type = 1;
+      use_viscosity = false;
+      visualization = false;
+      paraview = false;
+      save_files = false;
    }
 #ifndef LAGHOS_NO_MAIN
    hydro_options.timings = true;
@@ -460,6 +482,18 @@ int laghos(int argc, char *argv[])
          H1FESpace, L2FESpace, ess_tdof, rho0_coeff, x0_gf, rho0_gf, mat_gf,
          qc, ir, hydro_options);
    hydro->stage_dt_estimate = dt_min;
+
+   if (tg_adjoint_check)
+   {
+      MFEM_VERIFY(Mpi::WorldSize() == 1,
+                  "--tg-adjoint-check requires exactly one MPI task");
+      const bool passed =
+         hydrodynamics::VerifyTaylorGreenForwardEulerAdjoint(
+            H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
+            S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon);
+      delete hydro;
+      return passed ? 0 : 4;
+   }
 
    ODESolver *ode_solver = NULL;
    switch (ode_solver_type)
