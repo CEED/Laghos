@@ -501,8 +501,6 @@ int laghos(int argc, char *argv[])
 
    if (tg_adjoint_check || tg_manufactured_adjoint_check)
    {
-      MFEM_VERIFY(Mpi::WorldSize() == 1,
-                  "Taylor--Green adjoint checks require exactly one MPI task");
       const bool passed = tg_manufactured_adjoint_check ?
                           hydrodynamics::VerifyTaylorGreenManufacturedAdjoint(
                              H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,

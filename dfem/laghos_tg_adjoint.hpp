@@ -46,7 +46,7 @@ void ComputeTaylorGreenRK2AvgAdjoint(
    TaylorGreenAdjointState *final_state = nullptr);
 
 /// Verify the discrete adjoint of fixed-step RK2Avg Taylor--Green integration.
-/// This check currently requires one MPI task and no viscosity.
+/// This check requires no viscosity.
 bool VerifyTaylorGreenRK2AvgAdjoint(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,

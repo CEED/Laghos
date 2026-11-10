@@ -537,12 +537,11 @@ TEST_CASE("imp_run_sdv_3d_q21_mid_av7_dtn",
           "[dfem][imp][run][sdv][3d][q21][dtn]")
 { LaghosTest("imp_run_sdv_3d_q21_mid_av7_dtn"); }
 
-// The adjoint verification is currently defined for one conforming MPI rank.
-// The makefile runs this test with both local and global q-functions.
+// The makefile runs this parallel-safe adjoint verification with both local
+// and global q-functions.
 TEST_CASE("exp_tgv_2d_five_step_adjoint",
           "[dfem][adj][exp][tgv][2d][q21]")
 {
-   if (mfem::Mpi::WorldSize() != 1) { return; }
    std::vector<std::string> args =
    {
       "laghos", "-tga", "-tga-fd", "-rs", "1", "-ov", "2", "-oe", "1",

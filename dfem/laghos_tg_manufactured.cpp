@@ -160,7 +160,6 @@ std::shared_ptr<DifferentiableOperator> CreateManufacturedObjective(
       std::vector outputs{FieldDescriptor{MANUFACTURED_VALUE, &L2}};
       auto objective = std::make_shared<DifferentiableOperator>(
                           inputs, outputs, mesh);
-      objective->SetMultLevel(DifferentiableOperator::LVECTOR);
       future::tuple kernel_inputs =
       {
          Value<COORDINATES>{}, Gradient<COORDINATES>{}, Value<VELOCITY>{},
@@ -387,14 +386,17 @@ bool VerifyTaylorGreenManufacturedAdjoint(
    const real_t e_error = lambda_e_gf.ComputeL2Error(exact_e);
    const real_t combined_error =
       std::sqrt(x_error*x_error + v_error*v_error + e_error*e_error);
+   const long long global_elements = H1.GetMesh()->GetGlobalNE();
+   const HYPRE_BigInt global_h1_size = H1.GlobalTrueVSize();
+   const HYPRE_BigInt global_l2_size = L2.GlobalTrueVSize();
 
    if (Mpi::Root())
    {
       out << std::scientific << std::setprecision(16)
           << "\nTaylor--Green manufactured-adjoint convergence sample\n"
-          << "  elements                         = " << H1.GetMesh()->GetNE() << '\n'
-          << "  H1 true dofs                     = " << h1_size << '\n'
-          << "  L2 true dofs                     = " << l2_size << '\n'
+          << "  elements                         = " << global_elements << '\n'
+          << "  H1 true dofs                     = " << global_h1_size << '\n'
+          << "  L2 true dofs                     = " << global_l2_size << '\n'
           << "  dt                               = " << dt << '\n'
           << "  final time                       = " << final_time << '\n'
           << "  initial coordinate-adjoint error = " << x_error << '\n'
