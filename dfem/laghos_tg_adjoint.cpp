@@ -27,6 +27,16 @@ struct HydroState
       x(h1_size), v(h1_size), e(l2_size) { }
 };
 
+struct RK2AvgStepData
+{
+   HydroState state, midpoint;
+   Vector velocity_stage1, velocity_stage2;
+
+   RK2AvgStepData(int h1_size, int l2_size) :
+      state(h1_size, l2_size), midpoint(h1_size, l2_size),
+      velocity_stage1(h1_size), velocity_stage2(h1_size) { }
+};
+
 real_t Dot(const HydroState &a, const HydroState &b)
 {
    return a.x * b.x + a.v * b.v + a.e * b.e;
@@ -52,6 +62,13 @@ void Add(const HydroState &a, real_t alpha, const HydroState &b,
    add(a.e, alpha, b.e, result.e);
 }
 
+void AddInPlace(HydroState &a, real_t alpha, const HydroState &b)
+{
+   a.x.Add(alpha, b.x);
+   a.v.Add(alpha, b.v);
+   a.e.Add(alpha, b.e);
+}
+
 class TaylorGreenModel
 {
 private:
@@ -61,6 +78,7 @@ private:
 
    DifferentiableOperator &momentum;
    DifferentiableOperator &energy;
+   DifferentiableOperator &rk2avg_energy;
    DifferentiableOperator &source;
    DifferentiableOperator &objective;
    mutable Vector objective_values;
@@ -81,6 +99,13 @@ private:
    MultiVector SourceInputFields(const HydroState &state) const
    {
       return MultiVector{state.x};
+   }
+
+   MultiVector RK2AvgEnergyInputFields(const HydroState &state,
+                                       const Vector &work_velocity) const
+   {
+      return MultiVector{state.v, rho0, initial_coordinates, state.x,
+                         material, state.e, work_velocity};
    }
 
    MultiVector ObjectiveInputFields(const HydroState &state) const
@@ -117,6 +142,7 @@ public:
       initial_coordinates(H1.GetTrueVSize()),
       material(material_gf.ParFESpace()->GetTrueVSize()),
       momentum(*hydro.momentum_mf), energy(*hydro.energy_mf),
+      rk2avg_energy(*hydro.rk2avg_energy_mf),
       source(*hydro.taylor_source_mf), objective(*hydro.kinetic_energy_mf),
       objective_values(L2.GetTrueVSize()),
       velocity_mass(&H1), energy_mass(&L2),
@@ -191,24 +217,22 @@ public:
       SolveEnergyMass(energy_value, rhs.e);
    }
 
-   // RHS Jacobian-vector product used to propagate a direction forward.
-   void RhsJvp(const HydroState &state, const HydroState &direction,
-               HydroState &result) const
+   void VelocityRate(const HydroState &state, Vector &rate) const
+   {
+      Vector momentum_value(H1.GetTrueVSize());
+      MultiVector inputs = StateInputFields(state);
+      MultiVector output{momentum_value};
+      momentum.Mult(inputs, output);
+      momentum_value.Neg();
+      SolveVelocityMass(momentum_value, rate);
+   }
+
+   void VelocityJvp(const HydroState &state, const HydroState &direction,
+                    Vector &result) const
    {
       Vector dmomentum(H1.GetTrueVSize());
-      Vector denergy(L2.GetTrueVSize());
       dmomentum = 0.0;
-      denergy = 0.0;
-
       MultiVector inputs = StateInputFields(state);
-      auto add_derivative = [&](DifferentiableOperator &op, int id,
-                                const Vector &dfield, Vector &sum)
-      {
-         Vector part(sum.Size());
-         MultiVector output{part};
-         op.GetDerivative(id, inputs)->Mult(dfield, output);
-         sum += part;
-      };
       for (auto field :
            {
               std::pair{COORDINATES, &HydroState::x},
@@ -216,54 +240,108 @@ public:
               std::pair{INTERNAL_ENERGY, &HydroState::e}
            })
       {
-         add_derivative(momentum, field.first, direction.*field.second,
-                        dmomentum);
-         add_derivative(energy, field.first, direction.*field.second, denergy);
+         Vector part(dmomentum.Size());
+         MultiVector output{part};
+         momentum.GetDerivative(field.first, inputs)->Mult(
+            direction.*field.second, output);
+         dmomentum += part;
+      }
+      dmomentum.Neg();
+      SolveVelocityMass(dmomentum, result);
+   }
+
+   void VelocityVjp(const HydroState &state, const Vector &rate_lambda,
+                    HydroState &state_lambda) const
+   {
+      Vector momentum_lambda(H1.GetTrueVSize());
+      SolveVelocityMass(rate_lambda, momentum_lambda);
+      momentum_lambda.Neg();
+      MultiVector inputs = StateInputFields(state);
+      MultiVector output_lambda{momentum_lambda};
+      for (auto field :
+           {
+              std::pair{COORDINATES, &HydroState::x},
+              std::pair{VELOCITY, &HydroState::v},
+              std::pair{INTERNAL_ENERGY, &HydroState::e}
+           })
+      {
+         Vector part((state_lambda.*field.second).Size());
+         MultiVector output{part};
+         momentum.GetDerivative(field.first, inputs)->MultTranspose(
+            output_lambda, output);
+         state_lambda.*field.second += part;
+      }
+   }
+
+   void EnergyRate(const HydroState &state, const Vector &work_velocity,
+                   Vector &rate) const
+   {
+      Vector energy_value(L2.GetTrueVSize());
+      MultiVector energy_inputs =
+         RK2AvgEnergyInputFields(state, work_velocity);
+      MultiVector energy_output{energy_value};
+      rk2avg_energy.Mult(energy_inputs, energy_output);
+
+      Vector source_value(L2.GetTrueVSize());
+      MultiVector source_inputs = SourceInputFields(state);
+      MultiVector source_output{source_value};
+      source.Mult(source_inputs, source_output);
+      energy_value += source_value;
+      SolveEnergyMass(energy_value, rate);
+   }
+
+   void EnergyJvp(const HydroState &state, const Vector &work_velocity,
+                  const HydroState &state_direction,
+                  const Vector &work_velocity_direction,
+                  Vector &result) const
+   {
+      Vector denergy(L2.GetTrueVSize());
+      denergy = 0.0;
+      MultiVector inputs = RK2AvgEnergyInputFields(state, work_velocity);
+      for (auto field :
+           {
+              std::pair{COORDINATES, &HydroState::x},
+              std::pair{VELOCITY, &HydroState::v},
+              std::pair{INTERNAL_ENERGY, &HydroState::e}
+           })
+      {
+         Vector part(denergy.Size());
+         MultiVector output{part};
+         rk2avg_energy.GetDerivative(field.first, inputs)->Mult(
+            state_direction.*field.second, output);
+         denergy += part;
+      }
+      {
+         Vector part(denergy.Size());
+         MultiVector output{part};
+         rk2avg_energy.GetDerivative(RK2AVG_VELOCITY, inputs)->Mult(
+            work_velocity_direction, output);
+         denergy += part;
       }
 
       Vector dsource(L2.GetTrueVSize());
       MultiVector source_inputs = SourceInputFields(state);
       MultiVector source_output{dsource};
-      source.GetDerivative(COORDINATES, source_inputs)->Mult(direction.x,
-                                                             source_output);
+      source.GetDerivative(COORDINATES, source_inputs)->Mult(
+         state_direction.x, source_output);
       denergy += dsource;
-
-      result.x = direction.v;
-      dmomentum.Neg();
-      SolveVelocityMass(dmomentum, result.v);
-      SolveEnergyMass(denergy, result.e);
+      SolveEnergyMass(denergy, result);
    }
 
-   /// Backpropagate lambda_next through one Forward Euler step:
-   /// lambda = lambda_next + dt * R'(state)^T lambda_next.
-   void ComputeLambda(const HydroState &state,
-                      const HydroState &lambda_next,
-                      real_t dt,
-                      HydroState &lambda) const
+   void EnergyVjp(const HydroState &state, const Vector &work_velocity,
+                  const Vector &rate_lambda, HydroState &state_lambda,
+                  Vector &work_velocity_lambda) const
    {
-      Vector momentum_lambda(H1.GetTrueVSize());
       Vector energy_lambda(L2.GetTrueVSize());
-      SolveVelocityMass(lambda_next.v, momentum_lambda);
-      momentum_lambda.Neg();
-      SolveEnergyMass(lambda_next.e, energy_lambda);
-
-      HydroState rhs_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
-      rhs_lambda.x = 0.0;
-      rhs_lambda.v = 0.0;
-      rhs_lambda.e = 0.0;
-
-      MultiVector inputs = StateInputFields(state);
-      MultiVector momentum_output_lambda{momentum_lambda};
+      SolveEnergyMass(rate_lambda, energy_lambda);
       MultiVector energy_output_lambda{energy_lambda};
-      auto add_transpose = [&](DifferentiableOperator &op, int id,
-                               MultiVector &output_lambda,
-                               Vector &sum)
-      {
-         Vector part(sum.Size());
-         MultiVector output{part};
-         op.GetDerivative(id, inputs)->MultTranspose(output_lambda, output);
-         sum += part;
-      };
+      MultiVector inputs = RK2AvgEnergyInputFields(state, work_velocity);
+
+      Vector work_part(work_velocity.Size());
+      MultiVector work_output{work_part};
+      rk2avg_energy.GetDerivative(RK2AVG_VELOCITY, inputs)->MultTranspose(
+         energy_output_lambda, work_output);
+      work_velocity_lambda += work_part;
       for (auto field :
            {
               std::pair{COORDINATES, &HydroState::x},
@@ -271,23 +349,121 @@ public:
               std::pair{INTERNAL_ENERGY, &HydroState::e}
            })
       {
-         add_transpose(momentum, field.first, momentum_output_lambda,
-                       rhs_lambda.*field.second);
-         add_transpose(energy, field.first, energy_output_lambda,
-                       rhs_lambda.*field.second);
+         Vector part((state_lambda.*field.second).Size());
+         MultiVector output{part};
+         rk2avg_energy.GetDerivative(field.first, inputs)->MultTranspose(
+            energy_output_lambda, output);
+         state_lambda.*field.second += part;
       }
 
       Vector source_x(H1.GetTrueVSize());
       MultiVector source_inputs = SourceInputFields(state);
-      MultiVector source_output_lambda{energy_lambda};
       MultiVector source_x_output{source_x};
       source.GetDerivative(COORDINATES, source_inputs)->MultTranspose(
-         source_output_lambda, source_x_output);
-      rhs_lambda.x += source_x;
+         energy_output_lambda, source_x_output);
+      state_lambda.x += source_x;
+   }
 
-      rhs_lambda.v += lambda_next.x;
-      rhs_lambda.v.SetSubVector(essential_velocity_tdofs, 0.0);
-      Add(lambda_next, dt, rhs_lambda, lambda);
+   void RK2AvgStep(const HydroState &state, real_t dt,
+                   RK2AvgStepData &step, HydroState &next) const
+   {
+      const real_t half_dt = 0.5 * dt;
+      Copy(state, step.state);
+
+      Vector acceleration1(H1.GetTrueVSize());
+      Vector energy_rate1(L2.GetTrueVSize());
+      VelocityRate(state, acceleration1);
+      add(state.v, half_dt, acceleration1, step.velocity_stage1);
+      EnergyRate(state, step.velocity_stage1, energy_rate1);
+      add(state.x, half_dt, step.velocity_stage1, step.midpoint.x);
+      add(state.v, half_dt, acceleration1, step.midpoint.v);
+      add(state.e, half_dt, energy_rate1, step.midpoint.e);
+
+      Vector acceleration2(H1.GetTrueVSize());
+      Vector energy_rate2(L2.GetTrueVSize());
+      VelocityRate(step.midpoint, acceleration2);
+      add(state.v, half_dt, acceleration2, step.velocity_stage2);
+      EnergyRate(step.midpoint, step.velocity_stage2, energy_rate2);
+      add(state.x, dt, step.velocity_stage2, next.x);
+      add(state.v, dt, acceleration2, next.v);
+      add(state.e, dt, energy_rate2, next.e);
+   }
+
+   void RK2AvgJvp(const RK2AvgStepData &step,
+                  const HydroState &direction, real_t dt,
+                  HydroState &direction_next) const
+   {
+      const real_t half_dt = 0.5 * dt;
+      Vector acceleration1_direction(H1.GetTrueVSize());
+      Vector velocity1_direction(H1.GetTrueVSize());
+      Vector energy1_direction(L2.GetTrueVSize());
+      VelocityJvp(step.state, direction, acceleration1_direction);
+      add(direction.v, half_dt, acceleration1_direction,
+          velocity1_direction);
+      EnergyJvp(step.state, step.velocity_stage1, direction,
+                velocity1_direction, energy1_direction);
+
+      HydroState midpoint_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+      add(direction.x, half_dt, velocity1_direction, midpoint_direction.x);
+      add(direction.v, half_dt, acceleration1_direction,
+          midpoint_direction.v);
+      add(direction.e, half_dt, energy1_direction, midpoint_direction.e);
+
+      Vector acceleration2_direction(H1.GetTrueVSize());
+      Vector velocity2_direction(H1.GetTrueVSize());
+      Vector energy2_direction(L2.GetTrueVSize());
+      VelocityJvp(step.midpoint, midpoint_direction,
+                  acceleration2_direction);
+      add(direction.v, half_dt, acceleration2_direction,
+          velocity2_direction);
+      EnergyJvp(step.midpoint, step.velocity_stage2, midpoint_direction,
+                velocity2_direction, energy2_direction);
+
+      add(direction.x, dt, velocity2_direction, direction_next.x);
+      add(direction.v, dt, acceleration2_direction, direction_next.v);
+      add(direction.e, dt, energy2_direction, direction_next.e);
+   }
+
+   /// Backpropagate lambda_next through one complete RK2Avg step.
+   void ComputeLambda(const RK2AvgStepData &step,
+                      const HydroState &lambda_next, real_t dt,
+                      HydroState &lambda) const
+   {
+      const real_t half_dt = 0.5 * dt;
+      Copy(lambda_next, lambda);
+
+      Vector velocity2_lambda(lambda_next.x);
+      velocity2_lambda *= dt;
+      Vector acceleration2_lambda(lambda_next.v);
+      acceleration2_lambda *= dt;
+      Vector energy2_lambda(lambda_next.e);
+      energy2_lambda *= dt;
+
+      HydroState midpoint_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      midpoint_lambda.x = 0.0;
+      midpoint_lambda.v = 0.0;
+      midpoint_lambda.e = 0.0;
+      EnergyVjp(step.midpoint, step.velocity_stage2, energy2_lambda,
+                midpoint_lambda, velocity2_lambda);
+      lambda.v += velocity2_lambda;
+      acceleration2_lambda.Add(half_dt, velocity2_lambda);
+      VelocityVjp(step.midpoint, acceleration2_lambda, midpoint_lambda);
+      midpoint_lambda.v.SetSubVector(essential_velocity_tdofs, 0.0);
+
+      AddInPlace(lambda, 1.0, midpoint_lambda);
+      Vector velocity1_lambda(midpoint_lambda.x);
+      velocity1_lambda *= half_dt;
+      Vector acceleration1_lambda(midpoint_lambda.v);
+      acceleration1_lambda *= half_dt;
+      Vector energy1_lambda(midpoint_lambda.e);
+      energy1_lambda *= half_dt;
+
+      EnergyVjp(step.state, step.velocity_stage1, energy1_lambda,
+                lambda, velocity1_lambda);
+      lambda.v += velocity1_lambda;
+      acceleration1_lambda.Add(half_dt, velocity1_lambda);
+      VelocityVjp(step.state, acceleration1_lambda, lambda);
+      lambda.v.SetSubVector(essential_velocity_tdofs, 0.0);
    }
 
    real_t Objective(const HydroState &state) const
@@ -319,22 +495,27 @@ public:
    }
 
    void ForwardTrajectory(const HydroState &initial, real_t dt, int num_steps,
-                          std::vector<HydroState> &states) const
+                          std::vector<HydroState> &states,
+                          std::vector<RK2AvgStepData> &steps) const
    {
       MFEM_VERIFY(num_steps > 0, "number of time steps must be positive");
       states.clear();
       states.reserve(num_steps + 1);
+      steps.clear();
+      steps.reserve(num_steps);
       for (int n = 0; n <= num_steps; n++)
       {
          states.emplace_back(H1.GetTrueVSize(), L2.GetTrueVSize());
       }
-      Copy(initial, states[0]);
-
-      HydroState rhs(H1.GetTrueVSize(), L2.GetTrueVSize());
       for (int n = 0; n < num_steps; n++)
       {
-         Rhs(states[n], rhs);
-         Add(states[n], dt, rhs, states[n + 1]);
+         steps.emplace_back(H1.GetTrueVSize(), L2.GetTrueVSize());
+      }
+      Copy(initial, states[0]);
+
+      for (int n = 0; n < num_steps; n++)
+      {
+         RK2AvgStep(states[n], dt, steps[n], states[n + 1]);
       }
    }
 
@@ -342,7 +523,8 @@ public:
                               int num_steps) const
    {
       std::vector<HydroState> states;
-      ForwardTrajectory(initial, dt, num_steps, states);
+      std::vector<RK2AvgStepData> steps;
+      ForwardTrajectory(initial, dt, num_steps, states, steps);
       return Objective(states.back());
    }
 };
@@ -366,7 +548,7 @@ void ExtractTrueState(ParFiniteElementSpace &H1, ParFiniteElementSpace &L2,
 
 } // namespace
 
-bool VerifyTaylorGreenForwardEulerAdjoint(
+bool VerifyTaylorGreenRK2AvgAdjoint(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    const Array<int> &ess_tdofs_v,
@@ -414,7 +596,21 @@ bool VerifyTaylorGreenForwardEulerAdjoint(
    const real_t rhs_e_error = rhs_difference.e.Norml2();
 
    std::vector<HydroState> states;
-   model.ForwardTrajectory(state, dt, num_steps, states);
+   std::vector<RK2AvgStepData> steps;
+   model.ForwardTrajectory(state, dt, num_steps, states, steps);
+
+   BlockVector laghos_step(initial_state);
+   RK2AvgSolver rk2avg;
+   rk2avg.Init(hydro);
+   double laghos_time = 0.0;
+   double laghos_dt = dt;
+   rk2avg.Step(laghos_step, laghos_time, laghos_dt);
+   HydroState laghos_step_state(H1.GetTrueVSize(), L2.GetTrueVSize());
+   ExtractTrueState(H1, L2, laghos_step, laghos_step_state);
+   HydroState step_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
+   Add(states[1], -1.0, laghos_step_state, step_difference);
+   const real_t step_relative_error =
+      Norml2(step_difference) / std::max(Norml2(laghos_step_state), 1.0);
 
    HydroState initial_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
    HydroState lambda_next(H1.GetTrueVSize(), L2.GetTrueVSize());
@@ -425,6 +621,7 @@ bool VerifyTaylorGreenForwardEulerAdjoint(
    lambda_next.x.Randomize(2001);
    lambda_next.v.Randomize(2002);
    lambda_next.e.Randomize(2003);
+   lambda_next.v.SetSubVector(ess_tdofs_v, 0.0);
    const real_t direction_norm = Norml2(initial_direction);
    initial_direction.x /= direction_norm;
    initial_direction.v /= direction_norm;
@@ -432,19 +629,17 @@ bool VerifyTaylorGreenForwardEulerAdjoint(
 
    HydroState direction(H1.GetTrueVSize(), L2.GetTrueVSize());
    Copy(initial_direction, direction);
-   HydroState rhs_jvp(H1.GetTrueVSize(), L2.GetTrueVSize());
    HydroState direction_next(H1.GetTrueVSize(), L2.GetTrueVSize());
    HydroState lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
    for (int n = 0; n < num_steps; n++)
    {
-      model.RhsJvp(states[n], direction, rhs_jvp);
-      Add(direction, dt, rhs_jvp, direction_next);
+      model.RK2AvgJvp(steps[n], direction, dt, direction_next);
       Copy(direction_next, direction);
    }
    const real_t jvp_dot = Dot(lambda_next, direction);
    for (int n = num_steps - 1; n >= 0; n--)
    {
-      model.ComputeLambda(states[n], lambda_next, dt, lambda);
+      model.ComputeLambda(steps[n], lambda_next, dt, lambda);
       Copy(lambda, lambda_next);
    }
    const real_t vjp_dot = Dot(lambda_next, initial_direction);
@@ -461,7 +656,7 @@ bool VerifyTaylorGreenForwardEulerAdjoint(
    Copy(lambda_final, lambda_next);
    for (int n = num_steps - 1; n >= 0; n--)
    {
-      model.ComputeLambda(states[n], lambda_next, dt, lambda_0);
+      model.ComputeLambda(steps[n], lambda_next, dt, lambda_0);
       Copy(lambda_0, lambda_next);
    }
 
@@ -530,7 +725,7 @@ bool VerifyTaylorGreenForwardEulerAdjoint(
    });
 
    out << std::setprecision(12)
-       << "\nTaylor--Green five-step Forward Euler adjoint verification\n"
+       << "\nTaylor--Green five-step RK2Avg adjoint verification\n"
        << "  dt                              = " << dt << '\n'
        << "  objective J(S5)                 = " << objective_value << '\n'
        << "  dFEM/Laghos RHS relative error  = " << rhs_relative_error << '\n'
@@ -541,6 +736,9 @@ bool VerifyTaylorGreenForwardEulerAdjoint(
        << "    Laghos RHS block norms        = " << laghos_true_rhs.x.Norml2()
        << " / " << laghos_true_rhs.v.Norml2() << " / "
        << laghos_true_rhs.e.Norml2() << '\n'
+       << "  dFEM/Laghos RK2Avg step error   = " << step_relative_error << '\n'
+       << "  trajectory JVP dot              = " << jvp_dot << '\n'
+       << "  trajectory lambda dot           = " << vjp_dot << '\n'
        << "  trajectory JVP/lambda error     = " << transpose_relative_error << '\n'
        << "  directional adjoint derivative  = " << directional_adjoint << '\n'
        << "  directional finite difference   = " << directional_fd << '\n'
@@ -549,6 +747,7 @@ bool VerifyTaylorGreenForwardEulerAdjoint(
        << "  full-gradient max abs error     = " << gradient_max_error << '\n';
 
    const bool passed = rhs_relative_error < 1e-8 &&
+                       step_relative_error < 1e-8 &&
                        transpose_relative_error < 1e-10 &&
                        directional_relative_error < 5e-7 &&
                        gradient_relative_error < 5e-6;

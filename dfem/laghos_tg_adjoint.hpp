@@ -11,9 +11,9 @@ namespace mfem::hydrodynamics
 
 class LagrangianHydroOperator;
 
-/// Verify the discrete adjoint of five fixed Forward Euler Taylor--Green
-/// steps. This check currently requires one MPI task and no viscosity.
-bool VerifyTaylorGreenForwardEulerAdjoint(
+/// Verify the discrete adjoint of five fixed RK2Avg Taylor--Green steps.
+/// This check currently requires one MPI task and no viscosity.
+bool VerifyTaylorGreenRK2AvgAdjoint(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    const Array<int> &essential_velocity_tdofs,

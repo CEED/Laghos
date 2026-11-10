@@ -175,7 +175,7 @@ int laghos(int argc, char *argv[])
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&tg_adjoint_check, "-tga", "--tg-adjoint-check", "-no-tga",
                   "--no-tg-adjoint-check",
-                  "Verify five fixed Forward Euler Taylor-Green adjoint steps.");
+                  "Verify five fixed RK2Avg Taylor-Green adjoint steps.");
    args.AddOption(&tg_adjoint_dt, "-tga-dt", "--tg-adjoint-dt",
                   "Fixed time step for the Taylor-Green adjoint check.");
    args.AddOption(&tg_adjoint_fd_epsilon, "-tga-fd-eps",
@@ -194,7 +194,7 @@ int laghos(int argc, char *argv[])
    {
       problem = 0;
       dim = 2;
-      ode_solver_type = 1;
+      ode_solver_type = 7;
       use_viscosity = false;
       visualization = false;
       paraview = false;
@@ -488,7 +488,7 @@ int laghos(int argc, char *argv[])
       MFEM_VERIFY(Mpi::WorldSize() == 1,
                   "--tg-adjoint-check requires exactly one MPI task");
       const bool passed =
-         hydrodynamics::VerifyTaylorGreenForwardEulerAdjoint(
+         hydrodynamics::VerifyTaylorGreenRK2AvgAdjoint(
             H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
             S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon);
       delete hydro;

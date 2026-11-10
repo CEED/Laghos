@@ -56,6 +56,7 @@ constexpr int COORDINATES0 = 2;
 constexpr int COORDINATES = 3;
 constexpr int MATERIAL = 4;
 constexpr int INTERNAL_ENERGY = 5;
+constexpr int RK2AVG_VELOCITY = 6;
 constexpr int DT_EST = 8;
 constexpr int STRESS_TENSOR = 9;
 
@@ -469,6 +470,18 @@ std::shared_ptr<DifferentiableOperator> CreateMomentumOperator(
 
 // Builds the dFEM energy conservation operator, with its Jacobian blocks
 std::shared_ptr<DifferentiableOperator> CreateEnergyOperator(
+   int dim,
+   int qf_backend,
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   const QConstants &qc);
+
+// Builds the RK2Avg energy operator. The stage velocity determines the stress,
+// while rk2avg_velocity is the separately averaged velocity contracted with it.
+std::shared_ptr<DifferentiableOperator> CreateRK2AvgEnergyOperator(
    int dim,
    int qf_backend,
    ParFiniteElementSpace &H1,

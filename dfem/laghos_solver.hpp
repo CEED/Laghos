@@ -222,6 +222,7 @@ public:
                            std::shared_ptr<DifferentiableOperator> momentum_mf,
                            std::shared_ptr<DifferentiableOperator> momentum_pa,
                            std::shared_ptr<DifferentiableOperator> energy_conservation_mf,
+                           std::shared_ptr<DifferentiableOperator> rk2avg_energy_mf,
                            std::shared_ptr<DifferentiableOperator> energy_conservation_pa,
                            std::shared_ptr<DifferentiableOperator> total_internal_energy_mf,
                            std::shared_ptr<DifferentiableOperator> total_kinetic_energy_mf,
@@ -283,6 +284,7 @@ public:
    std::shared_ptr<DifferentiableOperator> momentum_mf;
    std::shared_ptr<DifferentiableOperator> momentum_pa;
    std::shared_ptr<DifferentiableOperator> energy_mf;
+   std::shared_ptr<DifferentiableOperator> rk2avg_energy_mf;
    std::shared_ptr<DifferentiableOperator> energy_pa;
    std::shared_ptr<DifferentiableOperator> internal_energy_mf;
    std::shared_ptr<DifferentiableOperator> kinetic_energy_mf;

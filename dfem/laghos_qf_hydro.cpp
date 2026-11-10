@@ -204,6 +204,9 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    auto energy_conservation_mf =
       CreateEnergyOperator(DIM, options.qfunction_backend, H1, L2,
                            material_gf, ir, all_domain_attr, qc);
+   auto rk2avg_energy_mf =
+      CreateRK2AvgEnergyOperator(DIM, options.qfunction_backend, H1, L2,
+                                 material_gf, ir, all_domain_attr, qc);
 
    std::shared_ptr<DifferentiableOperator> energy_conservation_pa;
    {
@@ -371,7 +374,7 @@ static LagrangianHydroOperator *CreateLagrangianHydroOperator(
    return new LagrangianHydroOperator(H1, L2, ess_tdof, ir,
                                       rho0_coeff, x0_gf, rho0_gf, material_gf,
                                       update_qdata, momentum_mf, momentum_pa,
-                                      energy_conservation_mf,
+                                      energy_conservation_mf, rk2avg_energy_mf,
                                       energy_conservation_pa,
                                       total_internal_energy_mf,
                                       total_kinetic_energy_mf,

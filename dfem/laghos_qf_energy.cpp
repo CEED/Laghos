@@ -62,4 +62,59 @@ std::shared_ptr<DifferentiableOperator> CreateEnergyOperator(
    });
 }
 
+template <int DIM>
+struct RK2AvgEnergyQFunction
+{
+   using matd = matd_t<DIM>;
+   using dmatd = matd_t<DIM, dscalar_t>;
+
+   QConstants c;
+   MFEM_HOST_DEVICE inline
+   void operator()(const dmatd &dvdxi, const real_t &rho0,
+                   const matd &J0, const dmatd &J,
+                   const real_t &gamma, const dscalar_t &E,
+                   const dmatd &rk2avg_dvdxi, const real_t &w,
+                   dscalar_t &de) const
+   {
+      auto setup = StressSetup<DIM>(c, dvdxi, rho0, J0, J, gamma, E, w);
+      de = ddot(future::get<0>(setup), rk2avg_dvdxi);
+   }
+};
+
+std::shared_ptr<DifferentiableOperator> CreateRK2AvgEnergyOperator(
+   int dim,
+   int qf_backend,
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   ParGridFunction &material_gf,
+   const IntegrationRule &ir,
+   const Array<int> &all_domain_attr,
+   const QConstants &qc)
+{
+   return Dispatch(dim, qf_backend, [&](auto DIM, auto backend)
+   {
+      constexpr int dim_v = decltype(DIM)::value;
+      using backend_t = decltype(backend);
+      auto inputs = QDataInputs(H1, L2, material_gf);
+      inputs.push_back({RK2AVG_VELOCITY, &H1});
+      std::vector outputs{FieldDescriptor{INTERNAL_ENERGY, &L2}};
+      auto op = std::make_shared<DifferentiableOperator>(
+                   inputs, outputs, *H1.GetParMesh());
+      future::tuple kernel_ao =
+      {
+         Gradient<VELOCITY>{}, Value<DENSITY0>{},
+         Gradient<COORDINATES0>{}, Gradient<COORDINATES>{},
+         Value<MATERIAL>{}, Value<INTERNAL_ENERGY>{},
+         Gradient<RK2AVG_VELOCITY>{}, Weight{}
+      };
+      future::tuple kernel_oo = {Value<INTERNAL_ENERGY>{}};
+      auto derivatives = std::integer_sequence<size_t, VELOCITY, COORDINATES,
+           INTERNAL_ENERGY, RK2AVG_VELOCITY> {};
+      RK2AvgEnergyQFunction<dim_v> qf{qc};
+      op->AddDomainIntegrator<backend_t, JACOBIAN_KERNELS>(
+         qf, kernel_ao, kernel_oo, ir, all_domain_attr, derivatives);
+      return op;
+   });
+}
+
 } // namespace mfem::hydrodynamics
