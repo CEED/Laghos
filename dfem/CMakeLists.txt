@@ -1,6 +1,7 @@
 # Assembly and solver, compiled once for laghos_dfem and laghos_tests
 add_library(laghos_dfem_lib OBJECT laghos_assembly.cpp laghos_solver.cpp
-            laghos_qf_hydro.cpp laghos_qf_velocity.cpp laghos_qf_energy.cpp)
+            laghos_qf_hydro.cpp laghos_qf_velocity.cpp laghos_qf_energy.cpp
+            laghos_tg_adjoint.cpp laghos_tg_manufactured.cpp)
 
 # Device kernels are emitted only from CUDA or HIP translation units.
 if (MFEM_USE_CUDA OR MFEM_USE_HIP)
@@ -16,7 +17,8 @@ if (MFEM_USE_CUDA OR MFEM_USE_HIP)
   endif()
   set_source_files_properties(
     laghos_assembly.cpp laghos_solver.cpp laghos_qf_hydro.cpp
-    laghos_qf_velocity.cpp laghos_qf_energy.cpp laghos.cpp
+    laghos_qf_velocity.cpp laghos_qf_energy.cpp laghos_tg_adjoint.cpp
+    laghos_tg_manufactured.cpp laghos.cpp
     PROPERTIES LANGUAGE ${_dfem_lang})
 endif()
 

@@ -545,7 +545,7 @@ TEST_CASE("exp_tgv_2d_five_step_adjoint",
    if (mfem::Mpi::WorldSize() != 1) { return; }
    std::vector<std::string> args =
    {
-      "laghos", "-tga", "-rs", "1", "-ov", "2", "-oe", "1",
+      "laghos", "-tga", "-tga-fd", "-rs", "1", "-ov", "2", "-oe", "1",
       "-qf", qf, "-tga-dt", "1e-3", "-tga-fd-eps", "1e-6"
    };
    std::vector<char *> argv;

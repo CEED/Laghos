@@ -18,14 +18,7 @@ namespace mfem::hydrodynamics
 namespace
 {
 
-struct HydroState
-{
-   Vector x, v, e;
-
-   HydroState() = default;
-   HydroState(int h1_size, int l2_size) :
-      x(h1_size), v(h1_size), e(l2_size) { }
-};
+using HydroState = TaylorGreenAdjointState;
 
 struct RK2AvgStepData
 {
@@ -547,6 +540,67 @@ void ExtractTrueState(ParFiniteElementSpace &H1, ParFiniteElementSpace &L2,
 }
 
 } // namespace
+
+void ComputeTaylorGreenRK2AvgAdjoint(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   const Array<int> &ess_tdofs_v,
+   Coefficient &rho0_coefficient,
+   const ParGridFunction &rho0,
+   const ParGridFunction &material,
+   const BlockVector &initial_state,
+   LagrangianHydroOperator &hydro,
+   real_t dt,
+   int num_steps,
+   const TaylorGreenObjectiveGradient &terminal_gradient,
+   const TaylorGreenObjectiveGradient &running_gradient,
+   TaylorGreenAdjointState &initial_gradient,
+   TaylorGreenAdjointState *final_state)
+{
+   MFEM_VERIFY(H1.GetComm() == MPI_COMM_WORLD,
+               "Taylor--Green adjoint integration expects MPI_COMM_WORLD");
+   MFEM_VERIFY(Mpi::WorldSize() == 1,
+               "Taylor--Green adjoint integration currently requires one MPI task");
+   MFEM_VERIFY(H1.GetMesh()->Dimension() == 2,
+               "Taylor--Green adjoint integration currently requires a 2D mesh");
+   MFEM_VERIFY(H1.GetVSize() == H1.GetTrueVSize() &&
+               L2.GetVSize() == L2.GetTrueVSize(),
+               "Taylor--Green adjoint integration requires conforming one-rank spaces");
+   MFEM_VERIFY(dt > 0.0 && num_steps > 0,
+               "time step and step count must be positive");
+
+   HydroState state(H1.GetTrueVSize(), L2.GetTrueVSize());
+   ExtractTrueState(H1, L2, initial_state, state);
+   TaylorGreenModel model(H1, L2, ess_tdofs_v, rho0_coefficient, rho0,
+                          material, state.x, hydro);
+
+   std::vector<HydroState> states;
+   std::vector<RK2AvgStepData> steps;
+   model.ForwardTrajectory(state, dt, num_steps, states, steps);
+   if (final_state) { Copy(states.back(), *final_state); }
+
+   const real_t final_time = num_steps * dt;
+   HydroState lambda_next(H1.GetTrueVSize(), L2.GetTrueVSize());
+   terminal_gradient(states.back(), final_time, lambda_next);
+   lambda_next.v.SetSubVector(ess_tdofs_v, 0.0);
+
+   HydroState objective_gradient(H1.GetTrueVSize(), L2.GetTrueVSize());
+   running_gradient(states.back(), final_time, objective_gradient);
+   objective_gradient.v.SetSubVector(ess_tdofs_v, 0.0);
+   AddInPlace(lambda_next, 0.5 * dt, objective_gradient);
+
+   HydroState lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+   for (int n = num_steps - 1; n >= 0; n--)
+   {
+      model.ComputeLambda(steps[n], lambda_next, dt, lambda);
+      running_gradient(states[n], n * dt, objective_gradient);
+      objective_gradient.v.SetSubVector(ess_tdofs_v, 0.0);
+      AddInPlace(lambda, (n == 0 ? 0.5 : 1.0) * dt,
+                 objective_gradient);
+      Copy(lambda, lambda_next);
+   }
+   Copy(lambda_next, initial_gradient);
+}
 
 bool VerifyTaylorGreenRK2AvgAdjoint(
    ParFiniteElementSpace &H1,

@@ -57,6 +57,7 @@
 
 #include "laghos_solver.hpp"
 #include "laghos_tg_adjoint.hpp"
+#include "laghos_tg_manufactured.hpp"
 #include "laghos_tests.hpp"
 
 using namespace mfem;
@@ -99,6 +100,7 @@ int laghos(int argc, char *argv[])
    int nretry = 100;
    bool gpu_aware_mpi = false;
    bool tg_adjoint_check = false;
+   bool tg_manufactured_adjoint_check = false;
    real_t tg_adjoint_dt = 1e-3;
    real_t tg_adjoint_fd_epsilon = 1e-6;
    bool tg_adjoint_fd_check = false;
@@ -179,6 +181,10 @@ int laghos(int argc, char *argv[])
    args.AddOption(&tg_adjoint_check, "-tga", "--tg-adjoint-check", "-no-tga",
                   "--no-tg-adjoint-check",
                   "Verify fixed-step RK2Avg Taylor-Green adjoint integration.");
+   args.AddOption(&tg_manufactured_adjoint_check, "-tgam",
+                  "--tg-manufactured-adjoint-check", "-no-tgam",
+                  "--no-tg-manufactured-adjoint-check",
+                  "Measure the Taylor-Green manufactured-adjoint error.");
    args.AddOption(&tg_adjoint_dt, "-tga-dt", "--tg-adjoint-dt",
                   "Fixed time step for the Taylor-Green adjoint check.");
    args.AddOption(&tg_adjoint_fd_epsilon, "-tga-fd-eps",
@@ -201,7 +207,7 @@ int laghos(int argc, char *argv[])
       if (Mpi::Root()) { args.PrintUsage(mfem::out); }
       return 1;
    }
-   if (tg_adjoint_check)
+   if (tg_adjoint_check || tg_manufactured_adjoint_check)
    {
       problem = 0;
       dim = 2;
@@ -493,16 +499,20 @@ int laghos(int argc, char *argv[])
          qc, ir, hydro_options);
    hydro->stage_dt_estimate = dt_min;
 
-   if (tg_adjoint_check)
+   if (tg_adjoint_check || tg_manufactured_adjoint_check)
    {
       MFEM_VERIFY(Mpi::WorldSize() == 1,
-                  "--tg-adjoint-check requires exactly one MPI task");
-      const bool passed =
-         hydrodynamics::VerifyTaylorGreenRK2AvgAdjoint(
-            H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
-            S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon,
-            tg_adjoint_steps, tg_checkpoint_interval, tg_adjoint_fd_check,
-            visualization);
+                  "Taylor--Green adjoint checks require exactly one MPI task");
+      const bool passed = tg_manufactured_adjoint_check ?
+                          hydrodynamics::VerifyTaylorGreenManufacturedAdjoint(
+                             H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
+                             S, ir, hydro_options.qfunction_backend, *hydro, tg_adjoint_dt,
+                             tg_adjoint_steps) :
+                          hydrodynamics::VerifyTaylorGreenRK2AvgAdjoint(
+                             H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
+                             S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon,
+                             tg_adjoint_steps, tg_checkpoint_interval, tg_adjoint_fd_check,
+                             visualization);
       delete hydro;
       return passed ? 0 : 4;
    }
