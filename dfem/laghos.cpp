@@ -129,7 +129,7 @@ int laghos(int argc, char *argv[])
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4,\n\t"
-                  "            6 - RK6,\n\t"
+                  "            6 - RK6, 7 - RK2Avg,\n\t"
                   "            11 - Backward Euler,\n\t"
                   "            12 - Implicit midpoint,\n\t"
                   "            13 - SDIRK33, 14 - SDIRK34.");
@@ -503,6 +503,7 @@ int laghos(int argc, char *argv[])
       case 3: ode_solver = new RK3SSPSolver; break;
       case 4: ode_solver = new RK4Solver; break;
       case 6: ode_solver = new RK6Solver; break;
+      case 7: ode_solver = new RK2AvgSolver; break;
       case 11: ode_solver = new BackwardEulerSolver; break;
       case 12: ode_solver = new ImplicitMidpointSolver; break;
       case 13: ode_solver = new SDIRK33Solver; break;

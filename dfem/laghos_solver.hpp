@@ -238,6 +238,9 @@ public:
    { return Device::GetDeviceMemoryClass(); }
 
    void UpdateMesh(const Vector &S) const;
+   void SolveVelocity(const Vector &S, Vector &dSdt) const;
+   void SolveEnergy(const Vector &S, const Vector &velocity,
+                    Vector &dSdt) const;
    void ApplyMomentum(Vector &force) const;
    void ApplyEnergy(const Vector &velocity, Vector &force) const;
 
@@ -342,3 +345,29 @@ LagrangianHydroOperator *CreateLagrangianHydroOperator(
    const LagrangianHydroOperator::Options &options);
 
 } // namespace mfem::hydrodynamics
+
+namespace mfem
+{
+
+class HydroODESolver : public ODESolver
+{
+protected:
+   hydrodynamics::LagrangianHydroOperator *hydro_oper;
+public:
+   HydroODESolver() : hydro_oper(NULL) { }
+   void Init(TimeDependentOperator &tdop) override;
+   void Step(Vector&, double&, double&) override
+   { MFEM_ABORT("Time stepping is undefined."); }
+};
+
+class RK2AvgSolver : public HydroODESolver
+{
+protected:
+   Vector V, dS_dt, S0;
+public:
+   RK2AvgSolver() { }
+   void Init(TimeDependentOperator &tdop) override;
+   void Step(Vector &S, double &t, double &dt) override;
+};
+
+} // namespace mfem

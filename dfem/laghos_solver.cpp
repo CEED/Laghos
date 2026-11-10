@@ -311,7 +311,18 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
    dx = v;
    dx.GetMemory().SyncAlias(dSdt.GetMemory(), dx.Size());
 
-   // solve velocity
+   SolveVelocity(S, dSdt);
+   SolveEnergy(S, v, dSdt);
+
+   qdata_is_current = false;
+}
+
+void LagrangianHydroOperator::SolveVelocity(const Vector &S,
+                                            Vector &dSdt) const
+{
+   MFEM_ASSERT(S.Size() == 2*H1vsize + L2vsize, "invalid state size");
+   Vector dv(dSdt, H1vsize, H1vsize);
+
    {
       dv = 0.0;
 
@@ -353,12 +364,19 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
          dvc.GetMemory().SyncAlias(dSdt.GetMemory(), dvc.Size());
       }
    }
+}
 
-   // solve energy
+void LagrangianHydroOperator::SolveEnergy(const Vector &S,
+                                          const Vector &velocity,
+                                          Vector &dSdt) const
+{
+   Vector x(const_cast<Vector&>(S), 0, H1vsize);
+   Vector de(dSdt, 2*H1vsize, L2vsize);
+
    {
       de = 0.0;
 
-      ApplyEnergy(v, RHSe);
+      ApplyEnergy(velocity, RHSe);
       L2.GetRestrictionMatrix()->MultTranspose(RHSe, rhse);
 
       if (taylor_source)
@@ -382,8 +400,6 @@ void LagrangianHydroOperator::Mult(const Vector &S, Vector &dSdt) const
       }
       de.GetMemory().SyncAlias(dSdt.GetMemory(), de.Size());
    }
-
-   qdata_is_current = false;
 }
 
 void LagrangianHydroOperator::ApplyMomentum(Vector &force) const
@@ -998,3 +1014,63 @@ real_t LagrangianHydroOperator::LocalTimeStepEstimate(const Vector &S) const
 }
 
 } // namespace mfem::hydrodynamics
+
+namespace mfem
+{
+
+void HydroODESolver::Init(TimeDependentOperator &tdop)
+{
+   ODESolver::Init(tdop);
+   hydro_oper = dynamic_cast<hydrodynamics::LagrangianHydroOperator *>(f);
+   MFEM_VERIFY(hydro_oper, "HydroSolvers expect LagrangianHydroOperator.");
+}
+
+void RK2AvgSolver::Init(TimeDependentOperator &tdop)
+{
+   HydroODESolver::Init(tdop);
+   const int state_size = 2*hydro_oper->H1vsize + hydro_oper->L2vsize;
+   V.SetSize(hydro_oper->H1vsize);
+   V.UseDevice(true);
+   dS_dt.SetSize(state_size);
+   dS_dt.UseDevice(true);
+   dS_dt = 0.0;
+   S0.SetSize(state_size);
+   S0.UseDevice(true);
+}
+
+void RK2AvgSolver::Step(Vector &S, double &t, double &dt)
+{
+   const int h1 = hydro_oper->H1vsize;
+
+   S0 = S;
+   Vector v0(S0, h1, h1);
+   Vector dx_dt(dS_dt, 0, h1);
+   Vector dv_dt(dS_dt, h1, h1);
+
+   // Stage 1: evaluate acceleration at S0, then average the velocity used by
+   // the position and energy equations.
+   hydro_oper->UpdateMesh(S);
+   hydro_oper->UpdateQuadratureData(S);
+   hydro_oper->SolveVelocity(S, dS_dt);
+   add(v0, 0.5 * dt, dv_dt, V);
+   hydro_oper->SolveEnergy(S, V, dS_dt);
+   dx_dt = V;
+   dx_dt.GetMemory().SyncAlias(dS_dt.GetMemory(), dx_dt.Size());
+
+   // Stage 2: repeat at S0 + 0.5 dt dS_dt.
+   add(S0, 0.5 * dt, dS_dt, S);
+   hydro_oper->ResetQuadratureData();
+   hydro_oper->UpdateMesh(S);
+   hydro_oper->UpdateQuadratureData(S);
+   hydro_oper->SolveVelocity(S, dS_dt);
+   add(v0, 0.5 * dt, dv_dt, V);
+   hydro_oper->SolveEnergy(S, V, dS_dt);
+   dx_dt = V;
+   dx_dt.GetMemory().SyncAlias(dS_dt.GetMemory(), dx_dt.Size());
+
+   add(S0, dt, dS_dt, S);
+   hydro_oper->ResetQuadratureData();
+   t += dt;
+}
+
+} // namespace mfem
