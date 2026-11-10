@@ -101,6 +101,9 @@ int laghos(int argc, char *argv[])
    bool tg_adjoint_check = false;
    real_t tg_adjoint_dt = 1e-3;
    real_t tg_adjoint_fd_epsilon = 1e-6;
+   bool tg_adjoint_fd_check = false;
+   int tg_adjoint_steps = 5;
+   int tg_checkpoint_interval = 5;
    int dev = 0;
 
    OptionsParser args(argc, argv);
@@ -175,12 +178,20 @@ int laghos(int argc, char *argv[])
                   "--no-gpu-aware-mpi", "Enable GPU aware MPI communications.");
    args.AddOption(&tg_adjoint_check, "-tga", "--tg-adjoint-check", "-no-tga",
                   "--no-tg-adjoint-check",
-                  "Verify five fixed RK2Avg Taylor-Green adjoint steps.");
+                  "Verify fixed-step RK2Avg Taylor-Green adjoint integration.");
    args.AddOption(&tg_adjoint_dt, "-tga-dt", "--tg-adjoint-dt",
                   "Fixed time step for the Taylor-Green adjoint check.");
    args.AddOption(&tg_adjoint_fd_epsilon, "-tga-fd-eps",
                   "--tg-adjoint-fd-epsilon",
                   "Centered finite-difference epsilon for the adjoint check.");
+   args.AddOption(&tg_adjoint_fd_check, "-tga-fd", "--tg-adjoint-fd-check",
+                  "-no-tga-fd", "--no-tg-adjoint-fd-check",
+                  "Enable finite-difference adjoint verification.");
+   args.AddOption(&tg_adjoint_steps, "-tga-steps", "--tg-adjoint-steps",
+                  "Number of fixed RK2Avg steps in the adjoint check.");
+   args.AddOption(&tg_checkpoint_interval, "-tga-cp-interval",
+                  "--tg-adjoint-checkpoint-interval",
+                  "Save an adjoint checkpoint every n steps.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
                   "Print the stock-compatible figures of merit table.");
@@ -196,7 +207,6 @@ int laghos(int argc, char *argv[])
       dim = 2;
       ode_solver_type = 7;
       use_viscosity = false;
-      visualization = false;
       paraview = false;
       save_files = false;
    }
@@ -490,7 +500,9 @@ int laghos(int argc, char *argv[])
       const bool passed =
          hydrodynamics::VerifyTaylorGreenRK2AvgAdjoint(
             H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
-            S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon);
+            S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon,
+            tg_adjoint_steps, tg_checkpoint_interval, tg_adjoint_fd_check,
+            visualization);
       delete hydro;
       return passed ? 0 : 4;
    }
@@ -680,21 +692,21 @@ int laghos(int argc, char *argv[])
             if (Mpi::Root()) { out << "Increasing dt: " << dt << std::endl; }
          }
       }
-      else if (dt_est < dt) // explicit.
-      {
-         // Repeat (solve again) with a decreased time step - decrease of the
-         // time estimate suggests appearance of oscillations.
-         dt *= 0.85;
-         if (dt < std::numeric_limits<real_t>::epsilon())
-         { MFEM_ABORT("The time step crashed!"); }
-         t = t_old;
-         S = S_old;
-         hydro->ResetQuadratureData();
-         last_step = false;
-         if (Mpi::Root()) { out << "Repeating step " << ti << std::endl; }
-         if (results) { results->repeats++; }
-         ti--; continue;
-      }
+      // else if (dt_est < dt) // explicit.
+      // {
+      //    // Repeat (solve again) with a decreased time step - decrease of the
+      //    // time estimate suggests appearance of oscillations.
+      //    dt *= 0.85;
+      //    if (dt < std::numeric_limits<real_t>::epsilon())
+      //    { MFEM_ABORT("The time step crashed!"); }
+      //    t = t_old;
+      //    S = S_old;
+      //    hydro->ResetQuadratureData();
+      //    last_step = false;
+      //    if (Mpi::Root()) { out << "Repeating step " << ti << std::endl; }
+      //    if (results) { results->repeats++; }
+      //    ti--; continue;
+      // }
 
       // Record the dt that advanced t. A larger estimate grows the next step.
       const real_t dt_taken = dt;

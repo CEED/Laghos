@@ -558,7 +558,11 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
    const BlockVector &initial_state,
    LagrangianHydroOperator &hydro,
    real_t dt,
-   real_t fd_epsilon)
+   real_t fd_epsilon,
+   int num_steps,
+   int checkpoint_interval,
+   bool finite_difference_check,
+   bool visualization)
 {
    MFEM_VERIFY(H1.GetComm() == MPI_COMM_WORLD,
                "Taylor--Green adjoint check expects MPI_COMM_WORLD");
@@ -571,8 +575,8 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
                "Taylor--Green adjoint check requires conforming one-rank spaces");
    MFEM_VERIFY(dt > 0.0 && fd_epsilon > 0.0,
                "dt and finite-difference epsilon must be positive");
-
-   constexpr int num_steps = 5;
+   MFEM_VERIFY(num_steps > 0 && checkpoint_interval > 0,
+               "step count and checkpoint interval must be positive");
 
    HydroState state(H1.GetTrueVSize(), L2.GetTrueVSize());
    ExtractTrueState(H1, L2, initial_state, state);
@@ -599,18 +603,52 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
    std::vector<RK2AvgStepData> steps;
    model.ForwardTrajectory(state, dt, num_steps, states, steps);
 
-   BlockVector laghos_step(initial_state);
-   RK2AvgSolver rk2avg;
-   rk2avg.Init(hydro);
-   double laghos_time = 0.0;
-   double laghos_dt = dt;
-   rk2avg.Step(laghos_step, laghos_time, laghos_dt);
-   HydroState laghos_step_state(H1.GetTrueVSize(), L2.GetTrueVSize());
-   ExtractTrueState(H1, L2, laghos_step, laghos_step_state);
-   HydroState step_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
-   Add(states[1], -1.0, laghos_step_state, step_difference);
-   const real_t step_relative_error =
-      Norml2(step_difference) / std::max(Norml2(laghos_step_state), 1.0);
+   BlockVector checkpoint_state(initial_state);
+   RK2AvgSolver checkpoint_solver;
+   checkpoint_solver.Init(hydro);
+   StateId checkpoint_step{0};
+   real_t checkpoint_time = 0.0;
+   real_t checkpoint_dt = dt;
+   ODECheckpointer::StateParameters checkpoint_parameters{
+      &checkpoint_step, &checkpoint_time, &checkpoint_dt
+   };
+   const std::size_t checkpoint_count =
+      1 + (num_steps - 1) / checkpoint_interval;
+   ODEMemoryBlockCheckpointer checkpoints(
+      checkpoint_state, checkpoint_solver, checkpoint_parameters,
+      checkpoint_count);
+   IntervalSchedule schedule(StateId{num_steps},
+                             StateId{checkpoint_interval});
+   ODEStatePropagator propagator(checkpoints, checkpoint_solver);
+   CheckpointController forward_controller(checkpoints, propagator);
+   out << "\nCheckpointed forward sweep\n";
+   for (;;)
+   {
+      const CheckpointCommand command = schedule.Next();
+      forward_controller.Execute(command);
+      if (command.action == CheckpointAction::Store)
+      {
+         out << "  store checkpoint at state " << command.to_step
+             << ", t = " << checkpoint_time << '\n';
+      }
+      else if (command.action == CheckpointAction::Advance)
+      {
+         out << "  forward step " << command.from_step << " -> "
+             << command.to_step << ", t = " << checkpoint_time << '\n';
+      }
+      else if (command.action == CheckpointAction::Finished)
+      {
+         break;
+      }
+   }
+
+   HydroState laghos_final_state(H1.GetTrueVSize(), L2.GetTrueVSize());
+   ExtractTrueState(H1, L2, checkpoint_state, laghos_final_state);
+   HydroState trajectory_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
+   Add(states.back(), -1.0, laghos_final_state, trajectory_difference);
+   const real_t trajectory_relative_error =
+      Norml2(trajectory_difference) /
+      std::max(Norml2(laghos_final_state), real_t(1.0));
 
    HydroState initial_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
    HydroState lambda_next(H1.GetTrueVSize(), L2.GetTrueVSize());
@@ -660,74 +698,168 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
       Copy(lambda_0, lambda_next);
    }
 
-   HydroState plus(H1.GetTrueVSize(), L2.GetTrueVSize());
-   HydroState minus(H1.GetTrueVSize(), L2.GetTrueVSize());
-   Add(state, fd_epsilon, initial_direction, plus);
-   Add(state, -fd_epsilon, initial_direction, minus);
-   const real_t directional_fd =
-      (model.TrajectoryObjective(plus, dt, num_steps) -
-       model.TrajectoryObjective(minus, dt, num_steps)) /
-      (2.0 * fd_epsilon);
+   const std::size_t window_capacity =
+      static_cast<std::size_t>(std::min(num_steps, checkpoint_interval) + 1);
+   ODEMemorySnapshotCheckpointer window_store(
+      checkpoint_state, checkpoint_solver, checkpoint_parameters,
+      window_capacity);
+   ExactCheckpointWindow window(window_store, window_capacity);
+   CheckpointController reverse_controller(checkpoints, propagator, &window);
+
+   HydroState checkpoint_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+   Copy(lambda_final, lambda_next);
+   real_t replay_state_relative_error = 0.0;
+   out << "\nCheckpointed reverse sweep\n";
+   for (int n = num_steps - 1; n >= 0; n--)
+   {
+      CheckpointInfo primary_origin, window_origin;
+      const bool have_primary =
+         checkpoints.FindAtOrBefore(StateId{n}, primary_origin);
+      const bool have_window =
+         window.FindAtOrBefore(StateId{n}, window_origin);
+      MFEM_VERIFY(have_primary || have_window,
+                  "no checkpoint is available for the reverse step");
+      const bool use_primary = have_primary &&
+                               (!have_window ||
+                                primary_origin.state >= window_origin.state);
+      const CheckpointInfo origin = use_primary ? primary_origin : window_origin;
+      out << "  reverse step " << n + 1 << " -> " << n << '\n'
+          << "    ";
+      if (origin.state == StateId{n})
+      {
+         out << (use_primary ? "restore checkpoint state "
+                             : "restore replay-window state ")
+             << origin.state << '\n';
+      }
+      else
+      {
+         out << (use_primary ? "restore checkpoint state "
+                             : "restore replay-window state ")
+             << origin.state << ", replay " << StateId{n} - origin.state
+             << " step(s)\n";
+      }
+      reverse_controller.RestoreState(StateId{n});
+      hydro.UpdateMesh(checkpoint_state);
+      hydro.ResetQuadratureData();
+
+      HydroState restored_state(H1.GetTrueVSize(), L2.GetTrueVSize());
+      ExtractTrueState(H1, L2, checkpoint_state, restored_state);
+      HydroState restored_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
+      Add(restored_state, -1.0, states[n], restored_difference);
+      replay_state_relative_error = std::max(
+         replay_state_relative_error,
+         Norml2(restored_difference) /
+         std::max(Norml2(states[n]), real_t(1.0)));
+
+      RK2AvgStepData replay_step(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState replay_next(H1.GetTrueVSize(), L2.GetTrueVSize());
+      model.RK2AvgStep(restored_state, dt, replay_step, replay_next);
+      HydroState replay_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
+      Add(replay_next, -1.0, states[n + 1], replay_difference);
+      replay_state_relative_error = std::max(
+         replay_state_relative_error,
+         Norml2(replay_difference) /
+         std::max(Norml2(states[n + 1]), real_t(1.0)));
+
+      model.ComputeLambda(replay_step, lambda_next, dt, checkpoint_lambda);
+      Copy(checkpoint_lambda, lambda_next);
+   }
+
+   HydroState checkpoint_gradient_difference(H1.GetTrueVSize(),
+                                              L2.GetTrueVSize());
+   Add(checkpoint_lambda, -1.0, lambda_0, checkpoint_gradient_difference);
+   const real_t checkpoint_gradient_relative_error =
+      Norml2(checkpoint_gradient_difference) /
+      std::max(Norml2(lambda_0), real_t(1.0));
+
    const real_t directional_adjoint = Dot(lambda_0, initial_direction);
-   const real_t directional_scale =
-      std::max({std::abs(directional_fd), std::abs(directional_adjoint),
-                real_t(1.0)});
-   const real_t directional_relative_error =
-      std::abs(directional_fd - directional_adjoint) / directional_scale;
-
-   HydroState finite_difference_gradient(H1.GetTrueVSize(), L2.GetTrueVSize());
-   finite_difference_gradient.x = 0.0;
-   finite_difference_gradient.v = 0.0;
-   finite_difference_gradient.e = 0.0;
-
-   auto finite_difference_block = [&](Vector HydroState::*member,
-                                      const Array<int> *excluded)
+   real_t directional_fd = 0.0;
+   real_t directional_relative_error = 0.0;
+   real_t gradient_relative_error = 0.0;
+   real_t gradient_max_error = 0.0;
+   if (finite_difference_check)
    {
-      Vector &gradient_block = finite_difference_gradient.*member;
-      const int size = gradient_block.Size();
-      Array<char> skip(size);
-      skip = 0;
-      if (excluded)
+      out << "\nFinite-difference verification\n"
+          << "  directional check: run two complete forward trajectories\n"
+          << std::flush;
+      HydroState plus(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState minus(H1.GetTrueVSize(), L2.GetTrueVSize());
+      Add(state, fd_epsilon, initial_direction, plus);
+      Add(state, -fd_epsilon, initial_direction, minus);
+      directional_fd =
+         (model.TrajectoryObjective(plus, dt, num_steps) -
+          model.TrajectoryObjective(minus, dt, num_steps)) /
+         (2.0 * fd_epsilon);
+      const real_t directional_scale =
+         std::max({std::abs(directional_fd), std::abs(directional_adjoint),
+                   real_t(1.0)});
+      directional_relative_error =
+         std::abs(directional_fd - directional_adjoint) / directional_scale;
+
+      HydroState finite_difference_gradient(H1.GetTrueVSize(),
+                                             L2.GetTrueVSize());
+      finite_difference_gradient.x = 0.0;
+      finite_difference_gradient.v = 0.0;
+      finite_difference_gradient.e = 0.0;
+
+      out << "  full-gradient check: perturb each unconstrained initial degree "
+          << "of freedom and run two complete forward trajectories\n"
+          << std::flush;
+
+      auto finite_difference_block = [&](Vector HydroState::*member,
+                                         const Array<int> *excluded)
       {
-         for (int i = 0; i < excluded->Size(); i++)
+         Vector &gradient_block = finite_difference_gradient.*member;
+         const int size = gradient_block.Size();
+         Array<char> skip(size);
+         skip = 0;
+         if (excluded)
          {
-            skip[(*excluded)[i]] = 1;
+            for (int i = 0; i < excluded->Size(); i++)
+            {
+               skip[(*excluded)[i]] = 1;
+            }
          }
-      }
-      for (int i = 0; i < size; i++)
-      {
-         if (skip[i]) { continue; }
-         HydroState state_plus(H1.GetTrueVSize(), L2.GetTrueVSize());
-         HydroState state_minus(H1.GetTrueVSize(), L2.GetTrueVSize());
-         Copy(state, state_plus);
-         Copy(state, state_minus);
-         (state_plus.*member)[i] += fd_epsilon;
-         (state_minus.*member)[i] -= fd_epsilon;
-         gradient_block[i] =
-            (model.TrajectoryObjective(state_plus, dt, num_steps) -
-             model.TrajectoryObjective(state_minus, dt, num_steps)) /
-            (2.0 * fd_epsilon);
-      }
-   };
-   finite_difference_block(&HydroState::x, nullptr);
-   finite_difference_block(&HydroState::v, &ess_tdofs_v);
-   finite_difference_block(&HydroState::e, nullptr);
+         for (int i = 0; i < size; i++)
+         {
+            if (skip[i]) { continue; }
+            HydroState state_plus(H1.GetTrueVSize(), L2.GetTrueVSize());
+            HydroState state_minus(H1.GetTrueVSize(), L2.GetTrueVSize());
+            Copy(state, state_plus);
+            Copy(state, state_minus);
+            (state_plus.*member)[i] += fd_epsilon;
+            (state_minus.*member)[i] -= fd_epsilon;
+            gradient_block[i] =
+               (model.TrajectoryObjective(state_plus, dt, num_steps) -
+                model.TrajectoryObjective(state_minus, dt, num_steps)) /
+               (2.0 * fd_epsilon);
+         }
+      };
+      finite_difference_block(&HydroState::x, nullptr);
+      finite_difference_block(&HydroState::v, &ess_tdofs_v);
+      finite_difference_block(&HydroState::e, nullptr);
 
-   HydroState gradient_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
-   Add(lambda_0, -1.0, finite_difference_gradient, gradient_difference);
-   const real_t gradient_relative_error =
-      Norml2(gradient_difference) /
-      std::max(Norml2(finite_difference_gradient), real_t(1.0));
-   const real_t gradient_max_error = std::max(
+      HydroState gradient_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
+      Add(lambda_0, -1.0, finite_difference_gradient, gradient_difference);
+      gradient_relative_error =
+         Norml2(gradient_difference) /
+         std::max(Norml2(finite_difference_gradient), real_t(1.0));
+      gradient_max_error = std::max(
+      {
+         gradient_difference.x.Normlinf(), gradient_difference.v.Normlinf(),
+         gradient_difference.e.Normlinf()
+      });
+   }
+   else
    {
-      gradient_difference.x.Normlinf(), gradient_difference.v.Normlinf(),
-      gradient_difference.e.Normlinf()
-   });
+      out << "\nFinite-difference verification disabled; use -tga-fd to enable.\n";
+   }
 
    out << std::setprecision(12)
-       << "\nTaylor--Green five-step RK2Avg adjoint verification\n"
+       << "\nTaylor--Green fixed-step RK2Avg adjoint verification\n"
+       << "  steps                           = " << num_steps << '\n'
        << "  dt                              = " << dt << '\n'
-       << "  objective J(S5)                 = " << objective_value << '\n'
+       << "  objective J(S_N)                = " << objective_value << '\n'
        << "  dFEM/Laghos RHS relative error  = " << rhs_relative_error << '\n'
        << "    position/velocity/energy      = " << rhs_x_error << " / "
        << rhs_v_error << " / " << rhs_e_error << '\n'
@@ -736,23 +868,57 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
        << "    Laghos RHS block norms        = " << laghos_true_rhs.x.Norml2()
        << " / " << laghos_true_rhs.v.Norml2() << " / "
        << laghos_true_rhs.e.Norml2() << '\n'
-       << "  dFEM/Laghos RK2Avg step error   = " << step_relative_error << '\n'
+       << "  dFEM/Laghos trajectory error    = "
+       << trajectory_relative_error << '\n'
+       << "  checkpoint interval/count       = " << checkpoint_interval
+       << " / " << checkpoints.Size() << '\n'
+       << "  checkpoint replay state error   = "
+       << replay_state_relative_error << '\n'
+       << "  checkpoint/full adjoint error   = "
+       << checkpoint_gradient_relative_error << '\n'
        << "  trajectory JVP dot              = " << jvp_dot << '\n'
        << "  trajectory lambda dot           = " << vjp_dot << '\n'
        << "  trajectory JVP/lambda error     = " << transpose_relative_error << '\n'
-       << "  directional adjoint derivative  = " << directional_adjoint << '\n'
-       << "  directional finite difference   = " << directional_fd << '\n'
-       << "  directional relative error      = " << directional_relative_error << '\n'
-       << "  full-gradient relative error    = " << gradient_relative_error << '\n'
-       << "  full-gradient max abs error     = " << gradient_max_error << '\n';
+       << "  directional adjoint derivative  = " << directional_adjoint << '\n';
+   if (finite_difference_check)
+   {
+      out << "  directional finite difference   = " << directional_fd << '\n'
+          << "  directional relative error      = "
+          << directional_relative_error << '\n'
+          << "  full-gradient relative error    = "
+          << gradient_relative_error << '\n'
+          << "  full-gradient max abs error     = " << gradient_max_error << '\n';
+   }
+   else
+   {
+      out << "  finite-difference checks         = disabled\n";
+   }
 
-   const bool passed = rhs_relative_error < 1e-8 &&
-                       step_relative_error < 1e-8 &&
-                       transpose_relative_error < 1e-10 &&
-                       directional_relative_error < 5e-7 &&
-                       gradient_relative_error < 5e-6;
+   bool passed = rhs_relative_error < 1e-8 &&
+                 trajectory_relative_error < 1e-8 &&
+                 replay_state_relative_error < 1e-8 &&
+                 checkpoint_gradient_relative_error < 1e-8 &&
+                 transpose_relative_error < 1e-10;
+   if (finite_difference_check)
+   {
+      passed = passed && directional_relative_error < 5e-7 &&
+               gradient_relative_error < 5e-6;
+   }
    out << "  result                          = "
        << (passed ? "PASS" : "FAIL") << "\n\n";
+
+   if (visualization)
+   {
+      ParGridFunction initial_energy_gradient(&L2);
+      initial_energy_gradient.SetFromTrueDofs(checkpoint_lambda.e);
+      socketstream gradient_socket;
+      const char vishost[] = "localhost";
+      constexpr int visport = 19916;
+      VisualizeField(gradient_socket, vishost, visport,
+                     initial_energy_gradient,
+                     "Gradient of J with respect to initial energy",
+                     0, 0, 700, 700);
+   }
    return passed;
 }
 

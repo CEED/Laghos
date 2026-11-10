@@ -11,7 +11,7 @@ namespace mfem::hydrodynamics
 
 class LagrangianHydroOperator;
 
-/// Verify the discrete adjoint of five fixed RK2Avg Taylor--Green steps.
+/// Verify the discrete adjoint of fixed-step RK2Avg Taylor--Green integration.
 /// This check currently requires one MPI task and no viscosity.
 bool VerifyTaylorGreenRK2AvgAdjoint(
    ParFiniteElementSpace &H1,
@@ -23,6 +23,10 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
    const BlockVector &initial_state,
    LagrangianHydroOperator &hydro,
    real_t dt,
-   real_t fd_epsilon);
+   real_t fd_epsilon,
+   int num_steps,
+   int checkpoint_interval,
+   bool finite_difference_check,
+   bool visualization);
 
 } // namespace mfem::hydrodynamics
