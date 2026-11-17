@@ -10,18 +10,21 @@ namespace mfem::hydrodynamics
 {
 
 class LagrangianHydroOperator;
+struct QConstants;
 
-/// Run one fixed-step Taylor--Green manufactured-adjoint convergence sample
-/// with RK2Avg or classical RK4 and print the initial-adjoint errors.
-bool VerifyTaylorGreenManufacturedAdjoint(
+/// Run a fixed-step Taylor--Green manufactured-adjoint convergence sample
+/// whose exact adjoint and objective are defined directly in material
+/// coordinates, without an Eulerian-to-Lagrangian adjoint conversion.
+bool VerifyTaylorGreenLagrangianManufacturedAdjoint(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
    const Array<int> &essential_velocity_tdofs,
    Coefficient &rho0_coefficient,
    const ParGridFunction &rho0,
-   const ParGridFunction &material,
+   ParGridFunction &material,
    const BlockVector &initial_state,
    const IntegrationRule &ir,
+   const QConstants &qconstants,
    int qfunction_backend,
    int ode_solver_type,
    LagrangianHydroOperator &hydro,
