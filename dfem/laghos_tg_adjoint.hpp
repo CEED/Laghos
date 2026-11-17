@@ -45,6 +45,24 @@ void ComputeTaylorGreenRK2AvgAdjoint(
    TaylorGreenAdjointState &initial_gradient,
    TaylorGreenAdjointState *final_state = nullptr);
 
+/// Integrate Taylor--Green with fixed-step classical RK4 and backpropagate a
+/// terminal objective plus an RK4-quadrature running objective.
+void ComputeTaylorGreenRK4Adjoint(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   const Array<int> &essential_velocity_tdofs,
+   Coefficient &rho0_coefficient,
+   const ParGridFunction &rho0,
+   const ParGridFunction &material,
+   const BlockVector &initial_state,
+   LagrangianHydroOperator &hydro,
+   real_t dt,
+   int num_steps,
+   const TaylorGreenObjectiveGradient &terminal_gradient,
+   const TaylorGreenObjectiveGradient &running_gradient,
+   TaylorGreenAdjointState &initial_gradient,
+   TaylorGreenAdjointState *final_state = nullptr);
+
 /// Verify the discrete adjoint of fixed-step RK2Avg Taylor--Green integration.
 /// This check requires no viscosity.
 bool VerifyTaylorGreenRK2AvgAdjoint(
@@ -62,5 +80,21 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
    int checkpoint_interval,
    bool finite_difference_check,
    bool visualization);
+
+/// Verify the discrete adjoint of fixed-step classical RK4 Taylor--Green
+/// integration. This check requires no viscosity.
+bool VerifyTaylorGreenRK4Adjoint(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   const Array<int> &essential_velocity_tdofs,
+   Coefficient &rho0_coefficient,
+   const ParGridFunction &rho0,
+   const ParGridFunction &material,
+   const BlockVector &initial_state,
+   LagrangianHydroOperator &hydro,
+   real_t dt,
+   real_t fd_epsilon,
+   int num_steps,
+   bool finite_difference_check);
 
 } // namespace mfem::hydrodynamics

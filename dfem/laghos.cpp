@@ -81,6 +81,14 @@ int laghos(int argc, char *argv[])
    int order_e = 1;
    int order_q = -1;
    int ode_solver_type = 4;
+   bool adjoint_solver_selected = false;
+   for (int i = 1; i < argc; i++)
+   {
+      if (!strcmp(argv[i], "-s") || !strcmp(argv[i], "--ode-solver"))
+      {
+         adjoint_solver_selected = true;
+      }
+   }
    real_t t_final = 0.6;
    real_t cfl = 0.5;
    int vis_steps = 5;
@@ -106,6 +114,7 @@ int laghos(int argc, char *argv[])
    bool tg_adjoint_fd_check = false;
    int tg_adjoint_steps = 5;
    int tg_checkpoint_interval = 5;
+   int tg_manufactured_refinements = 0;
    int dev = 0;
 
    OptionsParser args(argc, argv);
@@ -194,10 +203,14 @@ int laghos(int argc, char *argv[])
                   "-no-tga-fd", "--no-tg-adjoint-fd-check",
                   "Enable finite-difference adjoint verification.");
    args.AddOption(&tg_adjoint_steps, "-tga-steps", "--tg-adjoint-steps",
-                  "Number of fixed RK2Avg steps in the adjoint check.");
+                  "Number of fixed time steps in the adjoint check.");
    args.AddOption(&tg_checkpoint_interval, "-tga-cp-interval",
                   "--tg-adjoint-checkpoint-interval",
                   "Save an adjoint checkpoint every n steps.");
+   args.AddOption(&tg_manufactured_refinements, "-tgam-ref",
+                  "--tg-manufactured-temporal-refinements",
+                  "Number of timestep halvings in the manufactured-adjoint "
+                  "self-convergence study.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
                   "Print the stock-compatible figures of merit table.");
@@ -211,7 +224,9 @@ int laghos(int argc, char *argv[])
    {
       problem = 0;
       dim = 2;
-      ode_solver_type = 7;
+      if (!adjoint_solver_selected) { ode_solver_type = 7; }
+      MFEM_VERIFY(ode_solver_type == 4 || ode_solver_type == 7,
+                  "Taylor--Green adjoints support only RK4 (4) and RK2Avg (7)");
       use_viscosity = false;
       paraview = false;
       save_files = false;
@@ -504,8 +519,14 @@ int laghos(int argc, char *argv[])
       const bool passed = tg_manufactured_adjoint_check ?
                           hydrodynamics::VerifyTaylorGreenManufacturedAdjoint(
                              H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
-                             S, ir, hydro_options.qfunction_backend, *hydro, tg_adjoint_dt,
-                             tg_adjoint_steps) :
+                             S, ir, hydro_options.qfunction_backend, ode_solver_type,
+                             *hydro, tg_adjoint_dt, tg_adjoint_steps,
+                             tg_manufactured_refinements) :
+                          ode_solver_type == 4 ?
+                          hydrodynamics::VerifyTaylorGreenRK4Adjoint(
+                             H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
+                             S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon,
+                             tg_adjoint_steps, tg_adjoint_fd_check) :
                           hydrodynamics::VerifyTaylorGreenRK2AvgAdjoint(
                              H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
                              S, *hydro, tg_adjoint_dt, tg_adjoint_fd_epsilon,

@@ -11,8 +11,8 @@ namespace mfem::hydrodynamics
 
 class LagrangianHydroOperator;
 
-/// Run one fixed-step RK2Avg Taylor--Green manufactured-adjoint convergence
-/// sample and print the initial-adjoint errors.
+/// Run one fixed-step Taylor--Green manufactured-adjoint convergence sample
+/// with RK2Avg or classical RK4 and print the initial-adjoint errors.
 bool VerifyTaylorGreenManufacturedAdjoint(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
@@ -23,8 +23,10 @@ bool VerifyTaylorGreenManufacturedAdjoint(
    const BlockVector &initial_state,
    const IntegrationRule &ir,
    int qfunction_backend,
+   int ode_solver_type,
    LagrangianHydroOperator &hydro,
    real_t dt,
-   int num_steps);
+   int num_steps,
+   int temporal_refinements = 0);
 
 } // namespace mfem::hydrodynamics

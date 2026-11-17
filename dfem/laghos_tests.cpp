@@ -553,6 +553,21 @@ TEST_CASE("exp_tgv_2d_five_step_adjoint",
    REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
 }
 
+TEST_CASE("exp_tgv_2d_five_step_rk4_adjoint",
+          "[dfem][adj][exp][tgv][2d][q21][rk4]")
+{
+   std::vector<std::string> args =
+   {
+      "laghos", "-tga", "-s", "4", "-tga-fd", "-rs", "1",
+      "-ov", "2", "-oe", "1", "-qf", qf, "-tga-dt", "1e-3",
+      "-tga-fd-eps", "1e-6"
+   };
+   std::vector<char *> argv;
+   for (auto &a : args) { argv.push_back(&a[0]); }
+   argv.push_back(nullptr);
+   REQUIRE(RunLaghos(static_cast<int>(argv.size()) - 1, argv.data()) == 0);
+}
+
 // Problems 0 and 1 build a Cartesian mesh and must not open -m first.
 TEST_CASE("generated_mesh_skips_file", "[dfem][mesh]")
 {

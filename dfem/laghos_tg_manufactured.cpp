@@ -287,6 +287,38 @@ void ApplyInverseMass(ParFiniteElementSpace &space, bool vector_space,
    solver.Mult(covector, field);
 }
 
+real_t FieldDifferenceL2(ParFiniteElementSpace &space, bool vector_space,
+                         const IntegrationRule &ir,
+                         const Vector &a, const Vector &b)
+{
+   ConstantCoefficient one(1.0);
+   ParBilinearForm mass(&space);
+   mass.SetAssemblyLevel(AssemblyLevel::LEGACY);
+   if (vector_space)
+   {
+      mass.AddDomainIntegrator(new VectorMassIntegrator(one, &ir));
+   }
+   else
+   {
+      mass.AddDomainIntegrator(new MassIntegrator(one, &ir));
+   }
+   mass.Assemble();
+   mass.Finalize();
+   Array<int> no_essential_dofs;
+   HypreParMatrix matrix;
+   mass.FormSystemMatrix(no_essential_dofs, matrix);
+
+   Vector difference(a);
+   difference -= b;
+   Vector mass_difference(difference.Size());
+   matrix.Mult(difference, mass_difference);
+   const real_t local_norm_squared = difference * mass_difference;
+   real_t global_norm_squared = 0.0;
+   MPI_Allreduce(&local_norm_squared, &global_norm_squared, 1,
+                 MPITypeMap<real_t>::mpi_type, MPI_SUM, space.GetComm());
+   return std::sqrt(std::max(global_norm_squared, real_t(0.0)));
+}
+
 void ExactInitialCoordinateAdjoint(const Vector &x, Vector &lambda)
 {
    const real_t pix = M_PI * x(0), piy = M_PI * x(1);
@@ -331,12 +363,18 @@ bool VerifyTaylorGreenManufacturedAdjoint(
    const BlockVector &initial_state,
    const IntegrationRule &ir,
    int qfunction_backend,
+   int ode_solver_type,
    LagrangianHydroOperator &hydro,
    real_t dt,
-   int num_steps)
+   int num_steps,
+   int temporal_refinements)
 {
    MFEM_VERIFY(dt > 0.0 && num_steps > 0,
                "manufactured-adjoint time step and step count must be positive");
+   MFEM_VERIFY(temporal_refinements >= 0,
+               "number of temporal refinements must be nonnegative");
+   MFEM_VERIFY(ode_solver_type == 4 || ode_solver_type == 7,
+               "manufactured adjoint supports only RK4 (4) and RK2Avg (7)");
    const real_t final_time = dt * num_steps;
    const int h1_size = H1.GetTrueVSize();
    const int l2_size = L2.GetTrueVSize();
@@ -352,32 +390,51 @@ bool VerifyTaylorGreenManufacturedAdjoint(
 
    TaylorGreenManufacturedObjective objective(
       H1, L2, rho0, initial_x, ir, qfunction_backend, final_time);
-   TaylorGreenAdjointState gradient(h1_size, l2_size);
-   ComputeTaylorGreenRK2AvgAdjoint(
-      H1, L2, ess_tdofs_v, rho0_coefficient, rho0, material, initial_state,
-      hydro, dt, num_steps,
+   const auto terminal_gradient =
       [&](const TaylorGreenAdjointState &state, real_t time,
           TaylorGreenAdjointState &result)
    {
       objective.TerminalGradient(state, time, result);
-   },
-   [&](const TaylorGreenAdjointState &state, real_t time,
-       TaylorGreenAdjointState &result)
+   };
+   const auto running_gradient =
+      [&](const TaylorGreenAdjointState &state, real_t time,
+          TaylorGreenAdjointState &result)
    {
       objective.RunningGradient(state, time, result);
-   },
-   gradient);
-
-   Vector lambda_x, lambda_v, lambda_e;
+   };
    Array<int> no_essential_dofs;
-   ApplyInverseMass(H1, true, ir, no_essential_dofs, gradient.x, lambda_x);
-   ApplyInverseMass(H1, true, ir, ess_tdofs_v, gradient.v, lambda_v);
-   ApplyInverseMass(L2, false, ir, no_essential_dofs, gradient.e, lambda_e);
+   auto compute_adjoint_fields = [&](real_t step_dt, int step_count,
+                                     TaylorGreenAdjointState &fields)
+   {
+      TaylorGreenAdjointState gradient(h1_size, l2_size);
+      if (ode_solver_type == 4)
+      {
+         ComputeTaylorGreenRK4Adjoint(
+            H1, L2, ess_tdofs_v, rho0_coefficient, rho0, material,
+            initial_state, hydro, step_dt, step_count, terminal_gradient,
+            running_gradient, gradient);
+      }
+      else
+      {
+         ComputeTaylorGreenRK2AvgAdjoint(
+            H1, L2, ess_tdofs_v, rho0_coefficient, rho0, material,
+            initial_state, hydro, step_dt, step_count, terminal_gradient,
+            running_gradient, gradient);
+      }
+      ApplyInverseMass(H1, true, ir, no_essential_dofs,
+                       gradient.x, fields.x);
+      ApplyInverseMass(H1, true, ir, ess_tdofs_v, gradient.v, fields.v);
+      ApplyInverseMass(L2, false, ir, no_essential_dofs,
+                       gradient.e, fields.e);
+   };
+
+   TaylorGreenAdjointState adjoint_fields(h1_size, l2_size);
+   compute_adjoint_fields(dt, num_steps, adjoint_fields);
 
    ParGridFunction lambda_x_gf(&H1), lambda_v_gf(&H1), lambda_e_gf(&L2);
-   lambda_x_gf.SetFromTrueDofs(lambda_x);
-   lambda_v_gf.SetFromTrueDofs(lambda_v);
-   lambda_e_gf.SetFromTrueDofs(lambda_e);
+   lambda_x_gf.SetFromTrueDofs(adjoint_fields.x);
+   lambda_v_gf.SetFromTrueDofs(adjoint_fields.v);
+   lambda_e_gf.SetFromTrueDofs(adjoint_fields.e);
    VectorFunctionCoefficient exact_x(2, ExactInitialCoordinateAdjoint);
    VectorFunctionCoefficient exact_v(2, ExactInitialVelocityAdjoint);
    FunctionCoefficient exact_e(ExactInitialEnergyAdjoint);
@@ -397,12 +454,54 @@ bool VerifyTaylorGreenManufacturedAdjoint(
           << "  elements                         = " << global_elements << '\n'
           << "  H1 true dofs                     = " << global_h1_size << '\n'
           << "  L2 true dofs                     = " << global_l2_size << '\n'
+          << "  time integrator                  = "
+          << (ode_solver_type == 4 ? "RK4" : "RK2Avg") << '\n'
           << "  dt                               = " << dt << '\n'
           << "  final time                       = " << final_time << '\n'
           << "  initial coordinate-adjoint error = " << x_error << '\n'
           << "  initial velocity-adjoint error   = " << v_error << '\n'
           << "  initial energy-adjoint error     = " << e_error << '\n'
           << "  combined initial-adjoint error   = " << combined_error << '\n';
+   }
+
+   real_t previous_difference = 0.0;
+   TaylorGreenAdjointState previous_fields(h1_size, l2_size);
+   previous_fields.x = adjoint_fields.x;
+   previous_fields.v = adjoint_fields.v;
+   previous_fields.e = adjoint_fields.e;
+   for (int level = 1; level <= temporal_refinements; level++)
+   {
+      const int refined_steps = num_steps * (1 << level);
+      const real_t refined_dt = dt / (1 << level);
+      TaylorGreenAdjointState refined_fields(h1_size, l2_size);
+      compute_adjoint_fields(refined_dt, refined_steps, refined_fields);
+      const real_t x_difference =
+         FieldDifferenceL2(H1, true, ir, previous_fields.x, refined_fields.x);
+      const real_t v_difference =
+         FieldDifferenceL2(H1, true, ir, previous_fields.v, refined_fields.v);
+      const real_t e_difference =
+         FieldDifferenceL2(L2, false, ir, previous_fields.e, refined_fields.e);
+      const real_t combined_difference =
+         std::sqrt(x_difference*x_difference + v_difference*v_difference +
+                   e_difference*e_difference);
+      if (Mpi::Root())
+      {
+         out << "  temporal refinement " << level
+             << ": steps = " << refined_steps
+             << ", dt = " << refined_dt
+             << ", successive difference = " << combined_difference;
+         if (level > 1)
+         {
+            out << ", observed order = "
+                << std::log(previous_difference / combined_difference) /
+                   std::log(2.0);
+         }
+         out << '\n';
+      }
+      previous_difference = combined_difference;
+      previous_fields.x = refined_fields.x;
+      previous_fields.v = refined_fields.v;
+      previous_fields.e = refined_fields.e;
    }
    return std::isfinite(combined_error);
 }

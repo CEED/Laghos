@@ -30,6 +30,15 @@ struct RK2AvgStepData
       velocity_stage1(h1_size), velocity_stage2(h1_size) { }
 };
 
+struct RK4StepData
+{
+   HydroState stage1, stage2, stage3, stage4;
+
+   RK4StepData(int h1_size, int l2_size) :
+      stage1(h1_size, l2_size), stage2(h1_size, l2_size),
+      stage3(h1_size, l2_size), stage4(h1_size, l2_size) { }
+};
+
 real_t GlobalSum(real_t local_value, MPI_Comm comm)
 {
    real_t global_value = 0.0;
@@ -86,6 +95,23 @@ void AddInPlace(HydroState &a, real_t alpha, const HydroState &b)
    a.x.Add(alpha, b.x);
    a.v.Add(alpha, b.v);
    a.e.Add(alpha, b.e);
+}
+
+void ScaleCopy(real_t alpha, const HydroState &source, HydroState &destination)
+{
+   destination.x = source.x;
+   destination.v = source.v;
+   destination.e = source.e;
+   destination.x *= alpha;
+   destination.v *= alpha;
+   destination.e *= alpha;
+}
+
+void SetZero(HydroState &state)
+{
+   state.x = 0.0;
+   state.v = 0.0;
+   state.e = 0.0;
 }
 
 class TaylorGreenModel
@@ -235,6 +261,93 @@ public:
       momentum_value.Neg();
       SolveVelocityMass(momentum_value, rhs.v);
       SolveEnergyMass(energy_value, rhs.e);
+   }
+
+   void RhsJvp(const HydroState &state, const HydroState &direction,
+               HydroState &result) const
+   {
+      Vector dmomentum(H1.GetTrueVSize());
+      Vector denergy(L2.GetTrueVSize());
+      dmomentum = 0.0;
+      denergy = 0.0;
+
+      MultiVector inputs = StateInputFields(state);
+      for (auto field :
+           {
+              std::pair{COORDINATES, &HydroState::x},
+              std::pair{VELOCITY, &HydroState::v},
+              std::pair{INTERNAL_ENERGY, &HydroState::e}
+           })
+      {
+         Vector momentum_part(dmomentum.Size());
+         MultiVector momentum_output{momentum_part};
+         momentum.GetDerivative(field.first, inputs)->Mult(
+            direction.*field.second, momentum_output);
+         dmomentum += momentum_part;
+
+         Vector energy_part(denergy.Size());
+         MultiVector energy_output{energy_part};
+         energy.GetDerivative(field.first, inputs)->Mult(
+            direction.*field.second, energy_output);
+         denergy += energy_part;
+      }
+
+      Vector dsource(L2.GetTrueVSize());
+      MultiVector source_inputs = SourceInputFields(state);
+      MultiVector source_output{dsource};
+      source.GetDerivative(COORDINATES, source_inputs)->Mult(
+         direction.x, source_output);
+      denergy += dsource;
+
+      result.x = direction.v;
+      dmomentum.Neg();
+      SolveVelocityMass(dmomentum, result.v);
+      SolveEnergyMass(denergy, result.e);
+   }
+
+   void RhsVjp(const HydroState &state, const HydroState &rate_lambda,
+               HydroState &state_lambda) const
+   {
+      Vector momentum_lambda(H1.GetTrueVSize());
+      Vector energy_lambda(L2.GetTrueVSize());
+      SolveVelocityMass(rate_lambda.v, momentum_lambda);
+      momentum_lambda.Neg();
+      SolveEnergyMass(rate_lambda.e, energy_lambda);
+
+      SetZero(state_lambda);
+      MultiVector inputs = StateInputFields(state);
+      MultiVector momentum_output_lambda{momentum_lambda};
+      MultiVector energy_output_lambda{energy_lambda};
+      for (auto field :
+           {
+              std::pair{COORDINATES, &HydroState::x},
+              std::pair{VELOCITY, &HydroState::v},
+              std::pair{INTERNAL_ENERGY, &HydroState::e}
+           })
+      {
+         Vector momentum_part((state_lambda.*field.second).Size());
+         MultiVector momentum_output{momentum_part};
+         momentum.GetDerivative(field.first, inputs)->MultTranspose(
+            momentum_output_lambda, momentum_output);
+         state_lambda.*field.second += momentum_part;
+
+         Vector energy_part((state_lambda.*field.second).Size());
+         MultiVector energy_output{energy_part};
+         energy.GetDerivative(field.first, inputs)->MultTranspose(
+            energy_output_lambda, energy_output);
+         state_lambda.*field.second += energy_part;
+      }
+
+      Vector source_x(H1.GetTrueVSize());
+      MultiVector source_inputs = SourceInputFields(state);
+      MultiVector source_output_lambda{energy_lambda};
+      MultiVector source_x_output{source_x};
+      source.GetDerivative(COORDINATES, source_inputs)->MultTranspose(
+         source_output_lambda, source_x_output);
+      state_lambda.x += source_x;
+
+      state_lambda.v += rate_lambda.x;
+      state_lambda.v.SetSubVector(essential_velocity_tdofs, 0.0);
    }
 
    void VelocityRate(const HydroState &state, Vector &rate) const
@@ -486,6 +599,119 @@ public:
       lambda.v.SetSubVector(essential_velocity_tdofs, 0.0);
    }
 
+   void RK4Step(const HydroState &state, real_t dt,
+                RK4StepData &step, HydroState &next) const
+   {
+      const real_t half_dt = 0.5 * dt;
+      Copy(state, step.stage1);
+
+      HydroState rate1(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate2(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate3(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate4(H1.GetTrueVSize(), L2.GetTrueVSize());
+      Rhs(step.stage1, rate1);
+      Add(state, half_dt, rate1, step.stage2);
+      Rhs(step.stage2, rate2);
+      Add(state, half_dt, rate2, step.stage3);
+      Rhs(step.stage3, rate3);
+      Add(state, dt, rate3, step.stage4);
+      Rhs(step.stage4, rate4);
+
+      Copy(state, next);
+      AddInPlace(next, dt / 6.0, rate1);
+      AddInPlace(next, dt / 3.0, rate2);
+      AddInPlace(next, dt / 3.0, rate3);
+      AddInPlace(next, dt / 6.0, rate4);
+   }
+
+   void RK4Jvp(const RK4StepData &step, const HydroState &direction,
+               real_t dt, HydroState &direction_next) const
+   {
+      const real_t half_dt = 0.5 * dt;
+      HydroState rate1_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate2_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate3_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate4_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState stage2_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState stage3_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState stage4_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+
+      RhsJvp(step.stage1, direction, rate1_direction);
+      Add(direction, half_dt, rate1_direction, stage2_direction);
+      RhsJvp(step.stage2, stage2_direction, rate2_direction);
+      Add(direction, half_dt, rate2_direction, stage3_direction);
+      RhsJvp(step.stage3, stage3_direction, rate3_direction);
+      Add(direction, dt, rate3_direction, stage4_direction);
+      RhsJvp(step.stage4, stage4_direction, rate4_direction);
+
+      Copy(direction, direction_next);
+      AddInPlace(direction_next, dt / 6.0, rate1_direction);
+      AddInPlace(direction_next, dt / 3.0, rate2_direction);
+      AddInPlace(direction_next, dt / 3.0, rate3_direction);
+      AddInPlace(direction_next, dt / 6.0, rate4_direction);
+   }
+
+   /// Backpropagate through one classical RK4 step. When supplied, the four
+   /// running gradients are evaluated at the RK stages and are incorporated
+   /// with the RK4 quadrature weights.
+   void ComputeRK4Lambda(const RK4StepData &step,
+                         const HydroState &lambda_next, real_t dt,
+                         const std::vector<HydroState> *running_gradients,
+                         HydroState &lambda) const
+   {
+      const real_t half_dt = 0.5 * dt;
+      Copy(lambda_next, lambda);
+
+      HydroState rate1_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate2_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate3_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState rate4_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      ScaleCopy(dt / 6.0, lambda_next, rate1_lambda);
+      ScaleCopy(dt / 3.0, lambda_next, rate2_lambda);
+      ScaleCopy(dt / 3.0, lambda_next, rate3_lambda);
+      ScaleCopy(dt / 6.0, lambda_next, rate4_lambda);
+
+      HydroState stage1_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState stage2_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState stage3_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState stage4_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      if (running_gradients)
+      {
+         ScaleCopy(dt / 6.0, (*running_gradients)[0], stage1_lambda);
+         ScaleCopy(dt / 3.0, (*running_gradients)[1], stage2_lambda);
+         ScaleCopy(dt / 3.0, (*running_gradients)[2], stage3_lambda);
+         ScaleCopy(dt / 6.0, (*running_gradients)[3], stage4_lambda);
+      }
+      else
+      {
+         SetZero(stage1_lambda);
+         SetZero(stage2_lambda);
+         SetZero(stage3_lambda);
+         SetZero(stage4_lambda);
+      }
+
+      HydroState rhs_lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+      RhsVjp(step.stage4, rate4_lambda, rhs_lambda);
+      AddInPlace(stage4_lambda, 1.0, rhs_lambda);
+      AddInPlace(lambda, 1.0, stage4_lambda);
+      AddInPlace(rate3_lambda, dt, stage4_lambda);
+
+      RhsVjp(step.stage3, rate3_lambda, rhs_lambda);
+      AddInPlace(stage3_lambda, 1.0, rhs_lambda);
+      AddInPlace(lambda, 1.0, stage3_lambda);
+      AddInPlace(rate2_lambda, half_dt, stage3_lambda);
+
+      RhsVjp(step.stage2, rate2_lambda, rhs_lambda);
+      AddInPlace(stage2_lambda, 1.0, rhs_lambda);
+      AddInPlace(lambda, 1.0, stage2_lambda);
+      AddInPlace(rate1_lambda, half_dt, stage2_lambda);
+
+      RhsVjp(step.stage1, rate1_lambda, rhs_lambda);
+      AddInPlace(stage1_lambda, 1.0, rhs_lambda);
+      AddInPlace(lambda, 1.0, stage1_lambda);
+      lambda.v.SetSubVector(essential_velocity_tdofs, 0.0);
+   }
+
    real_t Objective(const HydroState &state) const
    {
       MultiVector inputs = ObjectiveInputFields(state);
@@ -537,6 +763,57 @@ public:
       {
          RK2AvgStep(states[n], dt, steps[n], states[n + 1]);
       }
+   }
+
+   void ForwardRK4Trajectory(const HydroState &initial, real_t dt,
+                             int num_steps,
+                             std::vector<HydroState> &states,
+                             std::vector<RK4StepData> &steps) const
+   {
+      MFEM_VERIFY(num_steps > 0, "number of time steps must be positive");
+      states.clear();
+      states.reserve(num_steps + 1);
+      steps.clear();
+      steps.reserve(num_steps);
+      for (int n = 0; n <= num_steps; n++)
+      {
+         states.emplace_back(H1.GetTrueVSize(), L2.GetTrueVSize());
+      }
+      for (int n = 0; n < num_steps; n++)
+      {
+         steps.emplace_back(H1.GetTrueVSize(), L2.GetTrueVSize());
+      }
+      Copy(initial, states[0]);
+      for (int n = 0; n < num_steps; n++)
+      {
+         RK4Step(states[n], dt, steps[n], states[n + 1]);
+      }
+   }
+
+   real_t RK4TrajectoryObjective(const HydroState &initial, real_t dt,
+                                 int num_steps) const
+   {
+      std::vector<HydroState> states;
+      std::vector<RK4StepData> steps;
+      ForwardRK4Trajectory(initial, dt, num_steps, states, steps);
+      return Objective(states.back());
+   }
+
+   real_t RK4TrajectoryObjectiveWithRunning(const HydroState &initial,
+                                            real_t dt, int num_steps) const
+   {
+      std::vector<HydroState> states;
+      std::vector<RK4StepData> steps;
+      ForwardRK4Trajectory(initial, dt, num_steps, states, steps);
+      real_t value = Objective(states.back());
+      for (const RK4StepData &step : steps)
+      {
+         value += dt * (Objective(step.stage1) / 6.0 +
+                        Objective(step.stage2) / 3.0 +
+                        Objective(step.stage3) / 3.0 +
+                        Objective(step.stage4) / 6.0);
+      }
+      return value;
    }
 
    real_t TrajectoryObjective(const HydroState &initial, real_t dt,
@@ -619,6 +896,70 @@ void ComputeTaylorGreenRK2AvgAdjoint(
       objective_gradient.v.SetSubVector(ess_tdofs_v, 0.0);
       AddInPlace(lambda, (n == 0 ? 0.5 : 1.0) * dt,
                  objective_gradient);
+      Copy(lambda, lambda_next);
+   }
+   Copy(lambda_next, initial_gradient);
+}
+
+void ComputeTaylorGreenRK4Adjoint(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   const Array<int> &ess_tdofs_v,
+   Coefficient &rho0_coefficient,
+   const ParGridFunction &rho0,
+   const ParGridFunction &material,
+   const BlockVector &initial_state,
+   LagrangianHydroOperator &hydro,
+   real_t dt,
+   int num_steps,
+   const TaylorGreenObjectiveGradient &terminal_gradient,
+   const TaylorGreenObjectiveGradient &running_gradient,
+   TaylorGreenAdjointState &initial_gradient,
+   TaylorGreenAdjointState *final_state)
+{
+   MFEM_VERIFY(H1.GetComm() == MPI_COMM_WORLD,
+               "Taylor--Green adjoint integration expects MPI_COMM_WORLD");
+   MFEM_VERIFY(H1.GetMesh()->Dimension() == 2,
+               "Taylor--Green adjoint integration currently requires a 2D mesh");
+   MFEM_VERIFY(dt > 0.0 && num_steps > 0,
+               "time step and step count must be positive");
+
+   HydroState state(H1.GetTrueVSize(), L2.GetTrueVSize());
+   ExtractTrueState(H1, L2, initial_state, state);
+   TaylorGreenModel model(H1, L2, ess_tdofs_v, rho0_coefficient, rho0,
+                          material, state.x, hydro);
+
+   std::vector<HydroState> states;
+   std::vector<RK4StepData> steps;
+   model.ForwardRK4Trajectory(state, dt, num_steps, states, steps);
+   if (final_state) { Copy(states.back(), *final_state); }
+
+   const real_t final_time = num_steps * dt;
+   HydroState lambda_next(H1.GetTrueVSize(), L2.GetTrueVSize());
+   terminal_gradient(states.back(), final_time, lambda_next);
+   lambda_next.v.SetSubVector(ess_tdofs_v, 0.0);
+
+   HydroState lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+   std::vector<HydroState> running_gradients;
+   running_gradients.reserve(4);
+   for (int i = 0; i < 4; i++)
+   {
+      running_gradients.emplace_back(H1.GetTrueVSize(), L2.GetTrueVSize());
+   }
+   for (int n = num_steps - 1; n >= 0; n--)
+   {
+      const real_t time = n * dt;
+      const RK4StepData &step = steps[n];
+      running_gradient(step.stage1, time, running_gradients[0]);
+      running_gradient(step.stage2, time + 0.5 * dt, running_gradients[1]);
+      running_gradient(step.stage3, time + 0.5 * dt, running_gradients[2]);
+      running_gradient(step.stage4, time + dt, running_gradients[3]);
+      for (HydroState &gradient : running_gradients)
+      {
+         gradient.v.SetSubVector(ess_tdofs_v, 0.0);
+      }
+      model.ComputeRK4Lambda(step, lambda_next, dt, &running_gradients,
+                             lambda);
       Copy(lambda, lambda_next);
    }
    Copy(lambda_next, initial_gradient);
@@ -1041,6 +1382,172 @@ bool VerifyTaylorGreenRK2AvgAdjoint(
                      initial_energy_gradient,
                      "Gradient of J with respect to initial energy",
                      0, 0, 700, 700);
+   }
+   return passed;
+}
+
+bool VerifyTaylorGreenRK4Adjoint(
+   ParFiniteElementSpace &H1,
+   ParFiniteElementSpace &L2,
+   const Array<int> &ess_tdofs_v,
+   Coefficient &rho0_coefficient,
+   const ParGridFunction &rho0,
+   const ParGridFunction &material,
+   const BlockVector &initial_state,
+   LagrangianHydroOperator &hydro,
+   real_t dt,
+   real_t fd_epsilon,
+   int num_steps,
+   bool finite_difference_check)
+{
+   MFEM_VERIFY(H1.GetComm() == MPI_COMM_WORLD,
+               "Taylor--Green RK4 adjoint check expects MPI_COMM_WORLD");
+   MFEM_VERIFY(H1.GetMesh()->Dimension() == 2,
+               "Taylor--Green RK4 adjoint check requires a 2D mesh");
+   MFEM_VERIFY(dt > 0.0 && fd_epsilon > 0.0 && num_steps > 0,
+               "step count, dt, and finite-difference epsilon must be positive");
+
+   MPI_Comm comm = H1.GetComm();
+   int myid = 0;
+   MPI_Comm_rank(comm, &myid);
+   HydroState state(H1.GetTrueVSize(), L2.GetTrueVSize());
+   ExtractTrueState(H1, L2, initial_state, state);
+   TaylorGreenModel model(H1, L2, ess_tdofs_v, rho0_coefficient, rho0,
+                          material, state.x, hydro);
+
+   std::vector<HydroState> states;
+   std::vector<RK4StepData> steps;
+   model.ForwardRK4Trajectory(state, dt, num_steps, states, steps);
+
+   BlockVector laghos_state(initial_state);
+   RK4Solver laghos_solver;
+   laghos_solver.Init(hydro);
+   real_t laghos_time = 0.0;
+   real_t laghos_dt = dt;
+   for (int n = 0; n < num_steps; n++)
+   {
+      laghos_solver.Step(laghos_state, laghos_time, laghos_dt);
+   }
+   HydroState laghos_final(H1.GetTrueVSize(), L2.GetTrueVSize());
+   ExtractTrueState(H1, L2, laghos_state, laghos_final);
+   HydroState trajectory_difference(H1.GetTrueVSize(), L2.GetTrueVSize());
+   Add(states.back(), -1.0, laghos_final, trajectory_difference);
+   const real_t trajectory_relative_error =
+      Norml2(trajectory_difference, comm) /
+      std::max(Norml2(laghos_final, comm), real_t(1.0));
+
+   HydroState initial_direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+   HydroState lambda_next(H1.GetTrueVSize(), L2.GetTrueVSize());
+   initial_direction.x.Randomize(3001);
+   initial_direction.v.Randomize(3002);
+   initial_direction.e.Randomize(3003);
+   initial_direction.v.SetSubVector(ess_tdofs_v, 0.0);
+   lambda_next.x.Randomize(4001);
+   lambda_next.v.Randomize(4002);
+   lambda_next.e.Randomize(4003);
+   lambda_next.v.SetSubVector(ess_tdofs_v, 0.0);
+   const real_t direction_norm = Norml2(initial_direction, comm);
+   initial_direction.x /= direction_norm;
+   initial_direction.v /= direction_norm;
+   initial_direction.e /= direction_norm;
+
+   HydroState direction(H1.GetTrueVSize(), L2.GetTrueVSize());
+   HydroState direction_next(H1.GetTrueVSize(), L2.GetTrueVSize());
+   HydroState lambda(H1.GetTrueVSize(), L2.GetTrueVSize());
+   Copy(initial_direction, direction);
+   for (int n = 0; n < num_steps; n++)
+   {
+      model.RK4Jvp(steps[n], direction, dt, direction_next);
+      Copy(direction_next, direction);
+   }
+   const real_t jvp_dot = Dot(lambda_next, direction, comm);
+   for (int n = num_steps - 1; n >= 0; n--)
+   {
+      model.ComputeRK4Lambda(steps[n], lambda_next, dt, nullptr, lambda);
+      Copy(lambda, lambda_next);
+   }
+   const real_t vjp_dot = Dot(lambda_next, initial_direction, comm);
+   const real_t transpose_scale =
+      std::max({std::abs(jvp_dot), std::abs(vjp_dot), real_t(1.0)});
+   const real_t transpose_relative_error =
+      std::abs(jvp_dot - vjp_dot) / transpose_scale;
+
+   HydroState lambda_final(H1.GetTrueVSize(), L2.GetTrueVSize());
+   model.ObjectiveGradient(states.back(), lambda_final);
+   Copy(lambda_final, lambda_next);
+   std::vector<HydroState> running_gradients;
+   running_gradients.reserve(4);
+   for (int i = 0; i < 4; i++)
+   {
+      running_gradients.emplace_back(H1.GetTrueVSize(), L2.GetTrueVSize());
+   }
+   for (int n = num_steps - 1; n >= 0; n--)
+   {
+      model.ObjectiveGradient(steps[n].stage1, running_gradients[0]);
+      model.ObjectiveGradient(steps[n].stage2, running_gradients[1]);
+      model.ObjectiveGradient(steps[n].stage3, running_gradients[2]);
+      model.ObjectiveGradient(steps[n].stage4, running_gradients[3]);
+      model.ComputeRK4Lambda(steps[n], lambda_next, dt, &running_gradients,
+                             lambda);
+      Copy(lambda, lambda_next);
+   }
+   const real_t directional_adjoint =
+      Dot(lambda_next, initial_direction, comm);
+   const real_t objective_value =
+      model.RK4TrajectoryObjectiveWithRunning(state, dt, num_steps);
+
+   real_t directional_fd = 0.0;
+   real_t directional_relative_error = 0.0;
+   if (finite_difference_check)
+   {
+      HydroState plus(H1.GetTrueVSize(), L2.GetTrueVSize());
+      HydroState minus(H1.GetTrueVSize(), L2.GetTrueVSize());
+      Add(state, fd_epsilon, initial_direction, plus);
+      Add(state, -fd_epsilon, initial_direction, minus);
+      directional_fd =
+         (model.RK4TrajectoryObjectiveWithRunning(plus, dt, num_steps) -
+          model.RK4TrajectoryObjectiveWithRunning(minus, dt, num_steps)) /
+         (2.0 * fd_epsilon);
+      const real_t directional_scale =
+         std::max({std::abs(directional_fd), std::abs(directional_adjoint),
+                   real_t(1.0)});
+      directional_relative_error =
+         std::abs(directional_fd - directional_adjoint) / directional_scale;
+   }
+
+   bool passed = trajectory_relative_error < 1e-8 &&
+                 transpose_relative_error < 1e-10;
+   if (finite_difference_check)
+   {
+      passed = passed && directional_relative_error < 5e-7;
+   }
+   if (myid == 0)
+   {
+      out << std::setprecision(12)
+          << "\nTaylor--Green fixed-step RK4 adjoint verification\n"
+          << "  steps                           = " << num_steps << '\n'
+          << "  dt                              = " << dt << '\n'
+          << "  objective J                     = " << objective_value << '\n'
+          << "  dFEM/Laghos trajectory error    = "
+          << trajectory_relative_error << '\n'
+          << "  trajectory JVP dot              = " << jvp_dot << '\n'
+          << "  trajectory lambda dot           = " << vjp_dot << '\n'
+          << "  trajectory JVP/lambda error     = "
+          << transpose_relative_error << '\n'
+          << "  directional adjoint derivative  = "
+          << directional_adjoint << '\n';
+      if (finite_difference_check)
+      {
+         out << "  directional finite difference   = " << directional_fd << '\n'
+             << "  directional relative error      = "
+             << directional_relative_error << '\n';
+      }
+      else
+      {
+         out << "  finite-difference check          = disabled\n";
+      }
+      out << "  result                          = "
+          << (passed ? "PASS" : "FAIL") << "\n\n";
    }
    return passed;
 }
