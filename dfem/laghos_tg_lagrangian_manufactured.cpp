@@ -18,126 +18,498 @@ namespace mfem::hydrodynamics
 constexpr int LAGRANGIAN_MANUFACTURED_TIME = 22;
 constexpr int LAGRANGIAN_MANUFACTURED_VALUE = 23;
 
+struct ReferenceJet2
+{
+   real_t value;
+   real_t gradient[2];
+   real_t hessian[2][2];
+
+   MFEM_HOST_DEVICE ReferenceJet2(real_t value_ = 0.0) : value(value_)
+   {
+      for (int i = 0; i < 2; i++)
+      {
+         gradient[i] = 0.0;
+         for (int j = 0; j < 2; j++) { hessian[i][j] = 0.0; }
+      }
+   }
+
+   MFEM_HOST_DEVICE static ReferenceJet2 Variable(real_t value, int direction)
+   {
+      ReferenceJet2 result(value);
+      result.gradient[direction] = 1.0;
+      return result;
+   }
+};
+
+MFEM_HOST_DEVICE ReferenceJet2 operator+(const ReferenceJet2 &a,
+                                          const ReferenceJet2 &b)
+{
+   ReferenceJet2 result(a.value + b.value);
+   for (int i = 0; i < 2; i++)
+   {
+      result.gradient[i] = a.gradient[i] + b.gradient[i];
+      for (int j = 0; j < 2; j++)
+      {
+         result.hessian[i][j] = a.hessian[i][j] + b.hessian[i][j];
+      }
+   }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 operator-(const ReferenceJet2 &a)
+{
+   ReferenceJet2 result(-a.value);
+   for (int i = 0; i < 2; i++)
+   {
+      result.gradient[i] = -a.gradient[i];
+      for (int j = 0; j < 2; j++)
+      {
+         result.hessian[i][j] = -a.hessian[i][j];
+      }
+   }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 operator-(const ReferenceJet2 &a,
+                                          const ReferenceJet2 &b)
+{
+   return a + (-b);
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 operator*(const ReferenceJet2 &a,
+                                          const ReferenceJet2 &b)
+{
+   ReferenceJet2 result(a.value * b.value);
+   for (int i = 0; i < 2; i++)
+   {
+      result.gradient[i] = a.gradient[i] * b.value +
+                           a.value * b.gradient[i];
+      for (int j = 0; j < 2; j++)
+      {
+         result.hessian[i][j] =
+            a.hessian[i][j] * b.value + a.value * b.hessian[i][j] +
+            a.gradient[i] * b.gradient[j] +
+            a.gradient[j] * b.gradient[i];
+      }
+   }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 UnaryReferenceJet(
+   const ReferenceJet2 &a, real_t value, real_t first, real_t second)
+{
+   ReferenceJet2 result(value);
+   for (int i = 0; i < 2; i++)
+   {
+      result.gradient[i] = first * a.gradient[i];
+      for (int j = 0; j < 2; j++)
+      {
+         result.hessian[i][j] = first * a.hessian[i][j] +
+                                second * a.gradient[i] * a.gradient[j];
+      }
+   }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 Inverse(const ReferenceJet2 &a)
+{
+   const real_t inverse = 1.0 / a.value;
+   return UnaryReferenceJet(a, inverse, -inverse * inverse,
+                            2.0 * inverse * inverse * inverse);
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 operator/(const ReferenceJet2 &a,
+                                          const ReferenceJet2 &b)
+{
+   return a * Inverse(b);
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 Sin(const ReferenceJet2 &a)
+{
+   using std::cos;
+   using std::sin;
+   return UnaryReferenceJet(a, sin(a.value), cos(a.value), -sin(a.value));
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 Cos(const ReferenceJet2 &a)
+{
+   using std::cos;
+   using std::sin;
+   return UnaryReferenceJet(a, cos(a.value), -sin(a.value), -cos(a.value));
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 Sqrt(const ReferenceJet2 &a)
+{
+   using std::sqrt;
+   const real_t root = sqrt(a.value);
+   return UnaryReferenceJet(a, root, 0.5 / root,
+                            -0.25 / (root * root * root));
+}
+
+MFEM_HOST_DEVICE ReferenceJet2 Acos(const ReferenceJet2 &a)
+{
+   using std::acos;
+   using std::sqrt;
+   const real_t denominator = sqrt(1.0 - a.value * a.value);
+   return UnaryReferenceJet(a, acos(a.value), -1.0 / denominator,
+                            -a.value / (denominator * denominator * denominator));
+}
+
+template <int ORDER = 24>
+MFEM_HOST_DEVICE void JacobiEllipticSmallArgument(
+   const ReferenceJet2 &parameter, real_t argument,
+   ReferenceJet2 &sn, ReferenceJet2 &cn, ReferenceJet2 &dn)
+{
+   // Power-series solution of sn'=cn*dn, cn'=-sn*dn,
+   // dn'=-m*sn*cn.  In this test |argument| <= pi/20, so ORDER=24
+   // evaluates the Jacobi functions to roundoff while retaining analytic
+   // first and second derivatives with respect to the parameter.
+   ReferenceJet2 sn_coefficient[ORDER + 1];
+   ReferenceJet2 cn_coefficient[ORDER + 1];
+   ReferenceJet2 dn_coefficient[ORDER + 1];
+   cn_coefficient[0] = 1.0;
+   dn_coefficient[0] = 1.0;
+   for (int n = 0; n < ORDER; n++)
+   {
+      ReferenceJet2 cn_dn, sn_dn, sn_cn;
+      for (int k = 0; k <= n; k++)
+      {
+         cn_dn = cn_dn + cn_coefficient[k] * dn_coefficient[n-k];
+         sn_dn = sn_dn + sn_coefficient[k] * dn_coefficient[n-k];
+         sn_cn = sn_cn + sn_coefficient[k] * cn_coefficient[n-k];
+      }
+      const real_t scale = 1.0 / (n + 1.0);
+      sn_coefficient[n+1] = cn_dn * scale;
+      cn_coefficient[n+1] = -sn_dn * scale;
+      dn_coefficient[n+1] = -(parameter * sn_cn) * scale;
+   }
+   sn = sn_coefficient[ORDER];
+   cn = cn_coefficient[ORDER];
+   dn = dn_coefficient[ORDER];
+   for (int n = ORDER - 1; n >= 0; n--)
+   {
+      sn = sn * argument + sn_coefficient[n];
+      cn = cn * argument + cn_coefficient[n];
+      dn = dn * argument + dn_coefficient[n];
+   }
+}
+
+MFEM_HOST_DEVICE void ExactTaylorGreenTrajectory(
+   const ReferenceJet2 initial_x[2], real_t time, ReferenceJet2 x[2])
+{
+   using std::cos;
+   using std::sin;
+   const ReferenceJet2 sin_x = Sin(initial_x[0] * M_PI);
+   const ReferenceJet2 cos_x = Cos(initial_x[0] * M_PI);
+   const ReferenceJet2 sin_y = Sin(initial_x[1] * M_PI);
+   const ReferenceJet2 cos_y = Cos(initial_x[1] * M_PI);
+   const ReferenceJet2 streamline = sin_x * sin_y;
+   const ReferenceJet2 parameter = 1.0 - streamline * streamline;
+
+   if (parameter.value <= 1e-28)
+   {
+      // The vortex center is stationary.  Its flow-map gradient is the
+      // rotation generated by the linearized Taylor--Green velocity, and
+      // symmetry makes the second derivative zero at the center.
+      const real_t cosine = cos(M_PI * time);
+      const real_t sine = sin(M_PI * time);
+      x[0] = ReferenceJet2(0.5);
+      x[1] = ReferenceJet2(0.5);
+      x[0].gradient[0] = cosine;
+      x[0].gradient[1] = -sine;
+      x[1].gradient[0] = sine;
+      x[1].gradient[1] = cosine;
+      return;
+   }
+
+   const ReferenceJet2 modulus = Sqrt(parameter);
+   const ReferenceJet2 sn_initial = cos_x / modulus;
+   const ReferenceJet2 cn_initial = sin_x * cos_y / modulus;
+   const ReferenceJet2 dn_initial = sin_x;
+   ReferenceJet2 sn_time, cn_time, dn_time;
+   JacobiEllipticSmallArgument(parameter, M_PI * time,
+                               sn_time, cn_time, dn_time);
+   const ReferenceJet2 denominator =
+      1.0 - parameter * sn_initial * sn_initial * sn_time * sn_time;
+   const ReferenceJet2 sn =
+      (sn_initial * cn_time * dn_time -
+       sn_time * cn_initial * dn_initial) / denominator;
+   const ReferenceJet2 cn =
+      (cn_initial * cn_time +
+       sn_initial * sn_time * dn_initial * dn_time) / denominator;
+   const ReferenceJet2 dn =
+      (dn_initial * dn_time + parameter * sn_initial * sn_time *
+       cn_initial * cn_time) / denominator;
+   x[0] = Acos(modulus * sn) / M_PI;
+   x[1] = Acos(modulus * cn / dn) / M_PI;
+}
+
+struct ReferenceJet1
+{
+   real_t value;
+   real_t gradient[2];
+
+   MFEM_HOST_DEVICE ReferenceJet1(real_t value_ = 0.0) : value(value_)
+   {
+      gradient[0] = gradient[1] = 0.0;
+   }
+};
+
+MFEM_HOST_DEVICE ReferenceJet1 FirstJet(const ReferenceJet2 &a)
+{
+   ReferenceJet1 result(a.value);
+   result.gradient[0] = a.gradient[0];
+   result.gradient[1] = a.gradient[1];
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet1 DerivativeJet(const ReferenceJet2 &a,
+                                              int direction)
+{
+   ReferenceJet1 result(a.gradient[direction]);
+   result.gradient[0] = a.hessian[direction][0];
+   result.gradient[1] = a.hessian[direction][1];
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet1 operator+(const ReferenceJet1 &a,
+                                          const ReferenceJet1 &b)
+{
+   ReferenceJet1 result(a.value + b.value);
+   for (int i = 0; i < 2; i++)
+   {
+      result.gradient[i] = a.gradient[i] + b.gradient[i];
+   }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet1 operator-(const ReferenceJet1 &a)
+{
+   ReferenceJet1 result(-a.value);
+   for (int i = 0; i < 2; i++) { result.gradient[i] = -a.gradient[i]; }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet1 operator-(const ReferenceJet1 &a,
+                                          const ReferenceJet1 &b)
+{
+   return a + (-b);
+}
+
+MFEM_HOST_DEVICE ReferenceJet1 operator*(const ReferenceJet1 &a,
+                                          const ReferenceJet1 &b)
+{
+   ReferenceJet1 result(a.value * b.value);
+   for (int i = 0; i < 2; i++)
+   {
+      result.gradient[i] = a.gradient[i] * b.value +
+                           a.value * b.gradient[i];
+   }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet1 Inverse(const ReferenceJet1 &a)
+{
+   ReferenceJet1 result(1.0 / a.value);
+   for (int i = 0; i < 2; i++)
+   {
+      result.gradient[i] = -a.gradient[i] / (a.value * a.value);
+   }
+   return result;
+}
+
+MFEM_HOST_DEVICE ReferenceJet1 operator/(const ReferenceJet1 &a,
+                                          const ReferenceJet1 &b)
+{
+   return a * Inverse(b);
+}
+
+template <int DIM>
+MFEM_HOST_DEVICE void TaylorGreenLagrangianManufacturedCoefficients(
+   const vecd_t<DIM> &initial_position, real_t time, real_t final_time,
+   vecd_t<DIM> &lambda_x, vecd_t<DIM> &lambda_v, real_t &lambda_e,
+   vecd_t<DIM> &running_x, vecd_t<DIM> &running_v, real_t &running_e)
+{
+   static_assert(DIM == 2,
+                 "the manufactured Lagrangian adjoint is two-dimensional");
+   ReferenceJet2 initial_x[DIM] =
+   {
+      ReferenceJet2::Variable(initial_position(0), 0),
+      ReferenceJet2::Variable(initial_position(1), 1)
+   };
+   ReferenceJet2 exact_x[DIM];
+   ExactTaylorGreenTrajectory(initial_x, time, exact_x);
+
+   const ReferenceJet2 sin_x = Sin(exact_x[0] * M_PI);
+   const ReferenceJet2 cos_x = Cos(exact_x[0] * M_PI);
+   const ReferenceJet2 sin_y = Sin(exact_x[1] * M_PI);
+   const ReferenceJet2 cos_y = Cos(exact_x[1] * M_PI);
+   ReferenceJet2 exact_v[DIM];
+   exact_v[0] = sin_x * cos_y;
+   exact_v[1] = -cos_x * sin_y;
+   constexpr real_t gamma_minus_one = 2.0 / 3.0;
+   const ReferenceJet2 exact_pressure =
+      1.0 + 0.25 * (Cos(exact_x[0] * (2.0*M_PI)) +
+                    Cos(exact_x[1] * (2.0*M_PI)));
+   const ReferenceJet2 exact_energy = exact_pressure / gamma_minus_one;
+   const ReferenceJet2 exact_source = 3.0 / 8.0 * M_PI *
+      (Cos(exact_x[0] * (3.0*M_PI)) * Cos(exact_x[1] * M_PI) -
+       Cos(exact_x[0] * M_PI) * Cos(exact_x[1] * (3.0*M_PI)));
+
+   const ReferenceJet2 sin_initial_x = Sin(initial_x[0] * M_PI);
+   const ReferenceJet2 sin_initial_y = Sin(initial_x[1] * M_PI);
+   const ReferenceJet2 sin_initial_x2 = sin_initial_x * sin_initial_x;
+   const ReferenceJet2 sin_initial_y2 = sin_initial_y * sin_initial_y;
+   const ReferenceJet2 phi = sin_initial_x2 * sin_initial_x2 *
+                             sin_initial_x2 * sin_initial_y2 *
+                             sin_initial_y2 * sin_initial_y2;
+   const real_t tau = time / final_time;
+   ReferenceJet2 lambda_x_jet[DIM], lambda_v_jet[DIM];
+   ReferenceJet2 lambda_e_jet = phi * (1.0 + 3.0*tau);
+   for (int i = 0; i < DIM; i++)
+   {
+      const real_t direction = i == 0 ? 1.0 : -1.0;
+      lambda_x_jet[i] = phi * ((1.0 + tau) * direction);
+      lambda_v_jet[i] = phi * ((1.0 + 2.0*tau) * direction);
+      lambda_x(i) = lambda_x_jet[i].value;
+      lambda_v(i) = lambda_v_jet[i].value;
+   }
+   lambda_e = lambda_e_jet.value;
+
+   ReferenceJet1 deformation[DIM][DIM];
+   ReferenceJet1 velocity_gradient[DIM][DIM];
+   ReferenceJet1 lambda_v_gradient[DIM][DIM];
+   for (int i = 0; i < DIM; i++)
+   {
+      for (int j = 0; j < DIM; j++)
+      {
+         deformation[i][j] = DerivativeJet(exact_x[i], j);
+         velocity_gradient[i][j] = DerivativeJet(exact_v[i], j);
+         lambda_v_gradient[i][j] = DerivativeJet(lambda_v_jet[i], j);
+      }
+   }
+   const ReferenceJet1 determinant =
+      deformation[0][0] * deformation[1][1] -
+      deformation[0][1] * deformation[1][0];
+   ReferenceJet1 inverse_transpose[DIM][DIM];
+   inverse_transpose[0][0] = deformation[1][1] / determinant;
+   inverse_transpose[0][1] = -deformation[1][0] / determinant;
+   inverse_transpose[1][0] = -deformation[0][1] / determinant;
+   inverse_transpose[1][1] = deformation[0][0] / determinant;
+
+   const ReferenceJet1 lambda_e_first = FirstJet(lambda_e_jet);
+   const ReferenceJet1 energy_first = FirstJet(exact_energy);
+   const ReferenceJet1 source_first = FirstJet(exact_source);
+   ReferenceJet1 B[DIM][DIM], pressure_stress[DIM][DIM];
+   for (int i = 0; i < DIM; i++)
+   {
+      for (int j = 0; j < DIM; j++)
+      {
+         B[i][j] = -lambda_v_gradient[i][j] +
+                   lambda_e_first * velocity_gradient[i][j];
+         pressure_stress[i][j] =
+            -gamma_minus_one * energy_first * inverse_transpose[i][j];
+      }
+   }
+
+   ReferenceJet1 coordinate_flux[DIM][DIM];
+   for (int i = 0; i < DIM; i++)
+   {
+      for (int j = 0; j < DIM; j++)
+      {
+         ReferenceJet1 geometric_flux;
+         for (int k = 0; k < DIM; k++)
+         {
+            for (int l = 0; l < DIM; l++)
+            {
+               geometric_flux = geometric_flux +
+                  inverse_transpose[i][k] * B[l][k] *
+                  inverse_transpose[l][j];
+            }
+         }
+         coordinate_flux[i][j] =
+            gamma_minus_one * energy_first * geometric_flux +
+            lambda_e_first * source_first * inverse_transpose[i][j];
+      }
+   }
+
+   real_t source_spatial_gradient[DIM];
+   for (int i = 0; i < DIM; i++)
+   {
+      source_spatial_gradient[i] = 0.0;
+      for (int j = 0; j < DIM; j++)
+      {
+         source_spatial_gradient[i] += inverse_transpose[i][j].value *
+                                       exact_source.gradient[j];
+      }
+   }
+   for (int i = 0; i < DIM; i++)
+   {
+      real_t coordinate_divergence = 0.0;
+      real_t velocity_divergence = 0.0;
+      for (int j = 0; j < DIM; j++)
+      {
+         coordinate_divergence += coordinate_flux[i][j].gradient[j];
+         const ReferenceJet1 velocity_flux =
+            lambda_e_first * pressure_stress[i][j];
+         velocity_divergence += velocity_flux.gradient[j];
+      }
+      const real_t adjoint_x = -coordinate_divergence +
+                               lambda_e * source_spatial_gradient[i];
+      const real_t adjoint_v = lambda_x(i) - velocity_divergence;
+      const real_t direction = i == 0 ? 1.0 : -1.0;
+      running_x(i) = -phi.value / final_time * direction - adjoint_x;
+      running_v(i) = -2.0 * phi.value / final_time * direction - adjoint_v;
+   }
+   real_t contraction = 0.0;
+   for (int i = 0; i < DIM; i++)
+   {
+      for (int j = 0; j < DIM; j++)
+      {
+         contraction += B[i][j].value * inverse_transpose[i][j].value;
+      }
+   }
+   const real_t adjoint_e = -gamma_minus_one * contraction;
+   running_e = -3.0 * phi.value / final_time - adjoint_e;
+}
+
 template <int DIM>
 struct TaylorGreenLagrangianObjectiveQFunction
 {
    static_assert(DIM == 2,
                  "the manufactured Lagrangian adjoint is two-dimensional");
    using dvec = vecd_t<DIM, dscalar_t>;
-   using dmat = matd_t<DIM, dscalar_t>;
    using vec = vecd_t<DIM>;
    using mat = matd_t<DIM>;
 
-   QConstants qconstants;
    real_t final_time;
    bool terminal;
 
    MFEM_HOST_DEVICE inline
-   void operator()(const dvec &x, const dmat &J, const dvec &v,
-                   const dmat &dvdxi, const dscalar_t &energy,
+   void operator()(const dvec &x, const dvec &v, const dscalar_t &energy,
                    const vec &initial_x, const mat &J0, const real_t &time,
                    const real_t &weight, dscalar_t &value) const
    {
-      using std::cos;
-      using std::sin;
-
-      const real_t pia = M_PI * initial_x(0);
-      const real_t pib = M_PI * initial_x(1);
-      const real_t sa = sin(pia), ca = cos(pia);
-      const real_t sb = sin(pib), cb = cos(pib);
-      const real_t sa2 = sa * sa, sb2 = sb * sb;
-      const real_t sa4 = sa2 * sa2, sb4 = sb2 * sb2;
-      const real_t phi = sa4 * sa2 * sb4 * sb2;
-      vec grad_phi;
-      grad_phi(0) = 6.0 * M_PI * sa4 * sa * ca * sb4 * sb2;
-      grad_phi(1) = 6.0 * M_PI * sb4 * sb * cb * sa4 * sa2;
-
-      const real_t tau = time / final_time;
-      const real_t lambda_x_factor = 1.0 + tau;
-      const real_t lambda_v_factor = 1.0 + 2.0 * tau;
-      const real_t lambda_e = (1.0 + 3.0 * tau) * phi;
-      const real_t dt_lambda_x_factor = 1.0 / final_time;
-      const real_t dt_lambda_v_factor = 2.0 / final_time;
-      const real_t dt_lambda_e = 3.0 * phi / final_time;
-
-      vec direction;
-      direction(0) = 1.0;
-      direction(1) = -1.0;
-
+      vec lambda_x, lambda_v, running_x, running_v;
+      real_t lambda_e, running_e;
+      TaylorGreenLagrangianManufacturedCoefficients<DIM>(
+         initial_x, time, final_time, lambda_x, lambda_v, lambda_e,
+         running_x, running_v, running_e);
       const real_t material_measure = det(J0) * weight;
-      value = 0.0;
+      value = (terminal ? lambda_e : running_e) * energy;
       for (int i = 0; i < DIM; i++)
       {
-         const real_t lambda_x = lambda_x_factor * phi * direction(i);
-         const real_t dt_lambda_x =
-            dt_lambda_x_factor * phi * direction(i);
-         const real_t dt_lambda_v =
-            dt_lambda_v_factor * phi * direction(i);
-         value -= (dt_lambda_x * x(i) + dt_lambda_v * v(i) +
-                   lambda_x * v(i)) * material_measure;
+         value += (terminal ? lambda_x(i) : running_x(i)) * x(i) +
+                  (terminal ? lambda_v(i) : running_v(i)) * v(i);
       }
-      value -= dt_lambda_e * energy * material_measure;
-
-      if (terminal)
-      {
-         // The state-dependent constants omitted above do not change the
-         // objective gradient. Replace the running functional by its terminal
-         // linear functional.
-         value = lambda_e * energy * material_measure;
-         for (int i = 0; i < DIM; i++)
-         {
-            const real_t lambda_x = lambda_x_factor * phi * direction(i);
-            const real_t lambda_v = lambda_v_factor * phi * direction(i);
-            value += (lambda_x * x(i) + lambda_v * v(i)) * material_measure;
-         }
-         return;
-      }
-
-      // The first Piola weak terms are evaluated in reference-element
-      // coordinates. StressSetup returns sigma J^{-T} det(J) weight, which
-      // is precisely the tensor contracted with a reference gradient.
-      constexpr real_t rho0 = 1.0;
-      constexpr real_t gamma = 5.0 / 3.0;
-      const auto setup = StressSetup<DIM>(qconstants, dvdxi, rho0, J0, J,
-                                          gamma, energy, weight);
-      const auto stress_jit = future::get<0>(setup);
-
-      mat grad_lambda_v_dxi;
-      for (int i = 0; i < DIM; i++)
-      {
-         for (int j = 0; j < DIM; j++)
-         {
-            grad_lambda_v_dxi(i, j) = 0.0;
-            for (int k = 0; k < DIM; k++)
-            {
-               const real_t grad_lambda_v_ik =
-                  lambda_v_factor * direction(i) * grad_phi(k);
-               grad_lambda_v_dxi(i, j) += grad_lambda_v_ik * J0(k, j);
-            }
-         }
-      }
-
-      for (int i = 0; i < DIM; i++)
-      {
-         for (int j = 0; j < DIM; j++)
-         {
-            value += stress_jit(i, j) * grad_lambda_v_dxi(i, j);
-            value -= lambda_e * stress_jit(i, j) * dvdxi(i, j);
-         }
-      }
-
-      const dscalar_t source =
-         3.0 / 8.0 * M_PI *
-         (cos(3.0*M_PI*x(0)) * cos(M_PI*x(1)) -
-          cos(M_PI*x(0)) * cos(3.0*M_PI*x(1)));
-      value -= lambda_e * source * det(J) * weight;
+      value *= material_measure;
    }
 };
 
 std::shared_ptr<DifferentiableOperator> CreateLagrangianObjective(
    ParFiniteElementSpace &H1, ParFiniteElementSpace &L2,
-   const IntegrationRule &ir, const QConstants &qconstants,
-   int qfunction_backend, real_t final_time, bool terminal)
+   const IntegrationRule &ir, int qfunction_backend,
+   real_t final_time, bool terminal)
 {
    ParMesh &mesh = *H1.GetParMesh();
    Array<int> attributes(mesh.attributes.Max());
@@ -161,8 +533,7 @@ std::shared_ptr<DifferentiableOperator> CreateLagrangianObjective(
                           inputs, outputs, mesh);
       future::tuple kernel_inputs =
       {
-         Value<COORDINATES>{}, Gradient<COORDINATES>{},
-         Value<VELOCITY>{}, Gradient<VELOCITY>{},
+         Value<COORDINATES>{}, Value<VELOCITY>{},
          Value<INTERNAL_ENERGY>{},
          Value<COORDINATES0>{}, Gradient<COORDINATES0>{},
          Value<LAGRANGIAN_MANUFACTURED_TIME>{}, Weight{}
@@ -175,7 +546,7 @@ std::shared_ptr<DifferentiableOperator> CreateLagrangianObjective(
            INTERNAL_ENERGY> {};
       TaylorGreenLagrangianObjectiveQFunction<2> qf
       {
-         qconstants, final_time, terminal
+         final_time, terminal
       };
       objective->AddDomainIntegrator<
       backend_t, future::DerivativeKernels::ApplyTranspose>(
@@ -229,13 +600,13 @@ public:
    TaylorGreenLagrangianObjective(
       ParFiniteElementSpace &H1, ParFiniteElementSpace &L2,
       const Vector &initial_x, const IntegrationRule &ir,
-      const QConstants &qconstants, int qfunction_backend, real_t final_time) :
+      int qfunction_backend, real_t final_time) :
       initial_coordinates(initial_x), time_values(L2.GetTrueVSize()),
       output_ones(L2.GetTrueVSize()),
-      terminal(CreateLagrangianObjective(H1, L2, ir, qconstants,
-                                         qfunction_backend, final_time, true)),
-      running(CreateLagrangianObjective(H1, L2, ir, qconstants,
-                                        qfunction_backend, final_time, false))
+      terminal(CreateLagrangianObjective(H1, L2, ir, qfunction_backend,
+                                         final_time, true)),
+      running(CreateLagrangianObjective(H1, L2, ir, qfunction_backend,
+                                        final_time, false))
    {
       output_ones = 1.0;
    }
@@ -345,7 +716,6 @@ bool VerifyTaylorGreenLagrangianManufacturedAdjoint(
    ParGridFunction &material,
    const BlockVector &initial_state,
    const IntegrationRule &ir,
-   const QConstants &qconstants,
    int qfunction_backend,
    int ode_solver_type,
    LagrangianHydroOperator &hydro,
@@ -373,8 +743,7 @@ bool VerifyTaylorGreenLagrangianManufacturedAdjoint(
    }
 
    TaylorGreenLagrangianObjective objective(
-      H1, L2, initial_x, ir, qconstants,
-      qfunction_backend, final_time);
+      H1, L2, initial_x, ir, qfunction_backend, final_time);
    const auto terminal_gradient =
       [&](const TaylorGreenAdjointState &state, real_t time,
           TaylorGreenAdjointState &result)

@@ -10,7 +10,6 @@ namespace mfem::hydrodynamics
 {
 
 class LagrangianHydroOperator;
-struct QConstants;
 
 /// Run a fixed-step Taylor--Green manufactured-adjoint convergence sample
 /// whose exact adjoint and objective are defined directly in material
@@ -24,7 +23,6 @@ bool VerifyTaylorGreenLagrangianManufacturedAdjoint(
    ParGridFunction &material,
    const BlockVector &initial_state,
    const IntegrationRule &ir,
-   const QConstants &qconstants,
    int qfunction_backend,
    int ode_solver_type,
    LagrangianHydroOperator &hydro,

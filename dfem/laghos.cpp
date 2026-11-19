@@ -526,7 +526,7 @@ int laghos(int argc, char *argv[])
          passed =
             hydrodynamics::VerifyTaylorGreenLagrangianManufacturedAdjoint(
                H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
-               S, ir, qc, hydro_options.qfunction_backend, ode_solver_type,
+               S, ir, hydro_options.qfunction_backend, ode_solver_type,
                *hydro, tg_adjoint_dt, tg_adjoint_steps,
                tg_manufactured_refinements);
       }
