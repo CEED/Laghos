@@ -1,0 +1,615 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.45em plus 0.1em minus 0.05em}
+
+\title{Laghos Optimization}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Discrete adjoint for forward Euler}
+
+Let $u_n=(x_n,v_n,e_n)$ denote the discrete state at time step $n$,
+$p$ denote the optimization parameters, and
+$R(u,p)$ denote the right-hand side of $\frac{du}{dt}=R(u,p)$.
+For a fixed time step $\Delta t$, define the discrete forward operator $F_n$ by
+\begin{equation}
+  u_{n+1}=F_n(u_n,p)=u_n+\Delta t\,R(u_n,p).
+\end{equation}
+
+\noindent
+If $J(u_N,p)$ is the final objective, then the terminal discrete adjoint is:
+\begin{equation}
+  \lambda_N=\left(\frac{\partial J}{\partial u_N}\right)^T.
+\end{equation}
+For $n=N-1,\ldots,0$, we have:
+\begin{equation}
+\label{eq_back}
+\boxed{\lambda_n =
+\left(\frac{\partial F_n}{\partial u_n}\right)^T\lambda_{n+1}
+=\lambda_{n+1}
++\Delta t
+\left(\frac{\partial R}{\partial u_n}\right)^T\lambda_{n+1}.}
+\end{equation}
+
+\noindent
+The recurrence is applied one time step at a time until $\lambda_0$ is
+reached, and this is the gradient with respect to the initial state:
+$\lambda_0=\nabla_{u_0}J$.
+This is the core algorithm.
+
+\noindent
+For separate optimization parameters $p$, the total gradient is
+\[
+\boxed{
+\nabla_p J =
+\left(\frac{\partial J}{\partial p}\right)^T
++
+\left(\frac{\partial u_0}{\partial p}\right)^T\lambda_0
++
+\sum_{n=0}^{N-1}
+\left(\frac{\partial F_n}{\partial p}\right)^T\lambda_{n+1}.
+}
+\]
+
+\section{Verification of the discrete adjoint}
+\label{sec_verify}
+
+The following calculation is used to verify the derivative and its transpose.
+It is not an additional part of the optimization algorithm.
+Here $F_n$ denotes the complete discrete time-step map of the method being
+verified.
+Choose an arbitrary small perturbation $d_0$ of the initial state.
+Its effect on the state is propagated forward by differentiating the time step:
+\[
+  d_{n+1} = \frac{\partial F_n}{\partial u_n}d_n.
+\]
+Thus, $d_n$ is the directional derivative of $u_n$ with respect to the chosen
+initial perturbation.
+
+Independently, choose an arbitrary vector $\lambda_N$ at the final time
+and propagate it backward with the corresponding discrete-adjoint recurrence
+\[
+ \lambda_n=
+ \left(\frac{\partial F_n}{\partial u_n}\right)^T\lambda_{n+1}.
+\]
+Because the tangent (linearized forward) operator and the discrete-adjoint operator
+are transposes of one another,
+they must satisfy this relation:
+\[
+  \boxed{\lambda_N^T d_N=\lambda_0^T d_0.}
+\]
+This identity is the discrete tangent/adjoint transpose test.
+It does not involve the objective.
+A failure indicates that the implemented Jacobian-vector product or
+transpose-Jacobian-vector product is incorrect.
+
+\section{Discrete adjoint for RK2Avg}
+
+Following the notation of the Laghos discretization, let
+\[
+ Y=(x;v;e)
+\]
+be the hydrodynamic state.  The semidiscrete equations are
+\[
+ \frac{dY}{dt}=\mathcal F(Y,t),
+ \qquad
+ \mathcal F(Y,t)=
+ \begin{pmatrix}
+  \mathcal F_x(x,v,e)\\
+  \mathcal F_v(x,v,e)\\
+  \mathcal F_e(x,v,e)
+ \end{pmatrix}
+ =
+ \begin{pmatrix}
+  v\\
+  -M_V^{-1}F\mathbf 1\\
+  M_E^{-1}\bigl(F^Tv+S(x)\bigr)
+ \end{pmatrix},
+\]
+where $M_V$ and $M_E$ are the velocity and energy mass matrices and $F$ is
+the force operator, while $S(x)$ is the Taylor--Green energy-source load.
+In this notation, one RK2Avg step is
+\begin{align}
+ v^{n+\frac12}
+ &=v^n-\frac{\Delta t}{2}M_V^{-1}F^n\mathbf 1,
+ &
+ v^{n+1}
+ &=v^n-\Delta t\,M_V^{-1}F^{n+\frac12}\mathbf 1,
+ \\
+ e^{n+\frac12}
+ &=e^n+\frac{\Delta t}{2}M_E^{-1}
+ \left((F^n)^Tv^{n+\frac12}+S^n\right),
+ &
+ e^{n+1}
+ &=e^n+\Delta t\,M_E^{-1}
+ \left((F^{n+\frac12})^T\bar v^{n+\frac12}+S^{n+\frac12}\right),
+ \\
+ x^{n+\frac12}
+ &=x^n+\frac{\Delta t}{2}v^{n+\frac12},
+ &
+ x^{n+1}
+ &=x^n+\Delta t\,\bar v^{n+\frac12},
+\end{align}
+where
+\[
+ F^k=F(Y^k),
+ \qquad
+ S^k=S(x^k),
+ \qquad
+ \bar v^{n+\frac12}=\frac{v^n+v^{n+1}}{2}.
+\]
+Thus both force evaluations and both source evaluations must be
+differentiated.  Since $S$ depends on the coordinates, its discrete adjoint
+contributes to $x^n$ or $x^{n+\frac12}$.  In addition, the final energy and
+position updates depend on the averaged velocity $\bar v^{n+\frac12}$, so their
+discrete adjoints contribute to both $v^n$ and $v^{n+1}$.
+
+For any intermediate operation $y=f(z)$, its reverse operation is
+\[
+ \lambda_z\mathrel{+}=
+ \left(\frac{\partial f}{\partial z}\right)^T\lambda_y.
+\]
+Let $\mathcal M_n$ denote the complete midpoint-update operator and let
+$\mathcal G_n$ denote the complete final-update operator, so that
+\[
+ Y^{n+\frac12}=\mathcal M_n(Y^n),
+ \qquad
+ Y^{n+1}=\mathcal G_n(Y^n,Y^{n+\frac12}).
+\]
+The two arguments of $\mathcal G_n$ are treated as independent when taking
+its partial derivatives.  Reversing the final-update operator first produces
+the midpoint discrete adjoint
+\[
+ \lambda_{n+\frac12}=
+ \left(\frac{\partial\mathcal G_n}{\partial Y^{n+\frac12}}\right)^T
+ \lambda_{n+1}.
+\]
+The discrete adjoint at the beginning of the step is then the sum of the direct path
+through the final updates and the path through the midpoint updates:
+\[
+ \boxed{
+ \lambda_n=
+ \underbrace{
+ \left(\frac{\partial\mathcal G_n}{\partial Y^n}\right)^T
+ \lambda_{n+1}}_{\text{direct final-update path}}
+ +
+ \underbrace{
+ \left(\frac{\partial\mathcal M_n}{\partial Y^n}\right)^T
+ \lambda_{n+\frac12}}_{\text{midpoint path}}.}
+\]
+The first term includes the direct copy of $Y^n$ into $Y^{n+1}$ and all
+other direct uses of the initial stage in the final updates.  Each term is
+itself accumulated operation by operation through the velocity, energy, and
+force and source calculations.  The midpoint evaluations are differentiated
+before the initial-stage evaluations.  The required forward stage values
+must either be stored or reconstructed from checkpoints.
+
+\section{Discrete adjoint for classical RK4}
+
+The classical fourth-order Runge--Kutta step is written
+\begin{align}
+ Y_1&=Y^n,
+&K_1&=R(Y_1),\\
+ Y_2&=Y^n+\frac{\Delta t}{2}K_1,
+&K_2&=R(Y_2),\\
+ Y_3&=Y^n+\frac{\Delta t}{2}K_2,
+&K_3&=R(Y_3),\\
+ Y_4&=Y^n+\Delta t K_3,
+&K_4&=R(Y_4),\\
+ Y^{n+1}&=Y^n+\Delta t\left(
+ \frac16K_1+\frac13K_2+\frac13K_3+\frac16K_4\right).
+\end{align}
+Here $R$ is the semidiscrete right-hand side for $Y=(x,v,e)^T$.
+Reversing the final weighted sum first initializes the four discrete rate adjoints:
+\[
+ \lambda_{K_1}=\frac{\Delta t}{6}\lambda_{n+1},\qquad
+ \lambda_{K_2}=\frac{\Delta t}{3}\lambda_{n+1},\qquad
+ \lambda_{K_3}=\frac{\Delta t}{3}\lambda_{n+1},\qquad
+ \lambda_{K_4}=\frac{\Delta t}{6}\lambda_{n+1}.
+\]
+The stages are then visited in reverse order:
+\begin{align}
+ \lambda_{Y_4}
+ &=\left(\frac{\partial R}{\partial Y_4}\right)^T\lambda_{K_4},
+ &\lambda_{K_3}&\mathrel{+}=\Delta t\,\lambda_{Y_4},\\
+ \lambda_{Y_3}
+ &=\left(\frac{\partial R}{\partial Y_3}\right)^T\lambda_{K_3},
+ &\lambda_{K_2}&\mathrel{+}=\frac{\Delta t}{2}\lambda_{Y_3},\\
+ \lambda_{Y_2}
+ &=\left(\frac{\partial R}{\partial Y_2}\right)^T\lambda_{K_2},
+ &\lambda_{K_1}&\mathrel{+}=\frac{\Delta t}{2}\lambda_{Y_2},\\
+ \lambda_{Y_1}
+ &=\left(\frac{\partial R}{\partial Y_1}\right)^T\lambda_{K_1}.
+\end{align}
+Since every stage state depends directly on $Y^n$, the discrete adjoint at the
+beginning of the step is the sum of the direct path and the four stage paths:
+\[
+ \boxed{
+ \lambda_n=\lambda_{n+1}
+ +\lambda_{Y_1}+\lambda_{Y_2}+\lambda_{Y_3}+\lambda_{Y_4}.}
+\]
+The four forward stage states must be stored or reconstructed before this
+reverse calculation.
+
+\section{Direct Lagrangian manufactured adjoint}
+
+The transpose test in Section~\ref{sec_verify} verifies an algebraic identity
+for the discrete operator, but it does not show that the discrete adjoint
+converges to a continuous adjoint.  A manufactured-adjoint test supplies that
+second verification.
+
+In a standard optimization problem, the objective is chosen first and the
+adjoint is derived from it.  The manufactured test reverses this process: it
+linearizes the continuous equations, prescribes a smooth analytic adjoint,
+and uses the continuous adjoint equation to construct the required terminal
+and running objectives.  The computed discrete adjoint can then be compared
+with the known analytic adjoint at the initial time.
+
+Here the entire construction is carried out directly in material
+coordinates.  Let
+$x^0=(x_1^0,x_2^0)\in\Omega_0$ denote the initial position of a material
+point.  At time $t$, this point has moved to
+$x(x^0,t)=(x_1,x_2)$.  Thus the whole current position vector is denoted by
+$x$, and its initial value by $x^0$.  The Lagrangian state is
+\[
+ u^L(x^0,t)=(x(x^0,t),v(x^0,t),e(x^0,t)).
+\]
+The exact fields
+$(\lambda_x^L)^\star$, $(\lambda_v^L)^\star$, and
+$(\lambda_e^L)^\star$ are prescribed directly as functions of $(x^0,t)$; no
+change of frame is part of the adjoint construction.
+
+\subsection{Exact mesh positions and solution}
+
+The exact Lagrangian position follows the stationary Taylor--Green velocity:
+\[
+ \frac{\partial x_1^\star}{\partial t}
+ =\sin(\pi x_1^\star)\cos(\pi x_2^\star),
+ \qquad
+ \frac{\partial x_2^\star}{\partial t}
+ =-\cos(\pi x_1^\star)\sin(\pi x_2^\star),
+ \qquad x^\star(x^0,0)=x^0.
+\]
+These two coupled equations, together with the initial position $x^0$,
+define the exact mesh trajectory.
+The solution can be written in a closed form.
+The derivation of this closed-form trajectory is lengthy and is not included
+in these notes.
+
+For an interior material point, define
+\[
+ c=\sin(\pi x_1^0)\sin(\pi x_2^0),\qquad m=1-c^2,
+\]
+\[
+ \theta_0=\operatorname{atan2}\!\left(
+ \cos(\pi x_1^0),
+ \sin(\pi x_1^0)\cos(\pi x_2^0)\right),
+ \qquad q_0=F(\theta_0\mid m),
+\]
+where $F$ is the incomplete elliptic integral of the first kind.  With
+$q=q_0-\pi t$, the exact positions are
+\begin{equation}
+ \boxed{
+ \begin{aligned}
+ x_1^\star(x^0,t)
+ &=\frac{1}{\pi}\arccos\!\left(
+ \sqrt m\,\operatorname{sn}(q\mid m)\right),\\
+ x_2^\star(x^0,t)
+ &=\frac{1}{\pi}\arccos\!\left(
+ \sqrt m\,\frac{\operatorname{cn}(q\mid m)}
+ {\operatorname{dn}(q\mid m)}\right).
+ \end{aligned}}
+ \label{eq:exact-lagrangian-flow-map}
+\end{equation}
+Here $\operatorname{sn}$, $\operatorname{cn}$, and $\operatorname{dn}$ are
+the Jacobi elliptic functions with parameter $m$.  The use of
+$\operatorname{atan2}$ selects the correct branch around the orbit.  The
+vortex center is stationary, and boundary trajectories have the
+corresponding elementary limiting formulas.
+
+Along the material trajectory, the exact velocity, pressure, and specific
+internal energy are
+\[
+ v^{L,\star}(x^0,t)=
+ \begin{pmatrix}
+  \sin(\pi x_1^\star)\cos(\pi x_2^\star)\\
+  -\cos(\pi x_1^\star)\sin(\pi x_2^\star)
+ \end{pmatrix},
+\]
+\[
+ p^{L,\star}(x^0,t)
+ =1+\frac14\left(\cos(2\pi x_1^\star)+\cos(2\pi x_2^\star)\right),
+ \qquad
+ e^{L,\star}(x^0,t)=\frac{p^{L,\star}(x^0,t)}{\gamma-1}.
+\]
+The deformation gradient
+$G^\star=\nabla_{x^0}x^\star$ is obtained by differentiating the closed-form
+trajectory.  Equivalently, it satisfies
+\[
+ \frac{\partial G^\star}{\partial t}
+ =\nabla_x v^\star(x^\star)G^\star,
+ \qquad G^\star(x^0,0)=I,
+\]
+which provides a separate check on the analytic derivatives.  Since the
+Taylor--Green velocity is divergence-free, its determinant satisfies
+$|G^\star|=1$.
+
+\subsection{Lagrangian equations and their linearization}
+
+For the Taylor--Green problem, the reference density is $\rho_0=1$.  Define
+\[
+ G=\nabla_{x^0}x,\qquad H=G^{-T}.
+\]
+For an ideal gas without viscosity, the first Piola stress is
+\[
+ P=|G|\sigma G^{-T}=-(\gamma-1)eH.
+\]
+The cancellation of $|G|$ follows from
+$p=(\gamma-1)\rho e$ and $\rho=1/|G|$.  Written entirely on the fixed material
+domain, the forward equations are
+\begin{align}
+ \partial_t x&=v,\label{eq:direct-lagrangian-x}\\
+ \partial_t v&=\operatorname{Div}_{x^0}P,
+ \label{eq:direct-lagrangian-v}\\
+ \partial_t e&=P:\nabla_{x^0}v+|G|f^\star(x).
+ \label{eq:direct-lagrangian-e}
+\end{align}
+Here $\operatorname{Div}_{x^0}$ acts rowwise.  The prescribed spatial source is
+\[
+ f^\star(x)=\frac{3\pi}{8}\left[
+ \cos(3\pi x_1)\cos(\pi x_2)
+ -\cos(\pi x_1)\cos(3\pi x_2)\right].
+\]
+Its material pullback $|G|f^\star(x(x^0,t))$ depends on the particle position and
+must therefore be differentiated with respect to $x$.
+
+Let $\delta x$, $\delta v$, and $\delta e$ be perturbations at fixed material
+coordinate.  The geometric variations are
+\[
+ \delta G=\nabla_{x^0}\delta x,
+ \qquad
+ \delta|G|=|G|H:\nabla_{x^0}\delta x,
+ \qquad
+ \delta H=-H(\nabla_{x^0}\delta x)^TH.
+\]
+Consequently,
+\[
+ \delta P=-(\gamma-1)
+ \left[\delta e\,H-eH(\nabla_{x^0}\delta x)^TH\right].
+\]
+Linearizing Equations~\eqref{eq:direct-lagrangian-x}--
+\eqref{eq:direct-lagrangian-e} gives
+\begin{align}
+ \partial_t\delta x&=\delta v,\\
+ \partial_t\delta v&=\operatorname{Div}_{x^0}\delta P,\\
+ \partial_t\delta e
+ &=\delta P:\nabla_{x^0}v+P:\nabla_{x^0}\delta v
+   +|G|f^\star H:\nabla_{x^0}\delta x
+   +|G|\nabla_x f^\star\mathbin{\cdot}\delta x.
+\end{align}
+Denote the right-hand side of this linearized system by
+$\mathcal A^L\delta u^L$.
+
+\subsection{Direct Lagrangian transpose operator}
+
+Use the fixed material-domain pairing
+\[
+ \langle\lambda^L,\delta u^L\rangle_0
+ =\int_{\Omega_0}\left(
+ \lambda_x^L\mathbin{\cdot}\delta x
+ +\lambda_v^L\mathbin{\cdot}\delta v
+ +\lambda_e^L\delta e\right)dx^0.
+\]
+Assume that the boundary terms generated below vanish.  Introduce
+\[
+ B=-\nabla_{x^0}\lambda_v^L+\lambda_e^L\nabla_{x^0}v.
+\]
+Substitution of $\delta P$ into
+$\langle\lambda^L,\mathcal A^L\delta u^L\rangle_0$ and integration by parts
+give the direct Lagrangian transpose operator
+\begin{equation}
+ \boxed{
+ (\mathcal A^L)^T\lambda^L=
+ \begin{pmatrix}
+ -\operatorname{Div}_{x^0}\!\left(
+ (\gamma-1)eHB^TH+\lambda_e^L|G|f^\star H\right)
+ +\lambda_e^L|G|\nabla_xf^\star\\[2mm]
+ \lambda_x^L-\operatorname{Div}_{x^0}(\lambda_e^LP)\\[2mm]
+ -(\gamma-1)B:H
+ \end{pmatrix}.}
+ \label{eq:direct-lagrangian-transpose}
+\end{equation}
+Every quantity in Equation~\eqref{eq:direct-lagrangian-transpose} is expressed
+in material coordinates.  In particular, no independent density adjoint or
+change-of-frame formula is introduced.
+
+\subsection{Direct manufactured adjoint}
+
+Define
+\[
+ \psi(x^0)=\sin^6(\pi x_1^0)\sin^6(\pi x_2^0),
+ \qquad \tau=\frac{t}{T},
+\]
+and prescribe the exact Lagrangian adjoint directly by
+\[
+ \begin{aligned}
+ (\lambda_x^L)^\star(x^0,t)
+ &=(1+\tau)\psi(x^0)
+ \begin{pmatrix}1\\-1\end{pmatrix},\\
+ (\lambda_v^L)^\star(x^0,t)
+ &=(1+2\tau)\psi(x^0)
+ \begin{pmatrix}1\\-1\end{pmatrix},\\
+ (\lambda_e^L)^\star(x^0,t)&=(1+3\tau)\psi(x^0).
+ \end{aligned}
+\]
+These fields and their leading normal derivatives vanish on the material
+boundary.  This stronger boundary compatibility matters because
+$\lambda_e^L$ is represented in the discontinuous thermodynamic space.  If
+$\psi$ vanishes only quadratically, the boundary-trace error of its
+discontinuous projection enters the coordinate covector and can dominate
+the interior approximation error.  In numerical experiments with
+$\sin^2(\pi x_1^0)\sin^2(\pi x_2^0)$, this gives coordinate-adjoint rates close
+to $1.5$ for Q2--Q1 and $3.5$ for Q4--Q3.  Sixth-order vanishing makes that
+trace contribution higher order for both pairs considered here, allowing
+the coupled spatial and temporal accuracy to determine the measured rate.
+
+Evaluate Equation~\eqref{eq:direct-lagrangian-transpose} on the analytic
+trajectory in Equation~\eqref{eq:exact-lagrangian-flow-map} and define
+\begin{equation}
+ \boxed{
+ g^L=-\frac{\partial(\lambda^L)^\star}{\partial t}
+ -(\mathcal A^L)^T(\lambda^L)^\star.}
+ \label{eq:direct-lagrangian-running-gradient}
+\end{equation}
+This defines the running-objective gradient entirely from analytic fields.
+It contains no numerical Laghos residual.
+
+\subsection{Analytic objective used by the implementation}
+
+Using the material-domain pairing above, define the terminal and running
+objectives by
+\begin{align}
+ J_T^L(u^L(T))
+ &=\langle(\lambda^L)^\star(T),u^L(T)\rangle_0,\\
+ L^L(u^L,t)
+ &=\langle g^L(t),u^L(t)\rangle_0,\\
+ J^L(u^L)&=J_T^L(u^L(T))+\int_0^T L^L(u^L,t)\,dt.
+\end{align}
+Consequently,
+\[
+ \left(\frac{\partial L^L}{\partial u^L}\right)^T
+ =g^L.
+\]
+One may replace $u^L$ by $u^L-u^{L,\star}$ in these linear functionals; the
+objective value changes, but its gradient and the manufactured adjoint do
+not.
+
+The implementation evaluates the exact flow map, its deformation gradient,
+and the material derivatives needed in
+Equation~\eqref{eq:direct-lagrangian-transpose} directly from the analytic
+formulas.  Jacobi addition identities reduce the evaluation at
+$q_0-\pi t$ to known values at $q_0$ and Jacobi functions at the small
+argument $\pi t$.  The latter are evaluated to roundoff by their analytic
+power series.  This is numerical evaluation of a closed-form function, not
+time integration of the reference trajectory.  Most importantly, neither
+the discrete Laghos residual $R_h$ nor its derivative is used to construct
+$g^L$; dFEM is used only to backpropagate the numerical Laghos time steps.
+
+\subsection{Time discretization of the running objective}
+
+The time integral in the manufactured objective must be discretized
+consistently with the forward method.  For RK2Avg, the trapezoidal rule gives
+\[
+ J_h^L=J_T^L(u_N)+\Delta t\left[
+ \frac12L^L(u_0,0)+\sum_{n=1}^{N-1}L^L(u_n,t_n)
+ +\frac12L^L(u_N,T)\right].
+\]
+If $\mathcal T_n^{\mathrm{RK2Avg}}$ denotes one complete RK2Avg step, the
+terminal value and backward recurrence become
+\[
+ \lambda_N=\left(\frac{\partial J_T^L}{\partial u_N}\right)^T
+ +\frac{\Delta t}{2}
+ \left(\frac{\partial L^L(u_N,T)}{\partial u_N}\right)^T,
+\]
+\[
+ \lambda_n=
+ \left(\frac{\partial\mathcal T_n^{\mathrm{RK2Avg}}}
+ {\partial u_n}\right)^T\lambda_{n+1}
+ +\Delta t\,w_n
+ \left(\frac{\partial L^L(u_n,t_n)}{\partial u_n}\right)^T,
+ \qquad w_0=\frac12,\quad w_n=1\quad(n>0).
+\]
+
+For classical RK4, the running objective is evaluated at the four RK stage
+states with the RK weights:
+\begin{align*}
+ J_h^L=J_T^L(Y^N)+\Delta t\sum_{n=0}^{N-1}\bigg[&
+ \frac16L^L(Y_1^n,t_n)
+ +\frac13L^L(Y_2^n,t_n+\Delta t/2)\\
+ &+\frac13L^L(Y_3^n,t_n+\Delta t/2)
+ +\frac16L^L(Y_4^n,t_n+\Delta t)\bigg].
+\end{align*}
+The gradient of each stage contribution is inserted into the reverse RK4
+calculation with the same weight.  A trapezoidal approximation of the
+running objective would reduce the RK4 verification to second-order temporal
+accuracy.
+
+After the reverse sweep, each algebraic covector is converted to an adjoint
+field with the corresponding mass matrix.  The computed initial field is
+compared with
+\[
+ (\lambda_x^L)^\star(x^0,0)=\psi(x^0)\begin{pmatrix}1\\-1\end{pmatrix},
+ \qquad
+ (\lambda_v^L)^\star(x^0,0)=\psi(x^0)\begin{pmatrix}1\\-1\end{pmatrix},
+ \qquad
+ (\lambda_e^L)^\star(x^0,0)=\psi(x^0).
+\]
+This compares the native Lagrangian discrete adjoint directly with its
+continuous manufactured counterpart.
+
+\subsection{Convergence results}
+
+Space and time are refined together at fixed final time $T=0.05$, beginning
+at spatial refinement level two with $\Delta t=10^{-3}$.  Each additional
+spatial refinement halves $\Delta t$.  The combined error is the quadrature
+sum of the $L^2$ errors in the initial coordinate, velocity, and energy
+adjoints.
+
+For a smooth, boundary-compatible adjoint, the Q2--Q1 pair supplies at least
+second-order accuracy in the lowest-order block, while the Q4--Q3 pair
+supplies at least fourth-order accuracy.  Since $\Delta t$ is proportional
+to the mesh size, the RK2Avg and RK4 time errors have those same respective
+orders.  The expected coupled rates are therefore two and four.
+
+For RK2Avg with Q2 velocity/coordinates and Q1 energy, the results are
+\[
+\begin{array}{c|c|c|c}
+ \text{refinement} & \Delta t & \text{combined error} &
+ \text{observed order}\\ \hline
+ 2 & 1.0\times10^{-3}  & 2.7204\times10^{-1} & -\\
+ 3 & 5.0\times10^{-4}  & 6.6040\times10^{-2} & 2.04\\
+ 4 & 2.5\times10^{-4}  & 2.0131\times10^{-2} & 1.71\\
+ 5 & 1.25\times10^{-4} & 4.7521\times10^{-3} & 2.08\\
+ 6 & 6.25\times10^{-5} & 1.2174\times10^{-3} & 1.96
+\end{array}
+\]
+The coarse levels are pre-asymptotic, while the finest transitions verify
+the expected second-order coupled behavior.
+
+This is also consistent with the second-order Taylor--Green study that
+motivates the test.  For its B2--B1 discretization without viscosity, that
+study reports successive velocity-error rates $1.59$, $1.81$, $1.72$, and
+$1.98$ on the $8^2$ through $64^2$ meshes.  The measured quantities are not
+identical---the study measures a forward velocity error, whereas the table
+above combines three initial-adjoint errors---so the individual rates need
+not coincide.  The relevant comparison is that both calculations recover
+the expected second-order asymptotic behavior after similar pre-asymptotic
+variation.
+
+For classical RK4 with Q4 velocity/coordinates and Q3 energy, the results
+are
+\[
+\begin{array}{c|c|c|c}
+ \text{refinement} & \Delta t & \text{combined error} &
+ \text{observed order}\\ \hline
+ 2 & 1.0\times10^{-3}  & 2.6529\times10^{-2} & -\\
+ 3 & 5.0\times10^{-4}  & 2.5206\times10^{-3} & 3.40\\
+ 4 & 2.5\times10^{-4}  & 1.3248\times10^{-4} & 4.25\\
+ 5 & 1.25\times10^{-4} & 7.4316\times10^{-6} & 4.16
+\end{array}
+\]
+The finest transition verifies the expected fourth-order coupled behavior.
+The direct construction reaches the order of each time integrator.  Thus the
+lower coordinate rates obtained with the quadratically vanishing trial
+function were a boundary-trace compatibility effect, not an inherent
+limitation of the native Lagrangian discrete adjoint.
+
+\end{document}
