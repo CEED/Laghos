@@ -346,11 +346,11 @@ $|G^\star|=1$.
 
 For the Taylor--Green problem, the reference density is $\rho_0=1$.  Define
 \[
- G=\nabla_{x^0}x,\qquad H=G^{-T}.
+ G=\nabla_{x^0}x.
 \]
 For an ideal gas without viscosity, the first Piola stress is
 \[
- P=|G|\sigma G^{-T}=-(\gamma-1)eH.
+ P=|G|\sigma G^{-T}=-(\gamma-1)eG^{-T}.
 \]
 The cancellation of $|G|$ follows from
 $p=(\gamma-1)\rho e$ and $\rho=1/|G|$.  Written entirely on the fixed material
@@ -376,14 +376,15 @@ coordinate.  The geometric variations are
 \[
  \delta G=\nabla_{x^0}\delta x,
  \qquad
- \delta|G|=|G|H:\nabla_{x^0}\delta x,
+ \delta|G|=|G|G^{-T}:\nabla_{x^0}\delta x,
  \qquad
- \delta H=-H(\nabla_{x^0}\delta x)^TH.
+ \delta(G^{-T})=-G^{-T}(\nabla_{x^0}\delta x)^TG^{-T}.
 \]
 Consequently,
 \[
  \delta P=-(\gamma-1)
- \left[\delta e\,H-eH(\nabla_{x^0}\delta x)^TH\right].
+ \left[\delta e\,G^{-T}
+ -eG^{-T}(\nabla_{x^0}\delta x)^TG^{-T}\right].
 \]
 Linearizing Equations~\eqref{eq:direct-lagrangian-x}--
 \eqref{eq:direct-lagrangian-e} gives
@@ -392,11 +393,13 @@ Linearizing Equations~\eqref{eq:direct-lagrangian-x}--
  \partial_t\delta v&=\operatorname{Div}_{x^0}\delta P,\\
  \partial_t\delta e
  &=\delta P:\nabla_{x^0}v+P:\nabla_{x^0}\delta v
-   +|G|f^\star H:\nabla_{x^0}\delta x
+   +|G|f^\star G^{-T}:\nabla_{x^0}\delta x
    +|G|\nabla_x f^\star\mathbin{\cdot}\delta x.
 \end{align}
 Denote the right-hand side of this linearized system by
 $\mathcal A^L\delta u^L$.
+Thus $\mathcal A^L$ describes the instantaneous forward propagation of small
+perturbations, or sensitivities, through the coupled Lagrangian equations.
 
 \subsection{Direct Lagrangian transpose operator}
 
@@ -420,10 +423,11 @@ give the direct Lagrangian transpose operator
  (\mathcal A^L)^T\lambda^L=
  \begin{pmatrix}
  -\operatorname{Div}_{x^0}\!\left(
- (\gamma-1)eHB^TH+\lambda_e^L|G|f^\star H\right)
+ (\gamma-1)eG^{-T}B^TG^{-T}
+ +\lambda_e^L|G|f^\star G^{-T}\right)
  +\lambda_e^L|G|\nabla_xf^\star\\[2mm]
  \lambda_x^L-\operatorname{Div}_{x^0}(\lambda_e^LP)\\[2mm]
- -(\gamma-1)B:H
+ -(\gamma-1)B:G^{-T}
  \end{pmatrix}.}
  \label{eq:direct-lagrangian-transpose}
 \end{equation}
