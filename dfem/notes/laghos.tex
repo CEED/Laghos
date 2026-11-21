@@ -260,11 +260,11 @@ point.  At time $t$, this point has moved to
 $x(x^0,t)=(x_1,x_2)$.  Thus the whole current position vector is denoted by
 $x$, and its initial value by $x^0$.  The Lagrangian state is
 \[
- u^L(x^0,t)=(x(x^0,t),v(x^0,t),e(x^0,t)).
+ u(x^0,t)=(x(x^0,t),v(x^0,t),e(x^0,t)).
 \]
 The exact fields
-$(\lambda_x^L)^\star$, $(\lambda_v^L)^\star$, and
-$(\lambda_e^L)^\star$ are prescribed directly as functions of $(x^0,t)$; no
+$\lambda_x^\star$, $\lambda_v^\star$, and
+$\lambda_e^\star$ are prescribed directly as functions of $(x^0,t)$; no
 change of frame is part of the adjoint construction.
 
 \subsection{Exact mesh positions and solution}
@@ -318,17 +318,17 @@ corresponding elementary limiting formulas.
 Along the material trajectory, the exact velocity, pressure, and specific
 internal energy are
 \[
- v^{L,\star}(x^0,t)=
+ v^\star(x^0,t)=
  \begin{pmatrix}
   \sin(\pi x_1^\star)\cos(\pi x_2^\star)\\
   -\cos(\pi x_1^\star)\sin(\pi x_2^\star)
  \end{pmatrix},
 \]
 \[
- p^{L,\star}(x^0,t)
+ p^\star(x^0,t)
  =1+\frac14\left(\cos(2\pi x_1^\star)+\cos(2\pi x_2^\star)\right),
  \qquad
- e^{L,\star}(x^0,t)=\frac{p^{L,\star}(x^0,t)}{\gamma-1}.
+ e^\star(x^0,t)=\frac{p^\star(x^0,t)}{\gamma-1}.
 \]
 The deformation gradient
 $G^\star=\nabla_{x^0}x^\star$ is obtained by differentiating the closed-form
@@ -397,36 +397,36 @@ Linearizing Equations~\eqref{eq:direct-lagrangian-x}--
    +|G|\nabla_x f^\star\mathbin{\cdot}\delta x.
 \end{align}
 Denote the right-hand side of this linearized system by
-$\mathcal A^L\delta u^L$.
-Thus $\mathcal A^L$ describes the instantaneous forward propagation of small
+$\mathcal A\delta u$.
+Thus $\mathcal A$ describes the instantaneous forward propagation of small
 perturbations, or sensitivities, through the coupled Lagrangian equations.
 
 \subsection{Direct Lagrangian transpose operator}
 
 Use the fixed material-domain pairing
 \[
- \langle\lambda^L,\delta u^L\rangle_0
+ \langle\lambda,\delta u\rangle_0
  =\int_{\Omega_0}\left(
- \lambda_x^L\mathbin{\cdot}\delta x
- +\lambda_v^L\mathbin{\cdot}\delta v
- +\lambda_e^L\delta e\right)dx^0.
+ \lambda_x\mathbin{\cdot}\delta x
+ +\lambda_v\mathbin{\cdot}\delta v
+ +\lambda_e\delta e\right)dx^0.
 \]
 Assume that the boundary terms generated below vanish.  Introduce
 \[
- B=-\nabla_{x^0}\lambda_v^L+\lambda_e^L\nabla_{x^0}v.
+ B=-\nabla_{x^0}\lambda_v+\lambda_e\nabla_{x^0}v.
 \]
 Substitution of $\delta P$ into
-$\langle\lambda^L,\mathcal A^L\delta u^L\rangle_0$ and integration by parts
+$\langle\lambda,\mathcal A\delta u\rangle_0$ and integration by parts
 give the direct Lagrangian transpose operator
 \begin{equation}
  \boxed{
- (\mathcal A^L)^T\lambda^L=
+ \mathcal A^T\lambda=
  \begin{pmatrix}
  -\operatorname{Div}_{x^0}\!\left(
  (\gamma-1)eG^{-T}B^TG^{-T}
- +\lambda_e^L|G|f^\star G^{-T}\right)
- +\lambda_e^L|G|\nabla_xf^\star\\[2mm]
- \lambda_x^L-\operatorname{Div}_{x^0}(\lambda_e^LP)\\[2mm]
+ +\lambda_e|G|f^\star G^{-T}\right)
+ +\lambda_e|G|\nabla_xf^\star\\[2mm]
+ \lambda_x-\operatorname{Div}_{x^0}(\lambda_eP)\\[2mm]
  -(\gamma-1)B:G^{-T}
  \end{pmatrix}.}
  \label{eq:direct-lagrangian-transpose}
@@ -445,18 +445,18 @@ Define
 and prescribe the exact Lagrangian adjoint directly by
 \[
  \begin{aligned}
- (\lambda_x^L)^\star(x^0,t)
+ \lambda_x^\star(x^0,t)
  &=(1+\tau)\psi(x^0)
  \begin{pmatrix}1\\-1\end{pmatrix},\\
- (\lambda_v^L)^\star(x^0,t)
+ \lambda_v^\star(x^0,t)
  &=(1+2\tau)\psi(x^0)
  \begin{pmatrix}1\\-1\end{pmatrix},\\
- (\lambda_e^L)^\star(x^0,t)&=(1+3\tau)\psi(x^0).
+ \lambda_e^\star(x^0,t)&=(1+3\tau)\psi(x^0).
  \end{aligned}
 \]
 These fields and their leading normal derivatives vanish on the material
 boundary.  This stronger boundary compatibility matters because
-$\lambda_e^L$ is represented in the discontinuous thermodynamic space.  If
+$\lambda_e$ is represented in the discontinuous thermodynamic space.  If
 $\psi$ vanishes only quadratically, the boundary-trace error of its
 discontinuous projection enters the coordinate covector and can dominate
 the interior approximation error.  In numerical experiments with
@@ -469,8 +469,8 @@ Evaluate Equation~\eqref{eq:direct-lagrangian-transpose} on the analytic
 trajectory in Equation~\eqref{eq:exact-lagrangian-flow-map} and define
 \begin{equation}
  \boxed{
- g^L=-\frac{\partial(\lambda^L)^\star}{\partial t}
- -(\mathcal A^L)^T(\lambda^L)^\star.}
+ g=-\frac{\partial\lambda^\star}{\partial t}
+ -\mathcal A^T\lambda^\star.}
  \label{eq:direct-lagrangian-running-gradient}
 \end{equation}
 This defines the running-objective gradient entirely from analytic fields.
@@ -481,18 +481,18 @@ It contains no numerical Laghos residual.
 Using the material-domain pairing above, define the terminal and running
 objectives by
 \begin{align}
- J_T^L(u^L(T))
- &=\langle(\lambda^L)^\star(T),u^L(T)\rangle_0,\\
- L^L(u^L,t)
- &=\langle g^L(t),u^L(t)\rangle_0,\\
- J^L(u^L)&=J_T^L(u^L(T))+\int_0^T L^L(u^L,t)\,dt.
+ J_T(u(T))
+ &=\langle\lambda^\star(T),u(T)\rangle_0,\\
+ L(u,t)
+ &=\langle g(t),u(t)\rangle_0,\\
+ J(u)&=J_T(u(T))+\int_0^T L(u,t)\,dt.
 \end{align}
 Consequently,
 \[
- \left(\frac{\partial L^L}{\partial u^L}\right)^T
- =g^L.
+ \left(\frac{\partial L}{\partial u}\right)^T
+ =g.
 \]
-One may replace $u^L$ by $u^L-u^{L,\star}$ in these linear functionals; the
+One may replace $u$ by $u-u^\star$ in these linear functionals; the
 objective value changes, but its gradient and the manufactured adjoint do
 not.
 
@@ -505,41 +505,41 @@ argument $\pi t$.  The latter are evaluated to roundoff by their analytic
 power series.  This is numerical evaluation of a closed-form function, not
 time integration of the reference trajectory.  Most importantly, neither
 the discrete Laghos residual $R_h$ nor its derivative is used to construct
-$g^L$; dFEM is used only to backpropagate the numerical Laghos time steps.
+$g$; dFEM is used only to backpropagate the numerical Laghos time steps.
 
 \subsection{Time discretization of the running objective}
 
 The time integral in the manufactured objective must be discretized
 consistently with the forward method.  For RK2Avg, the trapezoidal rule gives
 \[
- J_h^L=J_T^L(u_N)+\Delta t\left[
- \frac12L^L(u_0,0)+\sum_{n=1}^{N-1}L^L(u_n,t_n)
- +\frac12L^L(u_N,T)\right].
+ J_h=J_T(u_N)+\Delta t\left[
+ \frac12L(u_0,0)+\sum_{n=1}^{N-1}L(u_n,t_n)
+ +\frac12L(u_N,T)\right].
 \]
 If $\mathcal T_n^{\mathrm{RK2Avg}}$ denotes one complete RK2Avg step, the
 terminal value and backward recurrence become
 \[
- \lambda_N=\left(\frac{\partial J_T^L}{\partial u_N}\right)^T
+ \lambda_N=\left(\frac{\partial J_T}{\partial u_N}\right)^T
  +\frac{\Delta t}{2}
- \left(\frac{\partial L^L(u_N,T)}{\partial u_N}\right)^T,
+ \left(\frac{\partial L(u_N,T)}{\partial u_N}\right)^T,
 \]
 \[
  \lambda_n=
  \left(\frac{\partial\mathcal T_n^{\mathrm{RK2Avg}}}
  {\partial u_n}\right)^T\lambda_{n+1}
  +\Delta t\,w_n
- \left(\frac{\partial L^L(u_n,t_n)}{\partial u_n}\right)^T,
+ \left(\frac{\partial L(u_n,t_n)}{\partial u_n}\right)^T,
  \qquad w_0=\frac12,\quad w_n=1\quad(n>0).
 \]
 
 For classical RK4, the running objective is evaluated at the four RK stage
 states with the RK weights:
 \begin{align*}
- J_h^L=J_T^L(Y^N)+\Delta t\sum_{n=0}^{N-1}\bigg[&
- \frac16L^L(Y_1^n,t_n)
- +\frac13L^L(Y_2^n,t_n+\Delta t/2)\\
- &+\frac13L^L(Y_3^n,t_n+\Delta t/2)
- +\frac16L^L(Y_4^n,t_n+\Delta t)\bigg].
+ J_h=J_T(Y^N)+\Delta t\sum_{n=0}^{N-1}\bigg[&
+ \frac16L(Y_1^n,t_n)
+ +\frac13L(Y_2^n,t_n+\Delta t/2)\\
+ &+\frac13L(Y_3^n,t_n+\Delta t/2)
+ +\frac16L(Y_4^n,t_n+\Delta t)\bigg].
 \end{align*}
 The gradient of each stage contribution is inserted into the reverse RK4
 calculation with the same weight.  A trapezoidal approximation of the
@@ -550,11 +550,11 @@ After the reverse sweep, each algebraic covector is converted to an adjoint
 field with the corresponding mass matrix.  The computed initial field is
 compared with
 \[
- (\lambda_x^L)^\star(x^0,0)=\psi(x^0)\begin{pmatrix}1\\-1\end{pmatrix},
+ \lambda_x^\star(x^0,0)=\psi(x^0)\begin{pmatrix}1\\-1\end{pmatrix},
  \qquad
- (\lambda_v^L)^\star(x^0,0)=\psi(x^0)\begin{pmatrix}1\\-1\end{pmatrix},
+ \lambda_v^\star(x^0,0)=\psi(x^0)\begin{pmatrix}1\\-1\end{pmatrix},
  \qquad
- (\lambda_e^L)^\star(x^0,0)=\psi(x^0).
+ \lambda_e^\star(x^0,0)=\psi(x^0).
 \]
 This compares the native Lagrangian discrete adjoint directly with its
 continuous manufactured counterpart.
@@ -589,7 +589,7 @@ The coarse levels are pre-asymptotic, while the finest transitions verify
 the expected second-order coupled behavior.
 
 This is also consistent with the second-order Taylor--Green study that
-motivates the test.  For its B2--B1 discretization without viscosity, that
+motivates the test.  For its Q2-Q1 discretization without viscosity, that
 study reports successive velocity-error rates $1.59$, $1.81$, $1.72$, and
 $1.98$ on the $8^2$ through $64^2$ meshes.  The measured quantities are not
 identical---the study measures a forward velocity error, whereas the table
