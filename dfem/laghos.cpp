@@ -114,7 +114,6 @@ int laghos(int argc, char *argv[])
    bool tg_adjoint_fd_check = false;
    int tg_adjoint_steps = 5;
    int tg_checkpoint_interval = 5;
-   int tg_manufactured_refinements = 0;
    int dev = 0;
 
    OptionsParser args(argc, argv);
@@ -208,10 +207,6 @@ int laghos(int argc, char *argv[])
    args.AddOption(&tg_checkpoint_interval, "-tga-cp-interval",
                   "--tg-adjoint-checkpoint-interval",
                   "Save an adjoint checkpoint every n steps.");
-   args.AddOption(&tg_manufactured_refinements, "-tgam-ref",
-                  "--tg-manufactured-temporal-refinements",
-                  "Number of timestep halvings in the manufactured-adjoint "
-                  "self-convergence study.");
    args.AddOption(&dev, "-dev", "--dev", "GPU device to use.");
    args.AddOption(&fom, "-f", "--fom", "-no-fom", "--no-fom",
                   "Print the stock-compatible figures of merit table.");
@@ -527,8 +522,7 @@ int laghos(int argc, char *argv[])
             hydrodynamics::VerifyTaylorGreenLagrangianManufacturedAdjoint(
                H1FESpace, L2FESpace, ess_tdof, rho0_coeff, rho0_gf, mat_gf,
                S, ir, hydro_options.qfunction_backend, ode_solver_type,
-               *hydro, tg_adjoint_dt, tg_adjoint_steps,
-               tg_manufactured_refinements);
+               *hydro, tg_adjoint_dt, tg_adjoint_steps);
       }
       else if (ode_solver_type == 4)
       {

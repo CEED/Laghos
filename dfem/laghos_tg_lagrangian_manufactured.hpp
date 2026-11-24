@@ -12,8 +12,7 @@ namespace mfem::hydrodynamics
 class LagrangianHydroOperator;
 
 /// Run a fixed-step Taylor--Green manufactured-adjoint convergence sample
-/// whose exact adjoint and objective are defined directly in material
-/// coordinates, without an Eulerian-to-Lagrangian adjoint conversion.
+/// with an exact adjoint and objective.
 bool VerifyTaylorGreenLagrangianManufacturedAdjoint(
    ParFiniteElementSpace &H1,
    ParFiniteElementSpace &L2,
@@ -27,7 +26,6 @@ bool VerifyTaylorGreenLagrangianManufacturedAdjoint(
    int ode_solver_type,
    LagrangianHydroOperator &hydro,
    real_t dt,
-   int num_steps,
-   int temporal_refinements = 0);
+   int num_steps);
 
 } // namespace mfem::hydrodynamics
